@@ -264,4 +264,17 @@ assert.equal(element('t_calendar_view').value, '1');
 assert.equal(element('t_calendar_week_start').value, '6');
 assert.equal(element('t_calendar_popup_open_mode').value, '0');
 
-console.log('Calendar tiles: policies, registry, Bridge lists and events, popup hooks, translations and Web Admin preview');
+// On the panel the payloads, the store's map and the parsed events live in
+// PSRAM, and so does the parse's JSON pool: the default malloc puts blocks
+// below 16 KB into the internal heap, which the V2 already runs low on.
+const events = read('src/types/calendar/calendar_events.h');
+assert.match(events, /#if __has_include\(<esp_heap_caps\.h>\)[\s\S]*?#define CALENDAR_EVENTS_PSRAM 1/);
+assert.match(events, /#if CALENDAR_EVENTS_PSRAM\nusing EventList = PsVector<Event>;/);
+assert.match(events, /EventList events;/);
+assert.match(events, /#if CALENDAR_EVENTS_PSRAM\n  JsonDocument doc\(detail::json_allocator\(\)\);/);
+assert.match(events, /heap_caps_malloc\(size, MALLOC_CAP_SPIRAM \| MALLOC_CAP_8BIT\)/);
+assert.match(store, /PsString payload;/);
+assert.match(store, /using EntryMap = std::map<PsString, Entry, std::less<PsString>, PsramAllocator<std::pair<const PsString, Entry>>>;/);
+assert.doesNotMatch(store, /std::string/);
+
+console.log('Calendar tiles: policies, registry, Bridge lists and events, popup hooks, translations, PSRAM storage and Web Admin preview');

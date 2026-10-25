@@ -73,6 +73,9 @@ Retained payload (Bridge `calendar_events.py`, panel `calendar_events.h`):
 - MQTT callbacks only queue the payload (`calendar_store::queue`, coalesced,
   at most 24 calendars); the loop parses it (`calendar_store::process`, two
   per pass) and refreshes the tiles and an open popup.
+- The payloads, the store's map and the parsed events live in PSRAM
+  (`PsString`, `PsVector`, a PSRAM JSON pool): the default malloc puts
+  blocks below 16 KB into the internal heap.
 - Every rendered tile owns a small view found by calendar; a 15 s timer
   redraws them when the minute or the day changes.
 - "Today" needs the panel clock (NTP): until it is set, the tile shows `--`

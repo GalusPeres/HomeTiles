@@ -93,6 +93,15 @@ int main() {
                  long_title + R"(\nend"}]})");
   assert(c.events.size() == 1 && strlen(c.events[0].title) <= kTitleBytes);
   assert((static_cast<unsigned char>(c.events[0].title[strlen(c.events[0].title) - 1]) & 0xC0) != 0xC0);
+  // "ä" ends exactly at the cut: it stays (the cut dropped a whole character
+  // here before).
+  assert(strlen(c.events[0].title) == kTitleBytes && !strcmp(c.events[0].title + 61, "\xC3\xA4"));
+  // "ä" across the cut: it goes as a whole.
+  std::string across(200, 'x');
+  across.replace(62, 2, "\xC3\xA4");
+  Calendar a2 = P(std::string(R"({"v":1,"state":"on","from":"2026-10-01","to":"2026-10-31","e":[{"s":"2026-10-02","e":"2026-10-03","t":")") +
+                  across + R"("}]})");
+  assert(strlen(a2.events[0].title) == 62 && a2.events[0].title[61] == 'x');
   Calendar ctrl = P(R"({"v":1,"state":"on","from":"2026-10-01","to":"2026-10-31","e":[{"s":"2026-10-02","e":"2026-10-03","t":"a\nb"}]})");
   assert(!strcmp(ctrl.events[0].title, "a b"));
 

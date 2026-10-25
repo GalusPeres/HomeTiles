@@ -9,6 +9,19 @@
 #include <algorithm>
 #include <vector>
 
+// On the panel the events and the parse's JSON pool live in PSRAM: the
+// default malloc puts blocks below 16 KB into the scarce internal heap
+// (psram_allocator.h; the V2 has dropped to 66-80 KB free there), and a
+// calendar keeps up to 96 events. Host tests build without it.
+#if __has_include(<esp_heap_caps.h>)
+#include <esp_heap_caps.h>
+
+#include "src/core/memory/psram_allocator.h"
+#define CALENDAR_EVENTS_PSRAM 1
+#else
+#define CALENDAR_EVENTS_PSRAM 0
+#endif
+
 // The Bridge's retained `events` state of a calendar entity
 // ({ha_prefix}/calendar/<object>/events, docs-dev/calendar.md): the events of
 // one Home Assistant calendar in a window around today, in Home Assistant's
@@ -47,13 +60,19 @@ struct Event {
   bool all_day() const { return start_min == kAllDay; }
 };
 
+#if CALENDAR_EVENTS_PSRAM
+using EventList = PsVector<Event>;
+#else
+using EventList = std::vector<Event>;
+#endif
+
 struct Calendar {
   bool valid = false;
   bool available = false;
   // The days the Bridge looked at (inclusive); no event outside them is known.
   int32_t from_day = 0;
   int32_t to_day = -1;
-  std::vector<Event> events;
+  EventList events;
 };
 
 // Days since 1970-01-01 of a proleptic Gregorian date (H. Hinnant's
@@ -111,13 +130,35 @@ inline void copy_text(const char* text, char* out, size_t capacity) {
       out[length++] = byte < 0x20 || byte == 0x7F ? ' ' : static_cast<char>(byte);
     }
   }
-  // A cut multi-byte character goes as a whole.
-  if (text && length + 1 >= capacity && text[length]) {
+  // Cut inside a multi-byte character (the next byte continues it): the
+  // character goes as a whole. Cut on a boundary, every character stays.
+  if (text && (static_cast<unsigned char>(text[length]) & 0xC0) == 0x80) {
     while (length && (static_cast<unsigned char>(out[length - 1]) & 0xC0) == 0x80) --length;
     if (length && (static_cast<unsigned char>(out[length - 1]) & 0xC0) == 0xC0) --length;
   }
   out[length] = '\0';
 }
+
+#if CALENDAR_EVENTS_PSRAM
+// ArduinoJson's pool for the parse, from PSRAM (internal only when PSRAM is
+// out).
+struct PsramJsonAllocator : ArduinoJson::Allocator {
+  void* allocate(size_t size) override {
+    void* block = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    return block ? block : heap_caps_malloc(size, MALLOC_CAP_8BIT);
+  }
+  void deallocate(void* block) override { heap_caps_free(block); }
+  void* reallocate(void* block, size_t size) override {
+    void* moved = heap_caps_realloc(block, size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    return moved ? moved : heap_caps_realloc(block, size, MALLOC_CAP_8BIT);
+  }
+};
+
+inline ArduinoJson::Allocator* json_allocator() {
+  static PsramJsonAllocator allocator;
+  return &allocator;
+}
+#endif
 
 }  // namespace detail
 
@@ -155,7 +196,11 @@ inline bool event_before(const Event& a, const Event& b) {
 inline Calendar parse(const char* payload, size_t length) {
   Calendar out;
   if (!payload || !length || length > kMaxPayload) return out;
+#if CALENDAR_EVENTS_PSRAM
+  JsonDocument doc(detail::json_allocator());
+#else
   JsonDocument doc;
+#endif
   if (deserializeJson(doc, payload, length) || !doc.is<JsonObjectConst>()) return out;
   JsonVariantConst version = doc["v"];
   if (!version.is<int>() || version.as<int>() != 1) return out;

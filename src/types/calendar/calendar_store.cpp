@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 
+#include "src/core/memory/psram_allocator.h"
 #include "src/types/calendar/calendar_tile.h"
 #include "src/ui/popups/calendar/calendar_popup.h"
 
@@ -13,13 +14,17 @@ namespace {
 // A panel shows a handful of calendars; the Bridge offers what it released.
 constexpr size_t kMaxCalendars = 24;
 
+// The raw payloads, the map's nodes and its keys in PSRAM (the parsed
+// events too, calendar_events.h): kept for every offered calendar, they
+// would otherwise take the internal heap (psram_allocator.h).
 struct Entry {
-  std::string payload;
+  PsString payload;
   bool pending = false;
   std::unique_ptr<calendar_events::Calendar> calendar;
 };
 
-std::map<std::string, Entry> g_entries;
+using EntryMap = std::map<PsString, Entry, std::less<PsString>, PsramAllocator<std::pair<const PsString, Entry>>>;
+EntryMap g_entries;
 size_t g_pending = 0;
 
 bool valid_entity(const String& entity) {
@@ -45,7 +50,7 @@ void queue(const String& entity, const char* payload, size_t length) {
     }
     return;
   }
-  const std::string key(entity.c_str());
+  const PsString key(entity.c_str());
   auto it = g_entries.find(key);
   if (it == g_entries.end()) {
     if (g_entries.size() >= kMaxCalendars) return;
@@ -93,12 +98,12 @@ void process(uint8_t budget) {
 }
 
 const calendar_events::Calendar* get(const String& entity) {
-  const auto it = g_entries.find(std::string(entity.c_str()));
+  const auto it = g_entries.find(PsString(entity.c_str()));
   return it == g_entries.end() ? nullptr : it->second.calendar.get();
 }
 
 String payload(const String& entity) {
-  const auto it = g_entries.find(std::string(entity.c_str()));
+  const auto it = g_entries.find(PsString(entity.c_str()));
   return it == g_entries.end() ? String() : String(it->second.payload.c_str());
 }
 

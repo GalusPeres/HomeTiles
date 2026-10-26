@@ -4,6 +4,7 @@
 
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
+#include "src/tiles/config/bar_orientation.h"
 #include "src/types/switch/web_html.h"
 #include "src/web/server/web_admin_utils.h"
 
@@ -50,6 +51,11 @@ void append_device_fields_html(String& html, const String& tab_id, TileType type
   const String entity_field = String(prefix) + "_entity";
   appendEntityPickerField(html, tab_id, entity_field.c_str(), entity_label(type),
                           type == TILE_LOCK ? "locks" : type == TILE_ALARM ? "alarm_panels" : "fans");
+  // A Fan's bar upright like the Switch tile's (bar_orientation.h).
+  if (type == TILE_FAN) {
+    const SwitchChoice orientations[] = {{"0", tr.bar_horizontal}, {"1", tr.bar_upright}};
+    append_switch_choice(html, tab_id, "fan_orientation", tr.bar_orientation, orientations, 2);
+  }
   // The state size like the Switch tile (tile_header.h): the half-height
   // Sensor value sizes beside the disc, the Sensor value sizes from 1.5 rows.
   const SwitchChoice sizes[] = {{"0", tr.sensor_value_size_default}, {"1", "20"}, {"2", "24"},
@@ -83,7 +89,9 @@ bool apply_device_fields_from_request(WebServer& server, Tile& tile) {
           : TILE_POPUP_OPEN_SHORT_PRESS;
   setTilePopupOpenMode(tile, popup_mode);
   tile.sensor_unit = "";
-  tile.sensor_decimals = 0xFF;
+  // A Fan's bar upright with "bar_orientation" 1 (bar_orientation.h).
+  tile.sensor_decimals = bar_orientation::fan_stored(
+      type == TILE_FAN && server.hasArg("bar_orientation") && server.arg("bar_orientation").toInt() == 1);
   if (server.hasArg("sensor_value_font")) {
     const int font = server.arg("sensor_value_font").toInt();
     tile.sensor_value_font = font >= 1 && font <= SENSOR_VALUE_FONT_MAX ? static_cast<uint8_t>(font) : 0;

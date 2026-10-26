@@ -151,10 +151,12 @@
       (icon ? '<i class="mdi mdi-' + escapeHtml(icon) + '"></i>' : '') + '</span>';
   }
 
-  // bar_model(): the bar the device draws for this state.
-  function applyDevicePreview(tileElem, kind, d, halfHeight) {
+  // bar_model(): the bar the device draws for this state. `upright`: a
+  // Fan's bar stands below the header (bar_orientation.h).
+  function applyDevicePreview(tileElem, kind, d, halfHeight, upright = false) {
     if (!tileElem) return;
     tileElem.classList.toggle('switch-bar', !halfHeight);
+    tileElem.classList.toggle('switch-upright', !halfHeight && kind === 'fan' && !!upright);
     const bar = tileElem.querySelector('.tile-switch');
     if (!bar) return;
     const visual = devicePreviewVisual(kind, d);
@@ -204,7 +206,7 @@
         // the bar's width, also when the tile is resized or laid out later
         // (a 2x1 tile kept the three slots of 1x1 and lit none).
         onResize = () => {
-          if (fitNow() !== fit) applyDevicePreview(tileElem, kind, d, halfHeight);
+          if (fitNow() !== fit) applyDevicePreview(tileElem, kind, d, halfHeight, upright);
         };
         const modes = DEVICE_ALARM_MODES.filter(mode => d.features & mode[1]).slice(0, fit - 1);
         const slots = [['disarmed', 0, 'shield-off'], ...modes.reverse()];
@@ -254,6 +256,9 @@
     if (font) font.value = switchValueFont(data.sensor_value_font);
     const popup = document.getElementById(tab + '_' + prefix + '_popup_open_mode');
     if (popup) popup.value = data.popup_open_mode !== undefined ? String(data.popup_open_mode) : '1';
+    // A Fan's bar upright (bar_orientation.h).
+    const orientation = document.getElementById(tab + '_' + prefix + '_orientation');
+    if (orientation) orientation.value = Number(data.bar_orientation) === 1 ? '1' : '0';
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromEntity(tab, '_' + prefix + '_entity');
   }
@@ -267,6 +272,8 @@
       switchValueFont(document.getElementById(tab + '_' + prefix + '_value_font')?.value));
     const popup = document.getElementById(tab + '_' + prefix + '_popup_open_mode');
     if (popup) formData.append('popup_open_mode', popup.value || '1');
+    const orientation = document.getElementById(tab + '_' + prefix + '_orientation');
+    if (orientation) formData.append('bar_orientation', orientation.value === '1' ? '1' : '0');
   }
 
   function resetDeviceFields(tab, prefix) {
@@ -277,6 +284,8 @@
     if (font) font.value = '0';
     const popup = document.getElementById(tab + '_' + prefix + '_popup_open_mode');
     if (popup) popup.value = '1';
+    const orientation = document.getElementById(tab + '_' + prefix + '_orientation');
+    if (orientation) orientation.value = '0';
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
 

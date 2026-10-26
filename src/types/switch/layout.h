@@ -28,18 +28,36 @@ inline constexpr uint8_t kLayoutMax = 3;
 // New tiles start with Automatic (Web Admin default).
 inline constexpr Layout kNewTileLayout = Layout::Automatic;
 
+// The bar upright (user 2026-10-26, mockup switch-vertical): the header on
+// top, the bar below over the rest of the tile, filled from the bottom.
+// Stored as 4..6 for Switch, Dimmer and Automatic: the packed format keeps
+// sensor_decimals at 0..6, and older firmware shows such a tile as an icon
+// button (a value it does not know).
+inline constexpr uint8_t kUprightOffset = 3;
+inline bool upright_stored(uint8_t value) { return value > kLayoutMax && value <= kLayoutMax + kUprightOffset; }
+
 inline Layout from_stored(uint8_t value) {
+  if (upright_stored(value)) value = static_cast<uint8_t>(value - kUprightOffset);
   return value <= kLayoutMax ? static_cast<Layout>(value) : Layout::IconButton;
 }
 
 inline bool horizontal(Layout layout) { return layout != Layout::IconButton; }
 
+// The stored value of a layout and its orientation; the icon button has no
+// bar and stays as it is.
+inline uint8_t to_stored(Layout layout, bool upright) {
+  const uint8_t value = static_cast<uint8_t>(layout);
+  return upright && horizontal(layout) ? static_cast<uint8_t>(value + kUprightOffset) : value;
+}
+
 // From 1.5 rows a header layout looks like a Sensor tile: the title top
 // right, the state large and centered between the corner disc and the bar
 // (the Sensor value sizes), and the bar grows by a third of the height above
 // one row (approved mockup switch-tall, 2026-10-01). One row high (1x1, 2x1)
-// keeps the header beside the disc.
-inline bool sensor_look(Layout layout, float span_h) { return horizontal(layout) && span_h > 1.0f; }
+// keeps the header beside the disc, and so does an upright bar at any height.
+inline bool sensor_look(Layout layout, float span_h, bool upright = false) {
+  return horizontal(layout) && span_h > 1.0f && !upright;
+}
 inline int bar_growth(int tile_height, int cell_height) {
   return tile_height > cell_height ? (tile_height - cell_height) / 3 : 0;
 }

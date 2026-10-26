@@ -326,7 +326,7 @@ assert.match(html, /_camera_transparency" min="0" max="100" step="5" value="0">/
 assert.match(html, /append_switch_choice\(html, tab_id, "camera_head", tr\.camera_head, heads, 3\);/);
 assert.match(html, /append_switch_choice\(html, tab_id, "camera_tap", tr\.camera_tap, taps, 2\);/);
 assert.doesNotMatch(html, /class="hint"|screensaver_picture_hint/, 'no hint text under the options');
-assert.match(readRepoFile('src/types/switch/admin.js'), /'camera_display', 'camera_fit',\s*'camera_head', 'camera_tap'\];/);
+assert.match(readRepoFile('src/types/switch/admin.js'), /'camera_display', 'camera_fit',\s*'camera_head', 'camera_tap', 'switch_orientation', 'fan_orientation'\];/);
 assert.match(readRepoFile('src/web/admin/tiles/live-preview.js'),
   /applyCameraPicturePreview\(tileElem, cameraPictureOptions\(tab\), halfHeight, \{\s*col: Number\(tileElem\.dataset\.col \|\| 0\),\s*span_w: tileSpan\('span_w'\)\}\);/);
 assert.match(readRepoFile('src/web/admin/tiles/grid-preview.js'),

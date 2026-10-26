@@ -1011,6 +1011,8 @@
         ? tile.switch_style
         : (tile.sensor_decimals === 1 ? 1 : 0);
       fd.append('switch_style', style);
+      // The bar upright (bar_orientation.h); older exports have none.
+      fd.append('bar_orientation', Number(tile.bar_orientation) === 1 ? '1' : '0');
       fd.append('sensor_value_font', tile.sensor_value_font ?? 0);
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
@@ -1092,6 +1094,7 @@
     } else if (safeType === 24 || safeType === 25 || safeType === 26) {
       const kind = devicePreviewKind(safeType);
       fd.append(kind + '_entity', tile.sensor_entity || tile[kind + '_entity'] || '');
+      if (safeType === 26) fd.append('bar_orientation', Number(tile.bar_orientation) === 1 ? '1' : '0');
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }

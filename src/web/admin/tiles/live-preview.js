@@ -37,6 +37,9 @@
     const meta = getTileTypeMeta(type);
     const iconInput = document.getElementById(prefix + '_tile_icon');
     const switchStyle = document.getElementById(prefix + '_switch_style')?.value || '0';
+    // The bar upright (bar_orientation.h): Switch and Fan.
+    const switchUpright = document.getElementById(prefix + '_switch_orientation')?.value === '1';
+    const fanUpright = document.getElementById(prefix + '_fan_orientation')?.value === '1';
     const isEnergyType = type === '14';
     // Half-height tiles offer only the value sizes that fit.
     const halfHeight = tileSpan('span_h') === 0.5;
@@ -49,7 +52,7 @@
       // state of a tall tile the full-size ones.
       const spanH = tileSpan('span_h');
       syncCompactValueFontOptions(document.getElementById(prefix + '_switch_value_font'),
-                                  !switchSensorLook(switchStyle, spanH));
+                                  !switchSensorLook(switchStyle, spanH, switchUpright));
       syncSwitchChoices(tab);
     }
     const deviceKind = typeof devicePreviewKind === 'function' ? devicePreviewKind(type) : '';
@@ -58,7 +61,7 @@
       // the full-size ones (tile_header.h).
       const spanH = tileSpan('span_h');
       syncCompactValueFontOptions(document.getElementById(prefix + (deviceKind ? '_' + deviceKind : '_cover') +
-        '_value_font'), !(spanH > 1));
+        '_value_font'), !(spanH > 1 && !(deviceKind === 'fan' && fanUpright)));
       syncSwitchChoices(tab);
     }
     const previewKind = meta.preview || 'none';
@@ -153,7 +156,7 @@
     }
 
     resetTileClasses(tileElem, meta.css ? ['tile', meta.css] : ['tile']);
-    if (type === '5') applySwitchPreviewLayout(tileElem, switchStyle, halfHeight);
+    if (type === '5') applySwitchPreviewLayout(tileElem, switchStyle, halfHeight, switchUpright);
     tileElem.style.background = '';
     delete tileElem.dataset.bgOpacity;
     tileElem.dataset.type = type;
@@ -407,7 +410,7 @@
         span_w: tileSpan('span_w')});
     }
     if (previewKind === 'cover') applyCoverPreview(tileElem, coverPreviewState, halfHeight);
-    if (deviceKind) applyDevicePreview(tileElem, deviceKind, devicePreviewState, halfHeight);
+    if (deviceKind) applyDevicePreview(tileElem, deviceKind, devicePreviewState, halfHeight, fanUpright);
     if (wasActive) tileElem.classList.add('active');
     if (typeWas !== type && wasActive) {
       tileElem.classList.add('active');

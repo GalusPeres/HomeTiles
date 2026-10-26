@@ -62,7 +62,8 @@ if (output !== null) {
   const rows = output.trim().split('\n').map(line => line.trim().split(' '));
   const pick = kind => rows.filter(row => row[0] === kind).map(row => row.slice(1).map(Number));
 
-  assert.deepEqual(pick('layout'), [[0, 0], [1, 1], [2, 2], [3, 3], [4, 0], [5, 0]]);
+  // 4..6 are Switch, Dimmer and Automatic with the bar upright (bar_orientation.h).
+  assert.deepEqual(pick('layout'), [[0, 0], [1, 1], [2, 2], [3, 3], [4, 1], [5, 2]]);
 
   // Bar: None 0, Toggle 1, Dimmer 2.
   const bars = new Map(pick('bar').map(([layout, half, dimmable, bar]) => [`${layout}${half}${dimmable}`, bar]));
@@ -158,20 +159,21 @@ const levelBar = readRepoFile('src/tiles/runtime/level_bar.h');
 // The header (title, state line, tall look) lives in the shared tile header.
 const tileHeader = readRepoFile('src/tiles/runtime/tile_header.h');
 const tallRenderer = readRepoFile('src/types/switch/renderer.cpp') + levelBar + tileHeader;
-assert.ok(tallRenderer.includes('const bool tall = switch_layout::sensor_look(layout, tile.span_h);') &&
+// An upright bar keeps the header beside the disc (bar_orientation.h).
+assert.ok(tallRenderer.includes('const bool tall = switch_layout::sensor_look(layout, tile.span_h, view->upright);') &&
           tallRenderer.includes('tall ? tile_layout::value_font_for_choice(tile.sensor_value_font, FONT_VALUE)'));
 assert.ok(tallRenderer.includes('tile_header::create(container, tile, tall, bar_box(tile).top);') &&
           tallRenderer.includes('header.state_center = static_cast<int16_t>((inset + disc + bar_top) / 2 - pad_y);') &&
           tallRenderer.includes('if (center >= 0) lv_obj_set_y(label, center - lv_font_get_line_height(font) / 2);'));
 assert.ok(tallRenderer.includes('switch_layout::bar_growth(tile_h, GRID_CELL_H)'));
 const layoutJsTall = readRepoFile('src/web/admin/tiles/layout.js');
-assert.ok(layoutJsTall.includes('const switchTall = switchHeader && Number(layout?.span_h) > 1;'));
-assert.ok(admin.includes('function switchSensorLook(style, spanH) {'));
+assert.ok(layoutJsTall.includes("const switchTall = switchHeader && Number(layout?.span_h) > 1 && !el.classList.contains('switch-upright');"));
+assert.ok(admin.includes('function switchSensorLook(style, spanH, upright = false) {'));
 const livePreview = readRepoFile('src/web/admin/tiles/live-preview.js');
-assert.ok(livePreview.includes('!switchSensorLook(switchStyle, spanH));'),
+assert.ok(livePreview.includes('!switchSensorLook(switchStyle, spanH, switchUpright));'),
           'The editor offers the value sizes of the tile size');
 assert.ok(tallRenderer.includes('switch_layout::Dimmer geometry{width, height, radius, base};') &&
-          tallRenderer.includes('level_bar::draw_fill(layer, view->bar, view->level, view->bar_base, accent, notch);') &&
+          tallRenderer.includes('level_bar::draw_fill(layer, view->bar, view->level, view->bar_base, accent, notch, view->upright);') &&
           tallRenderer.includes('draw_power_symbol(layer, thumb, symbol_color, view->on, view->bar_base);'),
           'A taller bar keeps its handle width, roundings and symbol size');
 // b148 regression: switching a dimmable light on showed 100 % until Home
@@ -185,7 +187,7 @@ assert.ok(tallRenderer.includes('const uint8_t unreported_level = dimmable ? vie
 const popup = readRepoFile('src/ui/popups/light/light_popup.cpp');
 assert.ok(popup.includes('lv_color_hex(tone_color::notch_on(ctx->brightness_draw_color, lv_color_to_u32(brightness_dash_color(ctx))));') &&
           popup.includes('static lv_color_t brightness_dash_color(const LightPopupContext* ctx) { return popup_surface::card(ctx->card_bg); }'));
-assert.ok(tallRenderer.includes('level_bar::draw_fill(layer, view->bar, view->level, view->bar_base, accent, notch);'),
+assert.ok(tallRenderer.includes('level_bar::draw_fill(layer, view->bar, view->level, view->bar_base, accent, notch, view->upright);'),
   'The tile handle is the same handle line');
 // b149 regression: the resize preview copied the tile at its old size, so a
 // Switch kept its bar at half height and lost it (icon button look) at one

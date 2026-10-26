@@ -7,9 +7,14 @@ void apply_switch_fields_from_request(WebServer& server, Tile& tile) {
   uint8_t popup_mode = TILE_POPUP_OPEN_SHORT_PRESS;
   if (server.hasArg("switch_style")) {
     // Layout (switch_layout.h): 0 icon button, 1 switch, 2 dimmer,
-    // 3 automatic; anything else falls back to the icon button.
+    // 3 automatic; anything else falls back to the icon button. With
+    // "bar_orientation" 1 a bar layout stands upright (bar_orientation.h).
     const int raw = server.arg("switch_style").toInt();
-    style = (raw >= 0 && raw <= switch_layout::kLayoutMax) ? static_cast<uint8_t>(raw) : 0;
+    const switch_layout::Layout layout =
+        (raw >= 0 && raw <= switch_layout::kLayoutMax) ? static_cast<switch_layout::Layout>(raw)
+                                                       : switch_layout::Layout::IconButton;
+    const bool upright = server.hasArg("bar_orientation") && server.arg("bar_orientation").toInt() == 1;
+    style = switch_layout::to_stored(layout, upright);
   }
   if (server.hasArg("popup_open_mode")) {
     popup_mode = (server.arg("popup_open_mode").toInt() == TILE_POPUP_OPEN_SHORT_PRESS)

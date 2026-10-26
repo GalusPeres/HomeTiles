@@ -844,6 +844,11 @@ struct Strings {
   const char* pages_title;
   // Web Admin: the tooltip on a full folder's greyed-out type list.
   const char* js_folder_type_locked;
+  // Switch and Fan tile Orientation field (bar_orientation.h): the bar
+  // horizontal or upright.
+  const char* bar_orientation;
+  const char* bar_horizontal;
+  const char* bar_upright;
   // Media tile: the popup's layout (Web Admin) and the popup's sub-views
   // (source and sound mode, the speakers to group, the library).
   const char* media_popup_layout;

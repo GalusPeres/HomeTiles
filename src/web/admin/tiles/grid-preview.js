@@ -844,7 +844,9 @@
     if (meta.css) cls.push(meta.css);
     if (typeValue === '0' && (!meta.css || meta.css !== 'empty')) cls.push('empty');
     resetTileClasses(el, cls);
-    if (typeValue === '5') applySwitchPreviewLayout(el, tile.switch_style, Number(tile.span_h) === 0.5);
+    if (typeValue === '5') {
+      applySwitchPreviewLayout(el, tile.switch_style, Number(tile.span_h) === 0.5, Number(tile.bar_orientation) === 1);
+    }
     el.dataset.type = typeValue;
     // Every circle shows, in its icon's color (user 2026-10-11: no circle options).
     el.dataset.iconDisc = '0';
@@ -1088,7 +1090,8 @@
         applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
       }
       if (deviceKind) {
-        applyDevicePreview(el, deviceKind, devicePreviewState, Number(tile.span_h) === 0.5);
+        applyDevicePreview(el, deviceKind, devicePreviewState, Number(tile.span_h) === 0.5,
+          Number(tile.bar_orientation) === 1);
         applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
       }
       if (typeValue === '9') {

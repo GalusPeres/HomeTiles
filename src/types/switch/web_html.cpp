@@ -64,6 +64,10 @@ void append_switch_fields_html(String& html, const String& tab_id) {
                                   {"1", tr.switch_layout_switch},
                                   {"0", tr.switch_icon_button}};
   append_switch_choice(html, tab_id, "switch_style", tr.switch_display, layouts, 4);
+  // The bar upright (bar_orientation.h), under the layout; the editor hides
+  // it for the icon button, which has no bar (syncSwitchOrientationField).
+  const SwitchChoice orientations[] = {{"0", tr.bar_horizontal}, {"1", tr.bar_upright}};
+  append_switch_choice(html, tab_id, "switch_orientation", tr.bar_orientation, orientations, 2);
   // The Sensor value sizes. One row high, the state beside the disc offers
   // the half-height ones (Default = title size, 24, 28); from 1.5 rows the
   // large state offers the full-size ones (Default = 28, 20, 24, 32, 40).

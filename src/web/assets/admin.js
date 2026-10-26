@@ -4431,7 +4431,7 @@ async function saveGestureEdge(select) {
     // data, its entity and options returned with the next tile in the slot.
     const tile = Number(snapshot?.type) === 0 ? {} : Object.assign({}, prev);
     const layout = normalizeSnapshotLayout(snapshot, index, tab);
-    const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity', 'icon_disc', 'icon_glow'];
+    const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'bar_orientation', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity', 'icon_disc', 'icon_glow'];
 
     tile.type = clampInt(snapshot?.type, 0, 255, Number(prev.type) || 0);
     tile.title = snapshot?.title || '';
@@ -6592,7 +6592,8 @@ async function saveGestureEdge(select) {
     // The Cover position bar uses the same header (tile_header.h).
     // Lock, Alarm panel and Fan too (types/device).
     const switchHeader = [5, 19, 24, 25, 26].includes(Number(type)) && el.classList.contains('switch-bar');
-    const switchTall = switchHeader && Number(layout?.span_h) > 1;
+    // An upright bar keeps the header beside the disc (bar_orientation.h).
+    const switchTall = switchHeader && Number(layout?.span_h) > 1 && !el.classList.contains('switch-upright');
     el.classList.toggle('switch-tall', switchTall);
     if (switchTall) el.style?.setProperty?.('--switch-span-h', String(Number(layout.span_h)));
     else el.style?.removeProperty?.('--switch-span-h');
@@ -7689,6 +7690,11 @@ async function saveGestureEdge(select) {
     });
     bindLive(switchSelect, 'change', 'switchEntity', () => { maybeFillTitleFromSwitch(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(switchStyleSelect, 'change', 'switchStyle', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    // The bar upright (bar_orientation.h): Switch and Fan.
+    for (const id of ['_switch_orientation', '_fan_orientation']) {
+      bindLive(document.getElementById(prefix + id), 'change', id === '_fan_orientation' ? 'fanOrientation' : 'switchOrientation',
+        () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    }
     bindLive(switchPopupModeSelect, 'change', 'switchPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(mediaSelect, 'change', 'mediaEntity', () => { maybeFillTitleFromMedia(tab); updateTilePreview(tab); updateMediaValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(climateSelect, 'change', 'climateEntity', () => {
@@ -7995,6 +8001,9 @@ async function saveGestureEdge(select) {
     const meta = getTileTypeMeta(type);
     const iconInput = document.getElementById(prefix + '_tile_icon');
     const switchStyle = document.getElementById(prefix + '_switch_style')?.value || '0';
+    // The bar upright (bar_orientation.h): Switch and Fan.
+    const switchUpright = document.getElementById(prefix + '_switch_orientation')?.value === '1';
+    const fanUpright = document.getElementById(prefix + '_fan_orientation')?.value === '1';
     const isEnergyType = type === '14';
     // Half-height tiles offer only the value sizes that fit.
     const halfHeight = tileSpan('span_h') === 0.5;
@@ -8007,7 +8016,7 @@ async function saveGestureEdge(select) {
       // state of a tall tile the full-size ones.
       const spanH = tileSpan('span_h');
       syncCompactValueFontOptions(document.getElementById(prefix + '_switch_value_font'),
-                                  !switchSensorLook(switchStyle, spanH));
+                                  !switchSensorLook(switchStyle, spanH, switchUpright));
       syncSwitchChoices(tab);
     }
     const deviceKind = typeof devicePreviewKind === 'function' ? devicePreviewKind(type) : '';
@@ -8016,7 +8025,7 @@ async function saveGestureEdge(select) {
       // the full-size ones (tile_header.h).
       const spanH = tileSpan('span_h');
       syncCompactValueFontOptions(document.getElementById(prefix + (deviceKind ? '_' + deviceKind : '_cover') +
-        '_value_font'), !(spanH > 1));
+        '_value_font'), !(spanH > 1 && !(deviceKind === 'fan' && fanUpright)));
       syncSwitchChoices(tab);
     }
     const previewKind = meta.preview || 'none';
@@ -8111,7 +8120,7 @@ async function saveGestureEdge(select) {
     }
 
     resetTileClasses(tileElem, meta.css ? ['tile', meta.css] : ['tile']);
-    if (type === '5') applySwitchPreviewLayout(tileElem, switchStyle, halfHeight);
+    if (type === '5') applySwitchPreviewLayout(tileElem, switchStyle, halfHeight, switchUpright);
     tileElem.style.background = '';
     delete tileElem.dataset.bgOpacity;
     tileElem.dataset.type = type;
@@ -8365,7 +8374,7 @@ async function saveGestureEdge(select) {
         span_w: tileSpan('span_w')});
     }
     if (previewKind === 'cover') applyCoverPreview(tileElem, coverPreviewState, halfHeight);
-    if (deviceKind) applyDevicePreview(tileElem, deviceKind, devicePreviewState, halfHeight);
+    if (deviceKind) applyDevicePreview(tileElem, deviceKind, devicePreviewState, halfHeight, fanUpright);
     if (wasActive) tileElem.classList.add('active');
     if (typeWas !== type && wasActive) {
       tileElem.classList.add('active');
@@ -9965,6 +9974,8 @@ async function saveGestureEdge(select) {
         ? tile.switch_style
         : (tile.sensor_decimals === 1 ? 1 : 0);
       fd.append('switch_style', style);
+      // The bar upright (bar_orientation.h); older exports have none.
+      fd.append('bar_orientation', Number(tile.bar_orientation) === 1 ? '1' : '0');
       fd.append('sensor_value_font', tile.sensor_value_font ?? 0);
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
@@ -10046,6 +10057,7 @@ async function saveGestureEdge(select) {
     } else if (safeType === 24 || safeType === 25 || safeType === 26) {
       const kind = devicePreviewKind(safeType);
       fd.append(kind + '_entity', tile.sensor_entity || tile[kind + '_entity'] || '');
+      if (safeType === 26) fd.append('bar_orientation', Number(tile.bar_orientation) === 1 ? '1' : '0');
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }
@@ -10927,7 +10939,9 @@ async function saveGestureEdge(select) {
     if (meta.css) cls.push(meta.css);
     if (typeValue === '0' && (!meta.css || meta.css !== 'empty')) cls.push('empty');
     resetTileClasses(el, cls);
-    if (typeValue === '5') applySwitchPreviewLayout(el, tile.switch_style, Number(tile.span_h) === 0.5);
+    if (typeValue === '5') {
+      applySwitchPreviewLayout(el, tile.switch_style, Number(tile.span_h) === 0.5, Number(tile.bar_orientation) === 1);
+    }
     el.dataset.type = typeValue;
     // Every circle shows, in its icon's color (user 2026-10-11: no circle options).
     el.dataset.iconDisc = '0';
@@ -11171,7 +11185,8 @@ async function saveGestureEdge(select) {
         applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
       }
       if (deviceKind) {
-        applyDevicePreview(el, deviceKind, devicePreviewState, Number(tile.span_h) === 0.5);
+        applyDevicePreview(el, deviceKind, devicePreviewState, Number(tile.span_h) === 0.5,
+          Number(tile.bar_orientation) === 1);
         applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
       }
       if (typeValue === '9') {
@@ -17740,8 +17755,9 @@ function maybeFillTitleFromSwitch(tab) {
 
   // switch_layout::sensor_look: from 1.5 rows a header layout looks like a
   // Sensor tile with the bar below.
-  function switchSensorLook(style, spanH) {
-    return switchLayoutValue(style) !== 0 && Number(spanH) > 1;
+  // An upright bar keeps the header beside the disc (bar_orientation.h).
+  function switchSensorLook(style, spanH, upright = false) {
+    return switchLayoutValue(style) !== 0 && Number(spanH) > 1 && !upright;
   }
 
   // The segmented choices of the Switch fields (like Tile color). The hidden
@@ -17751,7 +17767,7 @@ function maybeFillTitleFromSwitch(tab) {
   // segmented choice.
   const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode', 'climate_view', 'media_layout',
     'cover_value_font', 'lock_value_font', 'alarm_value_font', 'fan_value_font', 'camera_display', 'camera_fit',
-    'camera_head', 'camera_tap'];
+    'camera_head', 'camera_tap', 'switch_orientation', 'fan_orientation'];
 
   function syncSwitchChoices(tab) {
     for (const field of SWITCH_CHOICE_FIELDS) {
@@ -17765,6 +17781,15 @@ function maybeFillTitleFromSwitch(tab) {
         const option = options.find(o => o.value === button.dataset.value);
         button.classList.toggle('hidden', !!option?.hidden);
       }
+    }
+    // The Switch tile's Orientation row only with a bar (not the icon button).
+    const style = document.getElementById(tab + '_switch_style');
+    if (style) {
+      const hide = switchLayoutValue(style.value) === 0;
+      const label = typeof document.querySelector === 'function'
+        ? document.querySelector('label[for="' + tab + '_switch_orientation"]') : null;
+      label?.classList?.toggle('hidden', hide);
+      document.getElementById(tab + '_switch_orientation_choices')?.classList?.toggle('hidden', hide);
     }
   }
 
@@ -17812,10 +17837,13 @@ function maybeFillTitleFromSwitch(tab) {
   }
 
   // The tile classes and layout of a Switch preview (live and cached grid).
-  function applySwitchPreviewLayout(tileElem, style, halfHeight) {
+  // `upright`: the bar stands below the header (bar_orientation.h).
+  function applySwitchPreviewLayout(tileElem, style, halfHeight, upright = false) {
     if (!tileElem) return;
     tileElem.dataset.switchLayout = String(switchLayoutValue(style));
-    tileElem.classList.toggle('switch-bar', switchUsesHeader(style, halfHeight) && !halfHeight);
+    const bar = switchUsesHeader(style, halfHeight) && !halfHeight;
+    tileElem.classList.toggle('switch-bar', bar);
+    tileElem.classList.toggle('switch-upright', bar && !!upright);
   }
 
   // switch_layout::Dimmer: the fill stays inside the bar's shape; its end
@@ -18039,7 +18067,7 @@ function maybeFillTitleFromSwitch(tab) {
       if (el.classList.contains('tile-switch-state') || el.classList.contains('tile-switch')) el.remove();
     }
     preview.insertAdjacentHTML('beforeend', switchPreviewExtraHtml(data.switch_style, half));
-    applySwitchPreviewLayout(preview, data.switch_style, half);
+    applySwitchPreviewLayout(preview, data.switch_style, half, Number(data.bar_orientation) === 1);
   }
 
   // Once the copy is in the grid (the bar measures itself): the state from
@@ -18181,14 +18209,21 @@ function maybeFillTitleFromSwitch(tab) {
     const {kind, level} = drawn;
     const width = bar.clientWidth;
     const height = bar.clientHeight;
-    const radius = Math.min(parseFloat(getComputedStyle(bar).borderTopLeftRadius) || 0, height / 2);
     const base = parseFloat(getComputedStyle(bar).getPropertyValue('--switch-bar-height')) || height;
-    const geometry = switchDimmerGeometry(width, height, radius, Math.min(base, height));
+    // An upright bar (level_bar::upright_geometry): along its height, with
+    // the one-row bar as its thickness; the fill rises from the bottom.
+    const upright = !!bar.parentElement?.classList?.contains('switch-upright');
+    const thickness = upright ? Math.min(base, width) : Math.min(base, height);
+    const radius = Math.min(parseFloat(getComputedStyle(bar).borderTopLeftRadius) || 0, (upright ? width : height) / 2);
+    const geometry = upright ? switchDimmerGeometry(height, thickness, radius, thickness)
+      : switchDimmerGeometry(width, height, radius, thickness);
     const fillWidth = kind === 'dimmer' ? geometry.fillWidth(level) : 0;
     const endRadius = geometry.endRadiusFor(fillWidth);
-    // The fill element starts one end radius left of the bar, so only the
-    // bar's round start shows (overflow hidden).
-    fill.style.width = (fillWidth ? fillWidth + endRadius : 0) + 'px';
+    // The fill element starts one end radius past the bar's start, so only
+    // the bar's round start shows (overflow hidden).
+    const size = (fillWidth ? fillWidth + endRadius : 0) + 'px';
+    fill.style.width = upright ? '' : size;
+    fill.style.height = upright ? size : '';
     bar.style.setProperty('--switch-end-radius', endRadius + 'px');
     bar.style.setProperty('--switch-handle-margin', geometry.margin + 'px');
     bar.style.setProperty('--switch-handle-w', geometry.handleWidth + 'px');
@@ -18224,6 +18259,8 @@ function maybeFillTitleFromSwitch(tab) {
       styleEl.value = (data.switch_style !== undefined && data.switch_style !== null)
         ? String(switchLayoutValue(data.switch_style)) : '0';
     }
+    const orientationEl = document.getElementById(prefix + '_switch_orientation');
+    if (orientationEl) orientationEl.value = Number(data.bar_orientation) === 1 ? '1' : '0';
     const fontEl = document.getElementById(prefix + '_switch_value_font');
     if (fontEl) fontEl.value = switchValueFont(data.sensor_value_font);
     const popupModeEl = document.getElementById(prefix + '_switch_popup_open_mode');
@@ -18240,6 +18277,7 @@ function maybeFillTitleFromSwitch(tab) {
     formData.append('switch_entity', document.getElementById(prefix + '_switch_entity')?.value || '');
     const styleEl = document.getElementById(prefix + '_switch_style');
     formData.append('switch_style', styleEl ? String(switchLayoutValue(styleEl.value)) : '0');
+    formData.append('bar_orientation', document.getElementById(prefix + '_switch_orientation')?.value === '1' ? '1' : '0');
     formData.append('sensor_value_font', switchValueFont(document.getElementById(prefix + '_switch_value_font')?.value));
     formData.append('popup_open_mode', document.getElementById(prefix + '_switch_popup_open_mode')?.value || '1');
   }
@@ -18251,6 +18289,8 @@ function maybeFillTitleFromSwitch(tab) {
     if (entityEl) entityEl.value = '';
     const styleEl = document.getElementById(prefix + '_switch_style');
     if (styleEl) styleEl.value = SWITCH_LAYOUT_NEW_TILE;
+    const orientationEl = document.getElementById(prefix + '_switch_orientation');
+    if (orientationEl) orientationEl.value = '0';
     const fontEl = document.getElementById(prefix + '_switch_value_font');
     if (fontEl) fontEl.value = '0';
     const popupModeEl = document.getElementById(prefix + '_switch_popup_open_mode');
@@ -18628,10 +18668,12 @@ function maybeFillTitleFromSwitch(tab) {
       (icon ? '<i class="mdi mdi-' + escapeHtml(icon) + '"></i>' : '') + '</span>';
   }
 
-  // bar_model(): the bar the device draws for this state.
-  function applyDevicePreview(tileElem, kind, d, halfHeight) {
+  // bar_model(): the bar the device draws for this state. `upright`: a
+  // Fan's bar stands below the header (bar_orientation.h).
+  function applyDevicePreview(tileElem, kind, d, halfHeight, upright = false) {
     if (!tileElem) return;
     tileElem.classList.toggle('switch-bar', !halfHeight);
+    tileElem.classList.toggle('switch-upright', !halfHeight && kind === 'fan' && !!upright);
     const bar = tileElem.querySelector('.tile-switch');
     if (!bar) return;
     const visual = devicePreviewVisual(kind, d);
@@ -18681,7 +18723,7 @@ function maybeFillTitleFromSwitch(tab) {
         // the bar's width, also when the tile is resized or laid out later
         // (a 2x1 tile kept the three slots of 1x1 and lit none).
         onResize = () => {
-          if (fitNow() !== fit) applyDevicePreview(tileElem, kind, d, halfHeight);
+          if (fitNow() !== fit) applyDevicePreview(tileElem, kind, d, halfHeight, upright);
         };
         const modes = DEVICE_ALARM_MODES.filter(mode => d.features & mode[1]).slice(0, fit - 1);
         const slots = [['disarmed', 0, 'shield-off'], ...modes.reverse()];
@@ -18731,6 +18773,9 @@ function maybeFillTitleFromSwitch(tab) {
     if (font) font.value = switchValueFont(data.sensor_value_font);
     const popup = document.getElementById(tab + '_' + prefix + '_popup_open_mode');
     if (popup) popup.value = data.popup_open_mode !== undefined ? String(data.popup_open_mode) : '1';
+    // A Fan's bar upright (bar_orientation.h).
+    const orientation = document.getElementById(tab + '_' + prefix + '_orientation');
+    if (orientation) orientation.value = Number(data.bar_orientation) === 1 ? '1' : '0';
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromEntity(tab, '_' + prefix + '_entity');
   }
@@ -18744,6 +18789,8 @@ function maybeFillTitleFromSwitch(tab) {
       switchValueFont(document.getElementById(tab + '_' + prefix + '_value_font')?.value));
     const popup = document.getElementById(tab + '_' + prefix + '_popup_open_mode');
     if (popup) formData.append('popup_open_mode', popup.value || '1');
+    const orientation = document.getElementById(tab + '_' + prefix + '_orientation');
+    if (orientation) formData.append('bar_orientation', orientation.value === '1' ? '1' : '0');
   }
 
   function resetDeviceFields(tab, prefix) {
@@ -18754,6 +18801,8 @@ function maybeFillTitleFromSwitch(tab) {
     if (font) font.value = '0';
     const popup = document.getElementById(tab + '_' + prefix + '_popup_open_mode');
     if (popup) popup.value = '1';
+    const orientation = document.getElementById(tab + '_' + prefix + '_orientation');
+    if (orientation) orientation.value = '0';
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
 

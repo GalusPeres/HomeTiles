@@ -2173,6 +2173,26 @@
     .tile-device-part.button { background:var(--device-button, rgba(255,255,255,0.18)); }
     .tile-device-part.lit { background:var(--switch-accent, #9E9E9E); color:var(--switch-card, #1A1A1A); }
     .tile-switch.is-unavailable > * { display:none !important; }
+    /* Upright (bar_orientation.h): the bar below the header over the rest
+       of the tile; the fill rises from the bottom with the handle line
+       across it, the switch is on at the top, a Fan's speeds stack from the
+       bottom. */
+    .tile.switch.switch-bar.switch-upright > .tile-switch,
+    .tile.device.switch-bar.switch-upright > .tile-switch {
+      top:calc(var(--preview-cell-h, 73px) - var(--climate-slots-bottom, 3px) + 3px - var(--switch-bar-height, 30px));
+      height:auto;
+    }
+    .tile.switch-upright .tile-switch .tile-switch-fill {
+      left:0; right:0; top:auto; bottom:calc(-1 * var(--switch-end-radius, 3px)); width:auto; height:0;
+    }
+    .tile.switch-upright .tile-switch .tile-switch-handle {
+      top:var(--switch-handle-margin, 6px); right:auto; left:50%;
+      width:var(--switch-handle-h, 42%); height:var(--switch-handle-w, 3px);
+      transform:translate(-50%, -50%);
+    }
+    .tile.switch-upright .tile-switch .tile-switch-knob { top:50%; bottom:0; left:0; right:0; width:auto; }
+    .tile.switch-upright .tile-switch.is-on .tile-switch-knob { top:0; bottom:50%; left:0; }
+    .tile.switch-upright .tile-switch .tile-device-parts { flex-direction:column-reverse; }
 
 .tile.cover .tile-cover-value {
       font-size:var(--fs20, 10px);

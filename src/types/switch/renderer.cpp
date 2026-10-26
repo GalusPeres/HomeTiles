@@ -314,8 +314,9 @@ void bar_draw_cb(lv_event_t* e) {
   const int32_t width = lv_area_get_width(&area);
   const int32_t height = lv_area_get_height(&area);
   if (width < 4 || height < 4) return;
-  const int32_t radius =
-      std::min<int32_t>(lv_obj_get_style_radius(view->bar, LV_PART_MAIN), height / 2);
+  // An upright bar rounds by its width (level_bar::radius_of).
+  const int32_t radius = std::min<int32_t>(lv_obj_get_style_radius(view->bar, LV_PART_MAIN),
+                                           (view->upright ? width : height) / 2);
   const lv_color_t card = lv_obj_get_style_bg_color(view->card, LV_PART_MAIN);
   const uint32_t accent_rgb = accent_color(view);
   const lv_color_t accent = lv_color_hex(accent_rgb);
@@ -326,15 +327,23 @@ void bar_draw_cb(lv_event_t* e) {
   if (view->bar_kind == static_cast<uint8_t>(Bar::Dimmer)) {
     // The handle line: the card's color (tone_color::notch_on).
     const lv_color_t notch = lv_color_hex(tone_color::notch_on(accent_rgb, lv_color_to_u32(card) & 0xFFFFFF));
-    level_bar::draw_fill(layer, view->bar, view->level, view->bar_base, accent, notch);
+    level_bar::draw_fill(layer, view->bar, view->level, view->bar_base, accent, notch, view->upright);
     return;
   }
 
   if (view->bar_kind != static_cast<uint8_t>(Bar::Toggle)) return;
-  // Flush half-width thumb like the Light popup switch, the bar's radius.
-  const int32_t half = width / 2;
-  const lv_area_t thumb = view->on ? lv_area_t{area.x2 - half + 1, area.y1, area.x2, area.y2}
-                                   : lv_area_t{area.x1, area.y1, area.x1 + half - 1, area.y2};
+  // Flush half-width thumb like the Light popup switch, the bar's radius;
+  // upright a half-height thumb, on at the top.
+  lv_area_t thumb;
+  if (view->upright) {
+    const int32_t half = height / 2;
+    thumb = view->on ? lv_area_t{area.x1, area.y1, area.x2, area.y1 + half - 1}
+                     : lv_area_t{area.x1, area.y2 - half + 1, area.x2, area.y2};
+  } else {
+    const int32_t half = width / 2;
+    thumb = view->on ? lv_area_t{area.x2 - half + 1, area.y1, area.x2, area.y2}
+                     : lv_area_t{area.x1, area.y1, area.x1 + half - 1, area.y2};
+  }
   lv_color_t thumb_color = accent;
   lv_color_t symbol_color = mark;
   if (!view->on) {
@@ -358,12 +367,12 @@ void bar_draw_cb(lv_event_t* e) {
 // follows, release commits. The bar never toggles or opens the popup.
 
 uint8_t level_at(const SwitchBarView* view, const lv_point_t& point) {
-  return level_bar::value_at(view->bar, view->bar_base, point);
+  return level_bar::value_at(view->bar, view->bar_base, point, view->upright);
 }
 
 // Redraws only the columns a level change touches (level_bar::invalidate_change).
 void invalidate_level_change(const SwitchBarView* view, uint8_t old_level, uint8_t new_level) {
-  level_bar::invalidate_change(view->bar, view->bar_base, old_level, new_level);
+  level_bar::invalidate_change(view->bar, view->bar_base, old_level, new_level, view->upright);
 }
 
 void show_local_level(SwitchEventData* data, uint8_t value) {
@@ -705,6 +714,7 @@ lv_obj_t* render_switch_tile(lv_obj_t* parent, int col, int row, const Tile& til
     view->icon = icon_lbl;
     view->layout = static_cast<uint8_t>(layout);
     view->compact = compact;
+    view->upright = bar_orientation::upright(tile);
     // Before any state: the likely bar, an empty dimmer for lights.
     const bool light = is_light_entity_id(tile.sensor_entity);
     view->bar_kind = static_cast<uint8_t>(switch_layout::bar_for(layout, compact, light));
@@ -715,7 +725,7 @@ lv_obj_t* render_switch_tile(lv_obj_t* parent, int col, int row, const Tile& til
     if (icon_lbl) {
       lv_obj_align(icon_lbl, LV_ALIGN_TOP_LEFT, tile_layout::scale_480(-8), tile_layout::scale_480(-8));
     }
-    const bool tall = switch_layout::sensor_look(layout, tile.span_h);
+    const bool tall = switch_layout::sensor_look(layout, tile.span_h, view->upright);
     const tile_header::Header text = tile_header::create(container, tile, tall, bar_box(tile).top);
     title_lbl = text.title;
     view->state_label = text.state;

@@ -12,6 +12,7 @@
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/core/power/power_manager.h"
 #include "src/tiles/config/tile_config.h"
+#include "src/tiles/config/bar_orientation.h"
 #include "src/tiles/config/tile_layouts.h"
 #include "src/core/config/config_manager.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
@@ -578,7 +579,10 @@ void WebAdminServer::handleGetTiles() {
     out += ",\"popup_open_mode\":";
     out += String(getTilePopupOpenMode(tile));
     out += ",\"switch_style\":";
-    out += String((tile.type == TILE_SWITCH && tile.sensor_decimals <= 3) ? tile.sensor_decimals : 0);
+    out += String(tile.type == TILE_SWITCH ? static_cast<uint8_t>(switch_layout::from_stored(tile.sensor_decimals)) : 0);
+    // Switch and Fan: the bar upright (bar_orientation.h).
+    out += ",\"bar_orientation\":";
+    out += bar_orientation::upright(tile) ? "1" : "0";
     out += ",\"navigate_target\":";
     out += String((tile.type == TILE_FOLDER) ? getNavigateTargetId(tile) : 0);
     // The editor prevents type changes for nonempty folders to keep their

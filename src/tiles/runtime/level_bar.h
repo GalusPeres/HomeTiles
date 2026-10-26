@@ -4,6 +4,7 @@
 
 #include <algorithm>
 
+#include "src/tiles/config/bar_orientation.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/config/tile_geometry.h"
 #include "src/tiles/icons/mdi_icons.h"
@@ -42,7 +43,9 @@ inline BarBox box(const Tile& tile) {
   BarBox box;
   box.width = tile_w - climate_layout::kOuterInset * 2;
   box.base = GRID_CELL_H - climate_layout::kOuterInset - top;
-  box.height = box.base + switch_layout::bar_growth(tile_h, GRID_CELL_H);
+  // Upright (bar_orientation.h): below the header over the rest of the tile.
+  box.height = bar_orientation::upright(tile) ? tile_h - climate_layout::kOuterInset - top
+                                              : box.base + switch_layout::bar_growth(tile_h, GRID_CELL_H);
   box.top = tile_h - climate_layout::kOuterInset - box.height;
   return box;
 }
@@ -133,17 +136,60 @@ inline int32_t radius_of(lv_obj_t* bar, int32_t height) {
   return std::min<int32_t>(lv_obj_get_style_radius(bar, LV_PART_MAIN), height / 2);
 }
 
+// An upright bar (bar_orientation.h) along its height: the one-row bar's
+// geometry turned (switch_layout::Dimmer with the length as its width and
+// the one-row height as its thickness), so end rounding, handle line and the
+// smallest piece are the horizontal bar's; 0 is the bottom.
+inline switch_layout::Dimmer upright_geometry(int32_t width, int32_t height, int32_t radius, int16_t base) {
+  const int32_t thickness = base > 0 ? base : width;
+  return switch_layout::Dimmer{height, thickness, radius, thickness};
+}
+
+// draw_fill of an upright bar: the fill rises from the bottom; the handle
+// line lies across it.
+inline void draw_fill_upright(lv_layer_t* layer, const lv_area_t& area, int32_t radius, uint8_t level, int16_t base,
+                              lv_color_t accent, lv_color_t card) {
+  const switch_layout::Dimmer geometry = upright_geometry(lv_area_get_width(&area), lv_area_get_height(&area), radius,
+                                                          base);
+  const int32_t fill = geometry.fill_width(level);
+  const int32_t end = geometry.end_radius_for(fill);
+  const lv_area_t clip_ori = layer->_clip_area;
+  const lv_area_t start_range = {area.x1, area.y2 - fill + end + 1, area.x2, area.y2};
+  lv_area_t clip;
+  if (intersect(clip_ori, start_range, clip)) {
+    layer->_clip_area = clip;
+    draw_rect(layer, area, accent, radius);
+  }
+  const lv_area_t end_range = {area.x1, area.y2 - fill + 1, area.x2, area.y2 - fill + end};
+  if (intersect(clip_ori, end_range, clip)) {
+    layer->_clip_area = clip;
+    const lv_area_t end_piece = {area.x1, area.y2 - fill + 1, area.x2, area.y2 - fill + 2 * end};
+    draw_rect(layer, end_piece, accent, end);
+  }
+  layer->_clip_area = clip_ori;
+  const int32_t line_len = geometry.handle_height();
+  const int32_t line_w = geometry.handle_width();
+  const int32_t line_x = area.x1 + (lv_area_get_width(&area) - line_len) / 2;
+  const int32_t line_y = area.y2 - geometry.handle_x(level) - line_w / 2;
+  const lv_area_t handle = {line_x, line_y, line_x + line_len - 1, line_y + line_w - 1};
+  draw_rect(layer, handle, card, LV_RADIUS_CIRCLE);
+}
+
 // Draws `level` (1..100; 0 draws nothing) of the bar in `accent` with the
 // handle line in `card`. `base`: the one-row bar height (a taller bar keeps
-// its end rounding and handle width).
+// its end rounding and handle width). `upright`: the bar stands (bottom 0).
 inline void draw_fill(lv_layer_t* layer, lv_obj_t* bar, uint8_t level, int16_t base, lv_color_t accent,
-                      lv_color_t card) {
+                      lv_color_t card, bool upright = false) {
   if (!layer || !bar || level == 0) return;
   lv_area_t area;
   lv_obj_get_coords(bar, &area);
   const int32_t width = lv_area_get_width(&area);
   const int32_t height = lv_area_get_height(&area);
   if (width < 4 || height < 4) return;
+  if (upright) {
+    draw_fill_upright(layer, area, radius_of(bar, width), level, base, accent, card);
+    return;
+  }
   const int32_t radius = radius_of(bar, height);
   switch_layout::Dimmer geometry{width, height, radius, base};
   const int32_t fill = geometry.fill_width(level);
@@ -177,10 +223,14 @@ inline void draw_fill(lv_layer_t* layer, lv_obj_t* bar, uint8_t level, int16_t b
 
 // The level under a touch point: the Light popup's brightness logic sideways
 // (100 % at the far cap center, 1 % at the near one, 0 only beyond it).
-inline uint8_t value_at(lv_obj_t* bar, int16_t base, const lv_point_t& point) {
+inline uint8_t value_at(lv_obj_t* bar, int16_t base, const lv_point_t& point, bool upright = false) {
   lv_area_t area;
   lv_obj_get_coords(bar, &area);
   const int32_t height = lv_area_get_height(&area);
+  if (upright) {
+    const int32_t width = lv_area_get_width(&area);
+    return upright_geometry(width, height, radius_of(bar, width), base).value_at(area.y2 - point.y);
+  }
   switch_layout::Dimmer geometry{lv_area_get_width(&area), height, radius_of(bar, height), base};
   return geometry.value_at(point.x - area.x1);
 }
@@ -189,11 +239,25 @@ inline uint8_t value_at(lv_obj_t* bar, int16_t base, const lv_point_t& point) {
 // invalidate_brightness_change: between the old and new fill end, plus the
 // end rounding and the handle line before it. The card corners, the tile
 // border and the bar's round start stay untouched while dragging.
-inline void invalidate_change(lv_obj_t* bar, int16_t base, uint8_t old_level, uint8_t new_level) {
+inline void invalidate_change(lv_obj_t* bar, int16_t base, uint8_t old_level, uint8_t new_level, bool upright = false) {
   lv_area_t area;
   lv_obj_get_coords(bar, &area);
   const int32_t width = lv_area_get_width(&area);
   const int32_t height = lv_area_get_height(&area);
+  if (upright) {
+    // The rows between the old and the new fill end, plus its rounding and
+    // the handle line below it.
+    const int32_t radius = radius_of(bar, width);
+    const switch_layout::Dimmer geometry = upright_geometry(width, height, radius, base);
+    const int32_t old_fill = geometry.fill_width(old_level);
+    const int32_t new_fill = geometry.fill_width(new_level);
+    const int32_t reach = std::max<int32_t>(radius, geometry.handle_margin() + geometry.handle_width()) + 1;
+    const int32_t from = std::max<int32_t>(0, std::min(old_fill, new_fill) - reach);
+    const int32_t to = std::min<int32_t>(height, std::max(old_fill, new_fill) + 1);
+    lv_area_t dirty = {area.x1, area.y2 - to + 1, area.x2, area.y2 - from};
+    lv_obj_invalidate_area(bar, &dirty);
+    return;
+  }
   const int32_t radius = radius_of(bar, height);
   const switch_layout::Dimmer geometry{width, height, radius, base};
   const int32_t old_fill = geometry.fill_width(old_level);

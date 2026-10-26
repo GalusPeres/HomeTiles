@@ -48,6 +48,9 @@ struct View {
   int16_t state_width = 0;
   int16_t state_center = -1;
   bool compact = false;
+  // A Fan's bar stands upright (bar_orientation.h): the switch on at the top,
+  // speeds stacked from the bottom, the percentage filled from the bottom.
+  bool upright = false;
   int16_t bar_base = 0;
   int16_t bar_width = 0;
   // What the bar draws.
@@ -188,7 +191,7 @@ void bar_draw_cb(lv_event_t* e) {
   const int32_t width = lv_area_get_width(&area);
   const int32_t height = lv_area_get_height(&area);
   if (width < 4 || height < 4) return;
-  const int32_t radius = level_bar::radius_of(view->bar, height);
+  const int32_t radius = level_bar::radius_of(view->bar, view->upright ? width : height);
   const lv_color_t card = lv_obj_get_style_bg_color(view->card, LV_PART_MAIN);
   const uint32_t base = lv_color_to_u32(lv_obj_get_style_bg_color(view->bar, LV_PART_MAIN)) & 0xFFFFFF;
   const lv_color_t accent = lv_color_hex(accent_rgb(view));
@@ -196,10 +199,18 @@ void bar_draw_cb(lv_event_t* e) {
 
   switch (view->kind) {
     case BarKind::Toggle: {
-      // Flush half-width thumb like the Light popup switch.
-      const int32_t half = width / 2;
-      const lv_area_t thumb = view->on ? lv_area_t{area.x2 - half + 1, area.y1, area.x2, area.y2}
-                                       : lv_area_t{area.x1, area.y1, area.x1 + half - 1, area.y2};
+      // Flush half-width thumb like the Light popup switch; upright a
+      // half-height thumb, on at the top.
+      lv_area_t thumb;
+      if (view->upright) {
+        const int32_t half = height / 2;
+        thumb = view->on ? lv_area_t{area.x1, area.y1, area.x2, area.y1 + half - 1}
+                         : lv_area_t{area.x1, area.y2 - half + 1, area.x2, area.y2};
+      } else {
+        const int32_t half = width / 2;
+        thumb = view->on ? lv_area_t{area.x2 - half + 1, area.y1, area.x2, area.y2}
+                         : lv_area_t{area.x1, area.y1, area.x1 + half - 1, area.y2};
+      }
       lv_color_t thumb_color = accent;
       lv_color_t symbol = card;
       // A pressed lock switch: the rail one control step up.
@@ -252,17 +263,20 @@ void bar_draw_cb(lv_event_t* e) {
       return;
     }
     case BarKind::Segments: {
+      // Upright: the first speed at the bottom.
       const int32_t n = std::max<int32_t>(1, view->count);
-      const int32_t step = (width - gap * (n - 1)) / n;
+      const int32_t step = ((view->upright ? height : width) - gap * (n - 1)) / n;
       for (int32_t i = 0; i < n; ++i) {
-        const lv_area_t segment = {area.x1 + i * (step + gap), area.y1, area.x1 + i * (step + gap) + step - 1,
-                                   area.y2};
+        const lv_area_t segment =
+            view->upright ? lv_area_t{area.x1, area.y2 - i * (step + gap) - step + 1, area.x2, area.y2 - i * (step + gap)}
+                          : lv_area_t{area.x1 + i * (step + gap), area.y1, area.x1 + i * (step + gap) + step - 1,
+                                      area.y2};
         level_bar::draw_rect(layer, segment, i < view->level ? accent : lv_color_hex(button_rgb(base)), radius);
       }
       return;
     }
     case BarKind::Dimmer:
-      level_bar::draw_fill(layer, view->bar, view->level, view->bar_base, accent, card);
+      level_bar::draw_fill(layer, view->bar, view->level, view->bar_base, accent, card, view->upright);
       return;
     case BarKind::None:
       return;
@@ -406,7 +420,7 @@ void dimmer_event(View* view, lv_event_code_t code) {
     const int dy = point.y - g_hold.press.y;
     g_hold.moved = dx * dx + dy * dy >= kDragThreshold * kDragThreshold;
   }
-  const uint8_t value = level_bar::value_at(view->bar, view->bar_base, point);
+  const uint8_t value = level_bar::value_at(view->bar, view->bar_base, point, view->upright);
   const bool changed = value != g_hold.value || code == LV_EVENT_PRESSED;
   g_hold.value = value;
   if (changed) show_drag_level(view, value);
@@ -555,7 +569,7 @@ void show_drag_level(View* view, uint8_t value) {
   }
   const uint8_t old_level = view->level;
   view->level = value;
-  level_bar::invalidate_change(view->bar, view->bar_base, old_level, value);
+  level_bar::invalidate_change(view->bar, view->bar_base, old_level, value, view->upright);
   tile_header::set_state(view->state_label, device_visual::fan_level_text(view->speed_count, value).c_str(),
                          view->compact ? nullptr : view->state_font, view->state_width, view->state_center);
 }
@@ -570,6 +584,16 @@ int32_t bar_x(lv_obj_t* bar, int32_t& width) {
   lv_point_t point = {0, 0};
   if (lv_indev_t* indev = lv_indev_get_act()) lv_indev_get_point(indev, &point);
   return std::max<int32_t>(0, std::min<int32_t>(width - 1, point.x - area.x1));
+}
+
+// bar_x along an upright bar: the distance from its bottom.
+int32_t bar_up(lv_obj_t* bar, int32_t& height) {
+  lv_area_t area;
+  lv_obj_get_coords(bar, &area);
+  height = lv_area_get_height(&area);
+  lv_point_t point = {0, 0};
+  if (lv_indev_t* indev = lv_indev_get_act()) lv_indev_get_point(indev, &point);
+  return std::max<int32_t>(0, std::min<int32_t>(height - 1, area.y2 - point.y));
 }
 
 // The part a press on the bar lands on, -1 when the press does nothing there
@@ -625,7 +649,9 @@ void bar_event_cb(lv_event_t* e) {
       device_control::fan_action(view->entity, on ? "turn_off" : "turn_on");
     } else if (view->kind == BarKind::Segments) {
       const int count = std::max<int>(1, view->count);
-      const int speed = std::min<int>(count, x * count / std::max<int32_t>(1, width) + 1);
+      int32_t length = width;
+      const int32_t along = view->upright ? bar_up(view->bar, length) : x;
+      const int speed = std::min<int>(count, along * count / std::max<int32_t>(1, length) + 1);
       const uint8_t percentage = static_cast<uint8_t>(device_detail::fan_percentage_of(d, speed));
       start_hold(view, percentage);
       device_control::fan_percentage(view->entity, percentage);
@@ -780,6 +806,7 @@ lv_obj_t* render_device_tile(lv_obj_t* parent, int col, int row, const Tile& til
   view->icon_visible = !isMdiIconDisabled(tile.icon_name);
   view->icon_name = view->icon_visible ? normalizeMdiIconName(tile.icon_name) : String();
   view->compact = tile_geometry::compact_device_control(tile.type, tile.span_w, tile.span_h);
+  view->upright = bar_orientation::upright(tile);
 
   if (view->icon_visible && FONT_MDI_ICONS) {
     view->icon = lv_label_create(card);
@@ -791,7 +818,8 @@ lv_obj_t* render_device_tile(lv_obj_t* parent, int col, int row, const Tile& til
   }
 
   const level_bar::BarBox box = level_bar::box(tile);
-  const bool tall = !view->compact && tile.span_h > 1.0f;
+  // An upright bar keeps the header beside the disc (switch_layout::sensor_look).
+  const bool tall = !view->compact && tile.span_h > 1.0f && !view->upright;
   const tile_header::Header header = tile_header::create(card, tile, tall, box.top);
   view->state_label = header.state;
   view->state_font = header.state_font;

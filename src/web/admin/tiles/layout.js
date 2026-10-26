@@ -115,7 +115,8 @@
     // The Cover position bar uses the same header (tile_header.h).
     // Lock, Alarm panel and Fan too (types/device).
     const switchHeader = [5, 19, 24, 25, 26].includes(Number(type)) && el.classList.contains('switch-bar');
-    const switchTall = switchHeader && Number(layout?.span_h) > 1;
+    // An upright bar keeps the header beside the disc (bar_orientation.h).
+    const switchTall = switchHeader && Number(layout?.span_h) > 1 && !el.classList.contains('switch-upright');
     el.classList.toggle('switch-tall', switchTall);
     if (switchTall) el.style?.setProperty?.('--switch-span-h', String(Number(layout.span_h)));
     else el.style?.removeProperty?.('--switch-span-h');

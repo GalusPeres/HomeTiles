@@ -684,6 +684,9 @@ static const Strings kStringsDe = {
     "Seiten",
     "Der Ordner enthält noch Kacheln. Löschen geht über „Löschen“.",
 
+    "Ausrichtung",
+    "Waagerecht",
+    "Senkrecht",
     "Popup",
     "Cover links",
     "Cover Mitte",
@@ -1374,6 +1377,9 @@ static const Strings kStringsEn = {
     "Pages",
     "The folder still contains tiles. Remove it with “Delete”.",
 
+    "Orientation",
+    "Horizontal",
+    "Vertical",
     "Popup",
     "Cover left",
     "Cover centered",
@@ -2064,6 +2070,9 @@ static const Strings kStringsFr = {
     "Pages",
     "Le dossier contient encore des tuiles. Supprimez-le avec «\u00A0Supprimer\u00A0».",
 
+    "Orientation",
+    "Horizontale",
+    "Verticale",
     "Popup",
     "Pochette à gauche",
     "Pochette au centre",
@@ -3153,6 +3162,9 @@ static const Strings kStringsPl = {
     "Strony",
     "Folder nadal zawiera kafelki. Usuń go przyciskiem „Usuń”.",
 
+    "Orientacja",
+    "Pozioma",
+    "Pionowa",
     "Okno",
     "Okładka po lewej",
     "Okładka na środku",
@@ -3813,6 +3825,9 @@ static const Strings kStringsCs = {
     "Stránky",
     "Složka stále obsahuje dlaždice. Odstraňte ji pomocí „Odstranit“.",
 
+    "Orientace",
+    "Vodorovně",
+    "Svisle",
     "Okno",
     "Obal vlevo",
     "Obal uprostřed",
@@ -4473,6 +4488,9 @@ static const Strings kStringsEs = {
     "Páginas",
     "La carpeta aún contiene mosaicos. Quítala con “Eliminar”.",
 
+    "Orientación",
+    "Horizontal",
+    "Vertical",
     "Ventana",
     "Portada a la izquierda",
     "Portada en el centro",
@@ -5133,6 +5151,9 @@ static const Strings kStringsSk = {
     "Stránky",
     "Priečinok stále obsahuje dlaždice. Odstráňte ho pomocou „Odstrániť“.",
 
+    "Orientácia",
+    "Vodorovne",
+    "Zvislo",
     "Okno",
     "Obal vľavo",
     "Obal v strede",

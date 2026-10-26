@@ -167,7 +167,7 @@ inline void draw_fill_upright(lv_layer_t* layer, const lv_area_t& area, int32_t 
     draw_rect(layer, end_piece, accent, end);
   }
   layer->_clip_area = clip_ori;
-  const int32_t line_len = geometry.handle_height();
+  const int32_t line_len = switch_layout::upright_handle_length(lv_area_get_width(&area));
   const int32_t line_w = geometry.handle_width();
   const int32_t line_x = area.x1 + (lv_area_get_width(&area) - line_len) / 2;
   const int32_t line_y = area.y2 - geometry.handle_x(level) - line_w / 2;

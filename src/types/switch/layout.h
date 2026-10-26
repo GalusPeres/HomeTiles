@@ -43,6 +43,11 @@ inline Layout from_stored(uint8_t value) {
 
 inline bool horizontal(Layout layout) { return layout != Layout::IconButton; }
 
+// The handle line across an upright bar: as long for the bar's width as the
+// Light popup's brightness handle is for its slider (46 of 160 px), so tile
+// and popup match (user 2026-10-26).
+inline int upright_handle_length(int width) { return width * 46 / 160; }
+
 // The stored value of a layout and its orientation; the icon button has no
 // bar and stays as it is.
 inline uint8_t to_stored(Layout layout, bool upright) {

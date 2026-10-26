@@ -30,10 +30,11 @@ int main() {
   for (int value = 7; value <= 9; ++value) std::printf("unknown %d %d\n", value, static_cast<int>(from_stored(value)));
   std::printf("look %d %d %d\n", sensor_look(Layout::Dimmer, 2.0f) ? 1 : 0, sensor_look(Layout::Dimmer, 2.0f, true) ? 1 : 0,
               sensor_look(Layout::Dimmer, 1.0f, true) ? 1 : 0);
-  // level_bar::upright_geometry on the V2 1x1.5 bar: 146 px long, the
-  // one-row bar (68 px) as its thickness, radius 27.
+  // level_bar::upright_geometry on the V2 1x1.5 bar: 146 px long, 182 wide,
+  // the one-row bar (68 px) as its thickness, radius 27; the handle line as
+  // long as the Light popup's for the bar's width.
   const Dimmer up{146, 68, 27, 68};
-  std::printf("upright %d %d %d %d %d %d\n", up.min_fill(), up.end_radius(), up.handle_width(), up.handle_height(),
+  std::printf("upright %d %d %d %d %d %d\n", up.min_fill(), up.end_radius(), up.handle_width(), upright_handle_length(182),
               up.fill_width(50), up.value_at(up.handle_x(50)));
   return 0;
 }
@@ -50,7 +51,7 @@ if (output !== null) {
   }
   assert.deepEqual(pick('unknown').map((row) => row[1]), [0, 0, 0], 'unknown values are the icon button');
   assert.deepEqual(pick('look')[0], [1, 0, 0], 'an upright bar keeps the header beside the disc');
-  assert.deepEqual(pick('upright')[0], [44, 17, 4, 28, 94, 50], 'upright: the one-row roundings and handle line');
+  assert.deepEqual(pick('upright')[0], [44, 17, 4, 52, 94, 50], 'upright: the one-row roundings, the popup handle length');
 }
 
 // The Web Admin's geometry is the same (switch admin.js switchDimmerGeometry
@@ -81,6 +82,7 @@ const levelBar = readRepoFile('src/tiles/runtime/level_bar.h');
 assert.ok(levelBar.includes('box.height = bar_orientation::upright(tile) ? tile_h - climate_layout::kOuterInset - top'),
   'the upright bar fills the tile below the header');
 assert.ok(levelBar.includes('return switch_layout::Dimmer{height, thickness, radius, thickness};') &&
+  levelBar.includes('const int32_t line_len = switch_layout::upright_handle_length(lv_area_get_width(&area));') &&
   levelBar.includes('lv_color_t card, bool upright = false) {') &&
   levelBar.includes('return upright_geometry(width, height, radius_of(bar, width), base).value_at(area.y2 - point.y);') &&
   levelBar.includes('lv_area_t dirty = {area.x1, area.y2 - to + 1, area.x2, area.y2 - from};'),
@@ -112,7 +114,8 @@ for (const word of ['"Ausrichtung",', '"Senkrecht",', '"Orientation",', '"Vertic
   assert.ok(i18n.includes(word), `translation ${word}`);
 }
 const switchAdmin = readRepoFile('src/types/switch/admin.js');
-assert.ok(switchAdmin.includes("'camera_tap', 'switch_orientation', 'fan_orientation'];") &&
+assert.ok(switchAdmin.includes("bar.style.setProperty('--switch-handle-h', (upright ? Math.floor(width * 46 / 160) : geometry.handleHeight) + 'px');") &&
+  switchAdmin.includes("'camera_tap', 'switch_orientation', 'fan_orientation'];") &&
   switchAdmin.includes("const hide = switchLayoutValue(style.value) === 0;") &&
   switchAdmin.includes("tileElem.classList.toggle('switch-upright', bar && !!upright);") &&
   switchAdmin.includes("if (orientationEl) orientationEl.value = Number(data.bar_orientation) === 1 ? '1' : '0';") &&

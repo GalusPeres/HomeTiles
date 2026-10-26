@@ -18227,7 +18227,9 @@ function maybeFillTitleFromSwitch(tab) {
     bar.style.setProperty('--switch-end-radius', endRadius + 'px');
     bar.style.setProperty('--switch-handle-margin', geometry.margin + 'px');
     bar.style.setProperty('--switch-handle-w', geometry.handleWidth + 'px');
-    bar.style.setProperty('--switch-handle-h', geometry.handleHeight + 'px');
+    // Upright: the Light popup's handle for its slider width
+    // (switch_layout::upright_handle_length).
+    bar.style.setProperty('--switch-handle-h', (upright ? Math.floor(width * 46 / 160) : geometry.handleHeight) + 'px');
   }
 
   function updateSwitchValuePreview(tab) {

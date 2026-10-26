@@ -179,11 +179,12 @@ assert.ok(tallRenderer.includes('switch_layout::Dimmer geometry{width, height, r
 assert.ok(tallRenderer.includes('const uint8_t unreported_level = dimmable ? view->last_on_level : 100;') &&
           tallRenderer.includes('if (dimmable && on && level > 0) view->last_on_level = level;') &&
           tallRenderer.includes('show_state_text(view, state, dimmable && level > 0, level, on);'));
-// The Light popup's brightness handle takes the tile's handle color: the handle line
-// on the fill like the tile's (user 2026-10-10, tone_color::notch_on).
+// The Light popup's brightness handle line on the fill like the tile's
+// (user 2026-10-10, tone_color::notch_on), in the popup card's color: the
+// popup shows the tile without "Ausfuellen" (#130, user 2026-10-26).
 const popup = readRepoFile('src/ui/popups/light/light_popup.cpp');
 assert.ok(popup.includes('lv_color_hex(tone_color::notch_on(ctx->brightness_draw_color, lv_color_to_u32(brightness_dash_color(ctx))));') &&
-          popup.includes('switch_tile_card_color(static_cast<GridType>(ctx->tile_grid), ctx->tile_index, rgb)'));
+          popup.includes('static lv_color_t brightness_dash_color(const LightPopupContext* ctx) { return popup_surface::card(ctx->card_bg); }'));
 assert.ok(tallRenderer.includes('level_bar::draw_fill(layer, view->bar, view->level, view->bar_base, accent, notch);'),
   'The tile handle is the same handle line');
 // b149 regression: the resize preview copied the tile at its old size, so a

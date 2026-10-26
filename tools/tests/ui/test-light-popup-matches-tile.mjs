@@ -92,7 +92,9 @@ const tileSwitch = read('src/types/switch/renderer.cpp');
 assert.ok(tileSwitch.includes('view->thumb_off = tone_color::switch_thumb_off(base);') &&
   tileSwitch.includes('symbol_color = lv_color_hex(tone_color::off_icon());'), 'Tile switch: off thumb and grey off symbol');
 const popup = read('src/ui/popups/light/light_popup.cpp');
-assert.ok(popup.includes('popup_nav_style::fill(popup_surface::card(ctx->card_bg), lv_color_hex(header_icon_rgb(ctx, icon_rgb)), color, opa);'),
+// For the color the header icon shows, the one its circle is computed for
+// (#130, user 2026-10-26: a white light's controls were grey under a tinted circle).
+assert.ok(popup.includes('popup_nav_style::fill(popup_surface::card(ctx->card_bg), lv_color_hex(shown_icon_rgb(ctx, header_icon_rgb(ctx, icon_rgb))),'),
   'Light popup controls use the shell control fill (the header circle color)');
 assert.equal((popup.match(/control_fill\(ctx, icon_rgb, track, track_opa\);\n\s*(?:const uint32_t accent = tone_color::light_accent\(icon_rgb\);\n\s*const lv_color_t thumb_color =|const lv_color_t thumb_color =|lv_obj_set_style_bg_color\(ctx->val_slider, track, LV_PART_MAIN\);)/g) || []).length, 2,
   'Switch and brightness track take the control fill');

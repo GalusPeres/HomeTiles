@@ -575,8 +575,12 @@ static uint32_t header_icon_rgb(const LightPopupContext* ctx, uint32_t icon_rgb)
 // the header circle's color (popup_shell_control_fill), the neutral step for
 // an off light or a white icon. The card stays neutral: tinting it restyled
 // the whole popup on every step of a dragged color.
+// They are computed for the color the header icon shows (shown_icon_rgb, the
+// one apply_header_disc_tint reads): the raw light color made a white
+// light's controls grey under a tinted circle (#130, user 2026-10-26).
 static void control_fill(const LightPopupContext* ctx, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa) {
-  popup_nav_style::fill(popup_surface::card(ctx->card_bg), lv_color_hex(header_icon_rgb(ctx, icon_rgb)), color, opa);
+  popup_nav_style::fill(popup_surface::card(ctx->card_bg), lv_color_hex(shown_icon_rgb(ctx, header_icon_rgb(ctx, icon_rgb))),
+                        color, opa);
 }
 
 // The mode buttons follow the circle color whenever the icon color changes:
@@ -846,16 +850,10 @@ static void update_brightness_fill(LightPopupContext* ctx) {
       ctx, old_active, old_center_y, new_active, new_center_y);
 }
 
-// The brightness handle line has the color of the bound tile's own handle
-// line (its card, tinted with the tile color "From icon"), read at draw
-// time; without a tile the card's.
-static lv_color_t brightness_dash_color(const LightPopupContext* ctx) {
-  uint32_t rgb = 0;
-  if (ctx->has_tile_ref && switch_tile_card_color(static_cast<GridType>(ctx->tile_grid), ctx->tile_index, rgb)) {
-    return lv_color_hex(rgb);
-  }
-  return popup_surface::card(ctx->card_bg);
-}
+// The brightness handle line: the popup card's color, like the handle line
+// of the tile without "Ausfuellen" (its card). The popup is never filled, so
+// it shows that tile's colors, not a filled tile's (#130, user 2026-10-26).
+static lv_color_t brightness_dash_color(const LightPopupContext* ctx) { return popup_surface::card(ctx->card_bg); }
 
 static void on_brightness_slider_draw(lv_event_t* e) {
   if (lv_event_get_code(e) != LV_EVENT_DRAW_MAIN) return;

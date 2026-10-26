@@ -237,13 +237,15 @@ uint32_t disc_icon_rgb(lv_obj_t* disc) {
   return icon ? tile_icon_disc::icon_color(icon) : ui_theme::text();
 }
 
-// The light theme fills a tile "From icon" in the neutral grey while its
-// icon shows white or almost white light (user 2026-10-10); tile_tint::choose
-// gives no tint for a color without a hue.
+// A tile "From icon" fills in the neutral grey while its icon shows white or
+// almost white light: the light theme's filled tiles (user 2026-10-10) and,
+// since #130 (2026-10-26), every tile with "Ausfuellen" of the dark theme, so
+// a light that is on always fills; tile_tint::choose gives no tint for a
+// color without a hue.
 tile_tint::Choice with_white(lv_obj_t* card, tile_tint::Choice choice, uint8_t fill, lv_obj_t* disc) {
+  if (choice.percent || !fill || !disc || !tile_icon_disc::icon_of(disc)) return choice;
   uint8_t base = 0, flags = 0;
-  if (choice.percent || !fill || !disc || !tile_icon_disc::icon_of(disc) || !tile_surface::rule_of(card, base, flags) ||
-      !(flags & tile_surface::kFollowTint)) {
+  if (ui_theme::theme_light() && (!tile_surface::rule_of(card, base, flags) || !(flags & tile_surface::kFollowTint))) {
     return choice;
   }
   const uint32_t icon = disc_icon_rgb(disc);

@@ -156,7 +156,7 @@ assert.ok(read('src/tiles/runtime/tile_icon_disc.h').includes('if (g_icon_color_
 assert.ok(read('src/tiles/config/tile_config.h').includes(
   'return !tileTypeKeepsOwnColor(tile.type) && tile_icon_colors::fills(tile.icon_colors.c_str());'));
 assert.ok(read('src/tiles/runtime/tile_renderer.cpp').includes(
-  'if (tileFills(tile)) return tile_surface::kFollowTint | tile_surface::kNeutralIdle;'));
+  'return tile.type == TILE_SWITCH ? tile_surface::kFollowTint : tile_surface::kFollowTint | tile_surface::kNeutralIdle;'));
 assert.ok(grid.includes('function tileFills(typeValue, iconColors) { return tileTypeKeepsOwnColor(typeValue) ? 0 : tileFillOf(iconColors); }') &&
   grid.includes('const ownFill = tileFills(typeValue, record);') &&
   grid.includes('const iconOffered = !keepsOwn && typeof tileTypeHasIconColors'));

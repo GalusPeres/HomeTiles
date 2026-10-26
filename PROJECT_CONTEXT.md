@@ -12,9 +12,9 @@ Last reviewed: 2026-10-26
 
 ## Releases and builds
 
-- FW v0.9.5 hotfix 2026-10-23 (media player hidden when rebuilt with the menu open); FW + Bridge v0.9.4 released the same day (media popup, speaker over the Bridge, camera sound, HA theme/rotation). Bridge beta v0.9.6b1.
+- FW v0.9.5 (hotfix) and FW + Bridge v0.9.4 released 2026-10-23. Bridge beta v0.9.6b1.
 - Pairing by IP without mDNS (#114, Bridge #16): read-only `GET /api/link` + Bridge menu step; HA ok on Tab5 (b513, b16).
-- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b553.
+- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b554.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build; a cache stays warm when only repo headers changed and the LVGL config fingerprint matches.
 - Docs CI runs on pinned Chrome for Testing 154.0.8037.57; a tag's docs run uses the tag's workflow, so after a release dispatch docs on `main`.
 - Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need their icons on HomeTiles-staging (tag = FW_VERSION).
@@ -84,6 +84,7 @@ Last reviewed: 2026-10-26
 - Upright (b294): P4 panels upright under a landscape profile draw the upright UI directly (`drawUpright`); JC1060/7B upright and JC4880 landscape (b368) compile only, HW pending.
 - Light theme: `ui_theme` roles + `SurfaceScope`; popups take the opener's surface. Remembered LVGL objects clear themselves on delete (LVGL 9.6 `lv_obj_is_valid` reads freed objects).
 - Settings: 4 pages (`build/design-mockups/settings`), Display with a Sound group on speaker boards (#123); setup in the popup card.
+- Lights (#130, b554): HA colors in both themes; Fill fills while on (white grey); Switch tiles off unfilled; Light popup = tile without Fill. HW pending.
 - Units (b551): a step smaller after the number, digit tops level, like the weather forecast (`value_unit.h`, `.tile-unit`, `unitTextHtml`): tiles, state lines, popups; two units in one line keep one size.
 
 ## Tiles and Bridge contracts

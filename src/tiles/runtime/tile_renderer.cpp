@@ -1767,11 +1767,12 @@ uint32_t switch_state_icon_color(const SwitchState& state) {
   if (state.supports_temperature && !state.supports_color && state.has_color_temp) {
     rgb = lv_color_to_u32(light_color_from_temperature_kelvin(state.color_temp_kelvin)) & 0xFFFFFF;
   }
-  // The light theme shows a light's color as Home Assistant does, the same
-  // on the tile and in its popup, white light in its light grey
-  // (tone_color::ha_light_color, user 2026-10-10: "genau so wie in HA").
-  if (ui_theme::theme_light()) rgb = tone_color::ha_light_color(rgb);
-  return rgb;
+  // A light's color as Home Assistant shows it, the same on the tile and in
+  // its popup, white light in its light grey (tone_color::ha_light_color):
+  // the light theme since 2026-10-10 ("genau so wie in HA"), the dark theme
+  // since 2026-10-26 (#130: below 40 % saturation raised to 40 %, so 4400 K
+  // fills like 4000 K).
+  return tone_color::ha_light_color(rgb);
 }
 
 bool switch_payload_icon_color(const char* payload, uint32_t& rgb, bool* active) {
@@ -5121,8 +5122,10 @@ static uint8_t tile_surface_of(const Tile& tile, GridType grid_type) {
 // The rule of a filled tile (tile_surface set_rule, 0 = none): in the light
 // theme a tile with "Ausfuellen" (tileFills) is filled from the
 // start, with its icon's color or, without one, the neutral grey
-// (kNeutralIdle; user 2026-10-10: a light that is off is grey, like the dark
-// theme's grey card). A rule row with its own "Fuellen" (user 2026-10-11)
+// (kNeutralIdle; user 2026-10-10). A Switch tile (lights, switches) is filled
+// only while it is on: off it keeps the white card, so a white light that is
+// on (filled grey) never looks like one that is off (#130, user 2026-10-26).
+// A rule row with its own "Fuellen" (user 2026-10-11)
 // changes a tile between the white and the filled look while it runs: filled
 // while a row with "Fuellen" matches, white while a row without it matches.
 // Every other tile keeps the theme's card.
@@ -5131,7 +5134,9 @@ static uint8_t tile_surface_rule_of(const Tile& tile, GridType grid_type) {
       tile_has_own_color(tile) || camera_picture::head_over_picture(tile)) {
     return 0;
   }
-  if (tileFills(tile)) return tile_surface::kFollowTint | tile_surface::kNeutralIdle;
+  if (tileFills(tile)) {
+    return tile.type == TILE_SWITCH ? tile_surface::kFollowTint : tile_surface::kFollowTint | tile_surface::kNeutralIdle;
+  }
   return tile_icon_colors::rows_fill(tile.icon_colors.c_str()) ? tile_surface::kFollowTint : 0;
 }
 

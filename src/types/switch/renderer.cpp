@@ -610,16 +610,6 @@ void release_timer_cb(lv_timer_t*) {
 
 }  // namespace
 
-bool switch_tile_card_color(GridType grid_type, uint8_t index, uint32_t& rgb) {
-  SwitchTileWidgets* widgets = tile_renderer_get_switch_widgets(grid_type);
-  if (!widgets || index >= TILES_PER_GRID) return false;
-  lv_obj_t* card = widgets[index].view ? widgets[index].view->card : nullptr;
-  if (!card && widgets[index].icon_label) card = lv_obj_get_parent(widgets[index].icon_label);
-  if (!card) return false;
-  rgb = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
-  return true;
-}
-
 bool switch_tile_held_on(const SwitchTileWidgets& widgets, bool& on) {
   uint8_t value = 0;
   bool level = false;

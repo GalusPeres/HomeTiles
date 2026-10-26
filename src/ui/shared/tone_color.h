@@ -342,20 +342,14 @@ inline uint32_t ha_light_color(uint32_t rgb) {
   return (channel(5.0f) << 16) | (channel(3.0f) << 8) | channel(1.0f);
 }
 
-// In the light theme a light's fill, power button and popup icon
-// (user 2026-10-10).
-inline uint32_t light_accent(uint32_t rgb) {
-  rgb &= 0xFFFFFF;
-  return ui_theme::light() ? ha_light_color(rgb) : rgb;
-}
+// A light's fill, power button and popup icon: Home Assistant's color of the
+// light in both themes (user 2026-10-10 light theme, 2026-10-26 dark theme
+// too, #130: "wie in HA"), white light its light grey.
+inline uint32_t light_accent(uint32_t rgb) { return ha_light_color(rgb & 0xFFFFFF); }
 
-// The icon of a light (its popup header, user 2026-10-10: "genau so wie in
-// HA"): in the light theme exactly its power button's color (light_accent),
-// white light Home Assistant's light grey too.
-inline uint32_t light_icon(uint32_t rgb) {
-  rgb &= 0xFFFFFF;
-  return ui_theme::light() ? light_accent(rgb) : rgb;
-}
+// The icon of a light (its popup header): exactly its power button's color
+// (light_accent).
+inline uint32_t light_icon(uint32_t rgb) { return light_accent(rgb); }
 
 // The tile color "From icon" at its default strength
 // (tile_icon_colors::kTintDefault).

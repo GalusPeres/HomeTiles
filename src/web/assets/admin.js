@@ -10447,14 +10447,15 @@ async function saveGestureEdge(select) {
     const hue = rgb[0] !== rgb[1] || rgb[1] !== rgb[2];
     return seed.L > 0.9 && (!hue || seed.C < 0.08);
   }
-  // tone_color::light_accent(): the light theme's light color.
+  // tone_color::light_accent(): a light's color as Home Assistant shows it,
+  // in both themes (#130).
   function toneLightAccent(rgb) {
-    return panelLight() ? toneHaLightColor(rgb) : rgb;
+    return toneHaLightColor(rgb);
   }
-  // switch_state_icon_color() (tile_renderer.cpp): the light theme shows a
-  // light's color as Home Assistant does, white light in its light grey.
+  // switch_state_icon_color() (tile_renderer.cpp): a light's color as Home
+  // Assistant shows it, in both themes (#130), white light in its light grey.
   function toneLightShown(hex) {
-    if (!panelThemeLight() || !/^#[0-9a-f]{6}$/i.test(String(hex))) return hex;
+    if (!/^#[0-9a-f]{6}$/i.test(String(hex))) return hex;
     const rgb = [1, 3, 5].map(i => parseInt(String(hex).slice(i, i + 2), 16));
     return toneHex(toneHaLightColor(rgb)).toUpperCase();
   }
@@ -10551,8 +10552,10 @@ async function saveGestureEdge(select) {
       // An icon without a color (white, almost white light) never tints the
       // card (tile_icon_source without_white).
       if (choice && toneNoColor(given)) choice = null;
-      // White light fills in the neutral grey (tile_icon_source with_white).
-      if (!choice && given && tileElem.dataset.followTint === '1' && toneNoColor(given) && toneOklch(given).L <= 0.95) {
+      // White light fills in the neutral grey (tile_icon_source with_white):
+      // the light theme's filled tiles, every tile of the dark theme (#130).
+      if (!choice && given && (tileElem.dataset.followTint === '1' || !panelThemeLight()) && toneNoColor(given) &&
+          toneOklch(given).L <= 0.95) {
         choice = { color: givenHex.toUpperCase(), percent: fill };
       }
       if (choice) {
@@ -10894,8 +10897,9 @@ async function saveGestureEdge(select) {
     } else {
       delete el.dataset.followTint;
     }
-    // A tile with "Fill" shows the neutral grey without a tint (kNeutralIdle).
-    if (el.dataset.followTint === '1' && tileFillOf(tile?.icon_colors) > 0) {
+    // A tile with "Fill" shows the neutral grey without a tint (kNeutralIdle);
+    // a Switch tile (type 5) only fills while on (tile_surface_rule_of, #130).
+    if (el.dataset.followTint === '1' && tileFillOf(tile?.icon_colors) > 0 && surfaceType !== '5') {
       el.dataset.neutralIdle = '1';
     } else {
       delete el.dataset.neutralIdle;

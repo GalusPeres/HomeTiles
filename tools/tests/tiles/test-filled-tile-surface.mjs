@@ -77,12 +77,16 @@ assert.match(fn('clear_tile_tint'), /\(flags & tile_surface::kNeutralIdle\) && !
 // from the start.
 assert.match(fn('clear_tile_tint'), /if \(plain && rule\) change_surface\(card, tile_surface::kNone\);\s*else follow_tint\(card, false\);/);
 assert.match(fn('tint_card'), /tint = idle \? tone_color::jewel_idle_card\(\) : tone_color::jewel_card\(color, percent\);/);
-assert.ok(renderer.includes('if (tileFills(tile)) return tile_surface::kFollowTint | tile_surface::kNeutralIdle;') &&
+// A Switch tile (lights, switches) is filled only while on: no idle grey
+// (#130, user 2026-10-26).
+assert.ok(renderer.includes('return tile.type == TILE_SWITCH ? tile_surface::kFollowTint : tile_surface::kFollowTint | tile_surface::kNeutralIdle;') &&
   renderer.includes('return tile_icon_colors::rows_fill(tile.icon_colors.c_str()) ? tile_surface::kFollowTint : 0;'),
   'Only a tile with Fill or a rule row with Fuellen gets the rule; every other tile keeps its card');
 const gridPreview = read('src/web/admin/tiles/grid-preview.js');
-assert.ok(gridPreview.includes("if (!choice && given && tileElem.dataset.followTint === '1' && toneNoColor(given) && toneOklch(given).L <= 0.95) {") &&
-  gridPreview.includes("if (el.dataset.followTint === '1' && tileFillOf(tile?.icon_colors) > 0) {") &&
+// White light fills grey in the dark theme too; a Switch tile has no idle
+// grey (#130, user 2026-10-26).
+assert.ok(gridPreview.includes("if (!choice && given && (tileElem.dataset.followTint === '1' || !panelThemeLight()) && toneNoColor(given) &&") &&
+  gridPreview.includes("if (el.dataset.followTint === '1' && tileFillOf(tile?.icon_colors) > 0 && surfaceType !== '5') {") &&
   colors.includes("const card = idle ? toneJewelIdleCard() : toneJewelCard(given, Number(percent) || 20);"),
   'preview: white light grey, the idle grey without a color');
 // The frame line (applyFrameLine, ui_surface_style frame_line) through --tile-border-tint.

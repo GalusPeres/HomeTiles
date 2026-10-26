@@ -17,6 +17,8 @@
 //       "restart":true on a Bridge stream: the Bridge plays the clip again
 //       from the paused point to resume, so a pause closes the stream and
 //       frees its buffers and the Bridge's FFmpeg at once.
+//       "timer_sound":true on a Bridge stream: a finished voice timer's own sound,
+//       played at the timer volume, unmuted (voice_timer_contract.h).
 //       {"v":1,"op":"stop"}
 //       {"v":1,"op":"pause"}  {"v":1,"op":"resume"}
 //       {"v":1,"op":"volume","volume":0.5}        0.0 .. 1.0

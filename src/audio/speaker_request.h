@@ -51,6 +51,8 @@ struct Command {
   // Only for Play of a Bridge stream: the Bridge plays the clip again from
   // the paused point to resume, so a pause closes the stream.
   bool restart = false;
+  // Only for Play of a Bridge stream: a voice timer's sound (timer volume).
+  bool timer = false;
   float volume = kDefaultVolume;
   bool muted = false;
 };
@@ -157,6 +159,8 @@ inline void parseCommand(const char* payload, size_t length, bool https_allowed,
   JsonVariantConst restart = doc["restart"];
   out->restart = !out->live && strncmp(url_text, "tcp://", 6) == 0 && restart.is<bool>() &&
                  restart.as<bool>();
+  JsonVariantConst timer = doc["timer_sound"];
+  out->timer = !out->live && strncmp(url_text, "tcp://", 6) == 0 && timer.is<bool>() && timer.as<bool>();
   out->status = CommandStatus::Ok;
 }
 

@@ -51,6 +51,9 @@ enum class TopicKey : uint8_t {
   ASSIST_AUDIO_STAT,
   // On-panel wake word detections (wake word profiles only publish).
   ASSIST_WAKE_STAT,
+  // Voice timer requests (touch presets, pause, +1 min) to the Bridge
+  // (voice_timer_contract.h).
+  ASSIST_TIMER_STAT,
   // Home Assistant's theme and rotation selects (capabilities
   // display_theme, display_rotation).
   DISPLAY_THEME_CMND,

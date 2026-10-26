@@ -956,6 +956,13 @@ void open_node_popup(lv_event_t* e, FlowTileState& st, uint8_t role, uint8_t nod
                              : node == kNodeHome ? "home-lightning-bolt" : "battery";
   init.icon_name = icon;
   init.unit = haBridgeConfig.findSensorUnit(entity);
+  // Whole numbers in header, readout and axis, like the tile and Home
+  // Assistant's own card (user 2026-10-26: "immer keine Nachkommastelle");
+  // a sensor in kW or MW keeps the digits Home Assistant sends.
+  String unit = init.unit;
+  unit.trim();
+  unit.toLowerCase();
+  if (unit != "kw" && unit != "mw" && unit != "gw") init.decimals = 0;
   init.bg_color = st.card_color;
   init.value = haBridgeConfig.findSensorInitialValue(entity);
   String kind = haBridgeConfig.findSensorStateKind(entity);

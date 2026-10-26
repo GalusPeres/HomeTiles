@@ -272,6 +272,9 @@ assert.ok(renderer.includes('make_value_tappable(*st, st->charge, kRoleBatteryCh
 assert.ok(renderer.includes('st->layout = layout(width, height, metrics, energyFlowOption(tile, kFlowHeaderBit) ? header_top(metrics) : 0.0f);'));
 assert.ok(admin.includes('const l = energyFlowLayout(width, height, L, (bits & 1) ? 2 * L.ring - L.insetY : 0);'));
 assert.match(read('src/types/energy_flow/flow_geometry.h'), /inline float header_top\(const Metrics& m\) \{ return 2\.0f \* m\.ring - m\.inset_y; \}/);
+// A node's popup shows whole numbers (user 2026-10-26: Home Assistant sends
+// "9291.81" W, its card shows 9.292 W); kW and MW keep their digits.
+assert.match(renderer, /String unit = init\.unit;\s*unit\.trim\(\);\s*unit\.toLowerCase\(\);\s*if \(unit != "kw" && unit != "mw" && unit != "gw"\) init\.decimals = 0;/);
 // The panel colors grid and battery by direction like the preview, the
 // mirrored feed-in picture included.
 assert.match(renderer, /case kNodeBattery: return in\.has_battery && -in\.battery >= kIdleWatts \? kBatteryColor : kBatteryOutColor;\s*default: return in\.has_grid && -in\.grid >= kIdleWatts \? kGridReturnColor : kGridColor;/);

@@ -1407,14 +1407,27 @@ static void appendTileTabHTML(
   html += R"html(_tile_icon" data-tile-icon><button type="button" class="tile-icon-picker" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_picker" aria-haspopup="listbox"></button></div></div>
+)html";
+  // Places for type options that belong elsewhere (data-tile-place,
+  // type-selection.js placeTileTypeParts): under Title and Icon, at the top
+  // of the settings and in Color.
+  html += R"html(<div class="tile-place-slot" id=")html";
+  html += tab_id;
+  html += R"html(_tile_head_slot"></div>
 </div>
 <div class="tile-settings-body">
+<div class="tile-place-slot" id=")html";
+  html += tab_id;
+  html += R"html(_tile_top_slot"></div>
 
 <div class="tile-settings-group">)html";
   // Two sections (user 2026-10-11): Color (icon color, tile color, Fill),
   // then Advanced (the type's options); "Icon" and "Tile" apart did not fit.
   appendHtmlEscaped(html, tr.tile_group_color);
   html += R"html(</div>
+<div class="tile-place-slot" id=")html";
+  html += tab_id;
+  html += R"html(_tile_color_slot"></div>
 )html";
   append_tile_icon_color_fixed_html(html, tab_id);
   html += R"html(            <div class="tile-icon-disc-fields" id=")html";

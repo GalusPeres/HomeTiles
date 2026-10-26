@@ -19,7 +19,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\
 // Stable ID, registry and its type module.
 assert.match(read('src/types/tile_type.h'), /TILE_ENERGY_FLOW = 28\n\};/);
 const registry = read('src/types/types_registry.cpp');
-assert.match(registry, /TILE_ENERGY_FLOW,\s*"Energiefluss",\s*"energy-flow",\s*"energy_flow",\s*"energy_flow",\s*nullptr,\s*"loadEnergyFlowFields",\s*"saveEnergyFlowFields",\s*"resetEnergyFlowFields",\s*0x2A2A2A,\s*false,\s*render_energy_flow_wrapper,\s*apply_energy_flow_wrapper,\s*append_energy_flow_fields_wrapper,\s*append_energy_flow_styles,\s*append_energy_flow_scripts/);
+assert.match(registry, /TILE_ENERGY_FLOW,\s*"Leistungsfluss",\s*"energy-flow",\s*"energy_flow",\s*"energy_flow",\s*nullptr,\s*"loadEnergyFlowFields",\s*"saveEnergyFlowFields",\s*"resetEnergyFlowFields",\s*0x2A2A2A,\s*false,\s*render_energy_flow_wrapper,\s*apply_energy_flow_wrapper,\s*append_energy_flow_fields_wrapper,\s*append_energy_flow_styles,\s*append_energy_flow_scripts/);
 assert.ok(registry.includes('case TILE_ENERGY_FLOW: return i18n::energy_flow_label(language, i18n::EnergyFlowLabel::Type);'));
 for (const file of ['renderer.cpp', 'renderer.h', 'web_handler.cpp', 'web_html.cpp', 'web_scripts.cpp', 'web_styles.cpp', 'admin.js',
   'flow_model.h', 'flow_geometry.h', 'flow_metrics.h']) {
@@ -29,8 +29,20 @@ assert.ok(JSON.parse(read('src/web/admin/bundle.json')).sources.includes('src/ty
 
 // Web Admin fields: one tab-prefixed entity picker per node in Home
 // Assistant's order and the options; the card starts on, the header off.
+// User 2026-10-26: the sensors at the top of the settings, "Invert sign"
+// right under the grid and the battery, "Show title and icon" under Title
+// and Icon, the card in Color; Auto names the type, not the solar sensor.
 const html = read('src/types/energy_flow/web_html.cpp');
-assert.ok(html.includes('_energy_flow_fields" class="type-fields">'));
+assert.ok(html.includes('_energy_flow_fields" class="type-fields" data-auto-title=")html";'));
+assert.ok(html.includes('appendHtmlEscaped(html, i18n::energy_flow_label(language, EnergyFlowLabel::Type));'));
+assert.ok(html.includes('data-auto-icon="lightning-bolt">'));
+const placeAt = place => html.indexOf(`open_place(html, "${place}");`);
+assert.ok(placeAt('head') > 0 && placeAt('head') < html.indexOf('"flow_header"') && html.indexOf('"flow_header"') < placeAt('top') &&
+  placeAt('top') < html.indexOf('for (const auto& node : nodes)') && html.indexOf('for (const auto& node : nodes)') < placeAt('color') &&
+  placeAt('color') < html.indexOf('"flow_card"'), 'header under the title, sensors on top, the card in Color');
+assert.ok(html.includes('{"flow_grid_entity", EnergyFlowLabel::GridPower, "flow_grid_invert"}') &&
+  html.includes('{"flow_battery_entity", EnergyFlowLabel::BatteryPower, "flow_battery_invert"}'), 'invert under its sensor');
+assert.ok(html.includes('if (node.invert) {\n      append_checkbox(html, tab_id, node.invert, i18n::energy_flow_label(language, EnergyFlowLabel::InvertSign), false);'));
 for (const field of ['flow_pv_entity', 'flow_grid_entity', 'flow_battery_entity', 'flow_battery_charge_entity', 'flow_home_entity']) {
   assert.ok(html.includes(`{"${field}", EnergyFlowLabel::`), field);
 }
@@ -46,7 +58,7 @@ for (const marker of ['if (server.hasArg("flow_entities")) tile.flow_entities = 
 
 // Browser editor: live binding, draft snapshot, copy/paste and import keep
 // the record and the options; a new tile grows to 2x2.
-assert.match(read('src/web/admin/tiles/editor.js'), /for \(const field of \['flow_pv_entity', 'flow_grid_entity', 'flow_battery_entity', 'flow_battery_charge_entity',\s*'flow_home_entity', 'flow_header', 'flow_card', 'flow_grid_invert', 'flow_battery_invert'\]\) \{\s*bindLive\(document\.getElementById\(prefix \+ '_' \+ field\), 'change', field, \(\) => \{\s*updateTilePreview\(tab\); updateDraft\(tab\); scheduleAutoSave\(tab\);/);
+assert.match(read('src/web/admin/tiles/editor.js'), /for \(const field of \['flow_pv_entity', 'flow_grid_entity', 'flow_battery_entity', 'flow_battery_charge_entity',\s*'flow_home_entity', 'flow_header', 'flow_card', 'flow_grid_invert', 'flow_battery_invert'\]\) \{\s*bindLive\(document\.getElementById\(prefix \+ '_' \+ field\), 'change', field, \(\) => \{\s*if \(field === 'flow_header'\) energyFlowHeaderTitle\(prefix\);\s*updateTilePreview\(tab\); updateDraft\(tab\); scheduleAutoSave\(tab\);/);
 assert.match(read('src/web/admin/tiles/snapshots.js'), /if \(Number\(tile\.type\) === 28 && snapshot && Object\.prototype\.hasOwnProperty\.call\(snapshot, 'flow_header'\)\) \{\s*tile\.key_code = energyFlowOptionBits\(snapshot\);/);
 assert.match(read('src/web/admin/tiles/import-export.js'), /\} else if \(safeType === 28\) \{\s*fd\.append\('flow_entities', tile\.flow_entities \|\| ''\);/);
 assert.ok(read('src/web/admin/tiles/layout.js').includes("if (Number(type) === 28) return [Math.min(2, placeCols()), Math.min(2, placeRows())];"));
@@ -114,19 +126,25 @@ assert.doesNotMatch(renderer.slice(renderer.indexOf('uint32_t step_dots('), rend
 assert.doesNotMatch(renderer.slice(renderer.indexOf('void motion_display_cb('), renderer.indexOf('void wake_motion(')),
   /Serial\.|String |new |malloc/, 'no logs or allocations per frame outside the rate-limited line');
 
-// Every language has the ten labels, none empty; the Web Admin shows them
-// through energy_flow_label only.
+// Every language has the nine labels, none empty; the Web Admin shows them
+// through energy_flow_label only. The tile shows power, not energy (user
+// 2026-10-26): "Leistungsfluss".
 const header = read('src/core/i18n/i18n.h');
-assert.ok(header.includes('const char* energy_flow_labels[10];'));
+assert.ok(header.includes('const char* energy_flow_labels[9];'));
+assert.match(header, /ShowCard,\s*InvertSign,\s*Count,/);
 const i18n = read('src/core/i18n/i18n.cpp');
 for (const lang of ['De', 'En', 'Fr', 'Pl', 'Cs', 'Es', 'Sk']) {
   const start = i18n.indexOf(`static const LocaleProfile kLocale${lang} = {`);
   assert.ok(start >= 0, lang);
   const table = i18n.slice(start, i18n.indexOf('"};\n', start) + 3);
   // Right before the entity picker labels (LocaleProfile order).
-  const labels = /\n    \{("[^"]+"(?:, "[^"]+"){9})\},\n    \{"[^"]+", "[^"]+", "[^"]*\{query\}/.exec(table);
-  assert.ok(labels, `${lang}: the ten energy flow labels before the entity picker labels`);
+  const labels = /\n    \{("[^"]+"(?:, "[^"]+"){8})\},\n    \{"[^"]+", "[^"]+", "[^"]*\{query\}/.exec(table);
+  assert.ok(labels, `${lang}: the nine energy flow labels before the entity picker labels`);
+  if (lang === 'De') assert.ok(labels[1].startsWith('"Leistungsfluss"') && labels[1].includes('"Titel und Icon anzeigen"') &&
+    labels[1].endsWith('"Vorzeichen umkehren"'), labels[1]);
+  if (lang === 'En') assert.ok(labels[1].startsWith('"Power flow"'), labels[1]);
 }
+assert.doesNotMatch(i18n, /"(Energiefluss|Energy flow)"/, 'no energy in the name');
 assert.doesNotMatch(html, /"(Solar|Grid|Battery|Home|Header|Card)[^"]*"/, 'no display text in the HTML generator');
 
 // The real preview code on made-up states (user 2026-10-24: 200 W from the
@@ -175,6 +193,14 @@ context.applyEnergyFlowPreview(headed, {flow_entities: 'sensor.pv', key_code: 1,
 assert.ok(headed.html.includes('&lt;b&gt;Energie&lt;/b&gt;'), 'the header title is escaped');
 assert.ok(headed.html.includes('mdi-lightning-bolt'), 'the header icon');
 assert.ok(!headed.html.includes('mdi-transmission-tower'), 'a node without its entity is left out');
+// A new tile without any sensor shows no node, not a lone home (user
+// 2026-10-26); the home joins with the first sensor.
+const empty = nodeOf();
+context.applyEnergyFlowPreview(empty, {flow_entities: '', key_code: 0, span_w: 2, span_h: 2}, meta);
+assert.ok(!empty.html.includes('<rect') && !empty.html.includes('mdi-') && !empty.html.includes('--'), 'empty tile: no node');
+assert.ok(/mdi-home-lightning-bolt/.test(headed.html), 'the home with the first sensor');
+assert.match(renderer, /const bool has_home = has_pv \|\| has_grid \|\| has_battery \|\| st->entities\[kRoleHome\]\.length\(\) > 0;\s*const bool node_shown\[kNodeCount\] = \{has_pv, has_grid, has_home, has_battery\};/,
+             'the panel: no node without a sensor either');
 // The battery keeps Home Assistant's sign (user 2026-10-24), also with its
 // direction inverted; the grid shows its amount.
 // While it charges its node shows Home Assistant's charging icon for its

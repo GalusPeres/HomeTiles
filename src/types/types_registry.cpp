@@ -623,7 +623,7 @@ const TileTypeDescriptor kTileTypes[] = {
   },
   {
     TILE_ENERGY_FLOW,
-    "Energiefluss",
+    "Leistungsfluss",
     "energy-flow",
     "energy_flow",
     "energy_flow",

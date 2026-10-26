@@ -961,7 +961,7 @@ struct LocaleProfile {
   // one (tm_wday: 0 Sunday, 1 Monday).
   uint8_t first_weekday;
   // The Energy flow tile (types/energy_flow), EnergyFlowLabel order.
-  const char* energy_flow_labels[10];
+  const char* energy_flow_labels[9];
 
   // Shared Web Admin entity picker (tiles/entity-picker.js). Order: choose,
   // search, no match ({query}), load failed, try again, clear, none available,
@@ -1010,8 +1010,7 @@ enum class EnergyFlowLabel : uint8_t {
   HomePower,
   ShowHeader,
   ShowCard,
-  GridExportPositive,
-  BatteryChargePositive,
+  InvertSign,
   Count,
 };
 // Index into LocaleProfile::calendar_labels.

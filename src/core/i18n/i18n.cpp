@@ -2192,7 +2192,7 @@ static const LocaleProfile kLocaleDe = {
     {"Januar", "Februar", "März", "April", "Mai", "Juni",
      "Juli", "August", "September", "Oktober", "November", "Dezember"},
     1,  // Monday
-    {"Energiefluss", "Solarleistung", "Netzleistung", "Batterieleistung", "Batterieladung", "Hausverbrauch", "Kopf anzeigen", "Karte anzeigen", "Netz: Einspeisung positiv", "Batterie: Laden positiv"},
+    {"Leistungsfluss", "Solarleistung", "Netzleistung", "Batterieleistung", "Batterieladung", "Hausverbrauch", "Titel und Icon anzeigen", "Karte anzeigen", "Vorzeichen umkehren"},
     {"Entität wählen", "Suchen", "Keine Entität passt zu „{query}“",
      "Die Entitäten konnten nicht geladen werden. Die gewählte Entität bleibt erhalten.",
      "Erneut versuchen", "Leeren", "Keine Entität verfügbar",
@@ -2321,7 +2321,7 @@ static const LocaleProfile kLocaleEn = {
     {"January", "February", "March", "April", "May", "June",
      "July", "August", "September", "October", "November", "December"},
     0,  // Sunday
-    {"Energy flow", "Solar power", "Grid power", "Battery power", "Battery charge", "Home power", "Show header", "Show card", "Grid: export is positive", "Battery: charging is positive"},
+    {"Power flow", "Solar power", "Grid power", "Battery power", "Battery charge", "Home power", "Show title and icon", "Show card", "Invert sign"},
     {"Choose an entity", "Search", "No entity matches “{query}”",
      "Could not load the entities. The chosen entity stays as it is.",
      "Try again", "Clear", "No entity available",
@@ -2455,7 +2455,7 @@ static const LocaleProfile kLocaleFr = {
     {"Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
      "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"},
     1,  // Monday
-    {"Flux d’énergie", "Puissance solaire", "Puissance réseau", "Puissance batterie", "Charge batterie", "Consommation maison", "Afficher l’en-tête", "Afficher la carte", "Réseau : injection positive", "Batterie : charge positive"},
+    {"Flux de puissance", "Puissance solaire", "Puissance réseau", "Puissance batterie", "Charge batterie", "Consommation maison", "Afficher le titre et l’icône", "Afficher la carte", "Inverser le signe"},
     {"Choisir une entité", "Rechercher", "Aucune entité ne correspond à « {query} »",
      "Impossible de charger les entités. L’entité choisie reste inchangée.",
      "Réessayer", "Effacer", "Aucune entité disponible",
@@ -5191,7 +5191,7 @@ static const LocaleProfile kLocalePl = {
     {"Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
      "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"},
     1,  // Monday
-    {"Przepływ energii", "Moc solarna", "Moc sieci", "Moc baterii", "Naładowanie baterii", "Zużycie domu", "Pokaż nagłówek", "Pokaż kartę", "Sieć: oddawanie dodatnie", "Bateria: ładowanie dodatnie"},
+    {"Przepływ mocy", "Moc solarna", "Moc sieci", "Moc baterii", "Naładowanie baterii", "Zużycie domu", "Pokaż tytuł i ikonę", "Pokaż kartę", "Odwróć znak"},
     {"Wybierz encję", "Szukaj", "Żadna encja nie pasuje do „{query}”",
      "Nie udało się wczytać encji. Wybrana encja pozostaje bez zmian.",
      "Spróbuj ponownie", "Wyczyść", "Brak dostępnych encji",
@@ -5254,7 +5254,7 @@ static const LocaleProfile kLocaleCs = {
     {"Leden", "Únor", "Březen", "Duben", "Květen", "Červen",
      "Červenec", "Srpen", "Září", "Říjen", "Listopad", "Prosinec"},
     1,  // Monday
-    {"Tok energie", "Solární výkon", "Výkon sítě", "Výkon baterie", "Nabití baterie", "Spotřeba domu", "Zobrazit záhlaví", "Zobrazit kartu", "Síť: dodávka kladná", "Baterie: nabíjení kladné"},
+    {"Tok výkonu", "Solární výkon", "Výkon sítě", "Výkon baterie", "Nabití baterie", "Spotřeba domu", "Zobrazit název a ikonu", "Zobrazit kartu", "Obrátit znaménko"},
     {"Vybrat entitu", "Hledat", "Žádná entita neodpovídá „{query}“",
      "Entity se nepodařilo načíst. Vybraná entita zůstane beze změny.",
      "Zkusit znovu", "Vymazat", "Žádné dostupné entity",
@@ -5383,7 +5383,7 @@ static const LocaleProfile kLocaleEs = {
     {"Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"},
     1,  // Monday
-    {"Flujo de energía", "Potencia solar", "Potencia de red", "Potencia de batería", "Carga de batería", "Consumo de la casa", "Mostrar encabezado", "Mostrar tarjeta", "Red: exportación positiva", "Batería: carga positiva"},
+    {"Flujo de potencia", "Potencia solar", "Potencia de red", "Potencia de batería", "Carga de batería", "Consumo de la casa", "Mostrar título e icono", "Mostrar tarjeta", "Invertir signo"},
     {"Elige una entidad", "Buscar", "Ninguna entidad coincide con “{query}”",
      "No se pudieron cargar las entidades. La entidad elegida no cambia.",
      "Reintentar", "Borrar", "No hay entidades disponibles",
@@ -5522,7 +5522,7 @@ static const LocaleProfile kLocaleSk = {
     {"Január", "Február", "Marec", "Apríl", "Máj", "Jún",
      "Júl", "August", "September", "Október", "November", "December"},
     1,  // Monday
-    {"Tok energie", "Solárny výkon", "Výkon siete", "Výkon batérie", "Nabitie batérie", "Spotreba domu", "Zobraziť hlavičku", "Zobraziť kartu", "Sieť: dodávka kladná", "Batéria: nabíjanie kladné"},
+    {"Tok výkonu", "Solárny výkon", "Výkon siete", "Výkon batérie", "Nabitie batérie", "Spotreba domu", "Zobraziť názov a ikonu", "Zobraziť kartu", "Obrátiť znamienko"},
     {"Vyberte entitu", "Hľadať", "Žiadna entita sa nezhoduje s „{query}“",
      "Nepodarilo sa načítať entity. Zvolená entita zostáva nezmenená.",
      "Skúsiť znova", "Vymazať", "Žiadna entita nie je k dispozícii",

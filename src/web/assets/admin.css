@@ -3541,6 +3541,15 @@
 /* The shown type's entity, under Type in the fixed head of the panel. */
 .tile-entity-slot { margin-bottom:10px; }
 .tile-entity-slot:empty { display:none; }
+/* Type options shown elsewhere (data-tile-place, type-selection.js
+   placeTileTypeParts) keep the type fields' rows: label above its field,
+   checkboxes on their own line. */
+.tile-place-slot:empty { display:none; }
+.tile-place-slot { margin-top:10px; }
+.tile-place { display:grid; grid-template-columns:minmax(0, 1fr); gap:9px; }
+.tile-place > * { min-width:0; }
+.tile-place > label { margin:0; }
+.tile-place > .inline-checkbox { margin:0 0 4px; }
 input[data-entity-picker].hidden + .entity-picker { display:none; }
 .entity-picker-field {
   width:100%; min-width:0; display:flex; align-items:center; gap:10px; min-height:44px;

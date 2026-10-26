@@ -151,7 +151,41 @@
     syncTileSizePolicy(tab);
     syncIconDiscFields(tab);
     placeTileEntityField(tab);
+    placeTileTypeParts(tab);
     syncTileAdvancedCaption(tab);
+  }
+
+  // Type options marked data-tile-place (Energy flow, user 2026-10-26) move
+  // to their place in the settings: "head" under Title and Icon, "top" at the
+  // start of the settings, "color" into Color. They return to their type
+  // fields when another type is shown. The shown type may also name the Auto
+  // title and icon of a tile without an entity of its own.
+  function placeTileTypeParts(tab) {
+    const places = ['head', 'top', 'color'];
+    for (const place of places) {
+      const slot = document.getElementById(tab + '_tile_' + place + '_slot');
+      for (const part of [...(slot?.children || [])]) document.getElementById(part.dataset.placeHome || '')?.append(part);
+    }
+    const fields = document.querySelector('#' + tab + 'Settings .type-fields.show');
+    for (const part of fields?.querySelectorAll(':scope > [data-tile-place]') || []) {
+      const slot = places.includes(part.dataset.tilePlace) && document.getElementById(tab + '_tile_' + part.dataset.tilePlace + '_slot');
+      if (!slot) continue;
+      part.dataset.placeHome = fields.id;
+      slot.append(part);
+    }
+    const typeAuto = (element, key, value) => {
+      if (!element) return;
+      if (value) {
+        element.dataset[key] = value;
+        element.dataset.typeAuto = '1';
+      } else if (element.dataset.typeAuto) {
+        delete element.dataset[key];
+        delete element.dataset.typeAuto;
+      }
+    };
+    typeAuto(document.getElementById(tab + '_tile_title_auto'), 'autoTitle', fields?.dataset.autoTitle || '');
+    typeAuto(document.getElementById(tab + '_tile_icon'), 'autoIcon', fields?.dataset.autoIcon || '');
+    if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons(tab);
   }
 
   // "Advanced" only above options the type shows (user 2026-10-11): its

@@ -1155,7 +1155,10 @@ lv_obj_t* render_energy_flow_tile(lv_obj_t* parent, int col, int row, const Tile
 
   const bool frame_lines = !on_card && grid_type != GridType::SCREENSAVER;
   static const uint8_t kNodeRole[kNodeCount] = {kRolePv, kRoleGrid, kRoleHome, kRoleBattery};
-  const bool node_shown[kNodeCount] = {has_pv, has_grid, true, has_battery};
+  // The home joins with the first sensor: a tile without any shows no node
+  // (user 2026-10-26).
+  const bool has_home = has_pv || has_grid || has_battery || st->entities[kRoleHome].length() > 0;
+  const bool node_shown[kNodeCount] = {has_pv, has_grid, has_home, has_battery};
   const lv_font_t* font = value_font();
   const Layout& l = st->layout;
   const int gap = round_px(l.ring) + value_gap();

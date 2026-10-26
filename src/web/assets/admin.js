@@ -7737,6 +7737,7 @@ async function saveGestureEdge(select) {
     for (const field of ['flow_pv_entity', 'flow_grid_entity', 'flow_battery_entity', 'flow_battery_charge_entity',
                          'flow_home_entity', 'flow_header', 'flow_card', 'flow_grid_invert', 'flow_battery_invert']) {
       bindLive(document.getElementById(prefix + '_' + field), 'change', field, () => {
+        if (field === 'flow_header') energyFlowHeaderTitle(prefix);
         updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
       });
     }
@@ -8562,7 +8563,41 @@ async function saveGestureEdge(select) {
     syncTileSizePolicy(tab);
     syncIconDiscFields(tab);
     placeTileEntityField(tab);
+    placeTileTypeParts(tab);
     syncTileAdvancedCaption(tab);
+  }
+
+  // Type options marked data-tile-place (Energy flow, user 2026-10-26) move
+  // to their place in the settings: "head" under Title and Icon, "top" at the
+  // start of the settings, "color" into Color. They return to their type
+  // fields when another type is shown. The shown type may also name the Auto
+  // title and icon of a tile without an entity of its own.
+  function placeTileTypeParts(tab) {
+    const places = ['head', 'top', 'color'];
+    for (const place of places) {
+      const slot = document.getElementById(tab + '_tile_' + place + '_slot');
+      for (const part of [...(slot?.children || [])]) document.getElementById(part.dataset.placeHome || '')?.append(part);
+    }
+    const fields = document.querySelector('#' + tab + 'Settings .type-fields.show');
+    for (const part of fields?.querySelectorAll(':scope > [data-tile-place]') || []) {
+      const slot = places.includes(part.dataset.tilePlace) && document.getElementById(tab + '_tile_' + part.dataset.tilePlace + '_slot');
+      if (!slot) continue;
+      part.dataset.placeHome = fields.id;
+      slot.append(part);
+    }
+    const typeAuto = (element, key, value) => {
+      if (!element) return;
+      if (value) {
+        element.dataset[key] = value;
+        element.dataset.typeAuto = '1';
+      } else if (element.dataset.typeAuto) {
+        delete element.dataset[key];
+        delete element.dataset.typeAuto;
+      }
+    };
+    typeAuto(document.getElementById(tab + '_tile_title_auto'), 'autoTitle', fields?.dataset.autoTitle || '');
+    typeAuto(document.getElementById(tab + '_tile_icon'), 'autoIcon', fields?.dataset.autoIcon || '');
+    if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons(tab);
   }
 
   // "Advanced" only above options the type shows (user 2026-10-11): its
@@ -16460,7 +16495,7 @@ function maybeFillTitleFromEnergy(tab) {
   // Energy flow tile (types/energy_flow): the node sensors, the options and
   // the previews. The record (Tile::flow_entities) holds one entity per line
   // in Home Assistant's order; lines after the five pickers are kept.
-  const ENERGY_FLOW_TILE_TYPE = 27;
+  const ENERGY_FLOW_TILE_TYPE = 28;
   const ENERGY_FLOW_FIELDS = Object.freeze(['flow_pv_entity', 'flow_grid_entity', 'flow_battery_entity',
     'flow_battery_charge_entity', 'flow_home_entity']);
   // key_code bits (tile_config.h kFlow*Bit); the card checkbox is the
@@ -16528,6 +16563,17 @@ function maybeFillTitleFromEnergy(tab) {
       if (input) input.value = '';
     }
     energyFlowSetOptions(tab, 0);
+  }
+
+  // "Show title and icon" with an empty title puts the type's name in, like
+  // Auto (type-selection.js placeTileTypeParts names it).
+  function energyFlowHeaderTitle(tab) {
+    if (!document.getElementById(tab + '_flow_header')?.checked) return;
+    const title = document.getElementById(tab + '_tile_title');
+    const name = document.getElementById(tab + '_tile_title_auto')?.dataset.autoTitle || '';
+    if (!title || String(title.value || '').trim() || !name) return;
+    title.value = normalizeTileTitle(name);
+    title.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   // The stored key_code of a snapshot's options (snapshots.js, import).
@@ -16759,7 +16805,10 @@ function maybeFillTitleFromEnergy(tab) {
     const cardRgb = /^#[0-9a-f]{6}$/i.test(cardHex) ? energyFlowHexRgb(cardHex) : (light ? [255, 255, 255] : [26, 26, 26]);
     const idle = !light ? '#3C3C3C' : onCard ? '#DCDEE2' : '#CDD0D5';
     const text = panelRoleHex('text', light ? '#1A1A1A' : '#FFFFFF');
-    const shown = { pv: !!entity.pv, grid: !!entity.grid, battery: !!(entity.bat || entity.charge), home: true };
+    // The home joins with the first sensor: a tile without any shows no node
+    // (user 2026-10-26).
+    const shown = { pv: !!entity.pv, grid: !!entity.grid, battery: !!(entity.bat || entity.charge),
+      home: Object.values(entity).some(Boolean) };
     const lineShown = { gridHome: shown.grid, pvBattery: shown.pv && shown.battery, pvHome: shown.pv,
       pvGrid: shown.pv && shown.grid, batHome: shown.battery, batGrid: shown.battery && shown.grid };
     const source = { gridHome: 'grid', pvBattery: 'pv', pvHome: 'pv', pvGrid: 'pv', batHome: 'battery',
@@ -16834,7 +16883,7 @@ function maybeFillTitleFromEnergy(tab) {
     const feeding = input.hasGrid && -input.grid >= ENERGY_FLOW_IDLE_WATTS;
     const gridIcon = supplying ? 'transmission-tower-export' : feeding ? 'transmission-tower-import' : 'transmission-tower';
     if (shown.grid) node(l.node.grid[0], l.node.grid[1], ENERGY_FLOW_COLORS.grid, gridIcon, feeding);
-    node(l.node.home[0], l.node.home[1], homeColor, 'home-lightning-bolt');
+    if (shown.home) node(l.node.home[0], l.node.home[1], homeColor, 'home-lightning-bolt');
     const level = entity.charge ? energyFlowNumber(values[entity.charge]) : null;
     const charging = input.hasBattery && -input.battery >= ENERGY_FLOW_IDLE_WATTS;
     if (shown.battery) node(l.node.battery[0], l.node.battery[1], ENERGY_FLOW_COLORS.battery,
@@ -16848,7 +16897,7 @@ function maybeFillTitleFromEnergy(tab) {
       input.hasGrid ? energyFlowPowerText(grid) : '--', 'center');
     const homeHalf = r(width - l.node.home[0]) - L.edge;
     const homeKnown = entity.home ? input.hasHome : flows.homeKnown;
-    label(r(l.node.home[0]) - homeHalf, 2 * homeHalf, l.node.home[1] + below,
+    if (shown.home) label(r(l.node.home[0]) - homeHalf, 2 * homeHalf, l.node.home[1] + below,
       homeKnown ? energyFlowPowerText(flows.home) : '--', 'center');
     if (shown.battery) {
       label(r(l.node.battery[0]) + gap, width - L.edge - r(l.node.battery[0]) - gap, l.node.battery[1],

@@ -1902,7 +1902,10 @@
     .tile-value.tile-editable-value { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .tile-value.sensor-value-size-24 { font-size:var(--fs24, 12px); }
     .tile-value.sensor-value-size-20 { font-size:var(--fs20, 10px); }
-    .tile-unit { color:inherit; font-size:inherit; margin-left:0.28em; }
+    /* A unit a step smaller after its number, its top level with the digits,
+       like the weather forecast (user 2026-10-26; value_unit_rules.h: 80 %,
+       a thin gap, the digits' tops meeting). */
+    .tile-unit { color:inherit; font-size:.8em; line-height:1; margin-left:.17em; vertical-align:.18em; }
     .tile.binary_sensor,
     .tile.number,
     .tile.select,
@@ -3319,7 +3322,6 @@
   top:calc(var(--compact-value-top, max(0px, (var(--compact-h) - var(--compact-title-line) - var(--compact-value-line) - var(--compact-text-gap)) / 2) + var(--compact-title-line) + var(--compact-text-gap)) + var(--compact-value-dy, 0px)); bottom:auto;
   font-size:var(--compact-value-font); line-height:var(--compact-value-line);
 }
-.tile.sensor-compact .tile-unit { font-size:inherit; }
 /* Chosen half-height value sizes (compact_sensor_layout::value_font); title
    and value both use the value line to center their block. */
 .tile.sensor-compact.compact-value-24 {

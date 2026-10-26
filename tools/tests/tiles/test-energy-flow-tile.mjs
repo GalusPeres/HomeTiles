@@ -194,7 +194,10 @@ const resting = nodeOf();
 context.applyEnergyFlowPreview(resting, {flow_entities: 'sensor.pv\nsensor.grid\nsensor.bat\nsensor.soc', key_code: 0, span_w: 2, span_h: 2},
   {values: {'sensor.pv': '0', 'sensor.grid': '200', 'sensor.bat': '0', 'sensor.soc': '78'}, units: {}, icons: {'sensor.soc': 'mdi:battery-70'}});
 assert.ok(/mdi-battery-70" style="[^"]*color:#4DB6AC/.test(resting.html), 'resting battery cyan');
-for (const value of ['0 W', '200 W', '700 W', '500 W', '78 %']) assert.ok(drawn.includes('>' + value + '</div>'), value);
+// Every value with its unit a step smaller after it (user 2026-10-26).
+for (const [value, unit] of [['0', 'W'], ['200', 'W'], ['700', 'W'], ['500', 'W'], ['78', '%']]) {
+  assert.ok(drawn.includes('>' + value + '<span class="tile-unit">' + unit + '</span></div>'), value + ' ' + unit);
+}
 assert.ok(!drawn.includes('Energie'), 'no header by default');
 const headed = nodeOf();
 context.applyEnergyFlowPreview(headed, {flow_entities: 'sensor.pv', key_code: 1, span_w: 2, span_h: 2, title: '<b>Energie</b>',
@@ -224,8 +227,9 @@ for (const key_code of [0, 8]) {
   context.applyEnergyFlowPreview(signed, {flow_entities: 'sensor.pv\nsensor.grid\nsensor.bat\nsensor.soc', key_code,
     span_w: 2, span_h: 2}, {values: {'sensor.pv': '0', 'sensor.grid': '-200', 'sensor.bat': '-0.3', 'sensor.soc': '76'},
     units: {'sensor.bat': 'kW'}, icons: {'sensor.soc': 'mdi:battery-70'}});
-  assert.ok(signed.html.includes('>300 W</div>') && !signed.html.includes('>-300 W</div>'), 'the battery shows its amount');
-  assert.ok(signed.html.includes('>200 W</div>') && !signed.html.includes('>-200 W</div>'), 'the grid shows its amount');
+  const shows = amount => signed.html.includes('>' + amount + '<span class="tile-unit">W</span></div>');
+  assert.ok(shows('300') && !shows('-300'), 'the battery shows its amount');
+  assert.ok(shows('200') && !shows('-200'), 'the grid shows its amount');
   assert.ok(/mdi-transmission-tower-import" style="[^"]*transform:scaleX\(-1\)"/.test(signed.html),
             'the grid feeding in: import mirrored, the arrow from the lines into the mast');
   // Inverted, the same value is a discharge: Home Assistant's own icon.
@@ -249,9 +253,13 @@ assert.match(renderer, /if \(st->grid_feed\) lv_image_set_src\(st->grid_feed, nu
 const coreIcons = read('tools/icons/core-icons.txt').split('\n');
 for (const name of ['battery-charging-outline', 'battery-charging-10', 'battery-charging-100', 'transmission-tower-export',
   'transmission-tower-import', 'solar-power']) assert.ok(coreIcons.includes(name), 'core icon ' + name);
-assert.ok(renderer.includes('set_text(st.node[kNodeBattery].value, in.has_battery ? power_text(in.battery) : String("--"));') &&
+assert.ok(renderer.includes('show_power(st.node[kNodeBattery].value, st.node[kNodeBattery].unit, in.has_battery, in.battery);') &&
   !renderer.includes('signed_power_text'), 'the panel shows the battery amount');
-assert.match(renderer, /const float magnitude = fabsf\(watts\);/, 'power_text drops the sign');
+assert.match(renderer, /const float magnitude = fabsf\(watts\);/, 'show_power drops the sign');
+// The values' units the shared way (value_unit.h), the charge's too.
+for (const call of ['show_power(st.node[kNodePv].value, st.node[kNodePv].unit, in.has_pv, in.pv);',
+  'value_unit::show(label, unit, i18n::format_number(language, magnitude / 1000.0f, 1), "kW");',
+  'value_unit::show(st.charge, st.charge_unit,']) assert.ok(renderer.includes(call), call);
 // User 2026-10-26 (b545): the nodes 6 px further out, the values 4 px
 // closer to them; the preview takes the same sizes (web_scripts.cpp).
 assert.ok(metrics.includes('m.inset_x = tile_layout::scale(18);') && metrics.includes('m.inset_y = tile_layout::scale(14);'));

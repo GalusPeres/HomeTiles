@@ -229,11 +229,13 @@
     return Number.isFinite(number) ? number : null;
   }
 
-  function energyFlowPowerText(watts) {
+  // A power's amount and unit, as the panel shows them (renderer.cpp
+  // show_power): the unit a step smaller after it (.tile-unit).
+  function energyFlowPower(watts) {
     const a = Math.abs(watts);
-    if (a >= 999950) return formatLocalizedNumber(a / 1e6, 1) + ' MW';
-    if (a >= 999.5) return formatLocalizedNumber(a / 1000, 1) + ' kW';
-    return formatLocalizedNumber(a, 0) + ' W';
+    if (a >= 999950) return [formatLocalizedNumber(a / 1e6, 1), 'MW'];
+    if (a >= 999.5) return [formatLocalizedNumber(a / 1000, 1), 'kW'];
+    return [formatLocalizedNumber(a, 0), 'W'];
   }
 
   // While the battery charges: Home Assistant's charging icon for its level,
@@ -377,11 +379,14 @@
         'px;line-height:' + L.iconPx + 'px;text-align:center;color:' + hex + (mirrored ? ';transform:scaleX(-1)' : '') +
         '"></i>';
     };
-    const label = (x, w, cy, value, align) => {
+    // `parts`: the amount and its unit ('' for none).
+    const label = (x, w, cy, parts, align) => {
       html += '<div style="position:absolute;left:' + r(x) + 'px;top:' + r(cy - L.valueLine / 2) + 'px;width:' + r(w) +
         'px;height:' + L.valueLine + 'px;line-height:' + L.valueLine + 'px;font-size:' + L.valuePx + 'px;text-align:' +
-        align + ';color:' + text + ';white-space:nowrap;overflow:hidden">' + escapeHtml(value) + '</div>';
+        align + ';color:' + text + ';white-space:nowrap;overflow:hidden">' + escapeHtml(parts[0]) +
+        (parts[1] ? '<span class="tile-unit">' + escapeHtml(parts[1]) + '</span>' : '') + '</div>';
     };
+    const power = (known, watts) => known ? energyFlowPower(watts) : ['--', ''];
     const iconOf = id => String(icons[id] || '').replace(/^mdi:/, '');
     const homeColor = colorOf[flows.homeSource || 'grid'];
     if (shown.pv) node(l.node.pv[0], l.node.pv[1], ENERGY_FLOW_COLORS.pv, 'solar-power');
@@ -401,19 +406,19 @@
     const gap = r(l.ring) + L.valueGap;
     const below = gap + L.valueBelow - (L.valueLine - L.valueBase) + L.valueLine / 2;
     if (shown.pv) label(r(l.node.pv[0]) + gap, width - L.edge - r(l.node.pv[0]) - gap, l.node.pv[1],
-      input.hasPv ? energyFlowPowerText(pv) : '--', 'left');
+      power(input.hasPv, pv), 'left');
     if (shown.grid) label(L.edge, 2 * (r(l.node.grid[0]) - L.edge), l.node.grid[1] + below,
-      input.hasGrid ? energyFlowPowerText(grid) : '--', 'center');
+      power(input.hasGrid, grid), 'center');
     const homeHalf = r(width - l.node.home[0]) - L.edge;
     const homeKnown = entity.home ? input.hasHome : flows.homeKnown;
     if (shown.home) label(r(l.node.home[0]) - homeHalf, 2 * homeHalf, l.node.home[1] + below,
-      homeKnown ? energyFlowPowerText(flows.home) : '--', 'center');
+      power(homeKnown, flows.home), 'center');
     if (shown.battery) {
       label(r(l.node.battery[0]) + gap, width - L.edge - r(l.node.battery[0]) - gap, l.node.battery[1],
-        input.hasBattery ? energyFlowPowerText(bat) : '--', 'left');
+        power(input.hasBattery, bat), 'left');
       const charge = energyFlowNumber(values[entity.charge]);
       label(L.edge, r(l.node.battery[0]) - gap - L.edge, l.node.battery[1],
-        entity.charge && charge !== null ? formatLocalizedNumber(charge, 0) + ' %' : '--', 'right');
+        entity.charge && charge !== null ? [formatLocalizedNumber(charge, 0), '%'] : ['--', ''], 'right');
     }
     if (bits & 1) {
       node(l.ring, l.ring, ENERGY_FLOW_COLORS.header,

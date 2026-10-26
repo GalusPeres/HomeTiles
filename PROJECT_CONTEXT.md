@@ -12,9 +12,9 @@ Last reviewed: 2026-10-26
 
 ## Releases and builds
 
-- FW v0.9.5 hotfix 2026-10-23 (media player hidden when rebuilt with the menu open); FW + Bridge v0.9.4 released the same day (media popup, speaker over the Bridge, camera sound, HA theme/rotation; speaker, camera sound and streaming experimental). Bridge beta v0.9.6b1.
+- FW v0.9.5 hotfix 2026-10-23 (media player hidden when rebuilt with the menu open); FW + Bridge v0.9.4 released the same day (media popup, speaker over the Bridge, camera sound, HA theme/rotation). Bridge beta v0.9.6b1.
 - Pairing by IP without mDNS (#114, Bridge #16): read-only `GET /api/link` + Bridge menu step; HA ok on Tab5 (b513, b16).
-- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b549.
+- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b550.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build; a cache stays warm when only repo headers changed and the LVGL config fingerprint matches.
 - Docs CI runs on pinned Chrome for Testing 154.0.8037.57; a tag's docs run uses the tag's workflow, so after a release dispatch docs on `main`.
 - Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need their icons on HomeTiles-staging (tag = FW_VERSION).
@@ -22,8 +22,8 @@ Last reviewed: 2026-10-26
 ## Active work
 
 - Power flow tile 28 ("Leistungsfluss", `src/types/energy_flow/`, picture 65): nodes in `/_tile_flow_entities`, options in key_code, node tap = Sensor popup, dots step per frame; V2 HW ok b542.
-- Media popup (v0.9.4): layouts `sensor_display_mode` 0 cover left, 1 centre (`media_popup_layout.h`); controls only with their HA feature bit; menu box (built once): speakers (group count), source, library; time from HA `media_position_updated_at`; shuffle/repeat on = icon color + dot; tile/head icon state form (`state_icon.h`), tile playing bars (`playing_bars.h`).
-- Issue #116 (JC4880, camera popup ended after 18-60 min): the Bridge closed after 5 s without a chunk ACK. Bridge v0.9.4b5 waits 45 s (the link's idle limit) and logs one warning; FW logs data gaps >= 1 s and the Wi-Fi signal at stream end; test builds hold the stream with /api/debug/camera-pause (V2 b499: a 20 s stall passes). Reporter confirmation pending; stall cause unproven (Wi-Fi?). A camera stream pauses the wake word (b499 HW ok). `build/analysis/2026-10-21-analyse.md`.
+- Media popup (v0.9.4): layouts `sensor_display_mode` 0 cover left, 1 centre (`media_popup_layout.h`); controls only with their HA feature bit; menu box (built once): speakers (group count), source, library; tile/head icon state form (`state_icon.h`), tile playing bars (`playing_bars.h`).
+- Issue #116 (JC4880, camera popup ended after 18-60 min): the Bridge closed after 5 s without a chunk ACK. Bridge v0.9.4b5 waits 45 s and logs one warning; FW logs data gaps >= 1 s and the Wi-Fi signal at stream end; test builds hold the stream with /api/debug/camera-pause (V2 b499: a 20 s stall passes). Reporter confirmation pending. A camera stream pauses the wake word (b499 HW ok). `build/analysis/2026-10-21-analyse.md`.
 - Issue #119 (Guition V1): the core's Helix (12-bit sync) cannot see MPEG-2.5 frames; tag bytes made it overwrite its memory. Own Helix (b501) `src/audio/helix_mp3`, TLS in PSRAM, position/length/pause, Bridge player bar. Speaker audio comes from the Bridge (`docs-dev/audio-stream.md`): FFmpeg -> mono PCM (44.1 kHz music / 22.05 kHz speech) over the camera tcp-ack listener (`HTAUD/1`, two 4 KB blocks in flight); panels announce `"stream":"tcp-ack-v1"`, older ones download. HW ok: 169 -> 148 KB while playing, camera 30 FPS beside a song. Seek restarts at `-ss`. Camera sound: live track of cameras with sound, picture waits for the sound (lip sync; b507 30 FPS HW ok, b508 even gaps HW pending). Small player, no queue; a pause frees the stream (b512/b15); the wake word is deaf while a clip plays.
 - Voice: microphone and wake word listening off on a new panel (b500, `2054a82a`); listening is its own setting, the chosen word stays (`applyWakeWordsCommand`). Bridge v0.9.4b6: Listening switch, word-only Wake word select, panel settings under Configuration, battery auto-sleep removed (no board has a battery sleep profile). HW/HA test pending. Mic button + audio settings open (user decides where, mockup first); Zeid's #91 Audio page as a fifth panel Settings category declined 2026-10-17.
 
@@ -84,6 +84,7 @@ Last reviewed: 2026-10-26
 - Upright (b294): P4 panels upright under a landscape profile draw the upright UI directly (`drawUpright`); JC1060/7B upright and JC4880 landscape (b368) compile only, HW pending.
 - Light theme: `ui_theme` roles + `SurfaceScope`; popups take the opener's surface. Remembered LVGL objects clear themselves on delete (LVGL 9.6 `lv_obj_is_valid` reads freed objects).
 - Settings: 4 pages (`build/design-mockups/settings`), Display with a Sound group on speaker boards (#123); setup in the popup card.
+- Units (b550): a step smaller after the number, digit tops level, like the weather forecast (`value_unit.h`, `.tile-unit`); next: climate, number, weather now, popups.
 
 ## Tiles and Bridge contracts
 

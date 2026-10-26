@@ -18,6 +18,7 @@
 #include "src/types/climate/visuals.h"
 #include "src/types/weather/weather_icons.h"
 #include "src/ui/shared/theme_schedule.h"
+#include "src/ui/shared/value_unit.h"
 #include "src/types/weather/tile_layout.h"
 #include "src/types/weather/weather_sensors.h"
 #include "src/types/climate/renderer.h"
@@ -5225,19 +5226,13 @@ void update_sensor_tile_value(GridType grid_type, uint8_t grid_index, const char
     displayValue = "--";
   }
 
-  // Combine value and unit in one label at the same size.
-  String combined = displayValue;
-  if (unit && strlen(unit) > 0 && displayValue != "--") {
-    combined += " ";
-    combined += unit;
-  }
-  // The Bridge repeats unchanged states (minute snapshot, reconnects).
-  // lv_label_set_text() always reallocates, relayouts and redraws the label,
-  // so only hand it a text that differs.
-  const char* shown = lv_label_get_text(value_label);
-  if (!shown || strcmp(shown, combined.c_str()) != 0) {
-    lv_label_set_text(value_label, combined.c_str());
-  }
+  // The unit a step smaller right after the value, like the weather
+  // forecast (value_unit.h, user 2026-10-26). The Bridge repeats unchanged
+  // states (minute snapshot, reconnects): show() hands LVGL changed texts
+  // only, since lv_label_set_text() always relayouts and redraws.
+  String unit_text = unit && displayValue != "--" ? String(unit) : String();
+  unit_text.trim();
+  value_unit::show(value_label, target[grid_index].unit_label, displayValue, unit_text);
 
   // Per-tile icon colors follow every state update; "--" covers empty,
   // unavailable and unknown states, which keep the default white icon.

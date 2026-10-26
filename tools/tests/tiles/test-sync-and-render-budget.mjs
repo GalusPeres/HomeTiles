@@ -65,8 +65,11 @@ assert.equal((update.match(/Serial\.printf/g) || []).length,
              'every queued log line must be gated on a changed payload and the per-tile 30 s limit');
 assert.match(fn(folders, 'tile_queue_log_due'), /now - last < 30000UL/);
 const renderer = read('src/tiles/runtime/tile_renderer.cpp');
-assert.match(fn(renderer, 'update_sensor_tile_value'),
-             /if \(!shown \|\| strcmp\(shown, combined\.c_str\(\)\) != 0\) \{\n\s*lv_label_set_text\(value_label, combined\.c_str\(\)\);/);
+// An unchanged value and unit hand LVGL nothing (value_unit.h since b550).
+assert.match(fn(renderer, 'update_sensor_tile_value'), /value_unit::show\(value_label, target\[grid_index\]\.unit_label, displayValue, unit_text\);/);
+const valueUnit = read('src/ui/shared/value_unit.cpp');
+assert.match(valueUnit, /const char\* shown = lv_label_get_text\(label\);\n\s*if \(!shown \|\| strcmp\(shown, text\) != 0\) lv_label_set_text\(label, text\);/);
+assert.match(valueUnit, /if \(lv_obj_get_style_pad_right\(label, LV_PART_MAIN\) != room\) lv_obj_set_style_pad_right\(label, room, 0\);/);
 // A full-grid cache application fits the sensor queue; an overflow repairs
 // the visible grid from the entity cache.
 assert.match(renderer, /QUEUE_SIZE =\n\s*TILES_PER_GRID \+ 8 > 32/);

@@ -28,6 +28,7 @@
 #include "src/ui/shared/tone_color.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/shared/ui_theme.h"
+#include "src/ui/shared/value_unit.h"
 
 // The Energy flow tile (decided design: flow_geometry.h). Each node is one
 // Home Assistant sensor and opens its normal Sensor popup when tapped; there
@@ -71,6 +72,7 @@ struct NodeWidgets {
   lv_obj_t* disc = nullptr;
   lv_obj_t* icon = nullptr;
   lv_obj_t* value = nullptr;
+  lv_obj_t* unit = nullptr;  // value_unit::show
   uint32_t color = 0xFFFFFFFFu;
   bool shown = false;
 };
@@ -79,6 +81,7 @@ struct FlowTileState {
   lv_obj_t* card = nullptr;
   lv_obj_t* canvas = nullptr;
   lv_obj_t* charge = nullptr;
+  lv_obj_t* charge_unit = nullptr;
   // The grid's feed-in icon: "transmission-tower-import" mirrored, drawn
   // once (grid_feed_picture), shown instead of the icon label.
   lv_obj_t* grid_feed = nullptr;
@@ -194,12 +197,22 @@ bool cached_watts(const String& entity, float& out) {
   return true;
 }
 
-String power_text(float watts) {
+// A power's amount and its unit, the unit a step smaller after it like
+// every value (value_unit.h, user 2026-10-26); "--" without a reading.
+void show_power(lv_obj_t* label, lv_obj_t*& unit, bool known, float watts) {
+  if (!known) {
+    value_unit::show(label, unit, "--", "");
+    return;
+  }
   const char* language = configManager.getConfig().language;
   const float magnitude = fabsf(watts);
-  if (magnitude >= 999950.0f) return i18n::format_number(language, magnitude / 1000000.0f, 1) + " MW";
-  if (magnitude >= 999.5f) return i18n::format_number(language, magnitude / 1000.0f, 1) + " kW";
-  return i18n::format_number(language, magnitude, 0) + " W";
+  if (magnitude >= 999950.0f) {
+    value_unit::show(label, unit, i18n::format_number(language, magnitude / 1000000.0f, 1), "MW");
+  } else if (magnitude >= 999.5f) {
+    value_unit::show(label, unit, i18n::format_number(language, magnitude / 1000.0f, 1), "kW");
+  } else {
+    value_unit::show(label, unit, i18n::format_number(language, magnitude, 0), "W");
+  }
 }
 
 // While the battery charges, its node shows Home Assistant's charging icon
@@ -882,18 +895,19 @@ void refresh(FlowTileState& st) {
   if (st.battery_invert) in.battery = -in.battery;
   const Flows flows = compute(in);
 
-  set_text(st.node[kNodePv].value, in.has_pv ? power_text(in.pv) : String("--"));
-  set_text(st.node[kNodeGrid].value, in.has_grid ? power_text(in.grid) : String("--"));
+  show_power(st.node[kNodePv].value, st.node[kNodePv].unit, in.has_pv, in.pv);
+  show_power(st.node[kNodeGrid].value, st.node[kNodeGrid].unit, in.has_grid, in.grid);
   // Every value its amount, the battery's too: its icon shows charging (user
   // 2026-10-26; b541-b545 kept Home Assistant's minus).
-  set_text(st.node[kNodeBattery].value, in.has_battery ? power_text(in.battery) : String("--"));
+  show_power(st.node[kNodeBattery].value, st.node[kNodeBattery].unit, in.has_battery, in.battery);
   const bool home_known = st.entities[kRoleHome].length() ? in.has_home : flows.home_known;
-  set_text(st.node[kNodeHome].value, home_known ? power_text(flows.home) : String("--"));
+  show_power(st.node[kNodeHome].value, st.node[kNodeHome].unit, home_known, flows.home);
   float charge = 0.0f;
   const bool has_charge = cached_number(st.entities[kRoleBatteryCharge], charge);
   if (st.charge) {
-    set_text(st.charge, has_charge ? i18n::format_number(configManager.getConfig().language, charge, 0) + " %"
-                                   : String("--"));
+    value_unit::show(st.charge, st.charge_unit,
+                     has_charge ? i18n::format_number(configManager.getConfig().language, charge, 0) : String("--"),
+                     has_charge ? String("%") : String());
   }
   show_grid_icon(st, in);
   // The battery shows its charge in the icon Home Assistant gives it; while

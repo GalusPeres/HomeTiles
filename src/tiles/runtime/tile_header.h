@@ -12,6 +12,7 @@
 #include "src/tiles/runtime/compact_sensor_layout.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
+#include "src/ui/shared/value_unit.h"
 #include "src/ui/shared/title_label.h"
 #include "src/ui/shared/ui_theme.h"
 
@@ -66,9 +67,11 @@ inline const lv_font_t* fitting_font(const char* text, int width, const lv_font_
 // steps down until the text fits `width` (null keeps the font, half-height
 // tiles); a tall state keeps its vertical `center`. Only a change touches the
 // label.
+// The state line's unit after a number ("Open · 58 %", "Cooling · 20.5 °C")
+// a step smaller after it (value_unit.h, user 2026-10-26).
 inline void set_state(lv_obj_t* label, const char* text, const lv_font_t* largest, int width, int center) {
   if (!label || !text) return;
-  if (strcmp(lv_label_get_text(label), text) == 0) return;
+  if (!value_unit::unit_text(label)[0] && strcmp(lv_label_get_text(label), text) == 0) return;
   if (largest) {
     const lv_font_t* font = fitting_font(text, width, largest);
     if (lv_obj_get_style_text_font(label, LV_PART_MAIN) != font) {
@@ -76,7 +79,7 @@ inline void set_state(lv_obj_t* label, const char* text, const lv_font_t* larges
       if (center >= 0) lv_obj_set_y(label, center - lv_font_get_line_height(font) / 2);
     }
   }
-  lv_label_set_text(label, text);
+  value_unit::show_text(label, text);
 }
 
 // Creates the title (if the tile has one) and the state label. `bar_top`: the

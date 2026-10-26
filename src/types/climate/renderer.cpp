@@ -20,6 +20,7 @@
 #include "src/types/climate/layout.h"
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/shared/ui_theme.h"
+#include "src/ui/shared/value_unit.h"
 
 namespace {
 
@@ -1303,8 +1304,8 @@ void refresh_climate_tile_content(
       const ClimateTileSlotKind kind =
           count > 0 ? kinds[0]
                     : ClimateTileSlotKind::CURRENT_TEMPERATURE;
-      const String text = climate_slot_text(kind, state);
-      lv_label_set_text(widget.value_label, text.c_str());
+      // The unit a step smaller after the number (value_unit.h).
+      value_unit::show_text(widget.value_label, climate_slot_text(kind, state));
       lv_obj_clear_flag(widget.value_label, LV_OBJ_FLAG_HIDDEN);
     }
     return;
@@ -1375,9 +1376,8 @@ void refresh_climate_tile_content(
       }
     }
     if (value) {
-      const String text = climate_slot_text(kind, state);
-      lv_label_set_text(value, text.c_str());
       lv_obj_set_style_text_color(value, lv_color_hex(ui_theme::text()), 0);
+      // The font first: the unit's size follows it (value_unit.h).
       lv_obj_set_style_text_font(
           value,
           adjustable
@@ -1386,6 +1386,7 @@ void refresh_climate_tile_content(
                      ? FONT_TITLE
                      : FONT_VALUE),
           0);
+      value_unit::show_text(value, climate_slot_text(kind, state));
     }
     if (caption) {
       if (interactive_control) {

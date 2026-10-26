@@ -17,6 +17,7 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 import {lvglHost} from '../../lib/lvgl-host.mjs';
+import {valueUnitSource} from '../../lib/value-unit-source.mjs';
 import {radiusPolicyHost, toneColorHost, popupSurfaceHost} from '../../lib/surface-style-host.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -207,6 +208,7 @@ const cpp = String.raw`
 #include "src/ui/popups/popup_body.h"
 #include "src/ui/popups/popup_graph_readout.h"
 extern "C" {LV_FONT_DECLARE(ui_font_12);LV_FONT_DECLARE(ui_font_14);LV_FONT_DECLARE(ui_font_16);LV_FONT_DECLARE(ui_font_20);LV_FONT_DECLARE(ui_font_24);LV_FONT_DECLARE(ui_font_28);LV_FONT_DECLARE(ui_font_32);LV_FONT_DECLARE(ui_font_40);LV_FONT_DECLARE(ui_font_48);LV_FONT_DECLARE(ui_font_56);LV_FONT_DECLARE(ui_font_64);LV_FONT_DECLARE(ui_font_72);LV_FONT_DECLARE(ui_font_80);LV_FONT_DECLARE(ui_font_96);LV_FONT_DECLARE(mdi_icons_32);LV_FONT_DECLARE(mdi_icons_40);LV_FONT_DECLARE(mdi_icons_48);}
+${valueUnitSource(root)}
 #if defined(DEVICE_LAYOUT_480X480)
 #define FONT_MDI_ICONS (&mdi_icons_32)
 #elif defined(DEVICE_LAYOUT_1024X600)
@@ -295,8 +297,8 @@ int main(){
  EnergyPopupInit init;init.entity_id="sensor.energy";init.title="Energy today";init.icon_name="flash";init.unit="kWh";init.decimals=2;init.bg_color=0x335577;
  show_energy_popup(init);auto* ctx=g_energy_popup_ctx;
  // The first frame already shows the current value in the shared header.
- assert(lv_obj_has_flag(ctx->value_label,LV_OBJ_FLAG_HIDDEN)&&strcmp(lv_label_get_text(ctx->value_label),"12.34 kWh")==0);
- sync_popup_shell();assert(shown(shell.value)&&strcmp(hometiles_title::text(shell.value),"12.34 kWh")==0);
+ assert(lv_obj_has_flag(ctx->value_label,LV_OBJ_FLAG_HIDDEN)&&strcmp(lv_label_get_text(ctx->value_label),"12.34")==0&&strcmp(value_unit::unit_text(ctx->value_label),"kWh")==0);
+ sync_popup_shell();assert(shown(shell.value)&&strcmp(hometiles_title::text(shell.value),"12.34")==0&&strcmp(value_unit::unit_text(shell.value),"kWh")==0);
  // settle() with a queue pass between the content and the next frame: the
  // hidden 7D chart waits until the content frame is drawn.
  lv_refr_now(display);process_popup_open();sync_popup_shell();
@@ -304,7 +306,7 @@ int main(){
  lv_refr_now(display);
  // Opening reads the newest bar.
  assert(ctx->shown_slots==24&&ctx->plot_w>0&&ctx->readout_slot==23&&ctx->readout_latest&&shown(ctx->readout_time_label)&&shown(ctx->readout_value_label));
- assert(strcmp(ctx->readout_time_text,"23:00 \xE2\x80\x93 00:00")==0&&strcmp(ctx->readout_value_text,"5.75 kWh")==0);
+ assert(strcmp(ctx->readout_time_text,"23:00 \xE2\x80\x93 00:00")==0&&strcmp(ctx->readout_value_text,"5.75")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0);
  // 7D sits left of the day button, which names today instead of 24H.
  {lv_area_t week,day;lv_obj_get_coords(ctx->week_btn,&week);lv_obj_get_coords(ctx->day_btn,&day);
   assert(week.x2<day.x1&&strcmp(lv_label_get_text(ctx->day_label),"Today")==0&&"7D sits left of Today");}
@@ -324,7 +326,7 @@ int main(){
  touch_at(bar_x(11,24),y);
  assert(ctx->readout.active()&&ctx->readout_slot==23&&"A press is applied with the next display refresh; the kept bar stays until then");
  lv_refr_now(display);
- assert(ctx->readout_slot==11&&strcmp(ctx->readout_time_text,"11:00 \xE2\x80\x93 12:00")==0&&strcmp(ctx->readout_value_text,"2.75 kWh")==0);
+ assert(ctx->readout_slot==11&&strcmp(ctx->readout_time_text,"11:00 \xE2\x80\x93 12:00")==0&&strcmp(ctx->readout_value_text,"2.75")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0);
  for(int i=0;i<ENERGY_VALUES_MAX;++i)assert(lv_obj_get_style_bg_opa(ctx->bars[i],LV_PART_MAIN)==(i==11?LV_OPA_COVER:kReadoutDimmedBarOpa));
  assert(shown(ctx->readout_time_label)&&shown(ctx->readout_value_label)&&lv_obj_get_y(value_box)==band_y);
  assert(lv_obj_get_style_text_font(ctx->readout_time_label,LV_PART_MAIN)==popup_layout::font20()&&lv_obj_get_style_text_font(ctx->readout_value_label,LV_PART_MAIN)==value_font());
@@ -346,13 +348,13 @@ int main(){
  assert(ctx->readout_slot==20&&strcmp(ctx->readout_time_text,"20:00 \xE2\x80\x93 21:00")==0);
  assert(lv_obj_get_style_bg_opa(ctx->bars[11],LV_PART_MAIN)==kReadoutDimmedBarOpa&&lv_obj_get_style_bg_opa(ctx->bars[20],LV_PART_MAIN)==LV_OPA_COVER);
  assert(!white_at(bar_x(11,24),chart.y1+2)&&white_at(wrap.x1+ctx->readout_x,chart.y1+2)&&"The line moves with the finger");
- touch_at(bar_x(5,24),y);lv_refr_now(display);assert(strcmp(ctx->readout_value_text,"--")==0&&"A missing bar value is not zero");
+ touch_at(bar_x(5,24),y);lv_refr_now(display);assert(strcmp(ctx->readout_value_text,"--")==0&&!value_unit::unit_text(ctx->readout_value_label)[0]&&"A missing bar value is not zero");
  touch_at(bar_x(23,24),y);lv_refr_now(display);assert(strcmp(ctx->readout_time_text,"23:00 \xE2\x80\x93 00:00")==0);
  configManager.cfg.global_time_format=clock_tile::TIME_FORMAT_12H;
- touch_at(bar_x(0,24),y);lv_refr_now(display);assert(strcmp(ctx->readout_time_text,"12 AM \xE2\x80\x93 1 AM")==0&&strcmp(ctx->readout_value_text,"0.10 kWh")==0);
+ touch_at(bar_x(0,24),y);lv_refr_now(display);assert(strcmp(ctx->readout_time_text,"12 AM \xE2\x80\x93 1 AM")==0&&strcmp(ctx->readout_value_text,"0.10")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0);
  touch_at(bar_x(12,24),y);lv_refr_now(display);assert(strcmp(ctx->readout_time_text,"12 PM \xE2\x80\x93 1 PM")==0);
  configManager.cfg.global_time_format=clock_tile::TIME_FORMAT_24H;configManager.cfg.language="de";
- touch_at(bar_x(1,24),y);lv_refr_now(display);assert(strcmp(ctx->readout_value_text,"0,25 kWh")==0&&"Values use the header's localized format");
+ touch_at(bar_x(1,24),y);lv_refr_now(display);assert(strcmp(ctx->readout_value_text,"0,25")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0&&"Values use the header's localized format");
  configManager.cfg.language="en";
  // The press stays with the chart outside its bounds.
  touch_at(SCREEN_WIDTH-1,SCREEN_HEIGHT-1);lv_refr_now(display);assert(ctx->readout.active()&&ctx->readout_slot==23);
@@ -363,13 +365,13 @@ int main(){
  assert(!ctx->readout.active()&&ctx->readout_slot==23&&ctx->readout_latest&&shown(ctx->readout_time_label)&&shown(ctx->readout_value_label)&&"Release keeps the read bar");
  assert(lv_display_get_event_count(display)==display_events&&"The refresh hook exists only while a finger is down");
  process_energy_popup_queue();assert(!g_pending_refresh.day&&ctx->shown_entry.values[23]==9.0f);
- assert(ctx->readout_slot==23&&strcmp(ctx->readout_value_text,"9.00 kWh")==0&&"The newest bar follows new data");
+ assert(ctx->readout_slot==23&&strcmp(ctx->readout_value_text,"9.00")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0&&"The newest bar follows new data");
  lv_refr_now(display);assert(white_at(wrap.x1+ctx->readout_x,chart.y1+2)&&"New bars keep the line");
  // Axis labels belong to the chart surface. A bar the finger left stays.
  touch_at(bar_x(6,24),(axis.y1+axis.y2)/2);lv_refr_now(display);assert(ctx->readout_slot==6);touch_release();
  assert(ctx->readout_slot==6&&!ctx->readout_latest);
  cache[0].values[6]=4.0f;queue_energy_popup_refresh("day");process_energy_popup_queue();
- assert(ctx->shown_entry.values[6]==4.0f&&ctx->readout_slot==6&&strcmp(ctx->readout_value_text,"4.00 kWh")==0&&"New data keeps the bar the finger left");
+ assert(ctx->shown_entry.values[6]==4.0f&&ctx->readout_slot==6&&strcmp(ctx->readout_value_text,"4.00")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0&&"New data keeps the bar the finger left");
  // A tap reads its bar at once and keeps it.
  touch_at(bar_x(3,24),y);touch_release();assert(ctx->readout_slot==3&&shown(ctx->readout_value_label)&&strcmp(ctx->readout_time_text,"03:00 \xE2\x80\x93 04:00")==0);
  lv_refr_now(display);
@@ -380,11 +382,11 @@ int main(){
  assert(ctx->week&&shown(ctx->chart_wrap)&&!shown(ctx->spare.chart_wrap)&&ctx->spare.shown_slots==24&&"The 24H chart waits hidden");
  assert(ctx->readout_slot==6&&ctx->readout_latest&&strcmp(ctx->readout_time_text,"Sunday")==0);
  touch_at(bar_x(2,7),y);lv_refr_now(display);
- assert(strcmp(ctx->readout_time_text,"Wednesday")==0&&strcmp(ctx->readout_value_text,"3.00 kWh")==0);
- sync_popup_shell();assert(strcmp(hometiles_title::text(shell.value),"12.34 kWh")==0&&"The header keeps today's value");
+ assert(strcmp(ctx->readout_time_text,"Wednesday")==0&&strcmp(ctx->readout_value_text,"3.00")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0);
+ sync_popup_shell();assert(strcmp(hometiles_title::text(shell.value),"12.34")==0&&strcmp(value_unit::unit_text(shell.value),"kWh")==0&&"The header keeps today's value");
  touch_release();
  lv_obj_send_event(ctx->day_btn,LV_EVENT_CLICKED,nullptr);settle(display);
- assert(ctx->period=="day"&&ctx->readout_slot==23&&ctx->readout_latest&&strcmp(ctx->readout_value_text,"9.00 kWh")==0);
+ assert(ctx->period=="day"&&ctx->readout_slot==23&&ctx->readout_latest&&strcmp(ctx->readout_value_text,"9.00")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0);
  // A negative bar hangs below the zero line; the line starts at the zero line.
  cache[0].values[3]=-2.0f;queue_energy_popup_refresh("day");process_energy_popup_queue();
  touch_at(bar_x(3,24),y);touch_release();lv_refr_now(display);

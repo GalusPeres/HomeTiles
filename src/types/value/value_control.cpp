@@ -25,6 +25,7 @@
 #include "src/tiles/config/tile_geometry.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/shared/ui_theme.h"
+#include "src/ui/shared/value_unit.h"
 
 namespace {
 const char* label(unsigned index) {
@@ -112,6 +113,20 @@ EditableValue parse_editable_value(const String& payload) {
 }
 
 String editable_display_value(const EditableValue& value) {
+  const String unit = editable_display_unit(value);
+  return unit.length() ? editable_display_number(value) + " " + unit : editable_display_number(value);
+}
+
+String editable_display_unit(const EditableValue& value) {
+  if (!value.valid || !value.has_state || !value.available || value.state == "unknown" || value.kind != "number")
+    return String();
+  char* end = nullptr;
+  const double number = strtod(value.state.c_str(), &end);
+  if (!end || *end || end == value.state.c_str() || !std::isfinite(number)) return String();
+  return value.unit;
+}
+
+String editable_display_number(const EditableValue& value) {
   if (!value.valid || !value.has_state) return "--";
   const char* language = configManager.getConfig().language;
   if (!value.available || value.state == "unknown")
@@ -123,7 +138,6 @@ String editable_display_value(const EditableValue& value) {
       return i18n::binary_sensor_state_label(language, "unknown", "");
     String text = value.state;
     if (i18n::locale(language).decimal_separator[0] == ',') text.replace('.', ',');
-    if (value.unit.length()) text += " " + value.unit;
     return text;
   }
   return value.state;
@@ -162,7 +176,8 @@ void refresh_editable_tile(GridType grid, uint8_t index) {
   lv_obj_t* label = widgets[index].value_label;
   lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
   lv_obj_set_height(label, lv_font_get_line_height(lv_obj_get_style_text_font(label, LV_PART_MAIN)));
-  lv_label_set_text(label, display.c_str());
+  // A number's unit a step smaller after it (value_unit.h, user 2026-10-26).
+  value_unit::show(label, widgets[index].unit_label, editable_display_number(value), editable_display_unit(value));
   // Per-tile icon colors: Number uses the color bar on the raw number; Select
   // and Date/Time state colors match the raw state or its displayed text.
   if (widgets[index].icon_label && tile->icon_colors.length()) {

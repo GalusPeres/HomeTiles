@@ -29,6 +29,7 @@
 #include <lvgl_private.h>
 #include <math.h>
 #include "src/ui/shared/ui_theme.h"
+#include "src/ui/shared/value_unit.h"
 
 namespace {
 
@@ -106,6 +107,10 @@ struct LightPopupContext {
   lv_obj_t* icon_label = nullptr;
   lv_obj_t* title_label = nullptr;
   lv_obj_t* top_value_label = nullptr;
+  // The values' units, a step smaller after them (value_unit.h).
+  lv_obj_t* top_value_unit = nullptr;
+  lv_obj_t* val_value_unit = nullptr;
+  lv_obj_t* temp_value_unit = nullptr;
   lv_obj_t* main_panel = nullptr;
   lv_obj_t* brightness_panel = nullptr;
   lv_obj_t* color_panel = nullptr;
@@ -363,15 +368,11 @@ static void update_popup_language(LightPopupContext* ctx) {
   (void)ctx;
 }
 
-static void update_value_label(lv_obj_t* label, int value, const char* suffix) {
+// A value with its unit a step smaller after it (value_unit.h, user
+// 2026-10-26).
+static void update_value_label(lv_obj_t* label, lv_obj_t*& unit, int value, const char* suffix) {
   if (!label) return;
-  char buf[24];
-  if (suffix && suffix[0]) {
-    snprintf(buf, sizeof(buf), "%d%s", value, suffix);
-  } else {
-    snprintf(buf, sizeof(buf), "%d", value);
-  }
-  lv_label_set_text(label, buf);
+  value_unit::show(label, unit, String(value), suffix ? suffix : "");
 }
 
 static uint8_t brightness_value_from_point(const lv_area_t& area, const lv_point_t& point) {
@@ -523,27 +524,23 @@ static const char* get_switch_slider_icon_name(const LightPopupContext* ctx) {
 static void update_top_value_label(LightPopupContext* ctx) {
   if (!ctx || !ctx->top_value_label) return;
   if (!ctx->available) {
-    lv_label_set_text(ctx->top_value_label, get_unavailable_text());
+    value_unit::show(ctx->top_value_label, ctx->top_value_unit, get_unavailable_text(), String());
     return;
   }
-  char buf[24];
   if (!ctx->is_on || (ctx->supports_brightness && ctx->val == 0)) {
-    lv_label_set_text(ctx->top_value_label, get_off_text());
+    value_unit::show(ctx->top_value_label, ctx->top_value_unit, get_off_text(), String());
     return;
   }
   if (ctx->supports_brightness) {
-    snprintf(buf, sizeof(buf), "%u %%", ctx->val);
-    lv_label_set_text(ctx->top_value_label, buf);
+    update_value_label(ctx->top_value_label, ctx->top_value_unit, ctx->val, "%");
     return;
   }
-  lv_label_set_text(ctx->top_value_label, get_on_text());
+  value_unit::show(ctx->top_value_label, ctx->top_value_unit, get_on_text(), String());
 }
 
 static void update_temperature_value_label(LightPopupContext* ctx) {
   if (!ctx || !ctx->temp_value_label) return;
-  char buf[24];
-  snprintf(buf, sizeof(buf), "%u K", static_cast<unsigned>(ctx->color_temp_kelvin));
-  lv_label_set_text(ctx->temp_value_label, buf);
+  update_value_label(ctx->temp_value_label, ctx->temp_value_unit, static_cast<int>(ctx->color_temp_kelvin), "K");
 }
 
 static bool is_visible_obj(lv_obj_t* obj) {
@@ -1495,7 +1492,7 @@ static void update_preview(LightPopupContext* ctx) {
   }
   update_top_value_label(ctx);
   if (is_visible_obj(ctx->val_value)) {
-    update_value_label(ctx->val_value, ctx->val, "%");
+    update_value_label(ctx->val_value, ctx->val_value_unit, ctx->val, "%");
   }
   if (is_visible_obj(ctx->temperature_panel)) {
     update_temperature_slider_visuals(ctx, true);
@@ -2510,6 +2507,9 @@ void show_light_popup(const LightPopupInit& init) {
   lv_obj_clear_flag(value_box, LV_OBJ_FLAG_SCROLLABLE);
 
   ctx->top_value_label = lv_label_create(value_box);
+  ctx->top_value_unit = nullptr;
+  ctx->val_value_unit = nullptr;
+  ctx->temp_value_unit = nullptr;
   lv_obj_set_width(ctx->top_value_label, LV_PCT(100));
   lv_obj_set_height(ctx->top_value_label, kTopValueHeight);
   lv_obj_set_style_text_align(ctx->top_value_label, LV_TEXT_ALIGN_CENTER, 0);

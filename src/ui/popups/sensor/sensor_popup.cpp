@@ -38,6 +38,7 @@
 #include <time.h>
 #include <vector>
 #include "src/ui/shared/ui_theme.h"
+#include "src/ui/shared/value_unit.h"
 
 namespace {
 
@@ -146,6 +147,7 @@ struct SensorPopupContext {
   lv_obj_t* icon_label = nullptr;
   lv_obj_t* close_button = nullptr;
   lv_obj_t* value_label = nullptr;
+  lv_obj_t* value_unit_label = nullptr;  // the holder's unit (value_unit.h)
   lv_obj_t* value_box = nullptr;
   lv_obj_t* control_row = nullptr;
   EditableControl* control = nullptr;
@@ -226,6 +228,7 @@ struct SensorPopupContext {
   PopupGraphScrub readout;
   lv_obj_t* readout_time_label = nullptr;
   lv_obj_t* readout_value_label = nullptr;
+  lv_obj_t* readout_unit_label = nullptr;
   uint8_t readout_kind = kReadoutNone;
   bool readout_band_raised = false;
   int32_t readout_point = -1;
@@ -365,8 +368,7 @@ static bool apply_decimals(String& value, uint8_t decimals) {
   return true;
 }
 
-static String sensor_value_display(const String& value, const String& unit,
-                                   uint8_t decimals, bool categorical_state);
+static String sensor_value_display(const String& value, uint8_t decimals, bool categorical_state);
 
 static void set_label_text_if_changed(lv_obj_t* label, const char* text) {
   if (!label || !text) return;
@@ -434,12 +436,20 @@ static void apply_editable_icon_color(SensorPopupContext* ctx, const EditableVal
                          lv_color_hex(ui_theme::text()));
 }
 
+// The header's value and its unit (value_unit.h: the unit a step smaller
+// after it, user 2026-10-26); every write to the holder comes here, so a
+// reused popup never keeps an old unit.
+static void show_header_value(SensorPopupContext* ctx, const String& value, const String& unit) {
+  if (!ctx || !ctx->value_label) return;
+  String shown_unit = value != "--" ? unit : String();
+  shown_unit.trim();
+  value_unit::show(ctx->value_label, ctx->value_unit_label, value, shown_unit);
+}
+
 static void update_value_label(SensorPopupContext* ctx, const String& value, const String& unit) {
   if (!ctx || !ctx->value_label) return;
   const bool categorical_state = ctx->state_history_mode && !ctx->binary_mode;
-  const String display =
-      sensor_value_display(value, unit, ctx->decimals, categorical_state);
-  set_label_text_if_changed(ctx->value_label, display.c_str());
+  show_header_value(ctx, sensor_value_display(value, ctx->decimals, categorical_state), unit);
   if (!ctx->binary_mode && !ctx->editable) {
     apply_popup_icon_color(ctx, popup_icon_state_known(value), value.c_str(), nullptr,
                            lv_color_hex(ui_theme::text()));
@@ -451,9 +461,9 @@ static void update_value_label(SensorPopupContext* ctx, const String& value, con
       categorical_state ? -1 : numeric_fraction_digits(value);
 }
 
-// Header value text, shared by live updates and the first frame of an opening.
-static String sensor_value_display(const String& value, const String& unit,
-                                   uint8_t decimals, bool categorical_state) {
+// Header value text without its unit, shared by live updates and the first
+// frame of an opening.
+static String sensor_value_display(const String& value, uint8_t decimals, bool categorical_state) {
   String display = categorical_state ? normalize_state_live_value(value)
                                      : value;
   if (!categorical_state) display.trim();
@@ -468,12 +478,6 @@ static String sensor_value_display(const String& value, const String& unit,
   if (!categorical_state && display.length() > 0 && display != "--" &&
       !display.equalsIgnoreCase("unavailable")) {
     apply_decimals(display, decimals);
-  }
-  String display_unit = unit;
-  display_unit.trim();
-  if (!display_unit.isEmpty() && display != "--") {
-    display += " ";
-    display += display_unit;
   }
   return display;
 }
@@ -594,8 +598,7 @@ static void apply_init_to_context(SensorPopupContext* ctx, const SensorPopupInit
   ctx->editable_history_id = "";
   ctx->editable_requested_range = SensorHistoryRange::Day24;
   if (init.editable) {
-    set_label_text_if_changed(ctx->value_label,
-                              editable_display_value(editable_value).c_str());
+    show_header_value(ctx, editable_display_number(editable_value), editable_display_unit(editable_value));
     apply_editable_icon_color(ctx, editable_value);
     ctx->value_fraction_digits = numeric_fraction_digits(editable_value.state);
   }
@@ -1709,14 +1712,11 @@ static void update_binary_state(SensorPopupContext* ctx,
   ctx->binary_device_class = device_class;
   ctx->binary_last_changed = last_changed;
   if (ctx->value_label) {
-    if (missing) {
-      lv_label_set_text(ctx->value_label, "--");
-    } else {
-      lv_label_set_text(
-          ctx->value_label,
-          i18n::binary_sensor_state_label(configManager.getConfig().language,
-                                          state, device_class));
-    }
+    show_header_value(ctx,
+                      missing ? String("--")
+                              : String(i18n::binary_sensor_state_label(configManager.getConfig().language,
+                                                                       state, device_class)),
+                      String());
   }
   if (ctx->icon_label) {
     // Per-tile On/Off or state colors match the raw state or its label, like
@@ -1740,7 +1740,7 @@ static void apply_sensor_header_value(SensorPopupContext* ctx,
   if (init.editable) {
     const EditableValue value =
         parse_editable_value(haBridgeConfig.findEditableValue(init.entity_id));
-    set_label_text_if_changed(ctx->value_label, editable_display_value(value).c_str());
+    show_header_value(ctx, editable_display_number(value), editable_display_unit(value));
     apply_editable_icon_color(ctx, value);
     return;
   }
@@ -1751,10 +1751,7 @@ static void apply_sensor_header_value(SensorPopupContext* ctx,
                         init.icon_name);
     return;
   }
-  set_label_text_if_changed(
-      ctx->value_label,
-      sensor_value_display(init.value, init.unit, init.decimals,
-                           init.state_history_mode).c_str());
+  show_header_value(ctx, sensor_value_display(init.value, init.decimals, init.state_history_mode), init.unit);
   apply_popup_icon_color(ctx, popup_icon_state_known(init.value), init.value.c_str(), nullptr,
                          lv_color_hex(ui_theme::text()));
 }
@@ -1906,6 +1903,7 @@ static void show_readout_band(SensorPopupContext* ctx) {
   }
   lv_label_set_text_static(ctx->readout_time_label, ctx->readout_time_text);
   lv_label_set_text_static(ctx->readout_value_label, ctx->readout_value_text);
+  value_unit::place(ctx->readout_value_label, ctx->readout_unit_label);
   popup_graph_readout::show_band_labels(ctx->readout_time_label,
                                         ctx->readout_value_label, true);
 }
@@ -2008,9 +2006,12 @@ static void apply_chart_readout(SensorPopupContext* ctx, const lv_point_t& point
                          : ctx->value_fraction_digits >= 0
                              ? static_cast<uint8_t>(ctx->value_fraction_digits)
                              : (fabsf(value - roundf(value)) < 0.05f ? 0 : 1);
+  // The number in the static buffer (no allocation while dragging), its
+  // unit a step smaller after it (value_unit.h, user 2026-10-26).
   popup_graph_readout::format_number(ctx->readout_value_text,
                                      sizeof(ctx->readout_value_text), value, digits,
-                                     readout_decimal_separator(), ctx->unit.c_str());
+                                     readout_decimal_separator(), nullptr);
+  value_unit::reserve(ctx->readout_value_label, ctx->readout_unit_label, isfinite(value) ? ctx->unit.c_str() : "");
   show_readout_band(ctx);
 }
 
@@ -2133,6 +2134,8 @@ static void apply_timeline_readout(SensorPopupContext* ctx, const lv_point_t& po
     write_state_history_label(ctx->readout_value_text, sizeof(ctx->readout_value_text),
                               state_value ? *state_value : unknown_state);
   }
+  // A state has no unit (a numeric readout before may have shown one).
+  value_unit::reserve(ctx->readout_value_label, ctx->readout_unit_label, "");
   show_readout_band(ctx);
 }
 
@@ -2213,6 +2216,7 @@ static void build_readout_band(SensorPopupContext* ctx) {
       ctx->value_box, popup_layout::font20(), ctx->readout_time_text);
   ctx->readout_value_label = popup_graph_readout::create_band_label(
       ctx->value_box, get_value_font(), ctx->readout_value_text);
+  ctx->readout_unit_label = nullptr;
   popup_graph_readout::align_band_labels(ctx->readout_time_label,
                                          ctx->readout_value_label);
 }
@@ -3386,6 +3390,7 @@ static void build_popup_shell(SensorPopupContext* ctx, const SensorPopupInit& in
   // The shared header shows the current value from this hidden label. It is
   // never drawn, so live value updates repaint only the header line.
   ctx->value_label = lv_label_create(parts.card);
+  ctx->value_unit_label = nullptr;  // value_unit::show adds it as the holder's child
   lv_label_set_text(ctx->value_label, "");
   lv_obj_add_flag(ctx->value_label, LV_OBJ_FLAG_HIDDEN);
 
@@ -3827,7 +3832,7 @@ void process_sensor_popup_queue() {
     if (ctx->editable_generation != editable_value_generation()) {
     ctx->editable_generation = editable_value_generation();
     const EditableValue value = parse_editable_value(haBridgeConfig.findEditableValue(ctx->entity_id));
-    set_label_text_if_changed(ctx->value_label, editable_display_value(value).c_str());
+    show_header_value(ctx, editable_display_number(value), editable_display_unit(value));
     apply_editable_icon_color(ctx, value);
     ctx->value_fraction_digits = numeric_fraction_digits(value.state);
     if (value.valid && (ctx->editable_state != value.state || ctx->editable_kind != value.kind || ctx->editable_available != value.available)) {

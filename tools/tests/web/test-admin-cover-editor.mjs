@@ -273,7 +273,7 @@ vm.runInContext(`
 // bar (user 2026-10-01, like the Switch dimmer).
 const previewHtml = elements['folder1-tile-3'].innerHTML;
 if (!previewHtml.includes('tile-value tile-switch-state') ||
-    !previewHtml.includes('Offen · 40 %') ||
+    !previewHtml.includes('Offen · 40<span class="tile-unit">%</span>') ||
     !previewHtml.includes('<div class="tile-switch" data-bar="dimmer">') ||
     !previewHtml.includes('style="color:#926bc7"') ||
     previewHtml.includes('tile-cover-state')) {

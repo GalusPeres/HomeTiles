@@ -21,7 +21,7 @@ for (const marker of [
   "'<i class=\"mdi mdi-' + escapeHtml(iconName) + ' tile-icon\"'",
   'tileTitleHtml(displayTitle)',
   'escapeHtml(coverPreviewStateText(state))',
-  'escapeHtml(coverPreviewStateLine(state))',
+  'unitTextHtml(coverPreviewStateLine(state))',
   "'<span class=\"tile-unit\">' + escapeHtml(unit) + '</span>'",
   'escapeHtml(textValue)',
   "'<strong>' + escapeHtml(info.value) + '</strong>'",

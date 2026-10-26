@@ -22,7 +22,7 @@ assert.ok(control.includes(
   'display.sensor_value_font = tile.sensor_value_font == 1 ? 0 : tile.sensor_value_font == 2 ? 2 : 5;'),
   'half height: 20 and 24 stay, 28, 32 and 40 become the compact 28');
 assert.match(control,
-  /lv_label_set_long_mode\(label, LV_LABEL_LONG_DOT\);\s*lv_obj_set_height\(label, lv_font_get_line_height\(lv_obj_get_style_text_font\(label, LV_PART_MAIN\)\)\);\s*lv_label_set_text\(label, display\.c_str\(\)\);/,
+  /lv_label_set_long_mode\(label, LV_LABEL_LONG_DOT\);\s*lv_obj_set_height\(label, lv_font_get_line_height\(lv_obj_get_style_text_font\(label, LV_PART_MAIN\)\)\);[\s\S]*?value_unit::show\(label, widgets\[index\]\.unit_label, editable_display_number\(value\), editable_display_unit\(value\)\);/,
   'one value line with dots');
 assert.ok(read('src/web/server/render/web_admin_html.cpp').includes('tile_geometry::compact_editable(tile.type, span_w, span_h)'));
 assert.ok(read('src/web/assets/admin.css').includes(

@@ -7,6 +7,7 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 import {lvglHost} from '../../lib/lvgl-host.mjs';
+import {valueUnitSource} from '../../lib/value-unit-source.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
 const control = read('src/types/value/value_control.cpp'), popup = read('src/ui/popups/sensor/sensor_popup.cpp');
@@ -60,11 +61,12 @@ struct PendingSensorInit{};using SensorPopupInit=PendingSensorInit;SensorPopupIn
 #include <iostream>
 #include <ArduinoJson.h>
 #include "src/types/value/value_editor_model.h"
-extern "C" { LV_FONT_DECLARE(ui_font_14); LV_FONT_DECLARE(ui_font_16); LV_FONT_DECLARE(ui_font_20); LV_FONT_DECLARE(ui_font_24);
+extern "C" { LV_FONT_DECLARE(ui_font_12); LV_FONT_DECLARE(ui_font_14); LV_FONT_DECLARE(ui_font_16); LV_FONT_DECLARE(ui_font_20); LV_FONT_DECLARE(ui_font_24);
 LV_FONT_DECLARE(ui_font_28); LV_FONT_DECLARE(ui_font_32); LV_FONT_DECLARE(ui_font_40); LV_FONT_DECLARE(ui_font_48);
 LV_FONT_DECLARE(ui_font_56); LV_FONT_DECLARE(ui_font_64); LV_FONT_DECLARE(ui_font_72); LV_FONT_DECLARE(ui_font_80); LV_FONT_DECLARE(ui_font_96);
 LV_FONT_DECLARE(ui_symbols_20); LV_FONT_DECLARE(ui_symbols_24);
 LV_FONT_DECLARE(mdi_icons_32); LV_FONT_DECLARE(mdi_icons_40); LV_FONT_DECLARE(mdi_icons_48); }
+${valueUnitSource(root)}
 #if defined(DEVICE_LAYOUT_480X480)
 #define FONT_MDI_ICONS (&mdi_icons_32)
 #elif defined(DEVICE_LAYOUT_1024X600)
@@ -87,7 +89,7 @@ const char* binary_sensor_state_label(const char*,const char* state,const char*)
 constexpr size_t EDITABLE_PAYLOAD_MAX=24576;
 #include "src/core/memory/psram_allocator.h"
 ${read('src/types/value/value_control.h').match(/struct EditableValue \{[\s\S]*?\n};/)[0]}
-${['label','finite_json','parse_editable_value','editable_display_value'].map(n=>fn(control,n)).join('\n')}
+${['label','finite_json','parse_editable_value','editable_display_unit','editable_display_number','editable_display_value'].map(n=>fn(control,n)).join('\n')}
 namespace Device { constexpr int kGridGap = SCREEN_WIDTH == 480 ? 10 : 16; }  // the profile's grid gap (popup header rule)
 ${geometry}
 ${styles}

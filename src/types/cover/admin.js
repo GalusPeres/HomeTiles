@@ -130,7 +130,7 @@
       return '<div class="tile-value tile-cover-value">' + escapeHtml(coverPreviewStateText(state)) +
         '<br>' + escapeHtml(value) + '</div>';
     }
-    let html = '<div class="tile-value tile-switch-state">' + escapeHtml(coverPreviewStateLine(state)) + '</div>';
+    let html = '<div class="tile-value tile-switch-state">' + unitTextHtml(coverPreviewStateLine(state)) + '</div>';
     if (!halfHeight) {
       html += '<div class="tile-switch" data-bar="dimmer">' +
         '<div class="tile-switch-fill"><span class="tile-switch-handle"></span></div></div>';

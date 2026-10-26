@@ -16,6 +16,7 @@
 #include <cstring>
 #include <string>
 #include "src/ui/shared/ui_theme.h"
+#include "src/ui/shared/value_unit.h"
 
 namespace {
 struct Binding {
@@ -60,7 +61,10 @@ struct Shell {
   lv_obj_t* icon = nullptr;
   lv_obj_t* close = nullptr;
   lv_obj_t* value = nullptr;
-  // Last source text copied into `value`; the visible label holds fitted text.
+  // The value's unit, a step smaller after it (value_unit.h).
+  lv_obj_t* value_unit = nullptr;
+  // Last source text and unit copied into `value`; the visible label holds
+  // fitted text.
   std::string value_source;
   Binding* active = nullptr;
 } shell;
@@ -523,8 +527,9 @@ void set_title_single_line(lv_obj_t* title, bool single_line) {
   hometiles_title::render(title, state);
 }
 
-// Copy the current value text from the popup's hidden holder. The holder is
-// never drawn, so its own changes do not repaint anything.
+// Copy the current value text and its unit from the popup's hidden holder
+// (value_unit::show keeps them apart there). The holder is never drawn, so
+// its own changes do not repaint anything.
 bool sync_header_value(lv_obj_t* source) {
   const char* text = source ? lv_label_get_text(source) : nullptr;
   const bool visible = text && text[0];
@@ -533,10 +538,18 @@ bool sync_header_value(lv_obj_t* source) {
     if (!hidden) lv_obj_add_flag(shell.value, LV_OBJ_FLAG_HIDDEN);
     return false;
   }
-  if (shell.value_source != text) {
-    shell.value_source = text;
+  const char* unit = value_unit::unit_text(source);
+  std::string key = text;
+  key += '\x1F';
+  key += unit;
+  if (shell.value_source != key) {
+    shell.value_source = key;
+    // The unit's room first, so the ellipsis leaves it free; then the unit
+    // after the text as fitted.
+    value_unit::reserve(shell.value, shell.value_unit, unit);
     hometiles_title::set(shell.value, text, true);
     set_title_single_line(shell.value, true);
+    value_unit::place(shell.value, shell.value_unit);
   }
   if (hidden) lv_obj_remove_flag(shell.value, LV_OBJ_FLAG_HIDDEN);
   return true;

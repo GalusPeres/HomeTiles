@@ -136,7 +136,7 @@
 
   // The state line beside the disc and, for full tiles, the bar.
   function devicePreviewExtraHtml(kind, d, halfHeight) {
-    let html = '<div class="tile-value tile-switch-state">' + escapeHtml(devicePreviewVisual(kind, d).label) + '</div>';
+    let html = '<div class="tile-value tile-switch-state">' + unitTextHtml(devicePreviewVisual(kind, d).label) + '</div>';
     if (!halfHeight) {
       html += '<div class="tile-switch" data-bar="none">' +
         '<div class="tile-switch-fill"><span class="tile-switch-handle"></span></div>' +

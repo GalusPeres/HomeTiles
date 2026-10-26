@@ -26,6 +26,7 @@
 #include <cstring>
 #include <math.h>
 #include "src/ui/shared/ui_theme.h"
+#include "src/ui/shared/value_unit.h"
 
 namespace {
 
@@ -189,6 +190,7 @@ struct ClimatePopupContext {
   lv_obj_t* range_high_marker = nullptr;
   lv_obj_t* current_marker = nullptr;
   lv_obj_t* target_label = nullptr;
+  lv_obj_t* target_unit_label = nullptr;  // value_unit.h
   lv_obj_t* state_caption = nullptr;
   lv_obj_t* minus_button = nullptr;
   lv_obj_t* plus_button = nullptr;
@@ -879,13 +881,16 @@ void refresh_target_label(
   const bool show_range =
       !ctx->humidity_control_active && ctx->has_range;
 
+  // The target and its unit, the unit a step smaller after it (value_unit.h,
+  // user 2026-10-26); a range keeps its two lines in one text.
   String target;
+  String target_unit;
   if (ctx->humidity_control_active) {
     target = humidity_control_available(ctx)
                  ? i18n::format_number(
                        language, ctx->target_humidity, 0)
                  : String("--");
-    target += " %";
+    target_unit = "%";
   } else if (show_range) {
     target = i18n::format_number(language, ctx->target_temp_low, 1);
     target += " ";
@@ -896,21 +901,22 @@ void refresh_target_label(
     target += ctx->temperature_unit;
   } else if (ctx->has_target) {
     target = i18n::format_number(language, ctx->target_temperature, 1);
+    target_unit = ctx->temperature_unit;
   } else {
     target = "--";
   }
-  if (!ctx->humidity_control_active && !show_range) {
-    target += " ";
-    target += ctx->temperature_unit;
-  }
+  if (target == "--") target_unit = "";
   if (ctx->target_label) {
-    lv_label_set_text(ctx->target_label, target.c_str());
+    // The font first: the unit's size follows it.
     if (refresh_layout) {
       lv_obj_set_style_text_font(
           ctx->target_label,
           show_range ? popup_layout::font40() : popup_layout::font48(), 0);
       lv_obj_set_style_text_line_space(
           ctx->target_label, show_range ? -10 : 0, 0);
+    }
+    value_unit::show(ctx->target_label, ctx->target_unit_label, target, target_unit);
+    if (refresh_layout) {
       lv_obj_set_height(
           ctx->target_label,
           show_range ? kRangeTargetTextHeight : LV_SIZE_CONTENT);
@@ -2657,6 +2663,7 @@ void show_climate_popup(const ClimatePopupInit& init) {
       ctx->state_caption, LV_ALIGN_CENTER, 0, kStateCaptionOffsetY);
 
   ctx->target_label = lv_label_create(ctx->body);
+  ctx->target_unit_label = nullptr;
   lv_obj_set_style_text_font(ctx->target_label, popup_layout::font48(), 0);
   lv_obj_set_style_text_color(
       ctx->target_label, lv_color_hex(ui_theme::text()), 0);

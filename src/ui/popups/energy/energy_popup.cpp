@@ -34,6 +34,7 @@
 #include "src/ui/popups/popup_body.h"
 #include "src/ui/popups/popup_graph_readout.h"
 #include "src/ui/shared/ui_theme.h"
+#include "src/ui/shared/value_unit.h"
 
 namespace {
 
@@ -102,6 +103,7 @@ struct EnergyPopupContext : EnergyChartView {
   lv_obj_t* icon_label = nullptr;
   lv_obj_t* close_button = nullptr;
   lv_obj_t* value_label = nullptr;
+  lv_obj_t* value_unit_label = nullptr;  // value_unit.h
   lv_obj_t* subtitle_label = nullptr;
   lv_obj_t* range_row = nullptr;
   lv_obj_t* day_btn = nullptr;
@@ -122,6 +124,7 @@ struct EnergyPopupContext : EnergyChartView {
   PopupFirstFrame spare_frame;
   lv_obj_t* readout_time_label = nullptr;
   lv_obj_t* readout_value_label = nullptr;
+  lv_obj_t* readout_unit_label = nullptr;
   int readout_slot = -1;
   int readout_x = 0;  // marker, relative to chart_wrap
   int readout_line_bottom = 0;  // top edge of the read bar, relative to chart_wrap
@@ -169,13 +172,11 @@ String format_number(float value, uint8_t decimals) {
       configManager.getConfig().language, value, decimals);
 }
 
-String format_value_with_unit(float value, const String& unit, uint8_t decimals) {
-  String out = format_number(value, decimals);
-  if (out != "--" && unit.length()) {
-    out += " ";
-    out += unit;
-  }
-  return out;
+// The header's total and its unit, the unit a step smaller after it
+// (value_unit.h, user 2026-10-26).
+void show_total(EnergyPopupContext* ctx, float value, const String& unit) {
+  const String number = format_number(value, ctx->decimals);
+  value_unit::show(ctx->value_label, ctx->value_unit_label, number, number != "--" ? unit : String());
 }
 
 bool popup_visible(const EnergyPopupContext* ctx) {
@@ -467,8 +468,7 @@ void update_header_value(EnergyPopupContext* ctx, const EnergyEntryData& fallbac
   }
 
   String unit = ctx->unit.length() ? ctx->unit : display_entry->unit;
-  lv_label_set_text(ctx->value_label,
-                    format_value_with_unit(display_entry->total, unit, ctx->decimals).c_str());
+  show_total(ctx, display_entry->total, unit);
   lv_label_set_text(ctx->subtitle_label, subtitle.c_str());
 }
 
@@ -478,13 +478,12 @@ void update_loading_header(EnergyPopupContext* ctx) {
   EnergyEntryData day_entry;
   if (energy_find_entry(ctx->entity_id, "day", day_entry)) {
     String unit = ctx->unit.length() ? ctx->unit : day_entry.unit;
-    lv_label_set_text(ctx->value_label,
-                      format_value_with_unit(day_entry.total, unit, ctx->decimals).c_str());
+    show_total(ctx, day_entry.total, unit);
     lv_label_set_text(ctx->subtitle_label, today_label());
     return;
   }
 
-  lv_label_set_text(ctx->value_label, loading_label());
+  value_unit::show(ctx->value_label, ctx->value_unit_label, loading_label(), String());
   lv_label_set_text(ctx->subtitle_label,
                     (ctx->period == "week" ? String("7D") : String(today_label())).c_str());
 }
@@ -645,12 +644,16 @@ void show_energy_slot(EnergyPopupContext* ctx, int slot) {
   const EnergyEntryData& entry = ctx->shown_entry;
   const bool valid = slot < entry.value_count && entry.value_valid[slot];
   const String& unit = ctx->unit.length() ? ctx->unit : entry.unit;
+  // The number in the static buffer (no allocation while dragging), its
+  // unit a step smaller after it (value_unit.h).
   popup_graph_readout::format_number(
       ctx->readout_value_text, sizeof(ctx->readout_value_text),
       valid ? entry.values[slot] : NAN, ctx->decimals,
-      i18n::locale(configManager.getConfig().language).decimal_separator[0], unit.c_str());
+      i18n::locale(configManager.getConfig().language).decimal_separator[0], nullptr);
+  value_unit::reserve(ctx->readout_value_label, ctx->readout_unit_label, valid ? unit.c_str() : "");
   lv_label_set_text_static(ctx->readout_time_label, ctx->readout_time_text);
   lv_label_set_text_static(ctx->readout_value_label, ctx->readout_value_text);
+  value_unit::place(ctx->readout_value_label, ctx->readout_unit_label);
   popup_graph_readout::show_band_labels(ctx->readout_time_label, ctx->readout_value_label,
                                         true);
 }
@@ -1312,6 +1315,8 @@ void build_popup_ui(EnergyPopupContext* ctx, const EnergyPopupInit& init) {
   // The shared header shows the current value from this hidden label. The old
   // value row below is the bar readout: time above, value below, centered.
   ctx->value_label = lv_label_create(card);
+  ctx->value_unit_label = nullptr;
+  ctx->readout_unit_label = nullptr;
   lv_label_set_text(ctx->value_label, "");
   lv_obj_add_flag(ctx->value_label, LV_OBJ_FLAG_HIDDEN);
   ctx->readout_time_label = popup_graph_readout::create_band_label(

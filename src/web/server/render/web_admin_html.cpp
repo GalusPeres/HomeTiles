@@ -805,7 +805,15 @@ static void appendTileTabHTML(
       html += tile.sensor_value_font == 1 ? "20" : tile.sensor_value_font == 2 ? "24" :
               tile.sensor_value_font == 3 ? "32" : tile.sensor_value_font == 4 ? "40" : "default";
       html += "\">";
-      appendHtmlEscaped(html, editable_display_value(parse_editable_value(haBridgeConfig.findEditableValue(tile.sensor_entity))));
+      // The unit a step smaller after the number, as the panel shows it.
+      const EditableValue editable = parse_editable_value(haBridgeConfig.findEditableValue(tile.sensor_entity));
+      appendHtmlEscaped(html, editable_display_number(editable));
+      const String editable_unit = editable_display_unit(editable);
+      if (editable_unit.length()) {
+        html += "<span class=\"tile-unit\">";
+        appendHtmlEscaped(html, editable_unit);
+        html += "</span>";
+      }
       html += "</div>";
     }
     if (binary_sensor_preview) {

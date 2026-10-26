@@ -392,7 +392,13 @@ function maybeFillTitleFromSwitch(tab) {
     if (!available) on = false;
     // A dimmable light on without a reported brightness: On without a level.
     const level = on ? (state.hasBrightness ? Math.max(1, state.brightness) : (dimmable ? 0 : 100)) : 0;
-    if (label) label.textContent = switchPreviewStateText(state, dimmable && level > 0, level, on);
+    if (label) {
+      // A level's percent a step smaller after it (unitTextHtml); words as text.
+      const text = switchPreviewStateText(state, dimmable && level > 0, level, on);
+      const html = unitTextHtml(text);
+      if (html === escapeHtml(text)) label.textContent = text;
+      else label.innerHTML = html;
+    }
     if (!bar) return;
     const kind = switchBarKind(style, halfHeight, dimmable);
     bar.dataset.bar = kind;

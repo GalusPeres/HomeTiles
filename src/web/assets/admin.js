@@ -8233,7 +8233,7 @@ async function saveGestureEdge(select) {
       tileElem.classList.toggle('climate-header', climateValue && !climateHalf);
       if (climateHalf || climateValue) {
         html += '<div class="tile-value tile-switch-state">' +
-          escapeHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
+          unitTextHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
       }
       if (!climateHalf) {
         html += climatePreviewSlots(
@@ -8254,7 +8254,7 @@ async function saveGestureEdge(select) {
         '</div>';
     }
 
-    if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + escapeHtml(editablePreviewText(iconEntity, previewKind)) + '</div>';
+    if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + editablePreviewHtml(iconEntity, previewKind) + '</div>';
 
     if (previewKind === 'sensor') {
       const entitySelect = document.getElementById(prefix + (isEnergyType ? '_energy_entity' : '_sensor_entity'));
@@ -11079,7 +11079,7 @@ async function saveGestureEdge(select) {
         el.classList.toggle('climate-header', climateValue && !climateHalf);
         if (climateHalf || climateValue) {
           html += '<div class="tile-value tile-switch-state">' +
-            escapeHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
+            unitTextHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
         }
         if (!climateHalf) {
           html += climatePreviewSlots(
@@ -11101,7 +11101,7 @@ async function saveGestureEdge(select) {
           escapeHtml(binarySensorPreviewStateText(binarySensorPreviewState)) +
           '</div>';
       }
-      if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + escapeHtml(editablePreviewText(iconEntity, previewKind, sensorMeta)) + '</div>';
+      if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + editablePreviewHtml(iconEntity, previewKind, sensorMeta) + '</div>';
       if (previewKind === 'clock') {
         const flags = normalizeClockFlags(tile.sensor_decimals);
         const clockTimeFont = tile.key_code || 40;
@@ -16079,6 +16079,32 @@ function maybeFillTitleFromSensor(tab) {
     maybeFillTitleFromEntity(tab, '_sensor_entity');
   }
 
+  // A finished text with its unit after a number ("21,5 °C", "Open · 58 %")
+  // as HTML, the unit a step smaller (.tile-unit), like the panel's
+  // value_unit::show_text (value_unit_rules.h split_unit): the last word, or
+  // the letters after the last digit, without a digit, right after a digit
+  // (one space allowed), on one line; any other text escaped as it is.
+  function unitTextHtml(text) {
+    const value = String(text ?? '');
+    const match = /^([^\n]*\d) ?([^ \d\n]+)$/.exec(value);
+    const bytes = match ? [...match[2]].reduce((n, c) => n + (c.codePointAt(0) < 0x80 ? 1 : c.codePointAt(0) < 0x800 ? 2 : c.codePointAt(0) < 0x10000 ? 3 : 4), 0) : 0;
+    if (!match || bytes > 12) return escapeHtml(value);
+    return escapeHtml(match[1]) + '<span class="tile-unit">' + escapeHtml(match[2]) + '</span>';
+  }
+
+  // A unit's inline size for a number of `valuePx` panel pixels, the step
+  // the panel takes (value_unit_rules.h unit_px over VALUE_UNIT_FONTS, its
+  // thin gap and the digits' tops meeting); the .tile-unit rule (80 %)
+  // stands in where the number's size is not known.
+  function valueUnitStyle(valuePx) {
+    const sizes = typeof VALUE_UNIT_FONTS !== 'undefined' && VALUE_UNIT_FONTS.length ? VALUE_UNIT_FONTS : [16, 20, 24, 28, 32];
+    let unit = sizes[0];
+    for (const size of sizes) if (size < valuePx && size * 10 <= valuePx * 8) unit = size;
+    const ratio = unit / valuePx;
+    return 'font-size:' + ratio.toFixed(4) + 'em;margin-left:' + (Math.floor((unit + 3) / 6) / unit).toFixed(4) +
+      'em;vertical-align:' + (0.727 * (1 - ratio) / ratio).toFixed(4) + 'em';
+  }
+
   function formatSensorValue(value, decimals) {
     if (value === undefined || value === null) return '--';
     let text = String(value).trim();
@@ -17309,15 +17335,22 @@ function maybeFillTitleFromWeather(tab) {
     }
     const showForecast = cardH >= L.forecastMinH;
     const rowCenter = showForecast ? (gridCellH / 2 + L.valueDy) * scale : height / 2 + L.valueDy * scale;
-    const textSpan = (cls, text, f, extra = '') => '<span class="' + cls + '" style="' + fontCss(f) +
-      'top:' + f.shift.toFixed(2) + 'px;' + extra + '">' + escapeHtml(text) + '</span>';
+    const htmlSpan = (cls, inner, f, extra = '') => '<span class="' + cls + '" style="' + fontCss(f) +
+      'top:' + f.shift.toFixed(2) + 'px;' + extra + '">' + inner + '</span>';
+    const textSpan = (cls, text, f, extra = '') => htmlSpan(cls, escapeHtml(text), f, extra);
+    // The temperature's unit a step smaller after it, as on the panel
+    // (value_unit.h); with the humidity behind it one size for both.
+    const tempHtml = hasTemp && state.unit && !state.humidity
+      ? escapeHtml(weatherPreviewTemp(state.temperature)) + '<span class="tile-unit" style="' + valueUnitStyle(L.value.px) +
+        '">' + escapeHtml(state.unit) + '</span>'
+      : escapeHtml(tempText);
     let html = '<div class="weather-preview-row" style="top:' + (rowCenter - valueFont.line / 2 - 3).toFixed(2) +
       'px;height:' + valueFont.line.toFixed(2) + 'px;gap:' + px(L.valueGap) + '">';
     if (showCondition) {
       html += textSpan('weather-preview-condition', conditionText, valueFont, 'max-width:' + Math.max(0, room).toFixed(2) + 'px;');
       if (tempText !== '--') html += textSpan('weather-preview-separator', '|', valueFont);
     }
-    html += textSpan('weather-preview-temp', tempText, valueFont) + '</div>';
+    html += htmlSpan('weather-preview-temp', tempHtml, valueFont) + '</div>';
 
     // Forecast columns, spread evenly over the card, the row anchored to the
     // card's bottom like on the device.
@@ -18072,7 +18105,13 @@ function maybeFillTitleFromSwitch(tab) {
     if (!available) on = false;
     // A dimmable light on without a reported brightness: On without a level.
     const level = on ? (state.hasBrightness ? Math.max(1, state.brightness) : (dimmable ? 0 : 100)) : 0;
-    if (label) label.textContent = switchPreviewStateText(state, dimmable && level > 0, level, on);
+    if (label) {
+      // A level's percent a step smaller after it (unitTextHtml); words as text.
+      const text = switchPreviewStateText(state, dimmable && level > 0, level, on);
+      const html = unitTextHtml(text);
+      if (html === escapeHtml(text)) label.textContent = text;
+      else label.innerHTML = html;
+    }
     if (!bar) return;
     const kind = switchBarKind(style, halfHeight, dimmable);
     bar.dataset.bar = kind;
@@ -18346,7 +18385,7 @@ function maybeFillTitleFromSwitch(tab) {
       return '<div class="tile-value tile-cover-value">' + escapeHtml(coverPreviewStateText(state)) +
         '<br>' + escapeHtml(value) + '</div>';
     }
-    let html = '<div class="tile-value tile-switch-state">' + escapeHtml(coverPreviewStateLine(state)) + '</div>';
+    let html = '<div class="tile-value tile-switch-state">' + unitTextHtml(coverPreviewStateLine(state)) + '</div>';
     if (!halfHeight) {
       html += '<div class="tile-switch" data-bar="dimmer">' +
         '<div class="tile-switch-fill"><span class="tile-switch-handle"></span></div></div>';
@@ -18570,7 +18609,7 @@ function maybeFillTitleFromSwitch(tab) {
 
   // The state line beside the disc and, for full tiles, the bar.
   function devicePreviewExtraHtml(kind, d, halfHeight) {
-    let html = '<div class="tile-value tile-switch-state">' + escapeHtml(devicePreviewVisual(kind, d).label) + '</div>';
+    let html = '<div class="tile-value tile-switch-state">' + unitTextHtml(devicePreviewVisual(kind, d).label) + '</div>';
     if (!halfHeight) {
       html += '<div class="tile-switch" data-bar="none">' +
         '<div class="tile-switch-fill"><span class="tile-switch-handle"></span></div>' +
@@ -23001,6 +23040,18 @@ function getClockPreviewLanguage() {
     }
   }
   function isEditablePreview(kind) { return ['number', 'select', 'datetime'].includes(kind); }
+  // The preview's value as HTML: a number's unit a step smaller after it
+  // (.tile-unit, like the panel's value_unit::show).
+  function editablePreviewHtml(entity, kind, meta = sensorMetaCache) {
+    let value = meta?.editableValues?.[entity];
+    if (typeof value === 'string') { try { value = JSON.parse(value); } catch (_) { value = null; } }
+    const text = editablePreviewText(entity, kind, meta);
+    const unit = value && value.kind === 'number' && value.unit && value.available && value.state !== 'unavailable' &&
+      value.state !== 'unknown' && String(value.state).trim() && Number.isFinite(Number(value.state)) ? String(value.unit) : '';
+    if (!unit || !text.endsWith(' ' + unit)) return escapeHtml(text);
+    return escapeHtml(text.slice(0, -unit.length - 1)) + '<span class="tile-unit">' + escapeHtml(unit) + '</span>';
+  }
+
   function editablePreviewText(entity, kind, meta = sensorMetaCache) {
     let value = meta?.editableValues?.[entity];
     if (typeof value === 'string') { try { value = JSON.parse(value); } catch (_) { return '--'; } }

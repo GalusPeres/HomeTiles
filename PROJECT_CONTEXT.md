@@ -14,7 +14,7 @@ Last reviewed: 2026-10-26
 
 - FW v0.9.5 hotfix 2026-10-23 (media player hidden when rebuilt with the menu open); FW + Bridge v0.9.4 released the same day (media popup, speaker over the Bridge, camera sound, HA theme/rotation). Bridge beta v0.9.6b1.
 - Pairing by IP without mDNS (#114, Bridge #16): read-only `GET /api/link` + Bridge menu step; HA ok on Tab5 (b513, b16).
-- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b550.
+- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b551.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build; a cache stays warm when only repo headers changed and the LVGL config fingerprint matches.
 - Docs CI runs on pinned Chrome for Testing 154.0.8037.57; a tag's docs run uses the tag's workflow, so after a release dispatch docs on `main`.
 - Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need their icons on HomeTiles-staging (tag = FW_VERSION).
@@ -53,7 +53,7 @@ Last reviewed: 2026-10-26
 - Backported ESP-Hosted allocation/PSRAM fixes, synchronous RPC UID routing, Espressif `a8204f9` dropped-RX recovery; `repo-a8204` is the release-safe baseline. Wedge safeguards are recovery, not a transport fix.
 - Issue #30 fix (v0.6.10): exact V1 keeps 1-bit/40 MHz and splits large RX into 512-byte CMD53 reads.
 - Flash-write blue flash: cache-safe DSI/DMA/CSI objects (`tools/esp-idf-3.3.7-p4-cache-safe`).
-- #38: reporter SKU10153001-V2 vs maintainer SKU10153002-V2 (labels prove no other panel). Exact-V2 fixes `e1a9297`. SD (#55): reporter card init fails, a failed V2 mount stays final until restart, init cause open. Interrupt-WDT cause unproven.
+- #38: reporter SKU10153001-V2 vs maintainer SKU10153002-V2. Exact-V2 fixes `e1a9297`. SD (#55): reporter card init fails, a failed V2 mount stays final until restart, init cause open. Interrupt-WDT cause unproven.
 - #37: packets up to 65,535 bytes with bounded queues/ACKs; reporter confirmation pending.
 
 ## Memory, flash, performance
@@ -84,7 +84,7 @@ Last reviewed: 2026-10-26
 - Upright (b294): P4 panels upright under a landscape profile draw the upright UI directly (`drawUpright`); JC1060/7B upright and JC4880 landscape (b368) compile only, HW pending.
 - Light theme: `ui_theme` roles + `SurfaceScope`; popups take the opener's surface. Remembered LVGL objects clear themselves on delete (LVGL 9.6 `lv_obj_is_valid` reads freed objects).
 - Settings: 4 pages (`build/design-mockups/settings`), Display with a Sound group on speaker boards (#123); setup in the popup card.
-- Units (b550): a step smaller after the number, digit tops level, like the weather forecast (`value_unit.h`, `.tile-unit`); next: climate, number, weather now, popups.
+- Units (b551): a step smaller after the number, digit tops level, like the weather forecast (`value_unit.h`, `.tile-unit`, `unitTextHtml`): tiles, state lines, popups; two units in one line keep one size.
 
 ## Tiles and Bridge contracts
 

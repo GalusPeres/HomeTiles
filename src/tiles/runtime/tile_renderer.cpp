@@ -2441,18 +2441,19 @@ static void update_climate_tile_state(
       kept_optimistic_target ? 0 : payload_hash;
 
   if (widget.value_label) {
-    String value = state.has_current_temperature
-                       ? i18n::format_number(
-                             configManager.getConfig().language,
-                             state.current_temperature,
-                             1)
-                       : String("--");
-    value += " ";
-    value += state.temperature_unit[0]
-                 ? state.temperature_unit
-                 : "\xC2\xB0"
-                   "C";
-    lv_label_set_text(widget.value_label, value.c_str());
+    // The unit a step smaller after the number (value_unit.h).
+    const String value = state.has_current_temperature
+                             ? i18n::format_number(
+                                   configManager.getConfig().language,
+                                   state.current_temperature,
+                                   1)
+                             : String("--");
+    value_unit::show(widget.value_label, value,
+                     state.has_current_temperature
+                         ? String(state.temperature_unit[0] ? state.temperature_unit
+                                                            : "\xC2\xB0"
+                                                              "C")
+                         : String());
   }
   refresh_climate_tile_content(grid_type, grid_index, state);
   if (widget.icon_label) {
@@ -2676,17 +2677,19 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
   const bool has_today = get_local_today_date(today_date);
 
   if (widgets.temp_label) {
-    if (!show_condition) {
-      lv_label_set_text(widgets.temp_label, temp_text.c_str());
-    } else if (!widgets.condition_label) {
+    // The temperature's unit a step smaller after it (value_unit.h); with
+    // the humidity behind it the line keeps one size for both units.
+    const bool own_unit = !tile.weather_humidity_sensor.length();
+    if (!show_condition || widgets.condition_label) {
+      if (own_unit) value_unit::show_text(widgets.temp_label, temp_text);
+      else value_unit::show(widgets.temp_label, temp_text, String());
+    } else {
       String combined = temp_text;
       if (condition_text.length() && condition_text != "--") {
         combined += " ";
         combined += condition_text;
       }
-      lv_label_set_text(widgets.temp_label, combined.c_str());
-    } else {
-      lv_label_set_text(widgets.temp_label, temp_text.c_str());
+      value_unit::show(widgets.temp_label, combined, String());
     }
     lv_obj_clear_flag(widgets.temp_label, LV_OBJ_FLAG_HIDDEN);
   }

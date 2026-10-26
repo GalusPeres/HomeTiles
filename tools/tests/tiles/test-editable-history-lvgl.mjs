@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 import {lvglHost} from '../../lib/lvgl-host.mjs';
 import deviceCatalog from '../../device-catalog.js';
+import {valueUnitSource} from '../../lib/value-unit-source.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
@@ -59,9 +60,10 @@ void popup_shell_control_raised_fill(uint32_t,uint32_t,lv_color_t&c,lv_opa_t&o){
 #include <fstream>
 #include <iostream>
 #include <ArduinoJson.h>
-extern "C" { LV_FONT_DECLARE(ui_font_14); LV_FONT_DECLARE(ui_font_16); LV_FONT_DECLARE(ui_font_20); LV_FONT_DECLARE(ui_font_24);
+extern "C" { LV_FONT_DECLARE(ui_font_12); LV_FONT_DECLARE(ui_font_14); LV_FONT_DECLARE(ui_font_16); LV_FONT_DECLARE(ui_font_20); LV_FONT_DECLARE(ui_font_24);
 LV_FONT_DECLARE(ui_font_28); LV_FONT_DECLARE(ui_font_32); LV_FONT_DECLARE(ui_font_40); LV_FONT_DECLARE(ui_font_48);
 LV_FONT_DECLARE(ui_font_56); LV_FONT_DECLARE(ui_font_64); LV_FONT_DECLARE(ui_font_72); LV_FONT_DECLARE(ui_font_80); LV_FONT_DECLARE(ui_font_96); }
+${valueUnitSource(root)}
 class String : public std::string {public:
  using std::string::string; using std::string::operator=; String()=default; String(const std::string& value):std::string(value){}
  bool isEmpty()const{return empty();} bool equalsIgnoreCase(const char* other)const{String a=*this,b=other;a.toLowerCase();b.toLowerCase();return a==b;}
@@ -120,6 +122,8 @@ struct Bridge{String payload="number";String findEditableValue(const String&){re
 EditableValue parse_editable_value(const String&p){EditableValue v;v.kind=String(p.substr(0,p.find('|')));return v;}
 uint32_t editable_value_generation(){return 1;}
 String editable_display_value(const EditableValue& value){return value.state+" "+value.unit;}
+String editable_display_number(const EditableValue& value){return value.state;}
+String editable_display_unit(const EditableValue& value){return value.unit;}
 // Locale lookups of the readout; formatting, snapping and drawing are real.
 bool readout_12h=false;
 bool readout_twelve_hour(){return readout_12h;}
@@ -153,7 +157,7 @@ ${fn(popup,'editable_history_fingerprint')}
 int requests=0;
 void request_history_for_context(SensorPopupContext*ctx){ctx->editable_history_id=std::to_string(++requests);ctx->history_request_fingerprint=editable_history_fingerprint(ctx->entity_id);}
 #include "src/tiles/config/tile_icon_colors.h"
-${['popup_icon_state_known','apply_popup_icon_color','apply_editable_icon_color'].map(n=>fn(popup,n)).join('\n')}
+${['popup_icon_state_known','apply_popup_icon_color','apply_editable_icon_color','show_header_value'].map(n=>fn(popup,n)).join('\n')}
 ${fn(popup,'apply_sensor_header')}
 ${fn(popup,'apply_sensor_header_value')}
 ${fn(popup,'apply_init_to_context')}
@@ -269,7 +273,7 @@ int main(int argc,char**argv){
   touch_at(content.x1+width/2,content.y1+ctx.chart_height/2);
   assert(ctx.readout.active()&&!shown(ctx.readout_value_label)&&"A press is applied with the next display refresh, not in the input event");
   lv_refr_now(display);
-  assert(ctx.readout_kind==kReadoutChart&&ctx.readout_point==2&&strcmp(ctx.readout_value_text,"100 %")==0&&"The readout snaps to the touched history point");
+  assert(ctx.readout_kind==kReadoutChart&&ctx.readout_point==2&&strcmp(ctx.readout_value_text,"100")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"%")==0&&"The readout snaps to the touched history point");
   assert(strlen(ctx.readout_time_text)==5&&ctx.readout_time_text[2]==':'&&"24H readouts show the local clock time");
   assert(shown(ctx.value_box)&&shown(ctx.readout_time_label)&&shown(ctx.readout_value_label));
   assert(lv_obj_get_y(ctx.value_box)==control_y&&lv_obj_get_style_bg_opa(ctx.value_box,LV_PART_MAIN)==LV_OPA_COVER&&"The readout covers the editor band only while touching");
@@ -284,7 +288,7 @@ int main(int argc,char**argv){
   touch_at(content.x1+width/4,content.y1+5);touch_at(content.x2,content.y1+5);
   assert(ctx.readout_point==2&&"Moves between refreshes must not update the readout");
   lv_refr_now(display);
-  assert(ctx.readout_point==4&&strcmp(ctx.readout_value_text,"80 %")==0);
+  assert(ctx.readout_point==4&&strcmp(ctx.readout_value_text,"80")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"%")==0);
   // The press stays with the graph outside its bounds and never scrolls.
   touch_at(SCREEN_WIDTH-1,SCREEN_HEIGHT-1);lv_refr_now(display);
   assert(ctx.readout.active()&&ctx.readout_point==4&&lv_obj_get_scroll_y(ctx.body_box)==0&&lv_obj_get_scroll_y(card)==0&&lv_obj_get_scroll_x(card)==0);
@@ -355,32 +359,32 @@ int main(int argc,char**argv){
   // Numeric Sensors read exact history values in the old value row. Large
   // spans are stored as rounded integers in the chart itself.
   ctx.decimals=2;apply_history_payload(&ctx,R"({"entity_id":"sensor.other","hours":24,"period_minutes":5,"unit":"C","values":[21.5,null,22.25,1234.56]})");
-  assert(ctx.readout_kind==kReadoutChart&&ctx.readout_point==3&&ctx.readout_latest&&shown(ctx.readout_value_label)&&strcmp(ctx.readout_value_text,"1234.56 C")==0&&"New history shows the newest point without a touch");
+  assert(ctx.readout_kind==kReadoutChart&&ctx.readout_point==3&&ctx.readout_latest&&shown(ctx.readout_value_label)&&strcmp(ctx.readout_value_text,"1234.56")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"C")==0&&"New history shows the newest point without a touch");
   lv_obj_update_layout(card);lv_refr_now(display);
   lv_area_t content,wrap;lv_obj_get_content_coords(ctx.chart,&content);lv_obj_get_coords(ctx.chart_wrap,&wrap);const int width=lv_area_get_width(&content);
   assert(white_at(pixels,wrap.x1+ctx.readout_x,content.y2-2)&&"The newest point shows the cursor");
   touch_at(content.x2-1,content.y1+4);lv_refr_now(display);
-  assert(ctx.readout_point==3&&strcmp(ctx.readout_value_text,"1234.56 C")==0&&"Readouts use exact history values");
+  assert(ctx.readout_point==3&&strcmp(ctx.readout_value_text,"1234.56")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"C")==0&&"Readouts use exact history values");
   assert(shown(ctx.value_box)&&lv_obj_get_style_bg_opa(ctx.value_box,LV_PART_MAIN)==LV_OPA_TRANSP&&lv_obj_get_style_y(ctx.value_box,LV_PART_MAIN)==popup_layout::kValueY-kContentLiftY);
   touch_at(content.x1+width/3,content.y1+4);lv_refr_now(display);
-  assert(ctx.readout_point==1&&strcmp(ctx.readout_value_text,"21.50 C")==0);
+  assert(ctx.readout_point==1&&strcmp(ctx.readout_value_text,"21.50")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"C")==0);
   // Release keeps the readout where the finger left it, also with new data.
   touch_release();
   assert(!ctx.readout.active()&&ctx.readout_kind==kReadoutChart&&ctx.readout_point==1&&!ctx.readout_latest&&shown(ctx.readout_value_label)&&"Release keeps the Sensor readout");
   lv_refr_now(display);assert(white_at(pixels,wrap.x1+ctx.readout_x,content.y2-2)&&"The cursor stays after release");
   apply_history_payload(&ctx,R"({"entity_id":"sensor.other","hours":24,"period_minutes":5,"unit":"C","values":[21.5,null,22.25,1300]})");
-  assert(ctx.readout_point==1&&strcmp(ctx.readout_value_text,"21.50 C")==0&&!ctx.readout_latest&&"New history keeps the position the finger left");
+  assert(ctx.readout_point==1&&strcmp(ctx.readout_value_text,"21.50")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"C")==0&&!ctx.readout_latest&&"New history keeps the position the finger left");
   // Dragging to the newest point follows new data again.
   touch_at(content.x1+width/3,content.y1+4);touch_at(content.x2+20,content.y1+4);lv_refr_now(display);touch_release();
   assert(ctx.readout_point==3&&ctx.readout_latest);
   apply_history_payload(&ctx,R"({"entity_id":"sensor.other","hours":24,"period_minutes":5,"unit":"C","values":[21.5,22,23,24,25.5]})");
-  assert(ctx.readout_point==4&&strcmp(ctx.readout_value_text,"25.50 C")==0&&"The newest point follows new history");
+  assert(ctx.readout_point==4&&strcmp(ctx.readout_value_text,"25.50")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"C")==0&&"The newest point follows new history");
   // A range change starts at the newest point of the new range.
   touch_at(content.x1+10,content.y1+4);touch_release();assert(ctx.readout_point==0&&!ctx.readout_latest&&"A tap reads its point at once and keeps it");
   lv_obj_send_event(ctx.range_week_btn,LV_EVENT_CLICKED,nullptr);
   assert(ctx.history_range==SensorHistoryRange::Day7&&ctx.readout_kind==kReadoutNone&&ctx.readout_latest&&!shown(ctx.readout_value_label));
   apply_history_payload(&ctx,R"({"entity_id":"sensor.other","hours":168,"period_minutes":35,"unit":"C","values":[20,null,19.25]})");
-  assert(ctx.readout_point==2&&strcmp(ctx.readout_value_text,"19.25 C")==0&&ctx.readout_latest);
+  assert(ctx.readout_point==2&&strcmp(ctx.readout_value_text,"19.25")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"C")==0&&ctx.readout_latest);
   lv_obj_send_event(ctx.range_day_btn,LV_EVENT_CLICKED,nullptr);assert(ctx.history_range==SensorHistoryRange::Day24&&ctx.readout_kind==kReadoutNone);
   apply_history_payload(&ctx,R"({"entity_id":"sensor.other","hours":24,"period_minutes":5,"unit":"C","values":[21.5,null,22.25,1234.56]})");
   touch_at(content.x1+width/3,content.y1+4);lv_refr_now(display);

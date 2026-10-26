@@ -19,6 +19,10 @@ struct EditableValue {
 EditableValue parse_editable_value(const String& payload);
 bool editable_entity_matches(TileType type, const String& entity);
 String editable_display_value(const EditableValue& value);
+// The same apart: the shown text without its unit, and the unit a number
+// shows after it ("" for none), for value_unit::show.
+String editable_display_number(const EditableValue& value);
+String editable_display_unit(const EditableValue& value);
 void append_editable_translations(String& html, const char* name);
 // The Sensor tile that shows a Number, Select or Date/Time value.
 Tile editable_display_tile(const Tile& tile);

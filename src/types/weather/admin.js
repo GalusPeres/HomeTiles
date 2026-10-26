@@ -328,15 +328,22 @@ function maybeFillTitleFromWeather(tab) {
     }
     const showForecast = cardH >= L.forecastMinH;
     const rowCenter = showForecast ? (gridCellH / 2 + L.valueDy) * scale : height / 2 + L.valueDy * scale;
-    const textSpan = (cls, text, f, extra = '') => '<span class="' + cls + '" style="' + fontCss(f) +
-      'top:' + f.shift.toFixed(2) + 'px;' + extra + '">' + escapeHtml(text) + '</span>';
+    const htmlSpan = (cls, inner, f, extra = '') => '<span class="' + cls + '" style="' + fontCss(f) +
+      'top:' + f.shift.toFixed(2) + 'px;' + extra + '">' + inner + '</span>';
+    const textSpan = (cls, text, f, extra = '') => htmlSpan(cls, escapeHtml(text), f, extra);
+    // The temperature's unit a step smaller after it, as on the panel
+    // (value_unit.h); with the humidity behind it one size for both.
+    const tempHtml = hasTemp && state.unit && !state.humidity
+      ? escapeHtml(weatherPreviewTemp(state.temperature)) + '<span class="tile-unit" style="' + valueUnitStyle(L.value.px) +
+        '">' + escapeHtml(state.unit) + '</span>'
+      : escapeHtml(tempText);
     let html = '<div class="weather-preview-row" style="top:' + (rowCenter - valueFont.line / 2 - 3).toFixed(2) +
       'px;height:' + valueFont.line.toFixed(2) + 'px;gap:' + px(L.valueGap) + '">';
     if (showCondition) {
       html += textSpan('weather-preview-condition', conditionText, valueFont, 'max-width:' + Math.max(0, room).toFixed(2) + 'px;');
       if (tempText !== '--') html += textSpan('weather-preview-separator', '|', valueFont);
     }
-    html += textSpan('weather-preview-temp', tempText, valueFont) + '</div>';
+    html += htmlSpan('weather-preview-temp', tempHtml, valueFont) + '</div>';
 
     // Forecast columns, spread evenly over the card, the row anchored to the
     // card's bottom like on the device.

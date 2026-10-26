@@ -22,10 +22,10 @@ for (const marker of [
 ]) assert.ok(popup.includes(marker), `sensor popup: ${marker}`);
 // Every state path applies the color: opening, live Sensor values, Binary
 // states and editable value changes.
-assert.match(popup, /set_label_text_if_changed\(ctx->value_label, display\.c_str\(\)\);\s*if \(!ctx->binary_mode && !ctx->editable\) \{\s*apply_popup_icon_color\(ctx, popup_icon_state_known\(value\), value\.c_str\(\), nullptr,/);
+assert.match(popup, /show_header_value\(ctx, sensor_value_display\(value, ctx->decimals, categorical_state\), unit\);\s*if \(!ctx->binary_mode && !ctx->editable\) \{\s*apply_popup_icon_color\(ctx, popup_icon_state_known\(value\), value\.c_str\(\), nullptr,/);
 assert.equal((popup.match(/apply_editable_icon_color\(ctx, (?:value|editable_value)\);/g) || []).length, 3,
   'Editable values color the icon when opening, rebinding and updating');
-assert.match(popup, /init\.state_history_mode\)\.c_str\(\)\);\s*apply_popup_icon_color\(ctx, popup_icon_state_known\(init\.value\)/);
+assert.match(popup, /init\.state_history_mode\), init\.unit\);\s*apply_popup_icon_color\(ctx, popup_icon_state_known\(init\.value\)/);
 assert.ok(read('src/ui/popups/sensor/sensor_popup.h').includes('  String icon_colors;\n') &&
   read('src/ui/popups/sensor/sensor_popup.h').includes('  bool forced_icon = false;'));
 // Tiles hand over their record or color.

@@ -275,7 +275,7 @@
       tileElem.classList.toggle('climate-header', climateValue && !climateHalf);
       if (climateHalf || climateValue) {
         html += '<div class="tile-value tile-switch-state">' +
-          escapeHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
+          unitTextHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
       }
       if (!climateHalf) {
         html += climatePreviewSlots(
@@ -296,7 +296,7 @@
         '</div>';
     }
 
-    if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + escapeHtml(editablePreviewText(iconEntity, previewKind)) + '</div>';
+    if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + editablePreviewHtml(iconEntity, previewKind) + '</div>';
 
     if (previewKind === 'sensor') {
       const entitySelect = document.getElementById(prefix + (isEnergyType ? '_energy_entity' : '_sensor_entity'));

@@ -996,7 +996,7 @@
         el.classList.toggle('climate-header', climateValue && !climateHalf);
         if (climateHalf || climateValue) {
           html += '<div class="tile-value tile-switch-state">' +
-            escapeHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
+            unitTextHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
         }
         if (!climateHalf) {
           html += climatePreviewSlots(
@@ -1018,7 +1018,7 @@
           escapeHtml(binarySensorPreviewStateText(binarySensorPreviewState)) +
           '</div>';
       }
-      if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + escapeHtml(editablePreviewText(iconEntity, previewKind, sensorMeta)) + '</div>';
+      if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + editablePreviewHtml(iconEntity, previewKind, sensorMeta) + '</div>';
       if (previewKind === 'clock') {
         const flags = normalizeClockFlags(tile.sensor_decimals);
         const clockTimeFont = tile.key_code || 40;

@@ -13,6 +13,7 @@ import {lvglHost} from '../../lib/lvgl-host.mjs';
 import {radiusPolicyHost, surfaceStyleHost, popupSurfaceHost} from '../../lib/surface-style-host.mjs';
 import {extractFunction, inlineScriptSafe, readRepoFile} from '../../lib/admin-source.mjs';
 import {findBrowser} from '../../lib/headless-dom.mjs';
+import {valueUnitSource} from '../../lib/value-unit-source.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
@@ -77,6 +78,7 @@ const cpp = String.raw`
 #include "src/ui/popups/popup_first_frame.h"
 #include "src/ui/popups/popup_body.h"
 extern "C" {LV_FONT_DECLARE(ui_font_12);LV_FONT_DECLARE(ui_font_14);LV_FONT_DECLARE(ui_font_16);LV_FONT_DECLARE(ui_font_20);LV_FONT_DECLARE(ui_font_24);LV_FONT_DECLARE(ui_font_28);LV_FONT_DECLARE(ui_font_32);LV_FONT_DECLARE(ui_font_40);LV_FONT_DECLARE(ui_font_48);LV_FONT_DECLARE(ui_font_56);LV_FONT_DECLARE(ui_font_64);LV_FONT_DECLARE(ui_font_72);LV_FONT_DECLARE(ui_font_80);LV_FONT_DECLARE(ui_font_96);LV_FONT_DECLARE(mdi_icons_32);LV_FONT_DECLARE(mdi_icons_40);LV_FONT_DECLARE(mdi_icons_48);}
+${valueUnitSource(root)}
 #if defined(DEVICE_LAYOUT_480X480)
 #define FONT_MDI_ICONS (&mdi_icons_32)
 #elif defined(DEVICE_LAYOUT_1024X600)
@@ -184,6 +186,7 @@ ${strip(read('src/types/clock/clock_face.h'))}
 ${strip(read('src/types/text/text_options.h'))}
 ${strip(read('src/web/server/render/web_admin_styles.cpp').split('void appendAdminStyles(')[0])}
 ${strip(read('src/types/weather/web_scripts.cpp'))}
+${strip(read('src/types/sensor/web_scripts.cpp'))}
 static void box(std::ostream&o,const char*name,lv_obj_t*obj,lv_obj_t*card,bool&first){
  if(!obj||lv_obj_has_flag(obj,LV_OBJ_FLAG_HIDDEN))return;
  lv_area_t a,c;lv_obj_get_coords(obj,&a);lv_obj_get_coords(card,&c);
@@ -199,9 +202,9 @@ static void box(std::ostream&o,const char*name,lv_obj_t*obj,lv_obj_t*card,bool&f
 int main(int argc,char**argv){
  lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SCREEN_HEIGHT);(void)d;
  std::ifstream file(argv[1]);std::stringstream payload;payload<<file.rdbuf();
- String css;appendPreviewScaleVars(css);String script;append_weather_scripts(script);
+ String css;appendPreviewScaleVars(css);String script;append_weather_scripts(script);append_sensor_scripts(script);
  std::cout<<"CSS "<<css.substr(css.find('{')+1,css.rfind('}')-css.find('{')-1)<<"\n";
- std::string js=script;js=js.substr(js.find("<script>")+8);js=js.substr(0,js.rfind("</script>"));
+ std::string js=script;for(const char* tag:{"<script>","</script>"}){size_t at;while((at=js.find(tag))!=std::string::npos)js.erase(at,strlen(tag));}
  for(char&c:js)if(c=='\n')c=' ';
  std::cout<<"SCRIPT "<<js<<"\n";
  for(float span_w:{1.f,2.f,2.5f,3.f,4.f})for(float span_h:{1.f,2.f}){
@@ -219,7 +222,7 @@ int main(int argc,char**argv){
    box(o,(p+"high").c_str(),f.temp_high_label,card,first);box(o,(p+"highUnit").c_str(),f.temp_high_unit_label,card,first);
    box(o,(p+"low").c_str(),f.temp_low_label,card,first);box(o,(p+"lowUnit").c_str(),f.temp_low_unit_label,card,first);}
   o<<"},\"texts\":{";first=true;
-  auto text=[&](const char*name,lv_obj_t*obj){if(!obj||lv_obj_has_flag(obj,LV_OBJ_FLAG_HIDDEN))return;o<<(first?"":",")<<"\""<<name<<"\":\""<<lv_label_get_text(obj)<<"\"";first=false;};
+  auto text=[&](const char*name,lv_obj_t*obj){if(!obj||lv_obj_has_flag(obj,LV_OBJ_FLAG_HIDDEN))return;o<<(first?"":",")<<"\""<<name<<"\":\""<<lv_label_get_text(obj)<<value_unit::unit_text(obj)<<"\"";first=false;};
   text("condition",w.condition_label);text("temp",w.temp_label);
   for(int i=0;i<WEATHER_FORECAST_MAX;++i){auto&f=w.forecast[i];std::string p="f"+std::to_string(i)+"-";text((p+"day").c_str(),f.day_label);text((p+"high").c_str(),f.temp_high_label);text((p+"low").c_str(),f.temp_low_label);}
   o<<"}}";std::cout<<"TILE "<<o.str()<<"\n";
@@ -236,6 +239,8 @@ const preview = [
   read('src/types/weather/admin-icons.js'),
   read('src/types/weather/admin.js'),
   extractFunction('escapeHtml', read('src/web/admin/tiles/state.js')),
+  // The unit's size the panel's way (value_unit.h).
+  extractFunction('valueUnitStyle', read('src/types/sensor/admin-format.js')),
   extractFunction('normalizeMdiIconName', read('src/web/admin/tiles/state.js')),
   extractFunction('formatLocalizedNumber', read('src/web/admin/core/localization.js')),
   // The panel theme's roles (no data-panel-theme here: the dark theme).

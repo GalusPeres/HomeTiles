@@ -243,11 +243,6 @@
     return 'battery-charging-' + Math.min(10, Math.round(level / 10)) * 10;
   }
 
-  // The battery's power keeps Home Assistant's sign, as on the panel.
-  function energyFlowSignedPowerText(watts) {
-    return (watts <= -0.5 ? '-' : '') + energyFlowPowerText(watts);
-  }
-
   // ----- Preview --------------------------------------------------------------
   const ENERGY_FLOW_COLORS = Object.freeze({ pv: '#FF9800', grid: '#488FC2', battery: '#F06292', header: '#F29C06' });
 
@@ -407,7 +402,7 @@
       homeKnown ? energyFlowPowerText(flows.home) : '--', 'center');
     if (shown.battery) {
       label(r(l.node.battery[0]) + gap, width - L.edge - r(l.node.battery[0]) - gap, l.node.battery[1],
-        input.hasBattery ? energyFlowSignedPowerText(bat) : '--', 'left');
+        input.hasBattery ? energyFlowPowerText(bat) : '--', 'left');
       const charge = energyFlowNumber(values[entity.charge]);
       label(L.edge, r(l.node.battery[0]) - gap - L.edge, l.node.battery[1],
         entity.charge && charge !== null ? formatLocalizedNumber(charge, 0) + ' %' : '--', 'right');

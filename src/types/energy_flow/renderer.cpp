@@ -56,9 +56,9 @@ constexpr uint32_t kIdleLightScreen = 0xCDD0D5;
 // One step of the dots per display frame (60 fps on the 17 ms refresh,
 // user 2026-10-24): the display's refresh moves them (LV_EVENT_REFR_START),
 // so every frame shows one step and no timer beats against the refresh
-// (b533's 40 ms timer showed its steps for 34 or 51 ms). Whole pixels per
-// step, the same every frame: 1 px, 2 px from this power.
-constexpr float kStep2Watts = 1500.0f;
+// (b533's 40 ms timer showed its steps for 34 or 51 ms). The step follows
+// the flow's power (flow_model.h dot_speed); a dot is drawn on whole pixels.
+
 // The dots' cost in the log: one line per this many ms while they move.
 constexpr uint32_t kMotionLogMs = 10000;
 constexpr size_t kMaxFlowTiles = 32;
@@ -94,7 +94,7 @@ struct FlowTileState {
   bool line_live[kLineCount] = {};
   bool reverse[kLineCount] = {};
   uint32_t line_color[kLineCount] = {};
-  uint8_t step[kLineCount] = {};  // px per motion step
+  float step[kLineCount] = {};  // px per display frame (dot_speed)
   float phase[kLineCount] = {};  // distance along the line
   lv_point_t dot[kLineCount] = {};
   // The bends as pictures, drawn once per color (render_bend): LVGL builds
@@ -194,12 +194,6 @@ String power_text(float watts) {
   if (magnitude >= 999950.0f) return i18n::format_number(language, magnitude / 1000000.0f, 1) + " MW";
   if (magnitude >= 999.5f) return i18n::format_number(language, magnitude / 1000.0f, 1) + " kW";
   return i18n::format_number(language, magnitude, 0) + " W";
-}
-
-// The battery's power keeps the sign Home Assistant gives it (user
-// 2026-10-24); the other values show their amount.
-String signed_power_text(float watts) {
-  return watts <= -0.5f ? String("-") + power_text(watts) : power_text(watts);
 }
 
 // While the battery charges, its node shows Home Assistant's charging icon
@@ -869,7 +863,6 @@ void refresh(FlowTileState& st) {
   in.has_pv = cached_watts(st.entities[kRolePv], in.pv);
   in.has_grid = cached_watts(st.entities[kRoleGrid], in.grid);
   in.has_battery = cached_watts(st.entities[kRoleBattery], in.battery);
-  const float battery_shown = in.battery;  // as Home Assistant gives it
   in.has_home = cached_watts(st.entities[kRoleHome], in.home);
   if (st.grid_invert) in.grid = -in.grid;
   if (st.battery_invert) in.battery = -in.battery;
@@ -877,7 +870,9 @@ void refresh(FlowTileState& st) {
 
   set_text(st.node[kNodePv].value, in.has_pv ? power_text(in.pv) : String("--"));
   set_text(st.node[kNodeGrid].value, in.has_grid ? power_text(in.grid) : String("--"));
-  set_text(st.node[kNodeBattery].value, in.has_battery ? signed_power_text(battery_shown) : String("--"));
+  // Every value its amount, the battery's too: its icon shows charging (user
+  // 2026-10-26; b541-b545 kept Home Assistant's minus).
+  set_text(st.node[kNodeBattery].value, in.has_battery ? power_text(in.battery) : String("--"));
   const bool home_known = st.entities[kRoleHome].length() ? in.has_home : flows.home_known;
   set_text(st.node[kNodeHome].value, home_known ? power_text(flows.home) : String("--"));
   float charge = 0.0f;
@@ -900,6 +895,7 @@ void refresh(FlowTileState& st) {
   color_node(st, st.node[kNodeHome],
              node_color(flows.home_source == kNodeCount ? kNodeGrid : flows.home_source));
 
+  const float strongest = strongest_flow(flows);
   for (uint8_t line = 0; line < kLineCount; ++line) {
     const bool live = st.line_shown[line] && flows.watts[line] > 0.0f;
     const uint32_t color = live ? node_color(line_source(static_cast<Line>(line), flows)) : st.idle_color;
@@ -909,8 +905,7 @@ void refresh(FlowTileState& st) {
     st.line_live[line] = live;
     st.line_color[line] = color;
     st.reverse[line] = reverse;
-    const float watts = flows.watts[line];
-    st.step[line] = watts >= kStep2Watts ? 2 : 1;
+    st.step[line] = dot_speed(flows.watts[line], strongest);
     if (live) st.dot[line] = dot_point(st, line);
     if (changed && st.line_shown[line]) invalidate_line(st, line);
     if (st.line_shown[line]) render_bend(st, line, color);
@@ -954,6 +949,16 @@ void node_click_cb(lv_event_t* e) {
   if (!st || !target) return;
   const uintptr_t tag = reinterpret_cast<uintptr_t>(lv_obj_get_user_data(target));
   open_node_popup(e, *st, static_cast<uint8_t>(tag / 8), static_cast<uint8_t>(tag % 8));
+}
+
+// A tap on a value opens its sensor like a tap on the node: every value
+// (user 2026-10-26), the battery's charge its own sensor (user 2026-10-24).
+void make_value_tappable(FlowTileState& st, lv_obj_t* label, uint8_t role, uint8_t node) {
+  if (!label || !st.entities[role].length()) return;
+  lv_obj_add_flag(label, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_ext_click_area(label, tile_layout::scale(10));
+  lv_obj_set_user_data(label, reinterpret_cast<void*>(static_cast<uintptr_t>(role * 8 + node)));
+  lv_obj_add_event_cb(label, node_click_cb, LV_EVENT_SHORT_CLICKED, &st);
 }
 
 void card_delete_cb(lv_event_t* e) {
@@ -1167,6 +1172,7 @@ lv_obj_t* render_energy_flow_tile(lv_obj_t* parent, int col, int row, const Tile
     if (!node_shown[node]) continue;
     create_node(*st, node, kNodeRole[node], pad_left, pad_top, frame_lines);
     st->node[node].value = create_value(*st, font);
+    make_value_tappable(*st, st->node[node].value, kNodeRole[node], node);
   }
   // Values (mockup): solar right of its node, grid and home under theirs,
   // the battery's charge left and its power right of it.
@@ -1194,14 +1200,7 @@ lv_obj_t* render_energy_flow_tile(lv_obj_t* parent, int col, int row, const Tile
     st->charge = create_value(*st, font);
     place_value(st->charge, edge, charge_right - edge, l.node[kNodeBattery].y, LV_TEXT_ALIGN_RIGHT, pad_left,
                 pad_top);
-    if (st->entities[kRoleBatteryCharge].length()) {
-      // A tap on the charge opens the charge sensor (user 2026-10-24).
-      lv_obj_add_flag(st->charge, LV_OBJ_FLAG_CLICKABLE);
-      lv_obj_set_ext_click_area(st->charge, tile_layout::scale(10));
-      lv_obj_set_user_data(st->charge,
-                           reinterpret_cast<void*>(static_cast<uintptr_t>(kRoleBatteryCharge * 8 + kNodeBattery)));
-      lv_obj_add_event_cb(st->charge, node_click_cb, LV_EVENT_SHORT_CLICKED, st);
-    }
+    make_value_tappable(*st, st->charge, kRoleBatteryCharge, kNodeBattery);
   }
 
   set_icon(st->node[kNodePv].icon, "", "solar-power");

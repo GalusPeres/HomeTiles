@@ -77,7 +77,7 @@ for (const marker of [
   // 40 ms timer stuttered); without a shown dot LVGL's refresh rests.
   'for (const lv_event_code_t code : {LV_EVENT_REFR_START, LV_EVENT_RENDER_START, LV_EVENT_FLUSH_START,',
   'lv_display_add_event_cb(g_motion_display, motion_display_cb, code, nullptr);',
-  'st.step[line] = watts >= kStep2Watts ? 2 : 1;',
+  'st.step[line] = dot_speed(flows.watts[line], strongest);',
   'st->phase[line] = fmodf(st->phase[line] + st->step[line], length);',
   'if (waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));',
   // Never behind a popup, asleep or off screen; only the dot's area, and
@@ -98,7 +98,7 @@ for (const marker of [
   'if (!lv_area_is_on(&box, &layer->_clip_area)) continue;',
   // A node tap opens that sensor's normal popup; the battery charge its own.
   'show_sensor_popup(init);',
-  'kRoleBatteryCharge * 8 + kNodeBattery',
+  'make_value_tappable(*st, st->charge, kRoleBatteryCharge, kNodeBattery);',
   // The state goes with the card.
   'lv_obj_add_event_cb(card, card_delete_cb, LV_EVENT_DELETE, st);',
   'st->~FlowTileState();',
@@ -201,8 +201,9 @@ assert.ok(!empty.html.includes('<rect') && !empty.html.includes('mdi-') && !empt
 assert.ok(/mdi-home-lightning-bolt/.test(headed.html), 'the home with the first sensor');
 assert.match(renderer, /const bool has_home = has_pv \|\| has_grid \|\| has_battery \|\| st->entities\[kRoleHome\]\.length\(\) > 0;\s*const bool node_shown\[kNodeCount\] = \{has_pv, has_grid, has_home, has_battery\};/,
              'the panel: no node without a sensor either');
-// The battery keeps Home Assistant's sign (user 2026-10-24), also with its
-// direction inverted; the grid shows its amount.
+// Every value shows its amount, the battery's too (user 2026-10-26: its
+// icon shows charging; b541-b545 kept Home Assistant's minus), also with its
+// direction inverted.
 // While it charges its node shows Home Assistant's charging icon for its
 // level; the grid's icon shows import and export; solar is solar-power.
 // The grid's arrow follows the energy (user 2026-10-24): out of the mast
@@ -214,7 +215,7 @@ for (const key_code of [0, 8]) {
   context.applyEnergyFlowPreview(signed, {flow_entities: 'sensor.pv\nsensor.grid\nsensor.bat\nsensor.soc', key_code,
     span_w: 2, span_h: 2}, {values: {'sensor.pv': '0', 'sensor.grid': '-200', 'sensor.bat': '-0.3', 'sensor.soc': '76'},
     units: {'sensor.bat': 'kW'}, icons: {'sensor.soc': 'mdi:battery-70'}});
-  assert.ok(signed.html.includes('>-300 W</div>'), 'a negative battery shows its minus');
+  assert.ok(signed.html.includes('>300 W</div>') && !signed.html.includes('>-300 W</div>'), 'the battery shows its amount');
   assert.ok(signed.html.includes('>200 W</div>') && !signed.html.includes('>-200 W</div>'), 'the grid shows its amount');
   assert.ok(/mdi-transmission-tower-import" style="[^"]*transform:scaleX\(-1\)"/.test(signed.html),
             'the grid feeding in: import mirrored, the arrow from the lines into the mast');
@@ -234,7 +235,16 @@ assert.match(renderer, /if \(st->grid_feed\) lv_image_set_src\(st->grid_feed, nu
 const coreIcons = read('tools/icons/core-icons.txt').split('\n');
 for (const name of ['battery-charging-outline', 'battery-charging-10', 'battery-charging-100', 'transmission-tower-export',
   'transmission-tower-import', 'solar-power']) assert.ok(coreIcons.includes(name), 'core icon ' + name);
-assert.match(renderer, /const float battery_shown = in\.battery;[\s\S]*signed_power_text\(battery_shown\)/,
-             'the panel shows the battery as Home Assistant gives it, before the invert option');
-assert.match(renderer, /String signed_power_text\(float watts\) \{\s*return watts <= -0\.5f \? String\("-"\) \+ power_text\(watts\) : power_text\(watts\);/);
+assert.ok(renderer.includes('set_text(st.node[kNodeBattery].value, in.has_battery ? power_text(in.battery) : String("--"));') &&
+  !renderer.includes('signed_power_text'), 'the panel shows the battery amount');
+assert.match(renderer, /const float magnitude = fabsf\(watts\);/, 'power_text drops the sign');
+// User 2026-10-26 (b545): the nodes 6 px further out, the values 4 px
+// closer to them; the preview takes the same sizes (web_scripts.cpp).
+assert.ok(metrics.includes('m.inset_x = tile_layout::scale(18);') && metrics.includes('m.inset_y = tile_layout::scale(14);'));
+assert.ok(metrics.includes('inline int value_gap() { return tile_layout::scale(8); }'));
+// Every value opens its sensor like its node, the charge its own.
+assert.match(renderer, /st->node\[node\]\.value = create_value\(\*st, font\);\s*make_value_tappable\(\*st, st->node\[node\]\.value, kNodeRole\[node\], node\);/);
+assert.ok(renderer.includes('make_value_tappable(*st, st->charge, kRoleBatteryCharge, kNodeBattery);'));
+assert.match(renderer, /void make_value_tappable\(FlowTileState& st, lv_obj_t\* label, uint8_t role, uint8_t node\) \{\s*if \(!label \|\| !st\.entities\[role\]\.length\(\)\) return;\s*lv_obj_add_flag\(label, LV_OBJ_FLAG_CLICKABLE\);/,
+             'a value without its own sensor stays plain text');
 console.log('Energy flow tile: registry, Web Admin fields and editor, runtime marks and timer, popups, translations and the real preview');

@@ -134,6 +134,30 @@ inline uint8_t line_source(Line line, const Flows& flows) {
   }
 }
 
+// The dots' speed in px per display frame (user 2026-10-26: faster and
+// slower with the power, "immer richtig aufgeteilt"): the tile's strongest
+// flow runs at its power / kWattsPerPxFrame, held between kTopSpeedMin and
+// kTopSpeedMax; every other flow in proportion to it, none slower than
+// kSlowestSpeed so it still visibly moves.
+constexpr float kWattsPerPxFrame = 2500.0f;
+constexpr float kTopSpeedMin = 0.5f;
+constexpr float kTopSpeedMax = 3.0f;
+constexpr float kSlowestSpeed = 0.15f;
+
+inline float strongest_flow(const Flows& flows) {
+  float strongest = 0.0f;
+  for (float watts : flows.watts) strongest = watts > strongest ? watts : strongest;
+  return strongest;
+}
+
+inline float dot_speed(float watts, float strongest) {
+  if (watts <= 0.0f || strongest <= 0.0f) return 0.0f;
+  float top = strongest / kWattsPerPxFrame;
+  top = top < kTopSpeedMin ? kTopSpeedMin : top > kTopSpeedMax ? kTopSpeedMax : top;
+  const float speed = top * watts / strongest;
+  return speed < kSlowestSpeed ? kSlowestSpeed : speed;
+}
+
 // A sensor value in watts from its unit (Home Assistant power units).
 inline bool unit_factor(const char* unit, float& factor) {
   if (!unit || !*unit) {

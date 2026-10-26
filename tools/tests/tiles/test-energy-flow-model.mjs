@@ -72,6 +72,9 @@ int main() {
   const char* units[] = {"W", "kW", "KW", "MW", "GW", "mW", "", "kWh", "%", " kW"};
   printf("],\\"units\\":[");
   for (int u = 0; u < 10; ++u) { float factor = 0; const bool ok = unit_factor(units[u], factor); printf("%s[%s,%.4f]", u ? "," : "", ok ? "true" : "false", factor); }
+  const float speeds[][2] = {{5700, 5700}, {4100, 5700}, {1900, 5700}, {400, 400}, {20, 400}, {12000, 12000}, {6000, 12000}, {0, 100}};
+  printf("],\\"speeds\\":[");
+  for (int i = 0; i < 8; ++i) printf("%s%.4f", i ? "," : "", dot_speed(speeds[i][0], speeds[i][1]));
   printf("]}\\n");
 }`;
 const out = path.join(root, 'build/tests/energy-flow-model');
@@ -85,6 +88,15 @@ r = spawnSync(binary, [], {encoding: 'utf8'});
 assert.equal(r.status, 0, r.stdout + r.stderr);
 const device = JSON.parse(r.stdout);
 const near = (a, b, label, eps = 0.02) => assert.ok(Math.abs(a - b) <= eps, `${label}: ${a} vs ${b}`);
+
+// The dots' speed follows the power (user 2026-10-26, "immer richtig
+// aufgeteilt"): the strongest flow at its power / 2500 W px per frame
+// between 0.5 and 3, the others in proportion, none below 0.15, none idle.
+const [top, mid, low, alone, tiny, capped, half, idle] = device.speeds;
+near(top, 2.28, 'strongest 5.7 kW', 0.001); near(mid, 2.28 * 4100 / 5700, '4.1 kW of 5.7', 0.001);
+near(low, 2.28 * 1900 / 5700, '1.9 kW of 5.7', 0.001);
+near(alone, 0.5, 'a lone 400 W at the slowest top', 0.001); near(tiny, 0.15, '20 W still moves', 0.001);
+near(capped, 3, '12 kW capped', 0.001); near(half, 1.5, 'half of the capped', 0.001); assert.equal(idle, 0, 'no flow, no dot');
 
 // The V2 2x2 tile is the mockup: node centres, straight lines on the disc
 // circles, the legs 18 beside the middle into lanes 18 off the middle, one

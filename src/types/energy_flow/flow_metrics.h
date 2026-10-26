@@ -28,8 +28,9 @@ inline Metrics device_metrics() {
   // smaller than the V2's 60 px tile disc).
   m.disc = tile_disc_diameter() / 2.0f;
   m.ring = m.disc + tile_icon_disc::inset() + tile_icon_disc::corner_shrink();
-  m.inset_x = tile_layout::scale(24);
-  m.inset_y = tile_layout::scale(20);
+  // The nodes 6 px further out than the mockup (user 2026-10-26, b545).
+  m.inset_x = tile_layout::scale(18);
+  m.inset_y = tile_layout::scale(14);
   m.spacing = tile_layout::scale(18);
   return m;
 }
@@ -37,9 +38,10 @@ inline Metrics device_metrics() {
 inline int line_width() { return LV_MAX(2, tile_layout::scale(4)); }
 inline int dot_radius() { return LV_MAX(3, tile_layout::scale(5)); }
 inline const lv_font_t* value_font() { return tile_layout::content_font_20(); }
-// A value's distance from its node's ring, and the extra drop of the values
-// under grid and home (mockup: their baseline 15 below that distance).
-inline int value_gap() { return tile_layout::scale(12); }
+// A value's distance from its node's ring (4 px closer than the mockup, user
+// 2026-10-26), and the extra drop of the values under grid and home
+// (mockup: their baseline 15 below that distance).
+inline int value_gap() { return tile_layout::scale(8); }
 inline int value_below() { return tile_layout::scale(15); }
 // The values' room ends this far from the tile's edge.
 inline int value_edge() { return tile_layout::scale(6); }

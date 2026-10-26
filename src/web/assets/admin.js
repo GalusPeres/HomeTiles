@@ -16738,7 +16738,8 @@ function maybeFillTitleFromEnergy(tab) {
   }
 
   // ----- Preview --------------------------------------------------------------
-  const ENERGY_FLOW_COLORS = Object.freeze({ pv: '#FF9800', grid: '#488FC2', battery: '#F06292', header: '#F29C06' });
+  const ENERGY_FLOW_COLORS = Object.freeze({ pv: '#FF9800', grid: '#488FC2', gridReturn: '#8353D1', battery: '#F06292',
+    batteryOut: '#4DB6AC', header: '#F29C06' });
 
   function energyFlowHexRgb(hex) {
     return [1, 3, 5].map(i => parseInt(String(hex).slice(i, i + 2), 16));
@@ -16808,6 +16809,11 @@ function maybeFillTitleFromEnergy(tab) {
       pvGrid: shown.pv && shown.grid, batHome: shown.battery, batGrid: shown.battery && shown.grid };
     const source = { gridHome: 'grid', pvBattery: 'pv', pvHome: 'pv', pvGrid: 'pv', batHome: 'battery',
       batGrid: flows.gridToBattery ? 'grid' : 'battery' };
+    // A node's color now, like the panel (renderer.cpp node_color): the grid
+    // purple while it takes the feed-in, the battery cyan while it discharges.
+    const colorOf = { pv: ENERGY_FLOW_COLORS.pv,
+      grid: input.hasGrid && -input.grid >= ENERGY_FLOW_IDLE_WATTS ? ENERGY_FLOW_COLORS.gridReturn : ENERGY_FLOW_COLORS.grid,
+      battery: input.hasBattery && input.battery >= ENERGY_FLOW_IDLE_WATTS ? ENERGY_FLOW_COLORS.batteryOut : ENERGY_FLOW_COLORS.battery };
     const r = n => Math.round(n);
     let svg = '';
     // Straight pieces and the bend as a true circle arc, like the panel.
@@ -16828,7 +16834,7 @@ function maybeFillTitleFromEnergy(tab) {
     for (const pass of [false, true]) {
       for (const name of Object.keys(l.lines)) {
         if (!lineShown[name] || live(name) !== pass) continue;
-        const color = pass ? ENERGY_FLOW_COLORS[source[name]] : idle;
+        const color = pass ? colorOf[source[name]] : idle;
         svg += '<path d="' + path(l.lines[name]) + '" fill="none" stroke="' + color + '" stroke-width="' + L.lineWidth +
           '" stroke-linecap="round" stroke-linejoin="round"/>';
       }
@@ -16838,7 +16844,7 @@ function maybeFillTitleFromEnergy(tab) {
       if (!live(name)) continue;
       const line = l.lines[name];
       const p = energyFlowPointAt(line, line.along[line.along.length - 1] / 2);
-      svg += '<circle cx="' + r(p[0]) + '" cy="' + r(p[1]) + '" r="' + L.dotRadius + '" fill="' + ENERGY_FLOW_COLORS[source[name]] + '"/>';
+      svg += '<circle cx="' + r(p[0]) + '" cy="' + r(p[1]) + '" r="' + L.dotRadius + '" fill="' + colorOf[source[name]] + '"/>';
     }
     // The global frame line (display-borders.js marks the grid) on the rings
     // only without a card.
@@ -16869,7 +16875,7 @@ function maybeFillTitleFromEnergy(tab) {
         align + ';color:' + text + ';white-space:nowrap;overflow:hidden">' + escapeHtml(value) + '</div>';
     };
     const iconOf = id => String(icons[id] || '').replace(/^mdi:/, '');
-    const homeColor = ENERGY_FLOW_COLORS[flows.homeSource || 'grid'];
+    const homeColor = colorOf[flows.homeSource || 'grid'];
     if (shown.pv) node(l.node.pv[0], l.node.pv[1], ENERGY_FLOW_COLORS.pv, 'solar-power');
     // The grid's direction past the idle threshold, as on the panel: while
     // it supplies "export" (the arrow leaves the mast towards the lines),
@@ -16877,11 +16883,11 @@ function maybeFillTitleFromEnergy(tab) {
     const supplying = input.hasGrid && input.grid >= ENERGY_FLOW_IDLE_WATTS;
     const feeding = input.hasGrid && -input.grid >= ENERGY_FLOW_IDLE_WATTS;
     const gridIcon = supplying ? 'transmission-tower-export' : feeding ? 'transmission-tower-import' : 'transmission-tower';
-    if (shown.grid) node(l.node.grid[0], l.node.grid[1], ENERGY_FLOW_COLORS.grid, gridIcon, feeding);
+    if (shown.grid) node(l.node.grid[0], l.node.grid[1], colorOf.grid, gridIcon, feeding);
     if (shown.home) node(l.node.home[0], l.node.home[1], homeColor, 'home-lightning-bolt');
     const level = entity.charge ? energyFlowNumber(values[entity.charge]) : null;
     const charging = input.hasBattery && -input.battery >= ENERGY_FLOW_IDLE_WATTS;
-    if (shown.battery) node(l.node.battery[0], l.node.battery[1], ENERGY_FLOW_COLORS.battery,
+    if (shown.battery) node(l.node.battery[0], l.node.battery[1], colorOf.battery,
       charging ? energyFlowChargingIcon(level) : iconOf(entity.charge || entity.bat) || 'battery');
 
     const gap = r(l.ring) + L.valueGap;

@@ -181,10 +181,13 @@ assert.ok(drawn.includes('width="404.00" height="320.00"'), 'the V2 2x2 tile in 
 assert.ok(drawn.includes('transform:scale(0.5)'), 'scaled like every preview');
 assert.ok(drawn.includes('<path d="M90 160 L314 160" fill="none" stroke="#488FC2"'), 'grid -> home in the grid color');
 assert.ok(/<path d="M220 80 [^"]*" fill="none" stroke="#3C3C3C"/.test(drawn), 'solar -> home idle grey');
-assert.ok(drawn.includes('<path d="M220 240 A62 62 0 0 1 282 178 L320 178" fill="none" stroke="#F06292"'),
+// Like Home Assistant's card (user 2026-10-26): the discharging battery
+// cyan, its flow and the home it mostly feeds too.
+assert.ok(drawn.includes('<path d="M220 240 A62 62 0 0 1 282 178 L320 178" fill="none" stroke="#4DB6AC"'),
   'battery -> home in the battery color, its bend a circle arc');
 assert.ok(drawn.includes('mdi-battery-70'), 'the battery shows Home Assistant\'s level icon');
-assert.ok(drawn.includes('color:#F06292"></i>') && /mdi-home-lightning-bolt" style="[^"]*color:#F06292/.test(drawn), 'home takes the main source color');
+assert.ok(drawn.includes('color:#4DB6AC"></i>') && /mdi-home-lightning-bolt" style="[^"]*color:#4DB6AC/.test(drawn), 'home takes the main source color');
+assert.ok(/mdi-transmission-tower-export" style="[^"]*color:#488FC2/.test(drawn), 'the supplying grid blue');
 for (const value of ['0 W', '200 W', '700 W', '500 W', '78 %']) assert.ok(drawn.includes('>' + value + '</div>'), value);
 assert.ok(!drawn.includes('Energie'), 'no header by default');
 const headed = nodeOf();
@@ -221,6 +224,11 @@ for (const key_code of [0, 8]) {
             'the grid feeding in: import mirrored, the arrow from the lines into the mast');
   // Inverted, the same value is a discharge: Home Assistant's own icon.
   assert.ok(signed.html.includes(key_code ? 'mdi-battery-70"' : 'mdi-battery-charging-80"'), 'charging icon ' + key_code);
+  // The grid taking the feed-in purple; the battery magenta while it
+  // charges, cyan while it discharges.
+  assert.ok(/mdi-transmission-tower-import" style="[^"]*color:#8353D1/.test(signed.html), 'feeding grid purple');
+  assert.ok(new RegExp('mdi-battery-[a-z0-9-]+" style="[^"]*color:' + (key_code ? '#4DB6AC' : '#F06292')).test(signed.html),
+            'battery color ' + key_code);
 }
 assert.match(renderer, /String charging_icon\(bool has_level, float level\) \{\s*if \(!has_level\) return "battery-charging";\s*if \(level < 10\.0f\) return "battery-charging-outline";\s*const long tens = LV_MIN\(10L, lroundf\(level \/ 10\.0f\)\) \* 10L;/,
              'the panel picks the charging icon like the preview');
@@ -245,6 +253,13 @@ assert.ok(metrics.includes('inline int value_gap() { return tile_layout::scale(8
 // Every value opens its sensor like its node, the charge its own.
 assert.match(renderer, /st->node\[node\]\.value = create_value\(\*st, font\);\s*make_value_tappable\(\*st, st->node\[node\]\.value, kNodeRole\[node\], node\);/);
 assert.ok(renderer.includes('make_value_tappable(*st, st->charge, kRoleBatteryCharge, kNodeBattery);'));
+// The panel colors grid and battery by direction like the preview, the
+// mirrored feed-in picture included.
+assert.match(renderer, /case kNodeBattery: return in\.has_battery && in\.battery >= kIdleWatts \? kBatteryOutColor : kBatteryColor;\s*default: return in\.has_grid && -in\.grid >= kIdleWatts \? kGridReturnColor : kGridColor;/);
+assert.ok(renderer.includes('color_node(st, st.node[kNodeGrid], node_color(kNodeGrid, in));') &&
+  renderer.includes('color_node(st, st.node[kNodeBattery], node_color(kNodeBattery, in));'));
+assert.ok(renderer.includes('lv_obj_set_style_image_recolor(st.grid_feed, lv_color_hex(tone_color::readable_icon(rgb)), 0);') &&
+  renderer.includes('lv_obj_set_style_image_recolor_opa(st.grid_feed, LV_OPA_COVER, 0);'), 'the feed-in picture recolored');
 assert.match(renderer, /void make_value_tappable\(FlowTileState& st, lv_obj_t\* label, uint8_t role, uint8_t node\) \{\s*if \(!label \|\| !st\.entities\[role\]\.length\(\)\) return;\s*lv_obj_add_flag\(label, LV_OBJ_FLAG_CLICKABLE\);/,
              'a value without its own sensor stays plain text');
 console.log('Energy flow tile: registry, Web Admin fields and editor, runtime marks and timer, popups, translations and the real preview');

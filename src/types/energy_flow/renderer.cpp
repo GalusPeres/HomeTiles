@@ -43,10 +43,13 @@ namespace {
 
 using namespace energy_flow;
 
-// The node colors of the decided design (Home Assistant's energy colors).
+// The node colors of the decided design (Home Assistant's energy colors);
+// grid and battery by direction like Home Assistant's card (user 2026-10-26).
 constexpr uint32_t kSolarColor = 0xFF9800;
-constexpr uint32_t kGridColor = 0x488FC2;
-constexpr uint32_t kBatteryColor = 0xF06292;
+constexpr uint32_t kGridColor = 0x488FC2;        // supplying (grid consumption)
+constexpr uint32_t kGridReturnColor = 0x8353D1;  // taking the feed-in (grid return)
+constexpr uint32_t kBatteryColor = 0xF06292;     // charging (battery in)
+constexpr uint32_t kBatteryOutColor = 0x4DB6AC;  // discharging (battery out)
 // The header icon (picture 66): the Energy color of the user's panel.
 constexpr uint32_t kHeaderIconColor = 0xF29C06;
 // Lines without a flow, darker on the light screen than on a white card.
@@ -157,11 +160,14 @@ bool g_any_dirty = false;
 
 int round_px(float value) { return static_cast<int>(lroundf(value)); }
 
-uint32_t node_color(uint8_t node) {
+// A node's color now (the tile's directions, past the idle threshold): the
+// grid purple while it takes the feed-in, else blue; the battery cyan while
+// it discharges, else magenta.
+uint32_t node_color(uint8_t node, const Inputs& in) {
   switch (node) {
     case kNodePv: return kSolarColor;
-    case kNodeBattery: return kBatteryColor;
-    default: return kGridColor;
+    case kNodeBattery: return in.has_battery && in.battery >= kIdleWatts ? kBatteryOutColor : kBatteryColor;
+    default: return in.has_grid && -in.grid >= kIdleWatts ? kGridReturnColor : kGridColor;
   }
 }
 
@@ -229,6 +235,10 @@ void color_node(FlowTileState& st, NodeWidgets& node, uint32_t rgb) {
                                                           ui_surface_style::icon_glow_percent());
   lv_obj_set_style_bg_color(node.disc, lv_color_hex(fill.disc), 0);
   lv_obj_set_style_text_color(node.icon, lv_color_hex(tone_color::readable_icon(rgb)), 0);
+  // The mirrored feed-in picture takes the grid icon's color too.
+  if (&node == &st.node[kNodeGrid] && st.grid_feed) {
+    lv_obj_set_style_image_recolor(st.grid_feed, lv_color_hex(tone_color::readable_icon(rgb)), 0);
+  }
 }
 
 bool shown_on_screen(lv_obj_t* obj) {
@@ -715,7 +725,9 @@ bool grid_feed_picture(FlowTileState& st) {
   lv_draw_label_dsc_t dsc;
   lv_draw_label_dsc_init(&dsc);
   dsc.font = font;
-  dsc.color = lv_obj_get_style_text_color(w.icon, LV_PART_MAIN);
+  // White, colored like the icon label when shown (the grid turns purple
+  // while feeding in, color_node).
+  dsc.color = lv_color_white();
   dsc.text = glyph.c_str();
   const lv_area_t area = {0, 0, size.x - 1, size.y - 1};
   lv_draw_label(&layer, &dsc, &area);
@@ -734,6 +746,8 @@ bool grid_feed_picture(FlowTileState& st) {
   st.grid_feed = lv_image_create(w.ring);
   lv_obj_add_flag(st.grid_feed, LV_OBJ_FLAG_HIDDEN);
   lv_image_set_src(st.grid_feed, picture);
+  lv_obj_set_style_image_recolor(st.grid_feed, lv_obj_get_style_text_color(w.icon, LV_PART_MAIN), 0);
+  lv_obj_set_style_image_recolor_opa(st.grid_feed, LV_OPA_COVER, 0);
   lv_obj_center(st.grid_feed);
   return true;
 }
@@ -891,14 +905,17 @@ void refresh(FlowTileState& st) {
   set_icon(st.node[kNodeBattery].icon,
            charging ? charging_icon(has_charge, charge) : haBridgeConfig.findEntityIcon(battery_icon_entity),
            charging ? "battery-charging" : "battery");
-  // Home in the color of the source that delivers most.
+  // Grid and battery by their direction, home in the color of the source
+  // that delivers most.
+  color_node(st, st.node[kNodeGrid], node_color(kNodeGrid, in));
+  color_node(st, st.node[kNodeBattery], node_color(kNodeBattery, in));
   color_node(st, st.node[kNodeHome],
-             node_color(flows.home_source == kNodeCount ? kNodeGrid : flows.home_source));
+             node_color(flows.home_source == kNodeCount ? kNodeGrid : flows.home_source, in));
 
   const float strongest = strongest_flow(flows);
   for (uint8_t line = 0; line < kLineCount; ++line) {
     const bool live = st.line_shown[line] && flows.watts[line] > 0.0f;
-    const uint32_t color = live ? node_color(line_source(static_cast<Line>(line), flows)) : st.idle_color;
+    const uint32_t color = live ? node_color(line_source(static_cast<Line>(line), flows), in) : st.idle_color;
     const bool reverse = line == kLineBatteryGrid && flows.grid_to_battery;
     const bool changed = live != st.line_live[line] || color != st.line_color[line] || reverse != st.reverse[line];
     if (changed && live && (!st.line_live[line] || reverse != st.reverse[line])) st.phase[line] = 0.0f;

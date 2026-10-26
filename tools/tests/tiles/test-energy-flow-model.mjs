@@ -17,8 +17,11 @@ const compiler = [process.env.CXX, 'clang++', 'g++'].filter(Boolean)
   .find(c => spawnSync(c, ['--version']).status === 0);
 if (!compiler) { console.log('SKIP: Energy flow model needs a native C++ compiler'); process.exit(0); }
 
-const sizes = [[404, 320, 34, 28, 24, 20, 18], [352, 296, 34, 28, 24, 20, 18], [232, 232, 25, 21, 16, 13, 12],
-  [600, 320, 34, 28, 24, 20, 18], [404, 488, 34, 28, 24, 20, 18]];
+// width, height, ring, disc, inset x, inset y, spacing, header room (the
+// last two: with the header on, user 2026-10-26).
+const sizes = [[404, 320, 34, 28, 24, 20, 18, 0], [352, 296, 34, 28, 24, 20, 18, 0], [232, 232, 25, 21, 16, 13, 12, 0],
+  [600, 320, 34, 28, 24, 20, 18, 0], [404, 488, 34, 28, 24, 20, 18, 0], [404, 320, 34, 28, 24, 20, 18, 48],
+  [298, 319, 36, 30, 18, 14, 18, 58]];
 const cases = [
   // pv, grid, battery, home, has: pv grid battery home
   [0, 200, 500, 0, 1, 1, 1, 0],
@@ -35,11 +38,12 @@ const cpp = `
 #include "src/types/energy_flow/flow_geometry.h"
 using namespace energy_flow;
 int main() {
-  const float sizes[][7] = {${sizes.map(s => '{' + s.join(',') + '}').join(',')}};
+  const float sizes[][8] = {${sizes.map(s => '{' + s.join(',') + '}').join(',')}};
   printf("{\\"layouts\\":[");
   for (size_t s = 0; s < sizeof(sizes) / sizeof(sizes[0]); ++s) {
     Metrics m; m.ring = sizes[s][2]; m.disc = sizes[s][3]; m.inset_x = sizes[s][4]; m.inset_y = sizes[s][5]; m.spacing = sizes[s][6];
-    const Layout l = layout(sizes[s][0], sizes[s][1], m);
+    const Layout l = layout(sizes[s][0], sizes[s][1], m, sizes[s][7]);
+    if (sizes[s][7] && header_top(m) != 2 * m.ring - m.inset_y) return 1;
     printf("%s{\\"nodes\\":[", s ? "," : "");
     for (int n = 0; n < kNodeCount; ++n) printf("%s[%.4f,%.4f]", n ? "," : "", l.node[n].x, l.node[n].y);
     printf("],\\"lines\\":[");
@@ -167,7 +171,13 @@ vm.runInContext(admin + '\nthis.api = {energyFlowLayout, energyFlowCompute, ener
 const {energyFlowLayout, energyFlowCompute, energyFlowPointAt} = context.api;
 const order = ['gridHome', 'pvBattery', 'pvHome', 'pvGrid', 'batHome', 'batGrid'];
 sizes.forEach((s, i) => {
-  const l = energyFlowLayout(s[0], s[1], {ring: s[2], disc: s[3], insetX: s[4], insetY: s[5], spacing: s[6]});
+  const l = energyFlowLayout(s[0], s[1], {ring: s[2], disc: s[3], insetX: s[4], insetY: s[5], spacing: s[6]}, s[7]);
+  // With the header the flow fills the tile below its room: solar right
+  // under it, grid and home in the middle of what is left, the battery at
+  // the bottom as before.
+  near(l.node.pv[1], s[7] + s[5] + s[2], `${s} solar under the header`);
+  near(l.node.grid[1], (s[7] + s[1]) / 2, `${s} middle below the header`);
+  near(l.node.battery[1], s[1] - s[5] - s[2], `${s} battery at the bottom`);
   ['pv', 'grid', 'home', 'battery'].forEach((name, n) => {
     near(l.node[name][0], device.layouts[i].nodes[n][0], `${s} ${name} x`); near(l.node[name][1], device.layouts[i].nodes[n][1], `${s} ${name} y`);
   });

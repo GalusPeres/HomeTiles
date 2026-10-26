@@ -143,10 +143,11 @@
     return line;
   }
 
-  function energyFlowLayout(width, height, m) {
-    const ox = width / 2, oy = height / 2;
+  // `top`: the header's room (flow_geometry.h header_top), the flow below it.
+  function energyFlowLayout(width, height, m, top = 0) {
+    const ox = width / 2, oy = (top + height) / 2;
     const l = { width, height, ring: m.ring, disc: m.disc, node: {
-      pv: [ox, m.insetY + m.ring], grid: [m.insetX + m.ring, oy],
+      pv: [ox, top + m.insetY + m.ring], grid: [m.insetX + m.ring, oy],
       home: [width - m.insetX - m.ring, oy], battery: [ox, height - m.insetY - m.ring] } };
     const spacing = Math.min(m.spacing, m.disc * 0.8);
     const gridHome = energyFlowPolyline();
@@ -301,7 +302,7 @@
       pv: pv || 0, grid: ((bits & 4) ? -1 : 1) * (grid || 0), battery: ((bits & 8) ? -1 : 1) * (bat || 0), home: home || 0 };
     const flows = energyFlowCompute(input);
 
-    const l = energyFlowLayout(width, height, L);
+    const l = energyFlowLayout(width, height, L, (bits & 1) ? 2 * L.ring - L.insetY : 0);
     const light = panelLight();
     const cardHex = String(rootStyle.getPropertyValue('--tile-card') || '').trim() || (light ? '#FFFFFF' : '#1A1A1A');
     const cardRgb = /^#[0-9a-f]{6}$/i.test(cardHex) ? energyFlowHexRgb(cardHex) : (light ? [255, 255, 255] : [26, 26, 26]);

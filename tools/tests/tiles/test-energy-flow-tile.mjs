@@ -259,6 +259,11 @@ assert.ok(metrics.includes('inline int value_gap() { return tile_layout::scale(8
 // Every value opens its sensor like its node, the charge its own.
 assert.match(renderer, /st->node\[node\]\.value = create_value\(\*st, font\);\s*make_value_tappable\(\*st, st->node\[node\]\.value, kNodeRole\[node\], node\);/);
 assert.ok(renderer.includes('make_value_tappable(*st, st->charge, kRoleBatteryCharge, kNodeBattery);'));
+// With the header on the flow moves down under it (user 2026-10-26), on the
+// panel and in the preview alike (test-energy-flow-model.mjs: the numbers).
+assert.ok(renderer.includes('st->layout = layout(width, height, metrics, energyFlowOption(tile, kFlowHeaderBit) ? header_top(metrics) : 0.0f);'));
+assert.ok(admin.includes('const l = energyFlowLayout(width, height, L, (bits & 1) ? 2 * L.ring - L.insetY : 0);'));
+assert.match(read('src/types/energy_flow/flow_geometry.h'), /inline float header_top\(const Metrics& m\) \{ return 2\.0f \* m\.ring - m\.inset_y; \}/);
 // The panel colors grid and battery by direction like the preview, the
 // mirrored feed-in picture included.
 assert.match(renderer, /case kNodeBattery: return in\.has_battery && -in\.battery >= kIdleWatts \? kBatteryColor : kBatteryOutColor;\s*default: return in\.has_grid && -in\.grid >= kIdleWatts \? kGridReturnColor : kGridColor;/);

@@ -1140,7 +1140,8 @@ lv_obj_t* render_energy_flow_tile(lv_obj_t* parent, int col, int row, const Tile
   // The tile's size as the grid places it (whole and half cells alike).
   const float width = tile_geometry::extent(tile.col, tile.span_w, GRID_CELL_W, GRID_GAP);
   const float height = tile_geometry::extent(tile.row, tile.span_h, GRID_CELL_H, GRID_GAP);
-  st->layout = layout(width, height, device_metrics());
+  const Metrics metrics = device_metrics();
+  st->layout = layout(width, height, metrics, energyFlowOption(tile, kFlowHeaderBit) ? header_top(metrics) : 0.0f);
   const int pad_left = lv_obj_get_style_pad_left(card, LV_PART_MAIN);
   const int pad_top = lv_obj_get_style_pad_top(card, LV_PART_MAIN);
 

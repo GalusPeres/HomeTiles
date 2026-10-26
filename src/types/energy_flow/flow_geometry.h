@@ -140,14 +140,16 @@ inline void build_leg(Polyline& line, const Layout& l, uint8_t from, int dir, ui
   if (fabsf(end_x - bend.cx) > 0.5f) polyline_add(line, end_x, static_cast<float>(lane));
 }
 
-inline Layout layout(float width, float height, const Metrics& m) {
+// `top`: the room the header takes (header_top); the flow then fills the
+// tile below it, pressed together downwards (user 2026-10-26).
+inline Layout layout(float width, float height, const Metrics& m, float top = 0.0f) {
   Layout l;
   l.width = width;
   l.height = height;
   l.ring = m.ring;
   l.disc = m.disc;
-  const float ox = width / 2.0f, oy = height / 2.0f;
-  l.node[kNodePv] = {ox, m.inset_y + m.ring};
+  const float ox = width / 2.0f, oy = (top + height) / 2.0f;
+  l.node[kNodePv] = {ox, top + m.inset_y + m.ring};
   l.node[kNodeGrid] = {m.inset_x + m.ring, oy};
   l.node[kNodeHome] = {width - m.inset_x - m.ring, oy};
   l.node[kNodeBattery] = {ox, height - m.inset_y - m.ring};
@@ -166,5 +168,9 @@ inline Layout layout(float width, float height, const Metrics& m) {
   build_leg(l.line[kLineBatteryGrid], l, kNodeBattery, -1, kNodeGrid, oy + spacing, spacing);
   return l;
 }
+
+// The header's room: its node sits in the tile's corner, so solar's ring
+// starts right under the header's ring.
+inline float header_top(const Metrics& m) { return 2.0f * m.ring - m.inset_y; }
 
 }  // namespace energy_flow

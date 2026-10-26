@@ -33,7 +33,9 @@ enum TileType : uint8_t {
   TILE_FAN = 26,
   TILE_CALENDAR = 27,
   TILE_POWER_FLOW = 28,
-  TILE_VACUUM = 29
+  TILE_VACUUM = 29,
+  // Voice timers (types/timer): no entity, the panel's Home Assistant timers.
+  TILE_TIMER = 30
 };
 
 static constexpr bool isRetiredTileType(TileType type) {

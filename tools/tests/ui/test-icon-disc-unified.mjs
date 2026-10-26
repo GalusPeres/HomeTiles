@@ -122,6 +122,7 @@ const round = {
   navigate: 'tile_icon_disc::add_round(btn, icon_lbl);',
   scene: 'tile_icon_disc::add_round(btn, icon_lbl);',
   camera: 'tile_icon_disc::add_round(card, icon);',
+  timer: 'tile_icon_disc::add_round(card, view->icon);',
 };
 const renderers = fs.readdirSync(path.join(root, 'src/types'), {withFileTypes: true})
   .filter(entry => entry.isDirectory() && fs.existsSync(path.join(root, 'src/types', entry.name, 'renderer.cpp')))

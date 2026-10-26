@@ -6,6 +6,33 @@
 namespace i18n {
 
 struct Strings {
+  // Voice timers (timer_ui.h): the Timers popup's title, the name of a timer
+  // without one, the alert card's title for it, its "Set for 10:00" line
+  // (%s = the timer's length), "Eggs is done too" (%s = the other timer's
+  // name), the card's Stop and +1 min buttons, a paused timer's state, the
+  // presets' heading, the empty list, and a preset ("5 min", %d = minutes).
+  const char* timers_title;
+  const char* timer_default_name;
+  const char* timer_done_title;
+  const char* timer_set_for;
+  const char* timer_done_too;
+  const char* timer_stop;
+  const char* timer_add_minute;
+  const char* timer_paused_name;  // "%s, paused": a paused timer's name
+  const char* timer_start;
+  const char* timer_none;
+  const char* timer_minutes;
+  // Timer tile (types/timer): the idle tile's hint, a wide tile's
+  // "Tea, of 5:00" (%s = the name, %s = the timer's length), and the words
+  // that pick the tile's icon from a timer's name (timer_icons.h:
+  // "icon=word, word; icon=word", lower case, '!' = the whole word), and the
+  // Web Admin note under the type.
+  const char* timer_tap_start;
+  const char* timer_of;
+  // A timer without a name: "15 min timer" (%s = its length).
+  const char* timer_unnamed;
+  const char* timer_icon_words;
+  const char* timer_tile_note;
   const char* code;
   const char* html_lang;
   const char* language_label;

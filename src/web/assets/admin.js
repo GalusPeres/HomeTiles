@@ -4621,10 +4621,10 @@ async function saveGestureEdge(select) {
   // Rules (every tile type, "src ..." in the record): the tile's own entity
   // or another one, entity color or own rules, coloring the icon and/or
   // tinting the tile (tile_icon_source.cpp). Scene, Folder, Back, Camera,
-  // Clock and Text have no entity of their own and use another entity only
+  // Clock, Text and Timer have no entity of their own and use another entity only
   // (tileTypeHasFixedIconColorOnly / tileTypeRulesUseOwnEntity in
   // tile_type_policy.h).
-  const ICON_COLOR_FIXED_TYPES = ['2', '4', '8', '9', '10', '18'];
+  const ICON_COLOR_FIXED_TYPES = ['2', '4', '8', '9', '10', '18', '30'];
   const ICON_COLOR_OWN_TYPES = ['1', '5', '12', '14', '15', '17', '19', '20', '21', '22', '23', '24', '25', '26', '29'];
   // The own entity field of each type (pairs, not an object with numeric keys).
   const ICON_COLOR_ENTITY_FIELDS = [['1', '_sensor_entity'], ['5', '_switch_entity'], ['12', '_weather_entity'],
@@ -8349,6 +8349,7 @@ async function saveGestureEdge(select) {
         !isExplicitlyDisabledValue(rawIcon)) {
       iconName = 'video';
     }
+    if (previewKind === 'timer_tile') iconName = timerPreviewIcon(rawIcon, iconName);
     let climatePreviewState = null;
     if (previewKind === 'climate') {
       climatePreviewState = parseClimatePreviewPayload(
@@ -8497,7 +8498,8 @@ async function saveGestureEdge(select) {
         titleFromEntity(cameraEntity);
     }
     if (calendarTile) displayTitle = calendarPreviewTitle(calendarTile, displayTitle);
-    if (displayTitle) {
+    // The Timer tile shows its name at the bottom (timerPreviewHtml).
+    if (displayTitle && previewKind !== 'timer_tile') {
       html += '<div class="tile-title" id="' + tileId + '-title">' +
         tileTitleHtml(displayTitle) + '</div>';
     }
@@ -8590,6 +8592,7 @@ async function saveGestureEdge(select) {
     }
 
     if (previewKind === 'switch') html += switchPreviewExtraHtml(switchStyle, halfHeight);
+    if (previewKind === 'timer_tile') html += timerPreviewHtml(title, tileSpan('span_w'), tileSpan('span_h'));
 
     html += getTileResizeHandlesHtml(type);
     // A title or icon moves the clock down (clock/renderer.cpp).
@@ -11313,6 +11316,7 @@ async function saveGestureEdge(select) {
           !isExplicitlyDisabledValue(rawIcon)) {
         iconName = 'video';
       }
+      if (previewKind === 'timer_tile') iconName = timerPreviewIcon(rawIcon, iconName);
       let climatePreviewState = null;
       if (previewKind === 'climate') {
         climatePreviewState = parseClimatePreviewPayload(
@@ -11388,7 +11392,8 @@ async function saveGestureEdge(select) {
           titleFromEntity(tile.sensor_entity);
       }
       if (previewKind === 'calendar') displayTitle = calendarPreviewTitle(tile, displayTitle, sensorMeta);
-      if (displayTitle.length) {
+      // The Timer tile shows its name at the bottom (timerPreviewHtml).
+      if (displayTitle.length && previewKind !== 'timer_tile') {
         html += '<div class="tile-title" id="' + tab + '-tile-' + index + '-title">' +
           tileTitleHtml(displayTitle) + '</div>';
       }
@@ -11460,6 +11465,7 @@ async function saveGestureEdge(select) {
         }
       }
       if (previewKind === 'switch') html += switchPreviewExtraHtml(tile.switch_style, Number(tile.span_h) === 0.5);
+      if (previewKind === 'timer_tile') html += timerPreviewHtml(displayTitle, tile.span_w || 1, tile.span_h || 1);
       html += getTileResizeHandlesHtml(typeValue);
       // A media tile's shown artwork survives the re-render; applyMediaPreview
       // keeps it when it is still the same picture.
@@ -24011,6 +24017,51 @@ function getClockPreviewLanguage() {
       const el = document.getElementById(prefix + id);
       if (el) el.value = '0';
     }
+  }
+
+  // Timer tile (types/timer, type 30): only the shared fields (title, icon,
+  // icon colors); the panel shows its Home Assistant voice timers.
+  function loadTimerFields(tab, data) {
+    loadIconColorFields(tab, data);
+  }
+
+  function saveTimerFields(tab, formData) {
+    saveIconColorFields(tab, formData);
+  }
+
+  function resetTimerFields(tab) {
+    resetIconColorFields(tab);
+  }
+
+  // The preview shows the panel's tile without a timer (renderer.cpp): the
+  // timer icon unless the tile has its own, "--:--" over the name at the
+  // bottom ("Tap to start" below on taller tiles), from two columns the name
+  // and "No timers running" beside the circle and the presets below.
+  const TIMER_PRESET_MINUTES = [1, 5, 10, 15];
+
+  function timerPreviewText(key, fallback) {
+    return (typeof TIMER_I18N === 'object' && TIMER_I18N && TIMER_I18N[key]) || fallback;
+  }
+
+  function timerPreviewIcon(rawIcon, iconName) {
+    if (iconName || isExplicitlyDisabledValue(rawIcon)) return iconName;
+    return 'timer-outline';
+  }
+
+  function timerPreviewHtml(title, spanW, spanH) {
+    const name = String(title || '').replace(/\s*\n\s*/g, ' ').trim() || timerPreviewText('defaultName', 'Timer');
+    if (Number(spanW) >= 2 && Number(spanH) >= 1) {
+      const presets = TIMER_PRESET_MINUTES.map(minutes => '<span class="tile-timer-preset">' +
+        escapeHtml(timerPreviewText('minutes', '%d min').replace('%d', String(minutes))) + '</span>').join('');
+      return '<div class="tile-timer-head"><div class="tile-timer-title">' + escapeHtml(name) +
+        '</div><div class="tile-timer-hint">' + escapeHtml(timerPreviewText('none', 'No timers running')) +
+        '</div></div><div class="tile-timer-presets">' + presets + '</div>';
+    }
+    let html = '<div class="tile-timer-foot"><div class="tile-timer-value">--:--</div><div class="tile-timer-title">' +
+      escapeHtml(name) + '</div>';
+    const hintSpan = Number(panelVar('--timer-hint-span', '1.5'));
+    if (Number(spanH) >= (Number.isFinite(hintSpan) ? hintSpan : 1.5)) html += '<div class="tile-timer-hint">' + escapeHtml(timerPreviewText('tapStart', 'Tap to start')) + '</div>';
+    return html + '</div>';
   }
   function isEditablePreview(kind) { return ['number', 'select', 'datetime'].includes(kind); }
   // The preview's value as HTML: a number's unit a step smaller after it

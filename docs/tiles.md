@@ -577,6 +577,12 @@ Only the buttons the vacuum supports are active.
 
 **Popup:** the map (**Map left** or **Map centre**), cleaned area, cleaning time and battery, **Clean**, **Stop** and **Dock**, and a menu (⋯) with the suction power, the rooms to clean and **Locate**. Rooms are the Home Assistant areas mapped to the vacuum; they need Home Assistant 2026.3 or newer and the area mapping in the vacuum's entity settings.
 
+### Timer
+
+Shows this display's voice timers, the ones you set by voice through its Assist satellite ("set a timer for 10 minutes named pasta"). The countdown and the timer's name sit at the bottom, the icon follows the name (a pot for pasta, a cup for tea, a washing machine for laundry), otherwise the tile's own icon or a timer. With more timers a **+N** shows how many more. Tap the tile to open the Timers list.
+
+From two columns wide the tile has controls: without a timer presets of 1, 5, 10 and 15 minutes; with one timer pause or resume, **+1 min** and cancel; with more **+1 min** for the next one and the two after it. From two rows high the next timer is large with a progress bar, pause or resume, **+1 min** and cancel, and every other timer gets its own row with **+1 min** below it. A timer without a name shows its length ("15 min timer"). Offered on displays with a speaker and microphone only.
+
 ## Local Tiles
 
 These types work without Home Assistant.

@@ -11,6 +11,7 @@
 #include "src/ui/shared/tabular_digits.h"
 #include "src/types/clock/clock_face.h"
 #include "src/types/text/text_options.h"
+#include "src/types/timer/renderer.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/screensaver/screensaver_tile_shadow.h"
 #include "src/ui/tabs/settings/settings_style.h"
@@ -325,6 +326,29 @@ void appendPreviewScaleVars(String& html, const char* selector = ":root", bool p
   // padding above and below.
   emit_device_px("text-header-h", tile_icon_disc::row_height());
   emit_scaled("text-compact-pad-v", tile_layout::scale_480(text_tile::kCompactPadV480));
+  // Timer tile (types/timer/renderer.cpp): its padding, the corner circle's
+  // middle and side (the buttons' height) and where text beside it starts.
+  {
+    const timer_tile::Geometry timer = timer_tile::geometry();
+    emit_scaled("timer-pad-top", timer_tile::kPadTop);
+    emit_scaled("timer-pad-side", timer_tile::kPadSide);
+    emit_scaled("timer-pad-bottom", timer_tile::kPadBottom);
+    emit_scaled("timer-disc-mid", timer_tile::kPadTop + timer.center_y);
+    emit_scaled("timer-disc", timer.disc);
+    emit_scaled("timer-beside", timer_tile::kPadSide + timer.beside);
+    emit_scaled("timer-gap", Device::kGridGap / 2);
+    // The smallest height in rows that shows "Tap to start" (1x1 tiles).
+    float hint_span = 99;
+    for (float span = 1; span <= Device::kGridRows; span += 0.5f) {
+      if (tile_geometry::extent(0, span, GRID_CELL_H, GRID_GAP) >= timer_tile::hint_min_height()) {
+        hint_span = span;
+        break;
+      }
+    }
+    html += "--timer-hint-span:";
+    html += String(hint_span, 1);
+    html += ";";
+  }
   // The device places a corner header's disc in the tile corner like the
   // half-height disc and centers the icon in it; the header labels move with
   // the icon (tile_icon_disc::corner_header). The preview header follows.

@@ -938,6 +938,7 @@
           !isExplicitlyDisabledValue(rawIcon)) {
         iconName = 'video';
       }
+      if (previewKind === 'timer_tile') iconName = timerPreviewIcon(rawIcon, iconName);
       let climatePreviewState = null;
       if (previewKind === 'climate') {
         climatePreviewState = parseClimatePreviewPayload(
@@ -1013,7 +1014,8 @@
           titleFromEntity(tile.sensor_entity);
       }
       if (previewKind === 'calendar') displayTitle = calendarPreviewTitle(tile, displayTitle, sensorMeta);
-      if (displayTitle.length) {
+      // The Timer tile shows its name at the bottom (timerPreviewHtml).
+      if (displayTitle.length && previewKind !== 'timer_tile') {
         html += '<div class="tile-title" id="' + tab + '-tile-' + index + '-title">' +
           tileTitleHtml(displayTitle) + '</div>';
       }
@@ -1085,6 +1087,7 @@
         }
       }
       if (previewKind === 'switch') html += switchPreviewExtraHtml(tile.switch_style, Number(tile.span_h) === 0.5);
+      if (previewKind === 'timer_tile') html += timerPreviewHtml(displayTitle, tile.span_w || 1, tile.span_h || 1);
       html += getTileResizeHandlesHtml(typeValue);
       // A media tile's shown artwork survives the re-render; applyMediaPreview
       // keeps it when it is still the same picture.

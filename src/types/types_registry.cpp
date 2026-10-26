@@ -25,6 +25,7 @@
 #include "src/types/cover/renderer.h"
 #include "src/types/camera/renderer.h"
 #include "src/types/pixelanim/renderer.h"
+#include "src/types/timer/renderer.h"
 
 #include "src/types/clock/web_handler.h"
 #include "src/types/navigate/web_handler.h"
@@ -46,6 +47,7 @@
 #include "src/types/pixelanim/web_handler.h"
 #include "src/types/calendar/calendar_tile.h"
 #include "src/types/calendar/web.h"
+#include "src/types/timer/web_handler.h"
 
 #include "src/types/clock/web_html.h"
 #include "src/types/navigate/web_html.h"
@@ -65,6 +67,7 @@
 #include "src/types/cover/web_html.h"
 #include "src/types/camera/web_html.h"
 #include "src/types/pixelanim/web_html.h"
+#include "src/types/timer/web_html.h"
 #include "src/types/settings/web_html.h"
 
 #include "src/types/clock/web_scripts.h"
@@ -85,6 +88,7 @@
 #include "src/types/cover/web_scripts.h"
 #include "src/types/camera/web_scripts.h"
 #include "src/types/pixelanim/web_scripts.h"
+#include "src/types/timer/web_scripts.h"
 #include "src/types/settings/web_scripts.h"
 #include "src/web/server/render/tile_icon_colors_html.h"
 
@@ -106,6 +110,7 @@
 #include "src/types/cover/web_styles.h"
 #include "src/types/camera/web_styles.h"
 #include "src/types/pixelanim/web_styles.h"
+#include "src/types/timer/web_styles.h"
 #include "src/types/settings/web_styles.h"
 
 #include "src/types/device/device_tile.h"
@@ -114,6 +119,7 @@
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
 #include "src/web/server/web_admin_utils.h"
+#include "src/ui/timers/voice_timers.h"
 
 namespace {
 
@@ -395,6 +401,18 @@ bool apply_clock_wrapper(WebServer& server, Tile& tile, const TileTypeApplyConte
 bool apply_text_wrapper(WebServer& server, Tile& tile, const TileTypeApplyContext&) {
   apply_text_fields_from_request(server, tile);
   return true;
+}
+
+lv_obj_t* render_timer_wrapper(lv_obj_t* parent, int col, int row, const Tile& tile, uint8_t index, GridType,
+                               scene_publish_cb_t) {
+  return render_timer_tile(parent, col, row, tile, index);
+}
+bool apply_timer_wrapper(WebServer& server, Tile& tile, const TileTypeApplyContext&) {
+  apply_timer_fields_from_request(server, tile);
+  return true;
+}
+void append_timer_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
+  append_timer_fields_html(html, safeString(ctx.tab_id));
 }
 
 bool apply_weather_wrapper(WebServer& server, Tile& tile, const TileTypeApplyContext&) {
@@ -939,6 +957,24 @@ const TileTypeDescriptor kTileTypes[] = {
     append_text_scripts
   },
   {
+    TILE_TIMER,
+    "Timer",
+    "timer_tile",
+    "timer_tile",
+    "timer_tile",
+    nullptr,
+    "loadTimerFields",
+    "saveTimerFields",
+    "resetTimerFields",
+    0x2A2A2A,
+    false,
+    render_timer_wrapper,
+    apply_timer_wrapper,
+    append_timer_fields_wrapper,
+    append_timer_styles,
+    append_timer_scripts
+  },
+  {
     TILE_SETTINGS,
     "Settings",
     "navigate",
@@ -1077,6 +1113,7 @@ static const char* localized_tile_type_label(const TileTypeDescriptor& entry) {
     case TILE_CLIMATE: return i18n::climate_tile_type_label(language);
     case TILE_CLOCK: return tr.tile_type_clock;
     case TILE_TEXT: return tr.tile_type_text;
+    case TILE_TIMER: return tr.timer_default_name;
     case TILE_SETTINGS: return tr.tile_type_settings;
     case TILE_BACK: return tr.tile_type_back;
     default: return entry.label;
@@ -1091,6 +1128,8 @@ const char* get_tile_type_localized_label(TileType type) {
 void append_tile_type_select_options(String& html) {
   for (const auto& entry : kTileTypes) {
     if (entry.locked) continue;
+    // Voice timers need the Assist satellite (speaker boards).
+    if (entry.type == TILE_TIMER && !voice_timers::supported()) continue;
     const char* label = localized_tile_type_label(entry);
     html += "<option value=\"";
     html += String(static_cast<unsigned>(entry.type));

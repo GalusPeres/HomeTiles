@@ -136,7 +136,7 @@ assert.match(read('src/web/admin/tiles/snapshots.js'), /if \(Number\(tile\.type\
 // The preview's styles (lost once in a merge): the shared Sensor header and the
 // preview body.
 const adminCss = read('src/web/assets/admin.css');
-assert.equal((adminCss.match(/\.switch-bar, \.calendar\)/g) || []).length, 4, 'the Calendar shares the Sensor header styles');
+assert.equal((adminCss.match(/\.switch-bar, \.calendar(?:, \.timer_tile)?\)/g) || []).length, 4, 'the Calendar shares the Sensor header styles');
 for (const rule of ['.tile.calendar > .calendar-preview-body {', '.calendar-preview-grid.month {', '.calendar-preview-dots > i {']) {
   assert.ok(adminCss.includes(rule), rule);
 }

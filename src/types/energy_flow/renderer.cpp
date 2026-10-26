@@ -49,7 +49,7 @@ constexpr uint32_t kSolarColor = 0xFF9800;
 constexpr uint32_t kGridColor = 0x488FC2;        // supplying (grid consumption)
 constexpr uint32_t kGridReturnColor = 0x8353D1;  // taking the feed-in (grid return)
 constexpr uint32_t kBatteryColor = 0xF06292;     // charging (battery in)
-constexpr uint32_t kBatteryOutColor = 0x4DB6AC;  // discharging (battery out)
+constexpr uint32_t kBatteryOutColor = 0x4DB6AC;  // discharging or resting (battery out)
 // The header icon (picture 66): the Energy color of the user's panel.
 constexpr uint32_t kHeaderIconColor = 0xF29C06;
 // Lines without a flow, darker on the light screen than on a white card.
@@ -161,12 +161,12 @@ bool g_any_dirty = false;
 int round_px(float value) { return static_cast<int>(lroundf(value)); }
 
 // A node's color now (the tile's directions, past the idle threshold): the
-// grid purple while it takes the feed-in, else blue; the battery cyan while
-// it discharges, else magenta.
+// grid purple while it takes the feed-in, else blue; the battery magenta
+// while it charges, else cyan (also at rest, user 2026-10-26).
 uint32_t node_color(uint8_t node, const Inputs& in) {
   switch (node) {
     case kNodePv: return kSolarColor;
-    case kNodeBattery: return in.has_battery && in.battery >= kIdleWatts ? kBatteryOutColor : kBatteryColor;
+    case kNodeBattery: return in.has_battery && -in.battery >= kIdleWatts ? kBatteryColor : kBatteryOutColor;
     default: return in.has_grid && -in.grid >= kIdleWatts ? kGridReturnColor : kGridColor;
   }
 }
@@ -1225,7 +1225,7 @@ lv_obj_t* render_energy_flow_tile(lv_obj_t* parent, int col, int row, const Tile
   set_icon(st->node[kNodeHome].icon, "", "home-lightning-bolt");
   color_node(*st, st->node[kNodePv], kSolarColor);
   color_node(*st, st->node[kNodeGrid], kGridColor);
-  color_node(*st, st->node[kNodeBattery], kBatteryColor);
+  color_node(*st, st->node[kNodeBattery], kBatteryOutColor);
 
   // Header (off by default): the tile's icon in a node's disc in the top
   // left corner and the title alone top right (picture 66).

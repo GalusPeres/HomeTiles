@@ -16810,10 +16810,11 @@ function maybeFillTitleFromEnergy(tab) {
     const source = { gridHome: 'grid', pvBattery: 'pv', pvHome: 'pv', pvGrid: 'pv', batHome: 'battery',
       batGrid: flows.gridToBattery ? 'grid' : 'battery' };
     // A node's color now, like the panel (renderer.cpp node_color): the grid
-    // purple while it takes the feed-in, the battery cyan while it discharges.
+    // purple while it takes the feed-in, the battery magenta only while it
+    // charges.
     const colorOf = { pv: ENERGY_FLOW_COLORS.pv,
       grid: input.hasGrid && -input.grid >= ENERGY_FLOW_IDLE_WATTS ? ENERGY_FLOW_COLORS.gridReturn : ENERGY_FLOW_COLORS.grid,
-      battery: input.hasBattery && input.battery >= ENERGY_FLOW_IDLE_WATTS ? ENERGY_FLOW_COLORS.batteryOut : ENERGY_FLOW_COLORS.battery };
+      battery: input.hasBattery && -input.battery >= ENERGY_FLOW_IDLE_WATTS ? ENERGY_FLOW_COLORS.battery : ENERGY_FLOW_COLORS.batteryOut };
     const r = n => Math.round(n);
     let svg = '';
     // Straight pieces and the bend as a true circle arc, like the panel.

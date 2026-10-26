@@ -188,6 +188,12 @@ assert.ok(drawn.includes('<path d="M220 240 A62 62 0 0 1 282 178 L320 178" fill=
 assert.ok(drawn.includes('mdi-battery-70'), 'the battery shows Home Assistant\'s level icon');
 assert.ok(drawn.includes('color:#4DB6AC"></i>') && /mdi-home-lightning-bolt" style="[^"]*color:#4DB6AC/.test(drawn), 'home takes the main source color');
 assert.ok(/mdi-transmission-tower-export" style="[^"]*color:#488FC2/.test(drawn), 'the supplying grid blue');
+// A battery at rest is cyan too, magenta only while it charges (user
+// 2026-10-26).
+const resting = nodeOf();
+context.applyEnergyFlowPreview(resting, {flow_entities: 'sensor.pv\nsensor.grid\nsensor.bat\nsensor.soc', key_code: 0, span_w: 2, span_h: 2},
+  {values: {'sensor.pv': '0', 'sensor.grid': '200', 'sensor.bat': '0', 'sensor.soc': '78'}, units: {}, icons: {'sensor.soc': 'mdi:battery-70'}});
+assert.ok(/mdi-battery-70" style="[^"]*color:#4DB6AC/.test(resting.html), 'resting battery cyan');
 for (const value of ['0 W', '200 W', '700 W', '500 W', '78 %']) assert.ok(drawn.includes('>' + value + '</div>'), value);
 assert.ok(!drawn.includes('Energie'), 'no header by default');
 const headed = nodeOf();
@@ -255,7 +261,7 @@ assert.match(renderer, /st->node\[node\]\.value = create_value\(\*st, font\);\s*
 assert.ok(renderer.includes('make_value_tappable(*st, st->charge, kRoleBatteryCharge, kNodeBattery);'));
 // The panel colors grid and battery by direction like the preview, the
 // mirrored feed-in picture included.
-assert.match(renderer, /case kNodeBattery: return in\.has_battery && in\.battery >= kIdleWatts \? kBatteryOutColor : kBatteryColor;\s*default: return in\.has_grid && -in\.grid >= kIdleWatts \? kGridReturnColor : kGridColor;/);
+assert.match(renderer, /case kNodeBattery: return in\.has_battery && -in\.battery >= kIdleWatts \? kBatteryColor : kBatteryOutColor;\s*default: return in\.has_grid && -in\.grid >= kIdleWatts \? kGridReturnColor : kGridColor;/);
 assert.ok(renderer.includes('color_node(st, st.node[kNodeGrid], node_color(kNodeGrid, in));') &&
   renderer.includes('color_node(st, st.node[kNodeBattery], node_color(kNodeBattery, in));'));
 assert.ok(renderer.includes('lv_obj_set_style_image_recolor(st.grid_feed, lv_color_hex(tone_color::readable_icon(rgb)), 0);') &&

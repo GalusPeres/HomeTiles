@@ -39,7 +39,7 @@ const readoutFunctions = ['get_value_font', 'set_label_text_if_changed', 'numeri
   'sensor_readout_is_latest', 'on_sensor_readout_end', 'refresh_sensor_readout',
   'build_readout_band', 'keep_chart_history', 'attach_chart_readout', 'attach_timeline_readout',
   // The graph's fade, cover, dashed lines and dots (mockup sensor-graph-2).
-  'graph_fade', 'clip_to', 'chart_extremes', 'on_chart_area_draw', 'on_chart_extremes_draw'];
+  'graph_area', 'chart_extremes', 'on_chart_area_draw', 'on_chart_extremes_draw'];
 const cpp = `
 #include <lvgl.h>
 #include "src/ui/popups/popup_first_frame.h"

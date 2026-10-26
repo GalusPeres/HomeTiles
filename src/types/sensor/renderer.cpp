@@ -38,44 +38,88 @@ static lv_area_t sensor_graph_box(const Tile& tile) {
           tile_h - climate_layout::kOuterInset - 1};
 }
 
+// The graph's area as an A8 mask (area_graph::render_mask, in the LVGL
+// heap) and the icon whose color the line takes; owned by the chart and
+// freed with it. The mask is computed again only when the line or the size
+// change.
+struct SensorGraphArea {
+  lv_obj_t* icon = nullptr;
+  uint8_t* mask = nullptr;
+  size_t capacity = 0;
+  int16_t* tops = nullptr;
+  int32_t tops_capacity = 0;
+  lv_image_dsc_t image = {};
+  uint32_t key = 0;
+};
+
 // Before lv_chart draws its line: the line takes the icon's current color
-// and the area below it the circle's. The graph's frame is a resting
-// surface, so tile_icon_source::refresh_controls gives it the control fill
-// like the Switch bar's track; its local transparent background keeps it
-// from filling the box.
+// and the area below it, one recolored image, the circle's. The graph's
+// frame is a resting surface, so tile_icon_source::refresh_controls gives it
+// the control fill like the Switch bar's track; its local transparent
+// background keeps it from filling the box.
 static void sensor_graph_area_cb(lv_event_t* e) {
   lv_obj_t* chart = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
   lv_layer_t* layer = lv_event_get_layer(e);
   lv_chart_series_t* series = chart ? lv_chart_get_series_next(chart, nullptr) : nullptr;
   lv_obj_t* frame = chart ? lv_obj_get_parent(chart) : nullptr;
-  if (!layer || !series || !frame) return;
+  auto* area = static_cast<SensorGraphArea*>(lv_event_get_user_data(e));
+  if (!layer || !series || !frame || !area) return;
   const ui_theme::SurfaceScope surface = tile_surface::scope(chart);
-  auto* icon = static_cast<lv_obj_t*>(lv_event_get_user_data(e));
   // Set while drawing: lv_chart_set_series_color would invalidate.
-  series->color = icon ? lv_obj_get_style_text_color(icon, LV_PART_MAIN) : lv_color_hex(ui_theme::text());
-  lv_area_t coords;
+  series->color = area->icon ? lv_obj_get_style_text_color(area->icon, LV_PART_MAIN) : lv_color_hex(ui_theme::text());
+  lv_area_t coords, content;
   lv_obj_get_coords(chart, &coords);
-  // lv_area_intersect is private in LVGL 9.6.
-  const lv_area_t clip = {std::max(layer->_clip_area.x1, coords.x1), std::max(layer->_clip_area.y1, coords.y1),
-                          std::min(layer->_clip_area.x2, coords.x2), std::min(layer->_clip_area.y2, coords.y2)};
-  if (clip.x1 > clip.x2 || clip.y1 > clip.y2) return;
-  const lv_color_t fill = lv_obj_get_style_bg_color(frame, LV_PART_MAIN);
-  const lv_opa_t opa =
+  lv_obj_get_content_coords(chart, &content);
+  // From the line down to the box's bottom (below the content's padding).
+  const int32_t width = lv_area_get_width(&content), height = coords.y2 - content.y1 + 1;
+  if (width < 2 || height < 2) return;
+  if (width > area->tops_capacity) {
+    lv_free(area->tops);
+    area->tops = static_cast<int16_t*>(lv_malloc(static_cast<size_t>(width) * sizeof(int16_t)));
+    area->tops_capacity = area->tops ? width : 0;
+    if (!area->tops) return;
+  }
+  if (!area_graph::column_tops(chart, series, area->tops, width)) return;
+  const uint32_t key = area_graph::area_key(area->tops, width, height, 0, 0);
+  if (!area->mask || key != area->key) {
+    const size_t bytes = static_cast<size_t>(width) * static_cast<size_t>(height);
+    if (bytes > area->capacity) {
+      if (area->mask) lv_image_cache_drop(&area->image);
+      lv_free(area->mask);
+      area->mask = static_cast<uint8_t*>(lv_malloc(bytes));
+      area->capacity = area->mask ? bytes : 0;
+      if (!area->mask) return;
+    }
+    lv_image_cache_drop(&area->image);
+    area_graph::render_mask(area->mask, static_cast<uint32_t>(width), width, height, area->tops);
+    area->image.header.magic = LV_IMAGE_HEADER_MAGIC;
+    area->image.header.cf = LV_COLOR_FORMAT_A8;
+    area->image.header.w = width;
+    area->image.header.h = height;
+    area->image.header.stride = width;
+    area->image.data = area->mask;
+    area->image.data_size = bytes;
+    area->key = key;
+  }
+  lv_draw_image_dsc_t image;
+  lv_draw_image_dsc_init(&image);
+  image.base.layer = layer;
+  image.src = &area->image;
+  image.recolor = lv_obj_get_style_bg_color(frame, LV_PART_MAIN);
+  image.recolor_opa = LV_OPA_COVER;
+  image.opa =
       tone_color::control_opa(ui_surface_style::icon_glow_percent(), tile_icon_disc::see_through(lv_obj_get_parent(frame)));
-  lv_draw_rect_dsc_t rect;
-  lv_draw_rect_dsc_init(&rect);
-  rect.base.layer = layer;
-  rect.bg_color = fill;
-  rect.bg_opa = opa;
-  rect.border_opa = LV_OPA_TRANSP;
-  lv_draw_triangle_dsc_t triangle;
-  lv_draw_triangle_dsc_init(&triangle);
-  triangle.base.layer = layer;
-  triangle.color = fill;
-  triangle.opa = opa;
-  area_graph::for_each_segment(chart, series, clip, [&](const lv_point_t& a, const lv_point_t& b, bool last) {
-    area_graph::draw_below(layer, a, b, last, coords.y2, rect, triangle);
-  });
+  const lv_area_t at = {content.x1, content.y1, content.x1 + width - 1, content.y1 + height - 1};
+  lv_draw_image(layer, &image, &at);
+}
+
+static void sensor_graph_delete_cb(lv_event_t* e) {
+  auto* area = static_cast<SensorGraphArea*>(lv_event_get_user_data(e));
+  if (!area) return;
+  if (area->mask) lv_image_cache_drop(&area->image);
+  lv_free(area->mask);
+  lv_free(area->tops);
+  delete area;
 }
 
 struct SensorEventData {
@@ -307,8 +351,11 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
 
       // Initialize with LV_CHART_POINT_NONE; history will replace it.
       lv_chart_set_all_value(chart, series, LV_CHART_POINT_NONE);
+      auto* area = new SensorGraphArea();
+      area->icon = icon_lbl;
       lv_obj_add_event_cb(chart, sensor_graph_area_cb,
-                          static_cast<lv_event_code_t>(LV_EVENT_DRAW_MAIN | LV_EVENT_PREPROCESS), icon_lbl);
+                          static_cast<lv_event_code_t>(LV_EVENT_DRAW_MAIN | LV_EVENT_PREPROCESS), area);
+      lv_obj_add_event_cb(chart, sensor_graph_delete_cb, LV_EVENT_DELETE, area);
     }
     // The Switch header: title and value beside the corner disc.
     if (icon_lbl) {

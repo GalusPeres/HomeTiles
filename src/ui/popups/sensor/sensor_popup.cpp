@@ -65,7 +65,6 @@ constexpr int kChartLineWidth = popup_layout::scale(4);
 // icon color at its highest and lowest point.
 constexpr int kChartLinePad = (kChartLineWidth + 1) / 2;
 constexpr int kGraphInset = popup_layout::kHeaderIconX;
-constexpr int kFadeWidth = 8;
 constexpr uint8_t kFadeTopOpa = 102;  // 40 %
 constexpr int kDashLength = popup_layout::scale(8);
 constexpr int kDashWidth = std::max(1, popup_layout::scale(2));
@@ -269,14 +268,15 @@ struct SensorPopupContext {
   int32_t chart_scale = 1;
   uint64_t chart_range_start = 0;
   uint64_t chart_range_end = 0;
-  // The area's fade (area_graph::fill_fade): a strip kFadeWidth pixels wide
-  // and as high as the graph, tiled over it; rebuilt when the icon color,
-  // the card color or the height change.
-  uint8_t* fade_pixels = nullptr;
-  size_t fade_capacity = 0;
-  lv_image_dsc_t fade_image = {};
-  uint32_t fade_color = 0;
-  uint32_t fade_card = 0;
+  // The area's picture (area_graph::render_fade): the graph's size in RGB565
+  // in PSRAM, computed again only when the line, the colors or the size
+  // change (area_graph::area_key); the line's top per column beside it.
+  uint16_t* area_pixels = nullptr;
+  size_t area_capacity = 0;
+  int16_t* area_tops = nullptr;
+  size_t area_tops_capacity = 0;
+  lv_image_dsc_t area_image = {};
+  uint32_t area_key = 0;
   // Fraction digits of the current numeric state; readouts of history points
   // use the header's precision when no fixed decimals are configured.
   int8_t value_fraction_digits = -1;
@@ -3300,9 +3300,11 @@ static void on_overlay_delete(lv_event_t* e) {
   ctx->readout.cancel();
   heap_caps_free(ctx->history_values);
   ctx->history_values = nullptr;
-  if (ctx->fade_pixels) lv_image_cache_drop(&ctx->fade_image);
-  heap_caps_free(ctx->fade_pixels);
-  ctx->fade_pixels = nullptr;
+  if (ctx->area_pixels) lv_image_cache_drop(&ctx->area_image);
+  heap_caps_free(ctx->area_pixels);
+  ctx->area_pixels = nullptr;
+  heap_caps_free(ctx->area_tops);
+  ctx->area_tops = nullptr;
   editable_control_delete(ctx->control); ctx->control = nullptr;
   if (g_sensor_popup_ctx == ctx) {
     g_sensor_first_frame.cancel();
@@ -3344,43 +3346,45 @@ static void on_range_click(lv_event_t* e) {
   request_history_for_context(ctx);
 }
 
-// The fade strip for the current colors and graph height (built on the
-// first draw and after a change; a few KB in PSRAM).
-static const lv_image_dsc_t* graph_fade(SensorPopupContext* ctx, int height, uint32_t color, uint32_t card) {
-  if (height < 2) return nullptr;
-  if (ctx->fade_pixels && ctx->fade_image.header.h == static_cast<uint32_t>(height) && ctx->fade_color == color &&
-      ctx->fade_card == card) {
-    return &ctx->fade_image;
+// The area's picture for the chart's current line, colors and size, or null
+// without a line (or memory).
+static const lv_image_dsc_t* graph_area(SensorPopupContext* ctx, int32_t width, int32_t height, uint32_t color,
+                                        uint32_t card) {
+  if (width < 2 || height < 2) return nullptr;
+  if (static_cast<size_t>(width) > ctx->area_tops_capacity) {
+    heap_caps_free(ctx->area_tops);
+    ctx->area_tops = static_cast<int16_t*>(
+        heap_caps_malloc(static_cast<size_t>(width) * sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    ctx->area_tops_capacity = ctx->area_tops ? static_cast<size_t>(width) : 0;
+    if (!ctx->area_tops) return nullptr;
   }
-  const uint32_t stride = lv_draw_buf_width_to_stride(kFadeWidth, LV_COLOR_FORMAT_ARGB8888);
+  if (!area_graph::column_tops(ctx->chart, ctx->series, ctx->area_tops, width)) return nullptr;
+  const uint32_t key = area_graph::area_key(ctx->area_tops, width, height, color, card);
+  if (ctx->area_pixels && key == ctx->area_key) return &ctx->area_image;
+  const uint32_t stride = lv_draw_buf_width_to_stride(width, LV_COLOR_FORMAT_RGB565);
   const size_t bytes = static_cast<size_t>(stride) * static_cast<size_t>(height);
-  if (bytes > ctx->fade_capacity) {
-    if (ctx->fade_pixels) lv_image_cache_drop(&ctx->fade_image);
-    heap_caps_free(ctx->fade_pixels);
-    ctx->fade_pixels = static_cast<uint8_t*>(heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-    if (!ctx->fade_pixels) {
-      ctx->fade_pixels = static_cast<uint8_t*>(heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+  if (bytes > ctx->area_capacity) {
+    if (ctx->area_pixels) lv_image_cache_drop(&ctx->area_image);
+    heap_caps_free(ctx->area_pixels);
+    ctx->area_pixels = static_cast<uint16_t*>(heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    ctx->area_capacity = ctx->area_pixels ? bytes : 0;
+    if (!ctx->area_pixels) {
+      Serial.printf("[SensorPopup] Graph area picture: %u bytes unavailable\n", static_cast<unsigned>(bytes));
+      return nullptr;
     }
-    ctx->fade_capacity = ctx->fade_pixels ? bytes : 0;
-    if (!ctx->fade_pixels) return nullptr;
   }
-  lv_image_cache_drop(&ctx->fade_image);
-  area_graph::fill_fade(ctx->fade_pixels, stride, kFadeWidth, height, color, card, kFadeTopOpa);
-  ctx->fade_image.header.magic = LV_IMAGE_HEADER_MAGIC;
-  ctx->fade_image.header.cf = LV_COLOR_FORMAT_ARGB8888;
-  ctx->fade_image.header.w = kFadeWidth;
-  ctx->fade_image.header.h = height;
-  ctx->fade_image.header.stride = stride;
-  ctx->fade_image.data = ctx->fade_pixels;
-  ctx->fade_image.data_size = bytes;
-  ctx->fade_color = color;
-  ctx->fade_card = card;
-  return &ctx->fade_image;
-}
-
-static bool clip_to(const lv_area_t& a, const lv_area_t& b, lv_area_t& out) {
-  out = {std::max(a.x1, b.x1), std::max(a.y1, b.y1), std::min(a.x2, b.x2), std::min(a.y2, b.y2)};
-  return out.x1 <= out.x2 && out.y1 <= out.y2;
+  lv_image_cache_drop(&ctx->area_image);
+  area_graph::render_fade(ctx->area_pixels, stride / sizeof(uint16_t), width, height, ctx->area_tops, color, card,
+                          kFadeTopOpa);
+  ctx->area_image.header.magic = LV_IMAGE_HEADER_MAGIC;
+  ctx->area_image.header.cf = LV_COLOR_FORMAT_RGB565;
+  ctx->area_image.header.w = width;
+  ctx->area_image.header.h = height;
+  ctx->area_image.header.stride = stride;
+  ctx->area_image.data = reinterpret_cast<const uint8_t*>(ctx->area_pixels);
+  ctx->area_image.data_size = bytes;
+  ctx->area_key = key;
+  return &ctx->area_image;
 }
 
 // Indices of the series' highest and lowest point (the first of equals);
@@ -3403,10 +3407,10 @@ static bool chart_extremes(const SensorPopupContext* ctx, uint32_t& high, uint32
 }
 
 // Before lv_chart draws its line (mockup sensor-graph-2, issue #131): the
-// line in the header icon's color; below it the icon color fading from 40 %
-// at the top of the graph to nothing at its bottom, one dithered strip tiled
-// under every run of the line with the card's color covering what lies
-// above the line; the dashed lines at the maximum and the minimum.
+// line in the header icon's color; the area's picture (below the line the
+// icon color fading from 40 % at the top of the graph to nothing at its
+// bottom, the card above it) as one image; the dashed lines at the maximum
+// and the minimum.
 static void on_chart_area_draw(lv_event_t* event) {
   const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
   auto* ctx = static_cast<SensorPopupContext*>(lv_event_get_user_data(event));
@@ -3420,65 +3424,18 @@ static void on_chart_area_draw(lv_event_t* event) {
   if (!chart_extremes(ctx, high, low)) return;
   lv_area_t content;
   lv_obj_get_content_coords(ctx->chart, &content);
-  const lv_area_t clip_ori = layer->_clip_area;
-  lv_area_t clip;
-  if (!clip_to(clip_ori, content, clip)) return;
+  // lv_chart maps the minimum one row below the content (y_ofs + h): the
+  // picture reaches it.
+  const int32_t width = lv_area_get_width(&content), height = lv_area_get_height(&content) + 1;
   const lv_color_t card = lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN);
-  const lv_image_dsc_t* fade = graph_fade(ctx, lv_area_get_height(&content), lv_color_to_u32(color) & 0xFFFFFF,
-                                          lv_color_to_u32(card) & 0xFFFFFF);
-  if (fade) {
+  if (const lv_image_dsc_t* area = graph_area(ctx, width, height, lv_color_to_u32(color) & 0xFFFFFF,
+                                              lv_color_to_u32(card) & 0xFFFFFF)) {
     lv_draw_image_dsc_t image;
     lv_draw_image_dsc_init(&image);
     image.base.layer = layer;
-    image.src = fade;
-    image.tile = 1;
-    // The pattern starts at the graph's left edge in every run.
-    image.image_area = {content.x1, content.y1, content.x1 + kFadeWidth - 1, content.y2};
-    const uint32_t count = lv_chart_get_point_count(ctx->chart);
-    const int32_t* values = lv_chart_get_series_y_array(ctx->chart, ctx->series);
-    lv_area_t coords;
-    lv_obj_get_coords(ctx->chart, &coords);
-    // Each run of points without a gap.
-    int32_t run_start = -1;
-    int32_t run_end = -1;
-    auto draw_run = [&]() {
-      lv_area_t run = {run_start, content.y1, run_end, content.y2};
-      lv_area_t run_clip;
-      if (run_end > run_start && clip_to(clip, run, run_clip)) {
-        layer->_clip_area = run_clip;
-        lv_draw_image(layer, &image, &run);
-        layer->_clip_area = clip_ori;
-      }
-      run_start = run_end = -1;
-    };
-    for (uint32_t i = 0; i < count; ++i) {
-      if (values[i] == LV_CHART_POINT_NONE) {
-        if (run_start >= 0) draw_run();
-        continue;
-      }
-      lv_point_t point;
-      lv_chart_get_point_pos_by_id(ctx->chart, ctx->series, i, &point);
-      if (run_start < 0) run_start = coords.x1 + point.x;
-      run_end = coords.x1 + point.x;
-    }
-    if (run_start >= 0) draw_run();
-
-    lv_draw_rect_dsc_t rect;
-    lv_draw_rect_dsc_init(&rect);
-    rect.base.layer = layer;
-    rect.bg_color = card;
-    rect.bg_opa = LV_OPA_COVER;
-    rect.border_opa = LV_OPA_TRANSP;
-    lv_draw_triangle_dsc_t triangle;
-    lv_draw_triangle_dsc_init(&triangle);
-    triangle.base.layer = layer;
-    triangle.color = card;
-    triangle.opa = LV_OPA_COVER;
-    layer->_clip_area = clip;
-    area_graph::for_each_segment(ctx->chart, ctx->series, clip, [&](const lv_point_t& a, const lv_point_t& b, bool) {
-      area_graph::draw_above(layer, a, b, content.y1, rect, triangle);
-    });
-    layer->_clip_area = clip_ori;
+    image.src = area;
+    const lv_area_t at = {content.x1, content.y1, content.x1 + width - 1, content.y1 + height - 1};
+    lv_draw_image(layer, &image, &at);
   }
 
   lv_draw_line_dsc_t dash;

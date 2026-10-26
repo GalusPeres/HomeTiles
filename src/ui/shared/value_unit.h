@@ -28,6 +28,8 @@ void show(lv_obj_t* value_label, lv_obj_t*& unit_label, const char* value, const
 // label's text as drawn now.
 bool reserve(lv_obj_t* value_label, lv_obj_t*& unit_label, const char* unit);
 void place(lv_obj_t* value_label, lv_obj_t* unit_label);
+// place() for a value label's tagged unit (after its width changed).
+void place(lv_obj_t* value_label);
 
 // The panel's text font sizes a unit takes, ascending (the Web Admin
 // preview picks the same step, sensor web_scripts.cpp).

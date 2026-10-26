@@ -61,6 +61,16 @@ has('src/ui/popups/sensor/sensor_popup.cpp', 'value_unit::show(ctx->value_label,
   'show_header_value(ctx, editable_display_number(value), editable_display_unit(value));',
   'value_unit::reserve(ctx->readout_value_label, ctx->readout_unit_label, isfinite(value) ? ctx->unit.c_str() : "");',
   'value_unit::reserve(ctx->readout_value_label, ctx->readout_unit_label, "");');
+// One count of decimals in the sensor popup (user 2026-10-26: header 0,
+// readout 2, axis 1): readout and axis take popup_digits, live values keep
+// the decimals the popup opened with; the axis shows its unit the same way
+// and counts its room.
+has('src/ui/popups/sensor/sensor_popup.cpp', 'static uint8_t popup_digits(const SensorPopupContext* ctx, float value) {',
+  'const uint8_t digits = popup_digits(ctx, value);',
+  'value_unit::show(ctx->y_max_label, i18n::format_number(language, max_v, popup_digits(ctx, max_v)), ctx->unit);',
+  'size.x += lv_obj_get_style_pad_right(label, LV_PART_MAIN);', 'value_unit::place(ctx->y_max_label);');
+assert.ok(!read('src/ui/popups/sensor/sensor_popup.cpp').includes('g_sensor_popup_ctx->decimals = g_pending_value.decimals;'),
+  'a live value of another tile does not change the decimals');
 assert.doesNotMatch(read('src/ui/popups/sensor/sensor_popup.cpp'), /lv_label_set_text\(\s*ctx->value_label,\s*i18n/,
   'no direct writes to the header holder');
 has('src/ui/popups/energy/energy_popup.cpp',

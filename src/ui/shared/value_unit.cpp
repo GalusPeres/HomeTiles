@@ -86,6 +86,15 @@ void set_text(lv_obj_t* label, const char* text) {
   if (!shown || strcmp(shown, text) != 0) lv_label_set_text(label, text);
 }
 
+// A fixed-width label's width, without a screen-wide layout pass for a plain
+// pixel width (the popups avoid those); a percentage needs the layout.
+int32_t fixed_width(lv_obj_t* label) {
+  const int32_t width = lv_obj_get_style_width(label, LV_PART_MAIN);
+  if (!LV_COORD_IS_PCT(width)) return width;
+  lv_obj_update_layout(label);
+  return lv_obj_get_width(label);
+}
+
 void set_room(lv_obj_t* label, int32_t room) {
   if (lv_obj_get_style_pad_right(label, LV_PART_MAIN) != room) lv_obj_set_style_pad_right(label, room, 0);
 }
@@ -146,8 +155,8 @@ void place(lv_obj_t* value_label, lv_obj_t* unit_label) {
   if (lv_obj_get_style_width(value_label, LV_PART_MAIN) != LV_SIZE_CONTENT) {
     // A fixed width: the text keeps the unit's room on its right, so its
     // alignment places the pair.
-    lv_obj_update_layout(value_label);
-    const int32_t inner = lv_obj_get_content_width(value_label);
+    const int32_t inner = fixed_width(value_label) - lv_obj_get_style_pad_left(value_label, LV_PART_MAIN) -
+                          lv_obj_get_style_pad_right(value_label, LV_PART_MAIN);
     const lv_text_align_t align = lv_obj_get_style_text_align(value_label, LV_PART_MAIN);
     if (align == LV_TEXT_ALIGN_CENTER) x = (inner - value_w) / 2 + value_w + gap;
     else if (align == LV_TEXT_ALIGN_RIGHT) x = inner + gap;
@@ -162,8 +171,7 @@ void show(lv_obj_t* value_label, lv_obj_t*& unit_label, const char* value, const
   bool split = unit[0] != 0;
   if (split && lv_obj_get_style_width(value_label, LV_PART_MAIN) != LV_SIZE_CONTENT) {
     // Too wide for its label: one text, as before.
-    lv_obj_update_layout(value_label);
-    const int32_t width = lv_obj_get_width(value_label) - lv_obj_get_style_pad_left(value_label, LV_PART_MAIN);
+    const int32_t width = fixed_width(value_label) - lv_obj_get_style_pad_left(value_label, LV_PART_MAIN);
     const int32_t value_w =
         text_width(value, font_of(value_label), lv_obj_get_style_text_letter_space(value_label, LV_PART_MAIN));
     split = value_w + room_for(value_label, unit) <= width;
@@ -188,6 +196,8 @@ const char* unit_text(lv_obj_t* value_label) {
   if (!unit || lv_obj_has_flag(unit, LV_OBJ_FLAG_HIDDEN)) return "";
   return lv_label_get_text(unit);
 }
+
+void place(lv_obj_t* value_label) { place(value_label, unit_child(value_label)); }
 
 void show(lv_obj_t* value_label, const char* value, const char* unit) {
   lv_obj_t* unit_label = unit_child(value_label);

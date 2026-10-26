@@ -32,7 +32,7 @@ const layout = read('src/ui/popups/popup_layout.h');
 const geometry = layout.slice(layout.indexOf('namespace popup_layout {'), layout.indexOf('// Standard popup close button.')) + '}';
 const chartBuild = popup.slice(popup.indexOf('  // Chart wrapper: Y-axis labels'), popup.indexOf('  lv_obj_move_foreground(ctx->icon_label);'));
 const rangeBuild = popup.slice(popup.indexOf('  lv_obj_t* range_row = lv_obj_create(card);'), popup.indexOf('  set_range_buttons_visible(ctx, false);', popup.indexOf('  lv_obj_t* range_row = lv_obj_create(card);')));
-const readoutFunctions = ['get_value_font', 'set_label_text_if_changed', 'numeric_fraction_digits', 'apply_decimals',
+const readoutFunctions = ['get_value_font', 'set_label_text_if_changed', 'numeric_fraction_digits', 'popup_digits', 'apply_decimals',
   'sensor_value_display', 'readout_target', 'invalidate_readout_cursor', 'on_readout_cursor_draw', 'show_readout_band',
   'clear_sensor_readout', 'move_readout_cursor', 'append_readout_time', 'binary_state_identifier_text', 'write_state_history_label',
   'apply_chart_readout', 'apply_timeline_readout', 'on_sensor_readout_apply', 'sensor_readout_graph',

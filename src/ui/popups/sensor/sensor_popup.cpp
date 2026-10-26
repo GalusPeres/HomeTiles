@@ -393,6 +393,17 @@ static int8_t numeric_fraction_digits(const String& value) {
   return fraction > 3 ? 3 : fraction;
 }
 
+// One count of decimals for the header, the readout and the axis (user
+// 2026-10-26: they showed 0, 2 and 1): the opening tile's setting, else the
+// digits Home Assistant sends with the state (the header shows it as sent),
+// else a whole number or one decimal.
+static uint8_t popup_digits(const SensorPopupContext* ctx, float value) {
+  const uint8_t decimals = ctx->editable ? 0xFF : ctx->decimals;
+  if (decimals != 0xFF && decimals <= 6) return decimals;
+  if (ctx->value_fraction_digits >= 0) return static_cast<uint8_t>(ctx->value_fraction_digits);
+  return fabsf(value - roundf(value)) < 0.05f ? 0 : 1;
+}
+
 // The shared popup header shows this hidden label's text as the current value.
 // The tile's per-tile icon colors (tile_icon_colors.h) color the header icon
 // like the tile icon: the color bar or state colors for the current state,
@@ -679,6 +690,8 @@ static lv_coord_t measure_label_text_width(lv_obj_t* label) {
                    lv_obj_get_style_text_letter_space(label, LV_PART_MAIN),
                    lv_obj_get_style_text_line_space(label, LV_PART_MAIN),
                    LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  // A unit after the text (value_unit.h) keeps its room on the right.
+  size.x += lv_obj_get_style_pad_right(label, LV_PART_MAIN);
   return size.x + lv_obj_get_style_pad_left(label, LV_PART_MAIN) +
          lv_obj_get_style_pad_right(label, LV_PART_MAIN);
 }
@@ -880,9 +893,11 @@ static void update_y_axis_layout(SensorPopupContext* ctx) {
   // Reposition labels; their width must fit the full text.
   if (ctx->y_max_label) {
     lv_obj_set_width(ctx->y_max_label, label_w);
+    value_unit::place(ctx->y_max_label);
   }
   if (ctx->y_min_label) {
     lv_obj_set_width(ctx->y_min_label, label_w);
+    value_unit::place(ctx->y_min_label);
   }
 
   // Chart drawing starts directly after label area
@@ -983,8 +998,8 @@ static void clear_chart(SensorPopupContext* ctx, uint16_t points) {
   if (ctx->readout_kind == kReadoutChart) clear_sensor_readout(ctx);
   lv_chart_set_point_count(ctx->chart, points);
   lv_chart_set_all_value(ctx->chart, ctx->series, LV_CHART_POINT_NONE);
-  if (ctx->y_max_label) lv_label_set_text(ctx->y_max_label, "");
-  if (ctx->y_min_label) lv_label_set_text(ctx->y_min_label, "");
+  if (ctx->y_max_label) value_unit::show(ctx->y_max_label, "", "");
+  if (ctx->y_min_label) value_unit::show(ctx->y_min_label, "", "");
   if (ctx->y_max_line) lv_obj_add_flag(ctx->y_max_line, LV_OBJ_FLAG_HIDDEN);
   if (ctx->y_min_line) lv_obj_add_flag(ctx->y_min_line, LV_OBJ_FLAG_HIDDEN);
   for (int i = 0; i < kTimeAxisMarkerCount; ++i) {
@@ -2001,11 +2016,7 @@ static void apply_chart_readout(SensorPopupContext* ctx, const lv_point_t& point
           ? ctx->history_values[found]
           : static_cast<float>(values[found]) / static_cast<float>(ctx->chart_scale);
   // Editors show the raw state; Sensors may use configured decimals.
-  const uint8_t decimals = ctx->editable ? 0xFF : ctx->decimals;
-  const uint8_t digits = decimals != 0xFF ? decimals
-                         : ctx->value_fraction_digits >= 0
-                             ? static_cast<uint8_t>(ctx->value_fraction_digits)
-                             : (fabsf(value - roundf(value)) < 0.05f ? 0 : 1);
+  const uint8_t digits = popup_digits(ctx, value);
   // The number in the static buffer (no allocation while dragging), its
   // unit a step smaller after it (value_unit.h, user 2026-10-26).
   popup_graph_readout::format_number(ctx->readout_value_text,
@@ -3166,37 +3177,26 @@ static void apply_history_payload(SensorPopupContext* ctx, const char* payload) 
   }
   const uint32_t chart_ready_ms = millis();
 
-  // Update Y-axis labels with min/max values
+  // Update Y-axis labels with min/max values: the popup's decimals
+  // (popup_digits) and the unit a step smaller after them (value_unit.h);
+  // sized to their text first, update_y_axis_layout fixes their width.
   if (has_range) {
-    auto format_y = [](float val, uint8_t decimals) -> String {
-      if (decimals != 0xFF && decimals <= 6) {
-        return i18n::format_number(
-            configManager.getConfig().language, val, decimals);
-      }
-      // Auto: use integer if close to whole number, else 1 decimal
-      if (fabsf(val - roundf(val)) < 0.05f) {
-        return i18n::format_number(
-            configManager.getConfig().language, val, 0);
-      }
-      return i18n::format_number(
-          configManager.getConfig().language, val, 1);
-    };
-    String unit_suffix = "";
-    if (ctx->unit.length()) {
-      unit_suffix = " " + ctx->unit;
+    const char* language = configManager.getConfig().language;
+    for (lv_obj_t* label : {ctx->y_max_label, ctx->y_min_label}) {
+      if (label) lv_obj_set_width(label, LV_SIZE_CONTENT);
     }
     if (ctx->y_max_label) {
-      lv_label_set_text(ctx->y_max_label, (format_y(max_v, ctx->decimals) + unit_suffix).c_str());
+      value_unit::show(ctx->y_max_label, i18n::format_number(language, max_v, popup_digits(ctx, max_v)), ctx->unit);
     }
     if (ctx->y_min_label) {
-      lv_label_set_text(ctx->y_min_label, (format_y(min_v, ctx->decimals) + unit_suffix).c_str());
+      value_unit::show(ctx->y_min_label, i18n::format_number(language, min_v, popup_digits(ctx, min_v)), ctx->unit);
     }
     update_y_axis_layout(ctx);
     if (ctx->y_max_line) lv_obj_clear_flag(ctx->y_max_line, LV_OBJ_FLAG_HIDDEN);
     if (ctx->y_min_line) lv_obj_clear_flag(ctx->y_min_line, LV_OBJ_FLAG_HIDDEN);
   } else {
-    if (ctx->y_max_label) lv_label_set_text(ctx->y_max_label, "");
-    if (ctx->y_min_label) lv_label_set_text(ctx->y_min_label, "");
+    if (ctx->y_max_label) value_unit::show(ctx->y_max_label, "", "");
+    if (ctx->y_min_label) value_unit::show(ctx->y_min_label, "", "");
     if (ctx->y_max_line) lv_obj_add_flag(ctx->y_max_line, LV_OBJ_FLAG_HIDDEN);
     if (ctx->y_min_line) lv_obj_add_flag(ctx->y_min_line, LV_OBJ_FLAG_HIDDEN);
     // No valid range: hide the time axis too.
@@ -3878,7 +3878,6 @@ void process_sensor_popup_queue() {
         g_sensor_popup_ctx->entity_id.equalsIgnoreCase(g_pending_value.entity_id) &&
         is_popup_visible(g_sensor_popup_ctx)) {
       const String previous_value = g_sensor_popup_ctx->state_history_value;
-      g_sensor_popup_ctx->decimals = g_pending_value.decimals;
       String live_unit = g_sensor_popup_ctx->lock_unit ? g_sensor_popup_ctx->unit : g_pending_value.unit;
       update_value_label(g_sensor_popup_ctx, g_pending_value.value, live_unit);
       if (g_sensor_popup_ctx->state_history_mode) {

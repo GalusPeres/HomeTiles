@@ -79,7 +79,7 @@ struct Tile{String title="Weather",sensor_entity="weather.home",icon_name="weath
 // No temperature/humidity sensors here (test-weather-sensor-overrides.mjs).
 namespace weather_sensors { inline uint32_t mix_hash(const String&,const String&,uint32_t h){return h;} inline void apply_temperature(const String&,const String&,float&,bool&){} inline void append_humidity(const String&,String&){} }
 ${read('src/tiles/config/tile_config.h').match(/static constexpr uint8_t SENSOR_VALUE_FONT_MAX = \d+;/)[0]}
-namespace tile_icon_source { inline lv_obj_t* card_icon(lv_obj_t*) { return nullptr; } inline void refresh_card(lv_obj_t*, const Tile&) {} inline uint32_t popup_background(lv_obj_t*, uint32_t fallback) { return fallback; } }
+namespace tile_icon_source { inline lv_obj_t* card_icon(lv_obj_t*) { return nullptr; } inline void refresh_card(lv_obj_t*, const Tile&) {} inline uint32_t popup_background(lv_obj_t*, uint32_t fallback) { return fallback; } inline void refresh_controls(lv_obj_t*) {} }
 constexpr int TILE_POPUP_OPEN_SHORT_PRESS=1;
 int getTilePopupOpenMode(const Tile&t){return t.popup_open_mode;}
 struct Logger{void println(const char*){}}Serial;
@@ -128,6 +128,9 @@ bool tileTypeIsEditableValue(int){return false;}
 struct EditableValue{String state,unit,kind;};EditableValue parse_editable_value(const String&){return {};}
 bool sensor_popup_should_use_state_history(const String&,const String&){return false;}
 void show_sensor_popup(const SensorPopupInit&){++sensor_opens;}void request_tile_graph_history(const char*){}
+// The graph tile's header and area (types/sensor/renderer.cpp).
+${strip(read('src/tiles/runtime/tile_header.h'))}
+${strip(read('src/ui/shared/area_graph.h'))}
 ${strip(read('src/types/sensor/renderer.cpp')).replace('render_sensor_tile(', 'render_sensor_tile_content(')}
 lv_obj_t* render_sensor_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint8_t index, GridType grid_type) {
  auto* card = render_sensor_tile_content(parent,col,row,tile,index,grid_type);

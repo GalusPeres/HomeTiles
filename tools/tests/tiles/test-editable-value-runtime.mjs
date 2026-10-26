@@ -75,7 +75,7 @@ void lv_obj_update_layout(Obj*){} void lv_obj_add_flag(Obj*o,unsigned f){o->flag
 // ESP32's int32_t is long, unlike the host's int32_t. Match the firmware
 // signature here so mixed-type template arguments fail before a full build.
 void lv_obj_remove_flag(Obj*o,unsigned f){o->flags&=~f;} long lv_font_get_line_height(const int*h){return *h;}
-constexpr int kChartHeight=popup_layout::contentScale(325),kTimeAxisMarkerCount=8;
+constexpr int kChartHeight=popup_layout::contentScale(325),kTimeAxisMarkerCount=8,kChartLinePad=(popup_layout::scale(4)+1)/2;
 #if defined(DEVICE_LAYOUT_480X480)
 constexpr int kContentLiftY=6,kBinaryTimelineHeight=22,kBinaryActivityRowHeight=42,kTimeAxisHeight=20;
 #elif defined(DEVICE_LAYOUT_1024X600)

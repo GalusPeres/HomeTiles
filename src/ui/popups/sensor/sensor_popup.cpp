@@ -37,8 +37,10 @@
 #include <string.h>
 #include <time.h>
 #include <vector>
+#include "src/ui/shared/area_graph.h"
 #include "src/ui/shared/ui_theme.h"
 #include "src/ui/shared/value_unit.h"
+#include <lvgl_private.h>
 
 namespace {
 
@@ -55,6 +57,21 @@ constexpr int kTimeAxisHeight = popup_layout::scale(20);  // space for time labe
 #endif
 constexpr int kTimeAxisMarkerCount = 8;
 constexpr int kChartLineWidth = popup_layout::scale(4);
+// The numeric graph (mockup build/design-mockups/sensor-graph-2, issue
+// #131): the line in the header icon's color, rounded but cut flush at both
+// ends by the chart's bounds, with room above the maximum and below the
+// minimum (kChartLinePad); below it the icon color fading from 40 % to
+// nothing; dashed lines at the day's maximum and minimum; filled dots in the
+// icon color at its highest and lowest point.
+constexpr int kChartLinePad = (kChartLineWidth + 1) / 2;
+constexpr int kGraphInset = popup_layout::kHeaderIconX;
+constexpr int kFadeWidth = 8;
+constexpr uint8_t kFadeTopOpa = 102;  // 40 %
+constexpr int kDashLength = popup_layout::scale(8);
+constexpr int kDashWidth = std::max(1, popup_layout::scale(2));
+constexpr lv_opa_t kDashOpa = 89;  // 35 %
+constexpr int kExtremeDotSize = popup_layout::scale(16);
+constexpr int kExtremeDotRing = std::max(1, popup_layout::scale(2));
 constexpr uint16_t kHistoryHours24h = 24;
 constexpr uint16_t kHistoryPeriodMinutes24h = 5;
 constexpr uint16_t kHistoryPoints24h = 288;
@@ -164,10 +181,7 @@ struct SensorPopupContext {
   lv_chart_series_t* series = nullptr;
   lv_obj_t* y_max_label = nullptr;
   lv_obj_t* y_min_label = nullptr;
-  lv_obj_t* y_max_line = nullptr;
-  lv_obj_t* y_min_line = nullptr;
   lv_obj_t* time_labels[kTimeAxisMarkerCount] = {};
-  lv_obj_t* time_lines[kTimeAxisMarkerCount] = {};
   lv_obj_t* chart_wrap = nullptr;
   uint16_t point_count = kHistoryPoints24h;
   bool binary_mode = false;
@@ -255,6 +269,14 @@ struct SensorPopupContext {
   int32_t chart_scale = 1;
   uint64_t chart_range_start = 0;
   uint64_t chart_range_end = 0;
+  // The area's fade (area_graph::fill_fade): a strip kFadeWidth pixels wide
+  // and as high as the graph, tiled over it; rebuilt when the icon color,
+  // the card color or the height change.
+  uint8_t* fade_pixels = nullptr;
+  size_t fade_capacity = 0;
+  lv_image_dsc_t fade_image = {};
+  uint32_t fade_color = 0;
+  uint32_t fade_card = 0;
   // Fraction digits of the current numeric state; readouts of history points
   // use the header's precision when no fixed decimals are configured.
   int8_t value_fraction_digits = -1;
@@ -436,6 +458,8 @@ static void apply_popup_icon_color(SensorPopupContext* ctx, bool known, const ch
     // follows the icon.
     update_range_buttons(ctx);
     editable_control_follow_colors(ctx->control);
+    // The graph's line, fade and dots take the icon's color.
+    if (ctx->chart_wrap) lv_obj_invalidate(ctx->chart_wrap);
   }
 }
 
@@ -690,8 +714,9 @@ static lv_coord_t measure_label_text_width(lv_obj_t* label) {
                    lv_obj_get_style_text_letter_space(label, LV_PART_MAIN),
                    lv_obj_get_style_text_line_space(label, LV_PART_MAIN),
                    LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-  // A unit after the text (value_unit.h) keeps its room on the right.
-  size.x += lv_obj_get_style_pad_right(label, LV_PART_MAIN);
+  // A unit after the text (value_unit.h) keeps its room on the right as the
+  // label's right padding: counted once (twice left a gap of the unit's
+  // width before the graph once the labels were left-aligned).
   return size.x + lv_obj_get_style_pad_left(label, LV_PART_MAIN) +
          lv_obj_get_style_pad_right(label, LV_PART_MAIN);
 }
@@ -838,28 +863,6 @@ static int calc_day7_label_axis(String out_labels[], float out_frac[], int max_m
   return count;
 }
 
-static int calc_day7_boundary_axis(float out_frac[], int max_markers) {
-  time_t now_local = 0;
-  time_t range_start = 0;
-  struct tm today_midnight_tm;
-  if (!get_day7_axis_base(now_local, range_start, today_midnight_tm)) return 0;
-
-  const float span = static_cast<float>(now_local - range_start);
-  if (span <= 0.0f) return 0;
-
-  int count = 0;
-  time_t boundary = next_local_midnight_after(range_start);
-  while (boundary < now_local && count < max_markers) {
-    if (boundary > range_start) {
-      out_frac[count] = static_cast<float>(boundary - range_start) / span;
-      ++count;
-    }
-    boundary = next_local_midnight_after(boundary);
-  }
-
-  return count;
-}
-
 // Calculate time axis marker positions and labels.
 static int calc_time_axis(const SensorPopupContext* ctx, String out_labels[], float out_frac[], int max_markers) {
   if (!ctx || max_markers < 1) return 0;
@@ -875,10 +878,8 @@ static int calc_time_axis(const SensorPopupContext* ctx, String out_labels[], fl
 // Measures max/min labels, repositions guide lines and chart padding.
 static void update_y_axis_layout(SensorPopupContext* ctx) {
   if (!ctx || !ctx->chart || !ctx->chart_wrap) return;
-  constexpr int kLineOverlap = 6;
-  constexpr int kLabelGap = 16;   // gap between label right edge and guide line start
+  constexpr int kLabelGap = 16;   // gap between label right edge and the graph
   constexpr int kMinAxisW = 10;   // minimum width even if labels empty
-  constexpr int kTimeAxisEdgeGap = 6;
   const int kAvailW = kCardWidth - (kCardPad * 2);
 
   // Measure actual rendered text widths
@@ -890,90 +891,60 @@ static void update_y_axis_layout(SensorPopupContext* ctx) {
   int label_w = text_w + 2;  // text width + small safety margin
   int axis_w = label_w + kLabelGap;  // label + visible gap before lines
 
+  // The labels and the graph keep the header circle's distance from the
+  // card's sides (mockup sensor-graph-2): kGraphInset on the left and right.
   // Reposition labels; their width must fit the full text.
   if (ctx->y_max_label) {
     lv_obj_set_width(ctx->y_max_label, label_w);
+    lv_obj_set_x(ctx->y_max_label, kGraphInset);
     value_unit::place(ctx->y_max_label);
   }
   if (ctx->y_min_label) {
     lv_obj_set_width(ctx->y_min_label, label_w);
+    lv_obj_set_x(ctx->y_min_label, kGraphInset);
     value_unit::place(ctx->y_min_label);
   }
 
   // Chart drawing starts directly after label area
-  int chart_left = axis_w;
+  int chart_left = kGraphInset + axis_w;
+  const int chart_right = kAvailW - kGraphInset;
 
-  // Prepare time axis labels first so we can reserve enough room on the right.
+  // The chart object spans exactly the graph, so the line's round caps end
+  // flush with it.
+  lv_obj_set_x(ctx->chart, chart_left);
+  lv_obj_set_width(ctx->chart, std::max(10, chart_right - chart_left));
+  lv_obj_set_style_pad_left(ctx->chart, 0, 0);
+  lv_obj_set_style_pad_right(ctx->chart, 0, 0);
+
   constexpr int kLabelOverhang = 12;
 
   String labels[kTimeAxisMarkerCount];
   float fracs[kTimeAxisMarkerCount];
   int n = calc_time_axis(ctx, labels, fracs, kTimeAxisMarkerCount);
-  lv_coord_t max_time_label_w = 0;
   lv_coord_t time_label_widths[kTimeAxisMarkerCount] = {};
 
   for (int i = 0; i < kTimeAxisMarkerCount; ++i) {
     if (i < n && ctx->time_labels[i]) {
       lv_label_set_text(ctx->time_labels[i], labels[i].c_str());
-      lv_coord_t lbl_w = measure_label_text_width(ctx->time_labels[i]);
-      time_label_widths[i] = lbl_w;
-      if (lbl_w > max_time_label_w) max_time_label_w = lbl_w;
+      time_label_widths[i] = measure_label_text_width(ctx->time_labels[i]);
     }
   }
 
-  int chart_right_reserve = (max_time_label_w > 0) ? (max_time_label_w / 2 + kTimeAxisEdgeGap) : 0;
-
-  // Reposition guide lines (keep Y unchanged, only adjust X and width)
-  int line_start = axis_w - kLineOverlap;
-  int line_w = kAvailW - line_start - chart_right_reserve;
-  if (line_w < 10) line_w = 10;
-  if (ctx->y_max_line) {
-    lv_obj_set_width(ctx->y_max_line, line_w);
-    lv_obj_set_x(ctx->y_max_line, line_start);
-  }
-  if (ctx->y_min_line) {
-    lv_obj_set_width(ctx->y_min_line, line_w);
-    lv_obj_set_x(ctx->y_min_line, line_start);
-  }
-
-  // Adjust chart padding so the graph itself ends slightly earlier on the right.
-  lv_obj_set_style_pad_left(ctx->chart, chart_left, 0);
-  lv_obj_set_style_pad_right(ctx->chart, chart_right_reserve, 0);
-
-  // Reposition time axis markers based on the reduced chart area.
-  int chart_draw_w = kAvailW - chart_left - chart_right_reserve;
+  // Time labels along the graph, the last one kept inside the card (clamped
+  // below). No vertical lines: the readout cursor shows the time; the dashed
+  // max/min lines are drawn with the graph (on_chart_area_draw).
+  int chart_draw_w = chart_right - chart_left;
   if (chart_draw_w < 10) return;
-
-  const bool is_week_range = ctx->history_range == SensorHistoryRange::Day7;
-  float week_boundary_fracs[kTimeAxisMarkerCount] = {};
-  int week_boundary_count = 0;
-  if (is_week_range) {
-    week_boundary_count = calc_day7_boundary_axis(week_boundary_fracs, kTimeAxisMarkerCount);
-  }
 
   for (int i = 0; i < kTimeAxisMarkerCount; ++i) {
     if (i < n) {
       int label_x_anchor = chart_left + static_cast<int>(fracs[i] * chart_draw_w);
-      int line_x = label_x_anchor;
-      if (is_week_range) {
-        if (i < week_boundary_count) {
-          line_x = chart_left + static_cast<int>(week_boundary_fracs[i] * chart_draw_w);
-        }
-      }
-      if (ctx->time_lines[i]) {
-        if (is_week_range && i >= week_boundary_count) {
-          lv_obj_add_flag(ctx->time_lines[i], LV_OBJ_FLAG_HIDDEN);
-        } else {
-          lv_obj_set_x(ctx->time_lines[i], line_x);
-          lv_obj_clear_flag(ctx->time_lines[i], LV_OBJ_FLAG_HIDDEN);
-        }
-      }
       if (ctx->time_labels[i]) {
         lv_coord_t lbl_w = time_label_widths[i];
         int label_x = label_x_anchor - lbl_w / 2;
         int min_x = chart_left - (lbl_w / 2);
-        if (min_x < 0) min_x = 0;
-        int max_x = kAvailW - lbl_w;
+        if (min_x < kGraphInset) min_x = kGraphInset;
+        int max_x = chart_right - lbl_w;
         if (max_x < min_x) max_x = min_x;
         if (label_x < min_x) label_x = min_x;
         if (label_x > max_x) label_x = max_x;
@@ -983,7 +954,6 @@ static void update_y_axis_layout(SensorPopupContext* ctx) {
         lv_obj_clear_flag(ctx->time_labels[i], LV_OBJ_FLAG_HIDDEN);
       }
     } else {
-      if (ctx->time_lines[i]) lv_obj_add_flag(ctx->time_lines[i], LV_OBJ_FLAG_HIDDEN);
       if (ctx->time_labels[i]) lv_obj_add_flag(ctx->time_labels[i], LV_OBJ_FLAG_HIDDEN);
     }
   }
@@ -1000,12 +970,11 @@ static void clear_chart(SensorPopupContext* ctx, uint16_t points) {
   lv_chart_set_all_value(ctx->chart, ctx->series, LV_CHART_POINT_NONE);
   if (ctx->y_max_label) value_unit::show(ctx->y_max_label, "", "");
   if (ctx->y_min_label) value_unit::show(ctx->y_min_label, "", "");
-  if (ctx->y_max_line) lv_obj_add_flag(ctx->y_max_line, LV_OBJ_FLAG_HIDDEN);
-  if (ctx->y_min_line) lv_obj_add_flag(ctx->y_min_line, LV_OBJ_FLAG_HIDDEN);
   for (int i = 0; i < kTimeAxisMarkerCount; ++i) {
-    if (ctx->time_lines[i]) lv_obj_add_flag(ctx->time_lines[i], LV_OBJ_FLAG_HIDDEN);
     if (ctx->time_labels[i]) lv_obj_add_flag(ctx->time_labels[i], LV_OBJ_FLAG_HIDDEN);
   }
+  // The dots at the extremes leave the chart's bounds.
+  if (ctx->chart_wrap) lv_obj_invalidate(ctx->chart_wrap);
 }
 
 static uint64_t extract_epoch(JsonVariantConst value) {
@@ -2702,11 +2671,9 @@ static void resize_editable_chart(SensorPopupContext* ctx, int height) {
   ctx->chart_height = height;
   constexpr int overhang = popup_layout::contentScale(12);
   lv_obj_set_height(ctx->chart_wrap, height + 2 * overhang + kTimeAxisHeight);
-  lv_obj_set_height(ctx->chart, height);
+  lv_obj_set_height(ctx->chart, height + 2 * kChartLinePad);
   if (ctx->y_min_label) lv_obj_set_y(ctx->y_min_label, height);
-  if (ctx->y_min_line) lv_obj_set_y(ctx->y_min_line, overhang + height - 1);
   for (int i = 0; i < kTimeAxisMarkerCount; ++i) {
-    if (ctx->time_lines[i]) lv_obj_set_height(ctx->time_lines[i], height);
     if (ctx->time_labels[i]) lv_obj_set_y(ctx->time_labels[i], overhang + height + popup_layout::scale480(8));
   }
 }
@@ -3192,22 +3159,18 @@ static void apply_history_payload(SensorPopupContext* ctx, const char* payload) 
       value_unit::show(ctx->y_min_label, i18n::format_number(language, min_v, popup_digits(ctx, min_v)), ctx->unit);
     }
     update_y_axis_layout(ctx);
-    if (ctx->y_max_line) lv_obj_clear_flag(ctx->y_max_line, LV_OBJ_FLAG_HIDDEN);
-    if (ctx->y_min_line) lv_obj_clear_flag(ctx->y_min_line, LV_OBJ_FLAG_HIDDEN);
   } else {
     if (ctx->y_max_label) value_unit::show(ctx->y_max_label, "", "");
     if (ctx->y_min_label) value_unit::show(ctx->y_min_label, "", "");
-    if (ctx->y_max_line) lv_obj_add_flag(ctx->y_max_line, LV_OBJ_FLAG_HIDDEN);
-    if (ctx->y_min_line) lv_obj_add_flag(ctx->y_min_line, LV_OBJ_FLAG_HIDDEN);
     // No valid range: hide the time axis too.
     for (int i = 0; i < kTimeAxisMarkerCount; ++i) {
-      if (ctx->time_lines[i]) lv_obj_add_flag(ctx->time_lines[i], LV_OBJ_FLAG_HIDDEN);
       if (ctx->time_labels[i]) lv_obj_add_flag(ctx->time_labels[i], LV_OBJ_FLAG_HIDDEN);
     }
   }
 
   // One refresh is sufficient after the complete buffer, scale and labels
-  // have been prepared.
+  // have been prepared; the wrap too, for the dots at the extremes.
+  lv_obj_invalidate(ctx->chart_wrap);
   lv_chart_refresh(ctx->chart);
   refresh_sensor_readout(ctx);
 
@@ -3337,6 +3300,9 @@ static void on_overlay_delete(lv_event_t* e) {
   ctx->readout.cancel();
   heap_caps_free(ctx->history_values);
   ctx->history_values = nullptr;
+  if (ctx->fade_pixels) lv_image_cache_drop(&ctx->fade_image);
+  heap_caps_free(ctx->fade_pixels);
+  ctx->fade_pixels = nullptr;
   editable_control_delete(ctx->control); ctx->control = nullptr;
   if (g_sensor_popup_ctx == ctx) {
     g_sensor_first_frame.cancel();
@@ -3376,6 +3342,190 @@ static void on_range_click(lv_event_t* e) {
     clear_chart(ctx, get_history_range_config(ctx->history_range).points);
   }
   request_history_for_context(ctx);
+}
+
+// The fade strip for the current colors and graph height (built on the
+// first draw and after a change; a few KB in PSRAM).
+static const lv_image_dsc_t* graph_fade(SensorPopupContext* ctx, int height, uint32_t color, uint32_t card) {
+  if (height < 2) return nullptr;
+  if (ctx->fade_pixels && ctx->fade_image.header.h == static_cast<uint32_t>(height) && ctx->fade_color == color &&
+      ctx->fade_card == card) {
+    return &ctx->fade_image;
+  }
+  const uint32_t stride = lv_draw_buf_width_to_stride(kFadeWidth, LV_COLOR_FORMAT_ARGB8888);
+  const size_t bytes = static_cast<size_t>(stride) * static_cast<size_t>(height);
+  if (bytes > ctx->fade_capacity) {
+    if (ctx->fade_pixels) lv_image_cache_drop(&ctx->fade_image);
+    heap_caps_free(ctx->fade_pixels);
+    ctx->fade_pixels = static_cast<uint8_t*>(heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!ctx->fade_pixels) {
+      ctx->fade_pixels = static_cast<uint8_t*>(heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    }
+    ctx->fade_capacity = ctx->fade_pixels ? bytes : 0;
+    if (!ctx->fade_pixels) return nullptr;
+  }
+  lv_image_cache_drop(&ctx->fade_image);
+  area_graph::fill_fade(ctx->fade_pixels, stride, kFadeWidth, height, color, card, kFadeTopOpa);
+  ctx->fade_image.header.magic = LV_IMAGE_HEADER_MAGIC;
+  ctx->fade_image.header.cf = LV_COLOR_FORMAT_ARGB8888;
+  ctx->fade_image.header.w = kFadeWidth;
+  ctx->fade_image.header.h = height;
+  ctx->fade_image.header.stride = stride;
+  ctx->fade_image.data = ctx->fade_pixels;
+  ctx->fade_image.data_size = bytes;
+  ctx->fade_color = color;
+  ctx->fade_card = card;
+  return &ctx->fade_image;
+}
+
+static bool clip_to(const lv_area_t& a, const lv_area_t& b, lv_area_t& out) {
+  out = {std::max(a.x1, b.x1), std::max(a.y1, b.y1), std::min(a.x2, b.x2), std::min(a.y2, b.y2)};
+  return out.x1 <= out.x2 && out.y1 <= out.y2;
+}
+
+// Indices of the series' highest and lowest point (the first of equals);
+// false without two points or with a flat line.
+static bool chart_extremes(const SensorPopupContext* ctx, uint32_t& high, uint32_t& low) {
+  const uint32_t count = ctx->chart && ctx->series ? lv_chart_get_point_count(ctx->chart) : 0;
+  const int32_t* values = count > 1 ? lv_chart_get_series_y_array(ctx->chart, ctx->series) : nullptr;
+  if (!values) return false;
+  uint32_t found = 0;
+  for (uint32_t i = 0; i < count; ++i) {
+    if (values[i] == LV_CHART_POINT_NONE) continue;
+    if (!found++) {
+      high = low = i;
+      continue;
+    }
+    if (values[i] > values[high]) high = i;
+    if (values[i] < values[low]) low = i;
+  }
+  return found > 1 && values[high] != values[low];
+}
+
+// Before lv_chart draws its line (mockup sensor-graph-2, issue #131): the
+// line in the header icon's color; below it the icon color fading from 40 %
+// at the top of the graph to nothing at its bottom, one dithered strip tiled
+// under every run of the line with the card's color covering what lies
+// above the line; the dashed lines at the maximum and the minimum.
+static void on_chart_area_draw(lv_event_t* event) {
+  const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
+  auto* ctx = static_cast<SensorPopupContext*>(lv_event_get_user_data(event));
+  lv_layer_t* layer = lv_event_get_layer(event);
+  if (!ctx || !layer || !ctx->chart || !ctx->series || !ctx->card) return;
+  const lv_color_t color =
+      ctx->icon_label ? lv_obj_get_style_text_color(ctx->icon_label, LV_PART_MAIN) : lv_color_hex(ui_theme::text());
+  // Set while drawing: lv_chart_set_series_color would invalidate.
+  ctx->series->color = color;
+  uint32_t high = 0, low = 0;
+  if (!chart_extremes(ctx, high, low)) return;
+  lv_area_t content;
+  lv_obj_get_content_coords(ctx->chart, &content);
+  const lv_area_t clip_ori = layer->_clip_area;
+  lv_area_t clip;
+  if (!clip_to(clip_ori, content, clip)) return;
+  const lv_color_t card = lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN);
+  const lv_image_dsc_t* fade = graph_fade(ctx, lv_area_get_height(&content), lv_color_to_u32(color) & 0xFFFFFF,
+                                          lv_color_to_u32(card) & 0xFFFFFF);
+  if (fade) {
+    lv_draw_image_dsc_t image;
+    lv_draw_image_dsc_init(&image);
+    image.base.layer = layer;
+    image.src = fade;
+    image.tile = 1;
+    // The pattern starts at the graph's left edge in every run.
+    image.image_area = {content.x1, content.y1, content.x1 + kFadeWidth - 1, content.y2};
+    const uint32_t count = lv_chart_get_point_count(ctx->chart);
+    const int32_t* values = lv_chart_get_series_y_array(ctx->chart, ctx->series);
+    lv_area_t coords;
+    lv_obj_get_coords(ctx->chart, &coords);
+    // Each run of points without a gap.
+    int32_t run_start = -1;
+    int32_t run_end = -1;
+    auto draw_run = [&]() {
+      lv_area_t run = {run_start, content.y1, run_end, content.y2};
+      lv_area_t run_clip;
+      if (run_end > run_start && clip_to(clip, run, run_clip)) {
+        layer->_clip_area = run_clip;
+        lv_draw_image(layer, &image, &run);
+        layer->_clip_area = clip_ori;
+      }
+      run_start = run_end = -1;
+    };
+    for (uint32_t i = 0; i < count; ++i) {
+      if (values[i] == LV_CHART_POINT_NONE) {
+        if (run_start >= 0) draw_run();
+        continue;
+      }
+      lv_point_t point;
+      lv_chart_get_point_pos_by_id(ctx->chart, ctx->series, i, &point);
+      if (run_start < 0) run_start = coords.x1 + point.x;
+      run_end = coords.x1 + point.x;
+    }
+    if (run_start >= 0) draw_run();
+
+    lv_draw_rect_dsc_t rect;
+    lv_draw_rect_dsc_init(&rect);
+    rect.base.layer = layer;
+    rect.bg_color = card;
+    rect.bg_opa = LV_OPA_COVER;
+    rect.border_opa = LV_OPA_TRANSP;
+    lv_draw_triangle_dsc_t triangle;
+    lv_draw_triangle_dsc_init(&triangle);
+    triangle.base.layer = layer;
+    triangle.color = card;
+    triangle.opa = LV_OPA_COVER;
+    layer->_clip_area = clip;
+    area_graph::for_each_segment(ctx->chart, ctx->series, clip, [&](const lv_point_t& a, const lv_point_t& b, bool) {
+      area_graph::draw_above(layer, a, b, content.y1, rect, triangle);
+    });
+    layer->_clip_area = clip_ori;
+  }
+
+  lv_draw_line_dsc_t dash;
+  lv_draw_line_dsc_init(&dash);
+  dash.base.layer = layer;
+  dash.color = lv_color_hex(ui_theme::text());
+  dash.opa = kDashOpa;
+  dash.width = kDashWidth;
+  dash.dash_width = kDashLength;
+  dash.dash_gap = kDashLength;
+  for (const int32_t y : {content.y1, content.y2}) {
+    dash.p1.x = content.x1;
+    dash.p1.y = y;
+    dash.p2.x = content.x2;
+    dash.p2.y = y;
+    lv_draw_line(layer, &dash);
+  }
+}
+
+// After the graph: filled dots in the icon's color at the highest and the
+// lowest point (issue #131), ringed in the card's color like the cursor dot.
+static void on_chart_extremes_draw(lv_event_t* event) {
+  const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
+  auto* ctx = static_cast<SensorPopupContext*>(lv_event_get_user_data(event));
+  lv_layer_t* layer = lv_event_get_layer(event);
+  if (!ctx || !layer || !ctx->chart || !ctx->card || lv_obj_has_flag(ctx->chart_wrap, LV_OBJ_FLAG_HIDDEN)) return;
+  uint32_t high = 0, low = 0;
+  if (!chart_extremes(ctx, high, low)) return;
+  lv_area_t coords;
+  lv_obj_get_coords(ctx->chart, &coords);
+  lv_draw_rect_dsc_t dot;
+  lv_draw_rect_dsc_init(&dot);
+  dot.base.layer = layer;
+  dot.bg_color = ctx->series->color;
+  dot.bg_opa = LV_OPA_COVER;
+  dot.radius = LV_RADIUS_CIRCLE;
+  dot.border_color = lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN);
+  dot.border_width = kExtremeDotRing;
+  dot.border_opa = LV_OPA_COVER;
+  for (const uint32_t index : {high, low}) {
+    lv_point_t point;
+    lv_chart_get_point_pos_by_id(ctx->chart, ctx->series, index, &point);
+    const int32_t x = coords.x1 + point.x - kExtremeDotSize / 2;
+    const int32_t y = coords.y1 + point.y - kExtremeDotSize / 2;
+    const lv_area_t area = {x, y, x + kExtremeDotSize - 1, y + kExtremeDotSize - 1};
+    lv_draw_rect(layer, &dot, &area);
+  }
 }
 
 static void build_popup_shell(SensorPopupContext* ctx, const SensorPopupInit& init) {
@@ -3500,53 +3650,23 @@ static void build_popup_body(SensorPopupContext* ctx) {
   lv_obj_t* y_max = lv_label_create(chart_wrap);
   ctx->y_max_label = y_max;
   set_label_style(y_max, lv_color_hex(ui_theme::text()), y_font);
-  lv_obj_set_style_text_align(y_max, LV_TEXT_ALIGN_RIGHT, 0);
+  // At the card's content edge like the header circle (mockup sensor-graph-2).
+  lv_obj_set_style_text_align(y_max, LV_TEXT_ALIGN_LEFT, 0);
   lv_obj_set_width(y_max, kYAxisWidth - 10);
   lv_label_set_text(y_max, "");
-  lv_obj_set_pos(y_max, 0, 0);  // font center ~kLabelOverhang = on top guide line
+  lv_obj_set_pos(y_max, kGraphInset, 0);  // font center ~kLabelOverhang = on top guide line
 
   // Min label: vertically centered on bottom guide line (at y = kLabelOverhang + kChartHeight - 1)
   lv_obj_t* y_min = lv_label_create(chart_wrap);
   ctx->y_min_label = y_min;
   set_label_style(y_min, lv_color_hex(ui_theme::text()), y_font);
-  lv_obj_set_style_text_align(y_min, LV_TEXT_ALIGN_RIGHT, 0);
+  lv_obj_set_style_text_align(y_min, LV_TEXT_ALIGN_LEFT, 0);
   lv_obj_set_width(y_min, kYAxisWidth - 10);
   lv_label_set_text(y_min, "");
-  lv_obj_set_pos(y_min, 0, kChartHeight);  // font center ~kChartHeight+kLabelOverhang = on bottom guide line
+  lv_obj_set_pos(y_min, kGraphInset, kChartHeight);  // font center ~kChartHeight+kLabelOverhang = on bottom guide line
 
-  // Horizontal guides at max/min extend 6 px left of the Y-axis for label alignment.
-  constexpr int kLineOverlap = popup_layout::scale(6);
-  const int kLineStart = kYAxisWidth - kLineOverlap;
-  const int kLineWidth = kCardWidth - (kCardPad * 2) - kLineStart;
-  auto make_guide_line = [&](int16_t y_pos) -> lv_obj_t* {
-    lv_obj_t* line = lv_obj_create(chart_wrap);
-    lv_obj_remove_style_all(line);
-    lv_obj_set_size(line, kLineWidth, 1);
-    lv_obj_set_style_bg_color(line, lv_color_hex(ui_theme::icon()), 0);
-    lv_obj_set_style_bg_opa(line, LV_OPA_30, 0);
-    lv_obj_remove_flag(line, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_remove_flag(line, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_pos(line, kLineStart, y_pos);
-    lv_obj_add_flag(line, LV_OBJ_FLAG_HIDDEN);
-    return line;
-  };
-  ctx->y_max_line = make_guide_line(kLabelOverhang);
-  ctx->y_min_line = make_guide_line(kLabelOverhang + kChartHeight - 1);
-
-  // Vertical time marker lines (thin, same opacity as horizontal guides)
-  // Created hidden; positioned and shown in apply_history_payload.
+  // Time labels below the graph, positioned by update_y_axis_layout.
   for (int i = 0; i < kTimeAxisMarkerCount; ++i) {
-    lv_obj_t* vline = lv_obj_create(chart_wrap);
-    lv_obj_remove_style_all(vline);
-    lv_obj_set_size(vline, 1, kChartHeight);
-    lv_obj_set_style_bg_color(vline, lv_color_hex(ui_theme::icon()), 0);
-    lv_obj_set_style_bg_opa(vline, LV_OPA_30, 0);
-    lv_obj_remove_flag(vline, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_remove_flag(vline, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_pos(vline, 0, kLabelOverhang);
-    lv_obj_add_flag(vline, LV_OBJ_FLAG_HIDDEN);
-    ctx->time_lines[i] = vline;
-
     lv_obj_t* tlbl = lv_label_create(chart_wrap);
     set_label_style(tlbl, lv_color_hex(ui_theme::text()), popup_layout::font20());
     lv_obj_set_style_text_align(tlbl, LV_TEXT_ALIGN_CENTER, 0);
@@ -3557,25 +3677,30 @@ static void build_popup_body(SensorPopupContext* ctx) {
     ctx->time_labels[i] = tlbl;
   }
 
+  // The chart spans exactly the graph (update_y_axis_layout moves its left
+  // edge after the labels); kChartLinePad above and below keeps the line's
+  // width at the maximum and the minimum inside it, so its content rows
+  // stay the graph's rows between the label centers.
   lv_obj_t* chart = lv_chart_create(chart_wrap);
   ctx->chart = chart;
-  lv_obj_set_size(chart, LV_PCT(100), kChartHeight);
-  lv_obj_set_style_pad_left(chart, kChartLeft, 0);
+  lv_obj_set_size(chart, kCardWidth - (kCardPad * 2) - 2 * kGraphInset - kChartLeft, kChartHeight + 2 * kChartLinePad);
   lv_obj_set_style_bg_opa(chart, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(chart, 0, 0);
-  lv_obj_set_style_pad_top(chart, 0, 0);
-  lv_obj_set_style_pad_right(chart, 0, 0);
-  lv_obj_set_style_pad_bottom(chart, 0, 0);
-  lv_obj_set_pos(chart, 0, kLabelOverhang);
+  lv_obj_set_style_pad_hor(chart, 0, 0);
+  lv_obj_set_style_pad_ver(chart, kChartLinePad, 0);
+  lv_obj_set_pos(chart, kGraphInset + kChartLeft, kLabelOverhang - kChartLinePad);
   lv_chart_set_div_line_count(chart, 0, 0);
   lv_chart_set_type(chart, LV_CHART_TYPE_LINE);
   lv_chart_set_update_mode(chart, LV_CHART_UPDATE_MODE_SHIFT);
   lv_obj_set_style_line_width(chart, kChartLineWidth, LV_PART_ITEMS);
-  lv_obj_set_style_line_color(chart, lv_color_hex(ui_theme::text()), LV_PART_ITEMS);
   lv_obj_set_style_line_rounded(chart, true, LV_PART_ITEMS);
   lv_obj_set_style_size(chart, 0, 0, LV_PART_INDICATOR);
 
-  ctx->series = lv_chart_add_series(chart, lv_color_hex(ui_theme::text()), LV_CHART_AXIS_PRIMARY_Y);
+  ctx->series = lv_chart_add_series(chart, lv_color_hex(ui_theme::icon()), LV_CHART_AXIS_PRIMARY_Y);
+  lv_obj_add_event_cb(chart, on_chart_area_draw,
+                      static_cast<lv_event_code_t>(LV_EVENT_DRAW_MAIN | LV_EVENT_PREPROCESS), ctx);
+  // Before the readout cursor (attach_chart_readout), which stays on top.
+  lv_obj_add_event_cb(chart_wrap, on_chart_extremes_draw, LV_EVENT_DRAW_POST, ctx);
   clear_chart(ctx, get_history_range_config(ctx->history_range).points);
 
   lv_obj_move_foreground(ctx->icon_label);

@@ -122,7 +122,14 @@
     else el.style?.removeProperty?.('--switch-span-h');
     const tallSize = switchTall ? ({1: 20, 2: 24, 3: 32, 4: 40}[Number(valueFont)] || 28) : 0;
     for (const size of [20, 24, 32, 40]) el.classList.toggle('switch-value-' + size, tallSize === size);
-    const valueSize = (compact && !compactIconTitle) || (switchHeader && !switchTall) ? compactValueSize(valueFont) : 20;
+    // A Sensor graph tile (display mode 2) has the Switch header beside the
+    // disc at the half-height value sizes (types/sensor/renderer.cpp); its
+    // graph needs the Bridge's history, so the box below stays empty like
+    // the panel's before the history arrives.
+    const sensorGraph = Number(type) === 1 && Number(mode) === 2 && !halfHeight;
+    el.classList.toggle('sensor-graph', sensorGraph);
+    const valueSize = (compact && !compactIconTitle) || (switchHeader && !switchTall) || sensorGraph
+      ? compactValueSize(valueFont) : 20;
     el.classList.toggle('compact-value-24', valueSize === 24);
     el.classList.toggle('compact-value-28', valueSize === 28);
     el.classList.toggle('clock-compact', Number(type) === 9 && halfHeight);

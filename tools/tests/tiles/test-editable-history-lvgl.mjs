@@ -27,7 +27,7 @@ if (!host || !jsonInclude) {
 }
 const out = path.join(root, 'build/tests/editable-history-lvgl');
 fs.mkdirSync(out, {recursive: true});
-fs.writeFileSync(path.join(out,'esp_heap_caps.h'),'#pragma once\n#include <cstdlib>\n#define MALLOC_CAP_SPIRAM 1\n#define MALLOC_CAP_8BIT 2\ninline void* heap_caps_malloc(size_t n,int){return malloc(n);}\ninline void heap_caps_free(void*p){free(p);}\n');
+fs.writeFileSync(path.join(out,'esp_heap_caps.h'),'#pragma once\n#include <cstdlib>\n#define MALLOC_CAP_SPIRAM 1\n#define MALLOC_CAP_8BIT 2\n#define MALLOC_CAP_INTERNAL 4\ninline void* heap_caps_malloc(size_t n,int){return malloc(n);}\ninline void* heap_caps_aligned_alloc(size_t,size_t n,int){return malloc(n);}\ninline void heap_caps_free(void*p){free(p);}\n');
 const layout = read('src/ui/popups/popup_layout.h');
 const geometry = layout.slice(layout.indexOf('namespace popup_layout {'), layout.indexOf('// Standard popup close button.')) + '}';
 const chartBuild = popup.slice(popup.indexOf('  // Chart wrapper: Y-axis labels'), popup.indexOf('  lv_obj_move_foreground(ctx->icon_label);'));
@@ -37,12 +37,19 @@ const readoutFunctions = ['get_value_font', 'set_label_text_if_changed', 'numeri
   'clear_sensor_readout', 'move_readout_cursor', 'append_readout_time', 'binary_state_identifier_text', 'write_state_history_label',
   'apply_chart_readout', 'apply_timeline_readout', 'on_sensor_readout_apply', 'sensor_readout_graph',
   'sensor_readout_is_latest', 'on_sensor_readout_end', 'refresh_sensor_readout',
-  'build_readout_band', 'keep_chart_history', 'attach_chart_readout', 'attach_timeline_readout'];
+  'build_readout_band', 'keep_chart_history', 'attach_chart_readout', 'attach_timeline_readout',
+  // The graph's fade, cover, dashed lines and dots (mockup sensor-graph-2).
+  'graph_fade', 'clip_to', 'chart_extremes', 'on_chart_area_draw', 'on_chart_extremes_draw'];
 const cpp = `
 #include <lvgl.h>
 #include "src/ui/popups/popup_first_frame.h"
 #include "src/ui/popups/popup_open.h"
 #include "src/ui/popups/popup_graph_readout.h"
+#include "src/ui/shared/area_graph.h"
+#include <lvgl_private.h>
+// The graph's drawing (defined with the readout functions below).
+static void on_chart_area_draw(lv_event_t*);
+static void on_chart_extremes_draw(lv_event_t*);
 void hide_popup_shell(lv_obj_t*){}
 lv_obj_t* header_value_source=nullptr;
 void show_popup_shell(lv_obj_t*,lv_obj_t*,lv_obj_t*,lv_obj_t*,lv_obj_t*,void(*)()=nullptr,lv_obj_t* value=nullptr){header_value_source=value;}
@@ -99,6 +106,7 @@ ${geometry}
 #undef lv_obj_update_layout
 ${popup.slice(popup.indexOf('constexpr int kBinaryTimelineHeight') - '#if defined(DEVICE_LAYOUT_480X480)\n'.length, popup.indexOf('struct HistoryRangeConfig'))}
 constexpr int kCardWidth=popup_layout::kCardWidth,kCardPad=popup_layout::kCardPad,kChartHeight=popup_layout::contentScale(325),kTimeAxisMarkerCount=8,kChartLineWidth=popup_layout::scale(4),kHistoryPoints24h=288;
+${popup.slice(popup.indexOf('// The numeric graph (mockup'), popup.indexOf('constexpr uint16_t kHistoryHours24h'))}
 constexpr int kRangeButtonWidth=popup_layout::scale(92),kRangeButtonHeight=popup_layout::kNavHeight,kRangeButtonGap=popup_layout::scale(10);
 #if defined(DEVICE_LAYOUT_480X480)
 constexpr int kTimeAxisHeight=20;

@@ -4871,7 +4871,30 @@ static void apply_tile_graph_history(const char* target_entity, const char* payl
       }
     }
 
-    // Use all points (same as popup - no downsampling)
+    // One point per four pixels of the graph's width (the mean of each run,
+    // about the mockup's 96 points on a two-cell tile): the area below the
+    // line draws one rect and one triangle per segment (area_graph.h), and
+    // the line stays a calm line instead of LVGL's crowded mode of upright
+    // strokes. The popup keeps every point.
+    const int32_t graph_w = lv_obj_get_content_width(w.chart);
+    const size_t target = graph_w > 8 ? static_cast<size_t>(graph_w / 4) : 96;
+    if (values.size() > target && target >= 2) {
+      std::vector<float> reduced(target);
+      for (size_t j = 0; j < target; ++j) {
+        const size_t from = j * values.size() / target;
+        const size_t to = std::max(from + 1, (j + 1) * values.size() / target);
+        float sum = 0.0f;
+        size_t valid = 0;
+        for (size_t k = from; k < to; ++k) {
+          if (!isfinite(values[k])) continue;
+          sum += values[k];
+          ++valid;
+        }
+        reduced[j] = valid ? sum / valid : NAN;
+      }
+      values.swap(reduced);
+    }
+
     // Calculate min/max for range
     float min_v = 0.0f, max_v = 0.0f;
     bool has_range = false;
@@ -5251,6 +5274,14 @@ void update_sensor_tile_value(GridType grid_type, uint8_t grid_index, const char
       tile_icon_color_rules::apply(icon, tile->icon_colors.c_str(),
                                    displayValue != "--", value, nullptr,
                                    lv_color_hex(ui_theme::text()));
+    }
+    // The graph's line takes the icon's color when it draws
+    // (sensor_graph_area_cb): a new icon color redraws it.
+    lv_obj_t* chart = target[grid_index].chart;
+    lv_chart_series_t* series = target[grid_index].series;
+    if (chart && series &&
+        !lv_color_eq(lv_chart_get_series_color(chart, series), lv_obj_get_style_text_color(icon, LV_PART_MAIN))) {
+      lv_obj_invalidate(chart);
     }
   }
 }

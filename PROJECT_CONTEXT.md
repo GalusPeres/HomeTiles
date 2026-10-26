@@ -14,18 +14,18 @@ Last reviewed: 2026-10-26
 
 - FW v0.9.5 (hotfix) and FW + Bridge v0.9.4 released 2026-10-23. Bridge beta v0.9.6b1.
 - Pairing by IP without mDNS (#114, Bridge #16): read-only `GET /api/link` + Bridge menu step; HA ok on Tab5 (b513, b16).
-- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b557.
+- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b558.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build; a cache stays warm when only repo headers changed and the LVGL config fingerprint matches.
 - Docs CI runs on pinned Chrome for Testing 154.0.8037.57; a tag's docs run uses the tag's workflow, so after a release dispatch docs on `main`.
 - Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need their icons on HomeTiles-staging (tag = FW_VERSION).
 
 ## Active work
 
-- Power flow tile 28 ("Leistungsfluss", `src/types/energy_flow/`, picture 65): nodes in `/_tile_flow_entities`, options in key_code, node tap = Sensor popup, dots step per frame; V2 HW ok b542.
+- Power flow tile 28 ("Leistungsfluss", `src/types/energy_flow/`, picture 65): nodes in `/_tile_flow_entities`, options in key_code, node tap = Sensor popup; V2 HW ok b542.
 - Media popup (v0.9.4): layouts `sensor_display_mode` 0 cover left, 1 centre (`media_popup_layout.h`); controls only with their HA feature bit; menu box (built once): speakers (group count), source, library; tile/head icon state form (`state_icon.h`).
-- Issue #116 (JC4880, camera popup ended after 18-60 min): the Bridge closed after 5 s without a chunk ACK. Bridge v0.9.4b5 waits 45 s and logs one warning; FW logs data gaps >= 1 s and the Wi-Fi signal at stream end; test builds hold the stream with /api/debug/camera-pause. Reporter confirmation pending. A camera stream pauses the wake word (b499 HW ok). `build/analysis/2026-10-21-analyse.md`.
-- Issue #119 (Guition V1): the core's Helix (12-bit sync) cannot see MPEG-2.5 frames; tag bytes made it overwrite its memory. Own Helix (b501) `src/audio/helix_mp3`, TLS in PSRAM, position/length/pause, Bridge player bar. Speaker audio comes from the Bridge (`docs-dev/audio-stream.md`): FFmpeg -> mono PCM (44.1 kHz music / 22.05 kHz speech) over the camera tcp-ack listener (`HTAUD/1`, two 4 KB blocks in flight); panels announce `"stream":"tcp-ack-v1"`, older ones download. HW ok: 169 -> 148 KB while playing, camera 30 FPS beside a song. Seek restarts at `-ss`. Camera sound: live track of cameras with sound, picture waits for the sound (lip sync; b507 30 FPS HW ok, b508 even gaps HW pending). Small player, no queue; a pause frees the stream (b512/b15); the wake word is deaf while a clip plays.
-- Voice: microphone and wake word listening off on a new panel (b500, `2054a82a`); listening is its own setting, the chosen word stays (`applyWakeWordsCommand`). Bridge v0.9.4b6: Listening switch, word-only Wake word select, panel settings under Configuration, battery auto-sleep removed (no board has a battery sleep profile). HW/HA test pending. Mic button + audio settings open (user decides where, mockup first); Zeid's #91 Audio page as a fifth panel Settings category declined 2026-10-17.
+- Issue #116 (JC4880, camera popup ended after 18-60 min): the Bridge closed after 5 s without a chunk ACK. Bridge v0.9.4b5 waits 45 s and logs one warning; FW logs data gaps >= 1 s and the Wi-Fi signal at stream end. Reporter confirmation pending. A camera stream pauses the wake word (b499 HW ok). `build/analysis/2026-10-21-analyse.md`.
+- Issue #119 (Guition V1): the core's Helix missed MPEG-2.5 frames and overwrote its memory. Own Helix (b501) `src/audio/helix_mp3`, TLS in PSRAM, position/length/pause, Bridge player bar. Speaker audio comes from the Bridge (`docs-dev/audio-stream.md`): FFmpeg -> mono PCM (44.1 kHz music / 22.05 kHz speech) over the camera tcp-ack listener (`HTAUD/1`, two 4 KB blocks in flight); panels announce `"stream":"tcp-ack-v1"`, older ones download. HW ok (169 -> 148 KB playing, camera 30 FPS beside a song). Camera sound: live track of cameras with sound, picture waits for the sound (lip sync; b507 30 FPS HW ok, b508 even gaps HW pending). Small player, no queue; a pause frees the stream (b512/b15); the wake word is deaf while a clip plays.
+- Voice: microphone and wake word listening off on a new panel (b500, `2054a82a`); listening is its own setting, the chosen word stays (`applyWakeWordsCommand`). Bridge v0.9.4b6: Listening switch, word-only Wake word, battery auto-sleep removed. HW/HA test pending. Mic button + audio settings open (user decides where, mockup first); #91 Audio page declined 2026-10-17.
 
 ## Do not retry (rejected with evidence)
 
@@ -92,6 +92,7 @@ Last reviewed: 2026-10-26
 - Editable tiles 21 Number, 22 Select, 23 Date/Time reuse Sensor persistence/popups (`PackedTileV7` unchanged); drafts coalesce 600 ms, sliders publish on release. Open: S3 froze adding Number to an active screensaver.
 - Lock/Alarm/Fan (24-26, `src/types/device/`): sealed commands need pairing + Web Admin password; HW ok 2026-10-02.
 - Calendar 27 (PR #127, `docs-dev/calendar.md`): Bridge v0.9.6b1 `events` (`entity_search` 5); V2 HW pending.
+- Sensor graph (b558, mockup `sensor-graph-2`, #131): tile = Switch header + graph in a rounded clip_corner frame (area circle color, line icon color, 1 point/4 px); popup = dithered fade strip (`area_graph.h`), dashed max/min, extreme dots, no vertical lines; HW pending.
 - Switch layouts `sensor_decimals` 0-3, 4-6 upright bar (`bar_orientation.h`; Fan upright = 1; sim ok, HW pending); `command_pacer.h` pacing: reporter test pending (#11).
 - Scene tile is "Button": picker searches scenes/scripts/buttons (`entity_search` 4), entity in `sensor_entity`.
 - Direct link: TCP 8140, Bridge = broker, frames sealed with pairing keys (`docs-dev/bridge-link.md`). The panel declares every entity it uses; without a password only released entities and the Energy Dashboard categories reach it. Picker lists Recent/Favorites/All (b369): V2 HW pending.

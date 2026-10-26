@@ -12,11 +12,70 @@
 #include "src/network/bridge/ha_bridge_config.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include <Arduino.h>
+#include <lvgl_private.h>
+#include "src/tiles/runtime/tile_header.h"
+#include "src/types/climate/layout.h"
 #include "src/types/value/value_control.h"
+#include "src/ui/shared/area_graph.h"
 #include "src/ui/shared/ui_theme.h"
 
 static const lv_font_t* get_sensor_value_font(const Tile& tile) {
   return tile_layout::value_font_for_choice(tile.sensor_value_font, FONT_VALUE);
+}
+
+// The graph tile (mockup build/design-mockups/sensor-graph-2, user
+// 2026-10-26): the Switch header beside the corner disc, the graph below it
+// in the Switch bar's box over the rest of the tile (insets, the bar's
+// radius at the bottom, an open top). The line in the icon's color, the area
+// below it in the circle's color.
+static lv_area_t sensor_graph_box(const Tile& tile) {
+  const int tile_w = tile_geometry::extent(tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP);
+  const int tile_h = tile_geometry::extent(tile.row, std::max(1.0f, tile.span_h), GRID_CELL_H, GRID_GAP);
+  const int icon_width =
+      FONT_MDI_ICONS ? lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0) : 0;
+  const int top = climate_layout::content_top(tile_icon_disc::header_diameter(icon_width), tile_icon_disc::inset());
+  return {climate_layout::kOuterInset, top, tile_w - climate_layout::kOuterInset - 1,
+          tile_h - climate_layout::kOuterInset - 1};
+}
+
+// Before lv_chart draws its line: the line takes the icon's current color
+// and the area below it the circle's. The graph's frame is a resting
+// surface, so tile_icon_source::refresh_controls gives it the control fill
+// like the Switch bar's track; its local transparent background keeps it
+// from filling the box.
+static void sensor_graph_area_cb(lv_event_t* e) {
+  lv_obj_t* chart = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+  lv_layer_t* layer = lv_event_get_layer(e);
+  lv_chart_series_t* series = chart ? lv_chart_get_series_next(chart, nullptr) : nullptr;
+  lv_obj_t* frame = chart ? lv_obj_get_parent(chart) : nullptr;
+  if (!layer || !series || !frame) return;
+  const ui_theme::SurfaceScope surface = tile_surface::scope(chart);
+  auto* icon = static_cast<lv_obj_t*>(lv_event_get_user_data(e));
+  // Set while drawing: lv_chart_set_series_color would invalidate.
+  series->color = icon ? lv_obj_get_style_text_color(icon, LV_PART_MAIN) : lv_color_hex(ui_theme::text());
+  lv_area_t coords;
+  lv_obj_get_coords(chart, &coords);
+  // lv_area_intersect is private in LVGL 9.6.
+  const lv_area_t clip = {std::max(layer->_clip_area.x1, coords.x1), std::max(layer->_clip_area.y1, coords.y1),
+                          std::min(layer->_clip_area.x2, coords.x2), std::min(layer->_clip_area.y2, coords.y2)};
+  if (clip.x1 > clip.x2 || clip.y1 > clip.y2) return;
+  const lv_color_t fill = lv_obj_get_style_bg_color(frame, LV_PART_MAIN);
+  const lv_opa_t opa =
+      tone_color::control_opa(ui_surface_style::icon_glow_percent(), tile_icon_disc::see_through(lv_obj_get_parent(frame)));
+  lv_draw_rect_dsc_t rect;
+  lv_draw_rect_dsc_init(&rect);
+  rect.base.layer = layer;
+  rect.bg_color = fill;
+  rect.bg_opa = opa;
+  rect.border_opa = LV_OPA_TRANSP;
+  lv_draw_triangle_dsc_t triangle;
+  lv_draw_triangle_dsc_init(&triangle);
+  triangle.base.layer = layer;
+  triangle.color = fill;
+  triangle.opa = opa;
+  area_graph::for_each_segment(chart, series, clip, [&](const lv_point_t& a, const lv_point_t& b, bool last) {
+    area_graph::draw_below(layer, a, b, last, coords.y2, rect, triangle);
+  });
 }
 
 struct SensorEventData {
@@ -110,8 +169,9 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   }
 
   lv_obj_t* title_label = nullptr;
-  // Right-aligned title label, shown only when a title is set.
-  if (tile.title.length() > 0) {
+  // Right-aligned title label, shown only when a title is set. The graph
+  // tile's header (tile_header) makes its own.
+  if (tile.title.length() > 0 && !graph_enabled) {
     title_label = lv_label_create(card);
     if (title_label) {
       set_label_style(title_label, lv_color_hex(ui_theme::text()),
@@ -189,22 +249,41 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
     if (title_label) lv_obj_move_foreground(title_label);
   }
 
-  // Graph rendering (display_mode == 2) - positioned BELOW value
-  // Same settings as popup: 288 points, line width 4, white color
+  // The graph (display_mode 2) in its box below the header
+  // (sensor_graph_box): the day's history from the Bridge, the line rounded
+  // but cut flush at both ends by the chart's own bounds.
   lv_obj_t* chart = nullptr;
   lv_chart_series_t* series = nullptr;
+  lv_obj_t* v = nullptr;
   if (graph_enabled) {
-    // Get graph height from tile settings (with defaults and clamping)
-    uint16_t graph_height = tile.sensor_graph_height;
-    if (graph_height < 20) graph_height = 20;
-    if (graph_height > 200) graph_height = 200;
-    graph_height = tile_layout::scale_u16(graph_height);
-
-    chart = lv_chart_create(card);
+    const lv_area_t box = sensor_graph_box(tile);
+    // The frame: a resting surface (the area's color, see
+    // sensor_graph_area_cb) with the Switch bar's radius that never fills
+    // itself; clip_corner cuts the graph's line and area at its bottom
+    // corners. It reaches one radius above the box, so its top corners cut
+    // nothing and the graph's top stays open.
+    lv_obj_t* frame = lv_obj_create(card);
+    if (frame) {
+      tile_icon_disc::mark_surface(frame);
+      lv_obj_set_style_bg_opa(frame, LV_OPA_TRANSP, LV_PART_MAIN);
+      lv_obj_set_style_border_width(frame, 0, LV_PART_MAIN);
+      lv_obj_set_style_shadow_width(frame, 0, LV_PART_MAIN);
+      lv_obj_set_style_pad_all(frame, 0, LV_PART_MAIN);
+      ui_surface_style::apply_radius(frame, climate_layout::kControlRadius, 0);
+      lv_obj_set_style_clip_corner(frame, true, LV_PART_MAIN);
+      lv_obj_remove_flag(frame, LV_OBJ_FLAG_CLICKABLE);
+      lv_obj_remove_flag(frame, LV_OBJ_FLAG_SCROLLABLE);
+      const int32_t radius = lv_obj_get_style_radius(frame, LV_PART_MAIN);
+      // Positions inside the card's content box (its paddings).
+      lv_obj_set_size(frame, lv_area_get_width(&box), lv_area_get_height(&box) + radius);
+      lv_obj_set_pos(frame, box.x1 - tile_layout::scale_480(20), box.y1 - radius - tile_layout::scale_480(24));
+      chart = lv_chart_create(frame);
+      if (chart) {
+        lv_obj_set_size(chart, lv_area_get_width(&box), lv_area_get_height(&box));
+        lv_obj_set_pos(chart, 0, radius);
+      }
+    }
     if (chart) {
-      lv_obj_set_size(chart, LV_PCT(100), graph_height);
-      // Position graph at bottom of tile (below value)
-      lv_obj_align(chart, LV_ALIGN_BOTTOM_MID, 0, 0);
       lv_obj_remove_flag(chart, LV_OBJ_FLAG_CLICKABLE);
       lv_obj_remove_flag(chart, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -213,37 +292,47 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
       lv_chart_set_div_line_count(chart, 0, 0);
       lv_chart_set_update_mode(chart, LV_CHART_UPDATE_MODE_SHIFT);
 
-      // Styling - same as popup
       lv_obj_set_style_bg_opa(chart, LV_OPA_TRANSP, LV_PART_MAIN);
       lv_obj_set_style_border_width(chart, 0, LV_PART_MAIN);
-      lv_obj_set_style_pad_all(chart, 0, LV_PART_MAIN);
+      lv_obj_set_style_shadow_width(chart, 0, LV_PART_MAIN);
+      lv_obj_set_style_radius(chart, 0, LV_PART_MAIN);
+      // Room above the day's maximum and below its minimum for the line.
+      lv_obj_set_style_pad_hor(chart, 0, LV_PART_MAIN);
+      lv_obj_set_style_pad_ver(chart, tile_layout::scale(8), LV_PART_MAIN);
 
-      // Series - white color, line width 4 (same as popup)
-      series = lv_chart_add_series(chart, lv_color_hex(ui_theme::text()), LV_CHART_AXIS_PRIMARY_Y);
-      lv_obj_set_style_line_width(chart, 2, LV_PART_ITEMS);
-      lv_obj_set_style_line_color(chart, lv_color_hex(ui_theme::text()), LV_PART_ITEMS);
+      series = lv_chart_add_series(chart, lv_color_hex(ui_theme::icon()), LV_CHART_AXIS_PRIMARY_Y);
+      lv_obj_set_style_line_width(chart, tile_layout::scale(3), LV_PART_ITEMS);
       lv_obj_set_style_line_rounded(chart, true, LV_PART_ITEMS);
       lv_obj_set_style_size(chart, 0, 0, LV_PART_INDICATOR);
 
       // Initialize with LV_CHART_POINT_NONE; history will replace it.
       lv_chart_set_all_value(chart, series, LV_CHART_POINT_NONE);
+      lv_obj_add_event_cb(chart, sensor_graph_area_cb,
+                          static_cast<lv_event_code_t>(LV_EVENT_DRAW_MAIN | LV_EVENT_PREPROCESS), icon_lbl);
     }
-    if (icon_lbl) lv_obj_move_foreground(icon_lbl);
-    if (title_label) lv_obj_move_foreground(title_label);
+    // The Switch header: title and value beside the corner disc.
+    if (icon_lbl) {
+      lv_obj_align(icon_lbl, LV_ALIGN_TOP_LEFT, tile_layout::scale_480(-8), tile_layout::scale_480(-8));
+    }
+    const tile_header::Header header = tile_header::create(card, tile, false, box.y1);
+    title_label = header.title;
+    v = header.state;
   }
 
   // Value label combines the value and unit.
-  lv_obj_t* v = lv_label_create(card);
+  if (!v) v = lv_label_create(card);
   if (!v) {
     Serial.println("[TileRenderer] ERROR: Could not create value label");
     return card;
   }
-  set_label_style(v, lv_color_hex(ui_theme::text()), get_sensor_value_font(tile));
-  lv_label_set_long_mode(v, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(v, LV_PCT(100));
-  lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_style_text_line_space(v, 8, 0);
-  lv_label_set_text(v, "--");
+  if (!graph_enabled) {
+    set_label_style(v, lv_color_hex(ui_theme::text()), get_sensor_value_font(tile));
+    lv_label_set_long_mode(v, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(v, LV_PCT(100));
+    lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_line_space(v, 8, 0);
+    lv_label_set_text(v, "--");
+  }
 
   // Get value y offset from tile settings (with defaults and clamping)
   int16_t value_y_offset = tile.sensor_value_y_offset;
@@ -255,9 +344,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
     lv_obj_align(v, LV_ALIGN_BOTTOM_MID, 0,
                  tile_layout::scale(12) + value_y_offset - (gauge_extra_h - gauge_shift));
   } else if (graph_enabled) {
-    // Value above graph: center vertically in upper area
-    lv_obj_align(v, LV_ALIGN_CENTER, 0,
-                 tile_layout::scale(-20) + value_y_offset);
+    // The header placed it beside the disc.
   } else {
     lv_obj_align(v, LV_ALIGN_CENTER, 0,
                  tile_layout::scale(28) + value_y_offset);
@@ -283,6 +370,8 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
     target[index].chart = chart;
     target[index].series = series;
   }
+  // The graph's area takes the circle's color (after add_round made the disc).
+  if (chart) tile_icon_source::refresh_controls(card);
 
   // PPA presents the screensaver as a complete fullscreen frame. Popups would
   // add a second overlay, so this mode disables them. Normal grids retain

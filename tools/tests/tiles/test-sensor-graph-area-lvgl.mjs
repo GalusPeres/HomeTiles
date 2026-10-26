@@ -1,14 +1,16 @@
 // The Sensor graph (mockup build/design-mockups/sensor-graph-2, issue #131,
 // user 2026-10-26): the tile draws the area below its line in the circle's
 // color, the popup a dithered fade from 40 % of the icon color to nothing
-// under the line with the card's color above it. The area is one picture
-// computed from the line (area_graph.h) and drawn as one image: b558 built it
-// from a rect and a triangle per segment, several hundred LVGL draw tasks and
-// about 150 ms per popup frame on the V2 (user log 2026-10-26). Renders the
-// real pictures with LVGL 9.6 under an lv_chart line: every pixel well below
-// the line is the area, every pixel well above it the card; the fade sits on
-// exact RGB565 steps and is dithered instead of banded; the picture is only
-// computed again after a change. The wiring is checked in the sources.
+// under the line with the card's color above it. Area, line and the popup's
+// dashed lines are pictures computed from the line (area_graph.h) and drawn
+// as images: b558 built the area from a rect and a triangle per segment
+// (about 150 ms per popup frame on the V2), and LVGL's own 4 px line still
+// cost about 90 ms (b559 log; on the host 1.1 ms against 0.09 ms for the
+// picture). Renders the real pictures with LVGL 9.6: the line where lv_chart
+// puts its points, every pixel well below it the area, every pixel well
+// above it the card; the fade sits on exact RGB565 steps and is dithered;
+// the pictures are computed again only after a change; drawing them costs a
+// fraction of LVGL's line. The wiring is checked in the sources.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,16 +21,16 @@ import {lvglHost} from '../../lib/lvgl-host.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
-// The area is one image, never pieces per segment.
+// The pictures are images, never pieces per segment or LVGL lines.
 const areaGraph = read('src/ui/shared/area_graph.h');
-for (const gone of ['lv_draw_triangle', 'lv_draw_rect', 'for_each_segment']) {
-  assert.ok(!areaGraph.includes(gone), `area_graph.h: no ${gone} any more (one picture, one draw task)`);
+for (const gone of ['lv_draw_triangle', 'lv_draw_rect', 'lv_draw_line', 'for_each_segment']) {
+  assert.ok(!areaGraph.includes(gone), `area_graph.h: no ${gone} (pictures drawn as images)`);
 }
 
 // Tile: the Switch header beside the disc, the graph in a rounded frame
 // below it whose clip_corner cuts line and area at the bottom corners, the
-// frame one radius taller upwards so the top stays open; the area one A8
-// mask recolored in the circle's current color.
+// frame one radius taller upwards so the top stays open; area and line two
+// A8 masks recolored in the circle's and the icon's current color.
 const tile = read('src/types/sensor/renderer.cpp');
 assert.ok(tile.includes('const tile_header::Header header = tile_header::create(card, tile, false, box.y1);'),
   'graph tile: the Switch header beside the disc');
@@ -36,19 +38,30 @@ assert.ok(tile.includes('lv_obj_set_style_clip_corner(frame, true, LV_PART_MAIN)
   tile.includes('lv_obj_set_size(frame, lv_area_get_width(&box), lv_area_get_height(&box) + radius);') &&
   tile.includes('tile_icon_disc::mark_surface(frame);') && tile.includes('chart = lv_chart_create(frame);'),
   'graph tile: a rounded surface frame clips the graph');
-assert.ok(tile.includes('area_graph::render_mask(area->mask, static_cast<uint32_t>(width), width, height, area->tops);') &&
+assert.ok(tile.includes('area_graph::render_mask(area->masks, static_cast<uint32_t>(width), width, height, area->tops);') &&
+  tile.includes('area_graph::line_mask(area->masks + bytes,') &&
   tile.includes('image.recolor = lv_obj_get_style_bg_color(frame, LV_PART_MAIN);') &&
-  tile.includes('if (!area->mask || key != area->key) {') &&
+  tile.includes('image.recolor = line_color;') &&
+  tile.includes('if (!area->masks || key != area->key) {') &&
   tile.includes('static_cast<lv_event_code_t>(LV_EVENT_DRAW_MAIN | LV_EVENT_PREPROCESS), area);') &&
   tile.includes('lv_obj_add_event_cb(chart, sensor_graph_delete_cb, LV_EVENT_DELETE, area);') &&
-  tile.includes('series->color = area->icon ? lv_obj_get_style_text_color(area->icon, LV_PART_MAIN)'),
-  'graph tile: one recolored mask before the line, freed with the chart, the line in the icon color');
+  tile.includes('lv_obj_set_style_line_width(chart, 0, LV_PART_ITEMS);'),
+  'graph tile: two recolored masks computed only after a change, freed with the chart, no LVGL line');
 assert.ok(!tile.includes('sensor_graph_height'), 'graph tile: the graph fills the box below the header');
 const renderer = read('src/tiles/runtime/tile_renderer.cpp');
 assert.ok(renderer.includes('const size_t target = graph_w > 8 ? static_cast<size_t>(graph_w / 4) : 96;'),
   'graph tile: one point per four pixels');
 assert.ok(renderer.includes('!lv_color_eq(lv_chart_get_series_color(chart, series), lv_obj_get_style_text_color(icon, LV_PART_MAIN))'),
   'graph tile: a new icon color redraws the line');
+// A tile built offline (at boot) asks again once the connection is up and
+// every five minutes; several answers wait in a bounded queue.
+assert.ok(renderer.includes('constexpr uint32_t kTileGraphRefreshMs = 5UL * 60UL * 1000UL;') &&
+  renderer.includes('if (!networkManager.isMqttConnected()) {') &&
+  renderer.includes('constexpr size_t kTileGraphQueueSlots = 4;') &&
+  renderer.includes('if (tile.sensor_entity.length()) request_tile_graph_history(tile.sensor_entity.c_str());'),
+  'graph tile: asks again after connecting and every five minutes, queue for several answers');
+assert.ok(read('HomeTiles.ino').includes('    process_tile_graph_queue();\n    tile_graph_service_periodic();'),
+  'the main loop runs the graph tile service');
 
 // Web Admin preview: the graph tile shows the same header beside the disc
 // (the graph itself needs the Bridge's history, which the preview lacks).
@@ -60,9 +73,10 @@ assert.ok(css.includes('.tile.sensor.sensor-graph > .tile-value {') && css.inclu
   'preview: the Switch header rules cover the graph tile');
 
 // Popup: no vertical lines or guide line objects, labels and graph at the
-// header circle's inset, the area as one RGB565 picture, dashed lines, dots.
+// header circle's inset, area, dashed lines and line as one RGB565 picture,
+// the dots at the extremes.
 const popup = read('src/ui/popups/sensor/sensor_popup.cpp');
-for (const gone of ['time_lines', 'y_max_line', 'y_min_line', 'calc_day7_boundary_axis', 'image.tile']) {
+for (const gone of ['time_lines', 'y_max_line', 'y_min_line', 'calc_day7_boundary_axis', 'image.tile', 'lv_draw_line_dsc_t dash']) {
   assert.ok(!popup.includes(gone), `popup: no ${gone} any more`);
 }
 assert.ok(popup.includes('constexpr int kGraphInset = popup_layout::kHeaderIconX;') &&
@@ -75,11 +89,13 @@ const measure = popup.slice(popup.indexOf('static lv_coord_t measure_label_text_
   popup.indexOf('static bool get_valid_local_time'));
 assert.equal((measure.match(/lv_obj_get_style_pad_right\(label, LV_PART_MAIN\)/g) || []).length, 1,
   'popup: label width counts the unit room once');
-assert.ok(popup.includes('area_graph::render_fade(ctx->area_pixels, stride / sizeof(uint16_t), width, height, ctx->area_tops, color, card,') &&
+assert.ok(popup.includes('area_graph::render_fade(ctx->area_pixels, stride_px, width, height, ctx->area_tops, fade_top, fade_bottom, color,') &&
+  popup.includes('area_graph::draw_dashes(ctx->area_pixels, stride_px, width, height, row - kDashWidth / 2, kDashWidth,') &&
+  popup.includes('area_graph::draw_line(ctx->area_pixels, stride_px, width, height, ctx->area_points, points,') &&
   popup.includes('if (ctx->area_pixels && key == ctx->area_key) return &ctx->area_image;') &&
-  popup.includes('dash.dash_width = kDashLength;') &&
+  popup.includes('lv_obj_set_style_line_width(chart, 0, LV_PART_ITEMS);') &&
   popup.includes('lv_obj_add_event_cb(chart_wrap, on_chart_extremes_draw, LV_EVENT_DRAW_POST, ctx);'),
-  'popup: the area picture (computed again only after a change), the dashed lines, the dots');
+  'popup: one picture (computed again only after a change), no LVGL line, the dots');
 assert.ok(popup.includes('constexpr uint8_t kFadeTopOpa = 102;  // 40 %'), 'popup: 40 % at the top');
 
 const host = await lvglHost(root);
@@ -93,6 +109,7 @@ const cpp = String.raw`
 #include <lvgl.h>
 #include <lvgl_private.h>
 #include <cassert>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
@@ -100,62 +117,82 @@ const cpp = String.raw`
 
 static const uint32_t kCard = 0x1A1A1A, kFill = 0x6E2A12, kIcon = 0xFF7043;
 static lv_chart_series_t* g_series = nullptr;
-static bool g_popup = false;
-static int g_renders = 0, g_images = 0;
+static bool g_popup = false, g_pictures = true;
+static int g_renders = 0;
 static uint32_t g_key = 0;
+static std::vector<area_graph::Point> g_points;
 static std::vector<int16_t> g_tops;
-static std::vector<uint16_t> g_fade;
-static std::vector<uint8_t> g_mask;
-static lv_image_dsc_t g_image{};
+static std::vector<uint16_t> g_picture;
+static std::vector<uint8_t> g_masks;
+static lv_image_dsc_t g_image{}, g_line{};
+static area_graph::Rows g_rows;
 
-// The callbacks of the tile renderer and the popup in short: the picture
-// from the line, computed again only after a change, drawn as one image.
+static void set_image(lv_image_dsc_t& image, lv_color_format_t cf, const uint8_t* data, int32_t w, int32_t h, int32_t stride) {
+  image.header.magic = LV_IMAGE_HEADER_MAGIC;
+  image.header.cf = cf;
+  image.header.w = w;
+  image.header.h = h;
+  image.header.stride = stride;
+  image.data = data;
+  image.data_size = stride * h;
+}
+
+// The callbacks of the popup and the tile renderer in short: the pictures
+// from the line, computed again only after a change, drawn as images.
 static void area_cb(lv_event_t* e) {
+  if (!g_pictures) return;
   lv_obj_t* chart = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
   lv_layer_t* layer = lv_event_get_layer(e);
-  lv_area_t content, coords;
-  lv_obj_get_content_coords(chart, &content);
+  lv_area_t coords, content;
   lv_obj_get_coords(chart, &coords);
-  const int32_t width = lv_area_get_width(&content);
-  const int32_t height = g_popup ? lv_area_get_height(&content) + 1 : coords.y2 - content.y1 + 1;
-  g_tops.assign(width, 0);
-  if (!area_graph::column_tops(chart, g_series, g_tops.data(), width)) return;
-  const uint32_t key = area_graph::area_key(g_tops.data(), width, height, kIcon, kCard);
+  lv_obj_get_content_coords(chart, &content);
+  const int32_t width = lv_area_get_width(&coords), height = lv_area_get_height(&coords);
+  const int32_t count = lv_chart_get_point_count(chart);
+  g_points.resize(count);
+  g_tops.resize(width);
+  const int32_t points = area_graph::chart_points(chart, g_series, g_points.data(), count);
+  if (!points) return;
+  const uint32_t key = area_graph::picture_key(g_points.data(), points, {uint32_t(width), uint32_t(height), g_popup ? 1u : 0u});
   if (key != g_key) {
     ++g_renders;
     g_key = key;
     lv_image_cache_drop(&g_image);
-    g_image.header.magic = LV_IMAGE_HEADER_MAGIC;
-    g_image.header.w = width;
-    g_image.header.h = height;
+    lv_image_cache_drop(&g_line);
+    area_graph::column_tops(g_points.data(), points, g_tops.data(), width);
     if (g_popup) {
-      g_fade.assign(width * height, 0);
-      area_graph::render_fade(g_fade.data(), width, width, height, g_tops.data(), kIcon, kCard, 102);
-      g_image.header.cf = LV_COLOR_FORMAT_RGB565;
-      g_image.header.stride = width * 2;
-      g_image.data = reinterpret_cast<const uint8_t*>(g_fade.data());
-      g_image.data_size = g_fade.size() * 2;
+      const int32_t fade_top = content.y1 - coords.y1, fade_bottom = fade_top + lv_area_get_height(&content);
+      g_picture.assign(width * height, 0);
+      area_graph::render_fade(g_picture.data(), width, width, height, g_tops.data(), fade_top, fade_bottom, kIcon, kCard, 102);
+      for (const int32_t row : {fade_top, fade_bottom}) area_graph::draw_dashes(g_picture.data(), width, width, height, row - 1, 2, 8, 0xFFFFFF, 89);
+      area_graph::draw_line(g_picture.data(), width, width, height, g_points.data(), points, 4.0f, kIcon);
+      set_image(g_image, LV_COLOR_FORMAT_RGB565, reinterpret_cast<const uint8_t*>(g_picture.data()), width, height, width * 2);
     } else {
-      g_mask.assign(width * height, 0);
-      area_graph::render_mask(g_mask.data(), width, width, height, g_tops.data());
-      g_image.header.cf = LV_COLOR_FORMAT_A8;
-      g_image.header.stride = width;
-      g_image.data = g_mask.data();
-      g_image.data_size = g_mask.size();
+      g_masks.assign(2 * width * height, 0);
+      area_graph::render_mask(g_masks.data(), width, width, height, g_tops.data());
+      area_graph::line_mask(g_masks.data() + width * height, width, width, height, g_points.data(), points, 3.0f);
+      g_rows = area_graph::rows_used(g_points.data(), points, height, 3.0f);
+      set_image(g_image, LV_COLOR_FORMAT_A8, g_masks.data() + g_rows.area_top * width, width, height - g_rows.area_top, width);
+      set_image(g_line, LV_COLOR_FORMAT_A8, g_masks.data() + width * height + g_rows.line_top * width, width, g_rows.line_rows, width);
     }
   }
   lv_draw_image_dsc_t image;
   lv_draw_image_dsc_init(&image);
   image.base.layer = layer;
   image.src = &g_image;
-  // The tile's mask takes the circle's color; the popup's picture has its own.
   if (!g_popup) {
     image.recolor = lv_color_hex(kFill);
     image.recolor_opa = LV_OPA_COVER;
   }
-  const lv_area_t at = {content.x1, content.y1, content.x1 + width - 1, content.y1 + height - 1};
-  lv_draw_image(layer, &image, &at);
-  ++g_images;
+  if (g_popup) {
+    lv_draw_image(layer, &image, &coords);
+  } else {
+    const lv_area_t area_at = {coords.x1, coords.y1 + g_rows.area_top, coords.x2, coords.y2};
+    lv_draw_image(layer, &image, &area_at);
+    image.src = &g_line;
+    image.recolor = lv_color_hex(kIcon);
+    const lv_area_t line_at = {coords.x1, coords.y1 + g_rows.line_top, coords.x2, coords.y1 + g_rows.line_top + g_rows.line_rows - 1};
+    lv_draw_image(layer, &image, &line_at);
+  }
 }
 
 static uint32_t pixel(const lv_draw_buf_t* buf, int x, int y) {
@@ -167,13 +204,13 @@ static int channel(uint32_t rgb, int c) { return (rgb >> (16 - 8 * c)) & 0xFF; }
 int main() {
   lv_init();
   // The fade on exact RGB565 steps with 40 % of the icon over the card in
-  // the first row and the card in the last, dithered: every row mixes the
+  // its first row and the card in its last, dithered: every row mixes the
   // two steps around its exact color.
   {
     const int width = 64, height = 160;
     std::vector<int16_t> tops(width, 0);
     std::vector<uint16_t> fade(width * height);
-    area_graph::render_fade(fade.data(), width, width, height, tops.data(), kIcon, kCard, 102);
+    area_graph::render_fade(fade.data(), width, width, height, tops.data(), 0, height - 1, kIcon, kCard, 102);
     for (int y = 0; y < height; ++y) {
       double sum = 0;
       for (int x = 0; x < width; ++x) sum += (fade[y * width + x] >> 11) * 255.0 / 31;
@@ -193,12 +230,6 @@ int main() {
     for (int y = 0; y < height && !mixed; ++y)
       for (int x = 1; x < 8; ++x) mixed = mixed || fade[y * width + x] != fade[y * width];
     assert(mixed && "dithered");
-    // Above the line and in gaps the card.
-    std::fill(tops.begin(), tops.end(), static_cast<int16_t>(80));
-    tops[5] = -1;
-    area_graph::render_fade(fade.data(), width, width, height, tops.data(), kIcon, kCard, 102);
-    assert(fade[40 * width + 10] == area_graph::rgb565(kCard) && fade[100 * width + 5] == area_graph::rgb565(kCard));
-    assert(fade[100 * width + 10] != area_graph::rgb565(kCard));
   }
 
   lv_display_t* display = lv_display_create(320, 220);
@@ -207,7 +238,7 @@ int main() {
   lv_display_set_flush_cb(display, [](lv_display_t* d, const lv_area_t*, uint8_t*) { lv_display_flush_ready(d); });
   for (int mode = 0; mode < 2; ++mode) {
     g_popup = mode == 1;
-    g_renders = g_images = 0;
+    g_renders = 0;
     g_key = 0;
     lv_obj_t* screen = lv_obj_create(nullptr);
     lv_obj_set_style_bg_color(screen, lv_color_hex(kCard), 0);
@@ -222,85 +253,111 @@ int main() {
     lv_obj_set_style_pad_ver(chart, 4, 0);
     lv_chart_set_div_line_count(chart, 0, 0);
     lv_chart_set_type(chart, LV_CHART_TYPE_LINE);
-    lv_obj_set_style_line_width(chart, 4, LV_PART_ITEMS);
-    lv_obj_set_style_line_rounded(chart, true, LV_PART_ITEMS);
+    // The line is in the pictures.
+    lv_obj_set_style_line_width(chart, 0, LV_PART_ITEMS);
     lv_obj_set_style_size(chart, 0, 0, LV_PART_INDICATOR);
     g_series = lv_chart_add_series(chart, lv_color_hex(kIcon), LV_CHART_AXIS_PRIMARY_Y);
-    // Steep and flat stretches, a peak, a valley and a gap (288 points: more
-    // points than columns, LVGL's crowded line).
-    const int count = 288;
+    // A house load: a base with noise and spikes, a flat stretch and a gap
+    // (100 points).
+    const int count = 100;
     lv_chart_set_point_count(chart, count);
     lv_chart_set_axis_range(chart, LV_CHART_AXIS_PRIMARY_Y, 0, 1000);
+    unsigned seed = 7;
     for (int i = 0; i < count; ++i) {
-      int v = i < 80 ? 200 + i * 10 : i < 120 ? 1000 - (i - 80) * 22 : i < 200 ? 120 : 120 + (i - 200) * 9;
-      lv_chart_set_value_by_id(chart, g_series, i, i >= 150 && i < 160 ? LV_CHART_POINT_NONE : v);
+      seed = seed * 1103515245u + 12345u;
+      int v = 180 + static_cast<int>((seed >> 16) % 60);
+      if ((seed >> 8) % 6 == 0) v = 700 + static_cast<int>((seed >> 4) % 280);
+      if (i >= 60 && i < 70) v = 140;
+      lv_chart_set_value_by_id(chart, g_series, i, i >= 52 && i < 56 ? LV_CHART_POINT_NONE : v);
     }
     lv_obj_add_event_cb(chart, area_cb, static_cast<lv_event_code_t>(LV_EVENT_DRAW_MAIN | LV_EVENT_PREPROCESS), nullptr);
     lv_screen_load(screen);
     lv_refr_now(display);
     lv_draw_buf_t* shot = lv_snapshot_take(screen, LV_COLOR_FORMAT_XRGB8888);
     assert(shot);
-    lv_area_t content;
+    lv_area_t coords, content;
+    lv_obj_get_coords(chart, &coords);
     lv_obj_get_content_coords(chart, &content);
-    int checked = 0, gaps = 0;
-    // The line's round caps reach two pixels into a gap, where the area has
-    // already ended: the columns next to a gap are left out.
-    std::vector<int> gap_columns;
-    for (int i = 150; i <= 160; ++i) {
-      lv_point_t point;
-      lv_chart_get_point_pos_by_id(chart, g_series, i == 150 ? 149 : 160, &point);
-      gap_columns.push_back(lv_obj_get_x(chart) + point.x);
-    }
-    const int gap_from = gap_columns.front(), gap_to = gap_columns.back();
-    for (int x = content.x1; x <= content.x2; ++x) {
-      if (x >= gap_from - 1 && x <= gap_from + 3) continue;
-      if (x >= gap_to - 3 && x <= gap_to + 1) continue;
-      // The line's top and bottom edge in this column.
-      int top = -1, bottom = -1;
-      for (int y = content.y1 - 4; y <= content.y2 + 4; ++y) {
-        if (channel(pixel(shot, x, y), 0) > 0xC0) {
-          if (top < 0) top = y;
-          bottom = y;
+    const int32_t* values = lv_chart_get_series_y_array(chart, g_series);
+    int checked = 0, line_hits = 0;
+    for (int i = 0; i < count; ++i) {
+      if (values[i] == LV_CHART_POINT_NONE || (i > 0 && values[i - 1] == LV_CHART_POINT_NONE) ||
+          (i + 1 < count && values[i + 1] == LV_CHART_POINT_NONE)) continue;
+      lv_point_t p;
+      lv_chart_get_point_pos_by_id(chart, g_series, i, &p);
+      const int x = coords.x1 + p.x, y = coords.y1 + p.y;
+      if (x <= coords.x1 + 2 || x >= coords.x2 - 2) continue;
+      // The line sits on lv_chart's point.
+      assert(channel(pixel(shot, x, y), 0) > 0xC0 && "the line passes through lv_chart's point");
+      ++line_hits;
+      // Well above it the card, well below it the area. "Above" is above
+      // the line in this column and its neighbours: a steep neighbouring
+      // segment's soft edge reaches into this column.
+      int first_line = coords.y2 + 1, last_line = coords.y1 - 1;
+      for (int nx = x - 3; nx <= x + 3; ++nx) {
+        for (int y2 = coords.y1; y2 <= coords.y2; ++y2) {
+          const int red = channel(pixel(shot, nx, y2), 0);
+          if (red > 0x30 && y2 < first_line) first_line = y2;
+          if (red > 0xA0) last_line = std::max(last_line, y2);
         }
       }
-      if (top < 0) {
-        // A gap: no line and no area.
-        for (int y = content.y1; y <= content.y2; ++y) assert((pixel(shot, x, y) & 0xF8FCF8) == (kCard & 0xF8FCF8) && "a gap shows the card (on a 16-bit panel exactly)");
-        ++gaps;
-        continue;
-      }
-      for (int y = content.y1; y <= content.y2; ++y) {
-        const uint32_t p = pixel(shot, x, y);
-        if (y < top - 3) {
-          if ((p & 0xF8FCF8) != (kCard & 0xF8FCF8))
-            std::fprintf(stderr, "mode=%d x=%d y=%d top=%d p=%06x\n", mode, x, y, top, static_cast<unsigned>(p));
-          assert((p & 0xF8FCF8) == (kCard & 0xF8FCF8) && "above the line: the card");
-        } else if (y > bottom + 3) {
-          if (!g_popup) {
-            if (p != kFill) std::fprintf(stderr, "x=%d y=%d top=%d bottom=%d p=%06x\n", x, y, top, bottom, static_cast<unsigned>(p));
-            assert(p == kFill && "below the line: the area");
-          } else {
-            assert(channel(p, 0) >= 0x18 && channel(p, 0) <= 0x7F && "the fade");
-            if (y < content.y1 + (content.y2 - content.y1) * 3 / 4)
-              assert((p & 0xF8FCF8) != (kCard & 0xF8FCF8) && "the fade under the line");
-          }
+      for (int yy = content.y1; yy <= coords.y2; ++yy) {
+        const uint32_t q = pixel(shot, x, yy);
+        if (yy < first_line - 2) {
+          if ((q & 0xF8FCF8) != (kCard & 0xF8FCF8)) std::fprintf(stderr, "above mode=%d x=%d y=%d q=%06x\n", mode, x, yy, (unsigned)q);
+          assert((q & 0xF8FCF8) == (kCard & 0xF8FCF8) && "above the line: the card");
+        } else if (yy <= last_line + 3) {
+          continue;
+        } else if (!g_popup) {
+          if (q != kFill) std::fprintf(stderr, "below x=%d y=%d q=%06x\n", x, yy, (unsigned)q);
+          assert(q == kFill && "below the line: the area");
+          ++checked;
+        } else if (yy <= content.y2) {
+          assert(channel(q, 0) >= 0x18 && channel(q, 0) <= 0x7F && "the fade");
           ++checked;
         }
       }
     }
-    assert(checked > 5000 && gaps >= 2);
-    // One image per frame; a redraw without a change reuses the picture.
-    assert(g_renders == 1 && g_images >= 1);
+    assert(line_hits > 40 && checked > 1000);
+    // Gap columns show neither line nor area.
+    for (int i = 53; i <= 54; ++i) {
+      lv_point_t p;
+      lv_chart_get_point_pos_by_id(chart, g_series, i, &p);
+      for (int yy = content.y1 + 2; yy <= content.y2 - 3; ++yy)
+        assert((pixel(shot, coords.x1 + p.x, yy) & 0xF8FCF8) == (kCard & 0xF8FCF8) && "a gap shows the card");
+    }
+    // The pictures are computed once; a redraw without a change reuses them.
+    assert(g_renders == 1);
     lv_obj_invalidate(chart);
     lv_refr_now(display);
-    assert(g_renders == 1 && g_images >= 2 && "an unchanged line keeps its picture");
+    assert(g_renders == 1 && "an unchanged line keeps its pictures");
+    // Drawing the pictures costs a fraction of LVGL's own line (b559: 90 ms
+    // per popup frame on the V2).
+    auto frame_us = [&]() {
+      const auto t0 = std::chrono::steady_clock::now();
+      for (int n = 0; n < 20; ++n) {
+        lv_obj_invalidate(chart);
+        lv_refr_now(display);
+      }
+      return std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count() / 20;
+    };
+    const double pictures = frame_us();
+    g_pictures = false;
+    lv_obj_set_style_line_width(chart, g_popup ? 4 : 3, LV_PART_ITEMS);
+    lv_obj_set_style_line_rounded(chart, true, LV_PART_ITEMS);
+    const double lvgl_line = frame_us();
+    g_pictures = true;
+    lv_obj_set_style_line_width(chart, 0, LV_PART_ITEMS);
+    std::fprintf(stderr, "mode %d: pictures %.0f us, LVGL line %.0f us per frame\n", mode, pictures, lvgl_line);
+    assert(pictures * 2 < lvgl_line && "the pictures cost far less than LVGL's line");
     lv_chart_set_value_by_id(chart, g_series, 10, 900);
     lv_refr_now(display);
-    assert(g_renders == 2 && "a changed line computes its picture again");
+    assert(g_renders == 2 && "a changed line computes its pictures again");
     lv_draw_buf_destroy(shot);
     lv_obj_delete(screen);
   }
   lv_image_cache_drop(&g_image);
+  lv_image_cache_drop(&g_line);
   lv_deinit();
   std::puts("ok");
   return 0;
@@ -313,4 +370,4 @@ const built = spawnSync(host.cxx, [...host.flags, '-std=c++17', '-I', out, sourc
 assert.equal(built.status, 0, built.stdout + built.stderr);
 const run = spawnSync(binary, [], {encoding: 'utf8'});
 assert.equal(run.status, 0, run.stdout + run.stderr);
-console.log('sensor graph: one picture per change for the tile area and the popup fade, card above the line and in gaps, dithered RGB565 fade');
+console.log('sensor graph: tile and popup pictures (area, line, dashes) computed once per change, line on lv_chart\'s points, card above, area below, far cheaper than LVGL\'s line');

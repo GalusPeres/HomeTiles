@@ -22,10 +22,13 @@ assert.match(sleep,
 assert.doesNotMatch(sleep, /process_tile_graph_queue\(\);/,
   'Sleep must not start request/response graph processing');
 // Every loop, inside the camera gate: no idle two-second batch any more (a
-// moving Cover's steps arrive twice a second, user 2026-10-02).
+// moving Cover's steps arrive twice a second, user 2026-10-02). Graph tiles
+// ask for their day again after connecting (tile_graph_service_periodic).
 assert.match(active,
-  /if \(!camera_popup_busy && !PopupFirstFrame::any_pending\(\)\)\s*\{\s*if \(!hold_tile_updates\) process_tile_update_queues<TileUpdateBudget::Active>\(\);\s*process_tile_graph_queue\(\);\s*energy_service_periodic\(\);\s*\}/,
+  /if \(!camera_popup_busy && !PopupFirstFrame::any_pending\(\)\)\s*\{\s*if \(!hold_tile_updates\) process_tile_update_queues<TileUpdateBudget::Active>\(\);\s*process_tile_graph_queue\(\);\s*tile_graph_service_periodic\(\);\s*energy_service_periodic\(\);\s*\}/,
   'Camera gating, graph order, and energy scheduling must stay in loop()');
+assert.doesNotMatch(sleep, /tile_graph_service_periodic\(\);/,
+  'Sleep must not ask for graph histories');
 assert.doesNotMatch(active, /isHighPerformance|last_queue_ms|>= 2000|process_idle_media_updates/,
   'Tile updates must not wait for an idle batch');
 assert.doesNotMatch(service,

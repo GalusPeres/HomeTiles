@@ -1539,6 +1539,7 @@ void loop() {
   if (!camera_popup_busy && !PopupFirstFrame::any_pending()) {
     if (!hold_tile_updates) process_tile_update_queues<TileUpdateBudget::Active>();
     process_tile_graph_queue();
+    tile_graph_service_periodic();
     energy_service_periodic();
   }
   uint32_t t_update_queues = millis();

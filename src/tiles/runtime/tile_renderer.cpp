@@ -4758,7 +4758,12 @@ struct TileGraphHistoryUpdate {
   bool valid = false;
 };
 
-static TileGraphHistoryUpdate g_tile_graph_history;
+// Answers wait here until the loop applies them: several graph tiles ask at
+// once (tile_graph_service_periodic), and one slot lost every answer but the
+// last of a loop pass. Bounded: when full, the oldest answer is replaced.
+constexpr size_t kTileGraphQueueSlots = 4;
+static TileGraphHistoryUpdate g_tile_graph_history[kTileGraphQueueSlots];
+static size_t g_tile_graph_next = 0;
 
 static bool extract_numeric_for_chart(const String& text, float& out) {
   String normalized = text;
@@ -4954,17 +4959,48 @@ static void apply_tile_graph_history(const char* target_entity, const char* payl
 
 void queue_tile_graph_history(const char* entity_id, const char* payload, size_t len) {
   if (!payload || len == 0) return;
-  g_tile_graph_history.entity_id = entity_id ? entity_id : "";
-  g_tile_graph_history.payload = String(payload).substring(0, len);
-  g_tile_graph_history.valid = true;
+  TileGraphHistoryUpdate& slot = g_tile_graph_history[g_tile_graph_next];
+  g_tile_graph_next = (g_tile_graph_next + 1) % kTileGraphQueueSlots;
+  slot.entity_id = entity_id ? entity_id : "";
+  slot.payload = String(payload).substring(0, len);
+  slot.valid = true;
 }
 
 void process_tile_graph_queue() {
-  if (!g_tile_graph_history.valid) return;
+  // Oldest first.
+  for (size_t i = 0; i < kTileGraphQueueSlots; ++i) {
+    TileGraphHistoryUpdate& slot = g_tile_graph_history[(g_tile_graph_next + i) % kTileGraphQueueSlots];
+    if (!slot.valid) continue;
+    apply_tile_graph_history(slot.entity_id.c_str(), slot.payload.c_str());
+    slot.valid = false;
+    slot.payload = String();
+  }
+}
 
-  apply_tile_graph_history(g_tile_graph_history.entity_id.c_str(),
-                           g_tile_graph_history.payload.c_str());
-  g_tile_graph_history.valid = false;
+// Graph tiles ask for their day when they are built; offline that request
+// is dropped (mqttPublishHistoryRequest), so a tile built at boot stayed
+// empty until its popup asked (user log 2026-10-26). The shown grid's graph
+// tiles ask again once the connection is up and every five minutes after
+// (the Bridge's day comes in 5-minute steps), so the graph follows the day.
+constexpr uint32_t kTileGraphRefreshMs = 5UL * 60UL * 1000UL;
+static bool g_tile_graph_online = false;
+static uint32_t g_tile_graph_asked_ms = 0;
+
+void tile_graph_service_periodic() {
+  if (!networkManager.isMqttConnected()) {
+    g_tile_graph_online = false;
+    return;
+  }
+  const uint32_t now = millis();
+  if (g_tile_graph_online && (uint32_t)(now - g_tile_graph_asked_ms) < kTileGraphRefreshMs) return;
+  g_tile_graph_online = true;
+  g_tile_graph_asked_ms = now;
+  const TileGridConfig& grid = tileConfig.getActiveGrid();
+  for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
+    const Tile& tile = grid.tiles[i];
+    if (tile.type != TILE_SENSOR || tile.sensor_display_mode != 2 || !g_tab0_sensors[i].chart) continue;
+    if (tile.sensor_entity.length()) request_tile_graph_history(tile.sensor_entity.c_str());
+  }
 }
 
 void request_tile_graph_history(const char* entity_id) {

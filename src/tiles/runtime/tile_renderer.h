@@ -152,6 +152,9 @@ void process_media_update_queue(uint8_t max_updates = 0);  // 0 drains the queue
 // Thread-safe tile graph history queue (MQTT callback -> main loop).
 void queue_tile_graph_history(const char* entity_id, const char* payload, size_t len);
 void process_tile_graph_queue();  // Call from the main loop before lv_timer_handler().
+// Graph tiles of the shown grid ask for their day again once the connection
+// is up and every five minutes; call from the main loop.
+void tile_graph_service_periodic();
 void request_tile_graph_history(const char* entity_id);  // Request history for an entity.
 
 void tile_renderer_snapshot_tab0(TileWidgetCache* out);

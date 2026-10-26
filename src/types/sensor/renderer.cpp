@@ -38,25 +38,50 @@ static lv_area_t sensor_graph_box(const Tile& tile) {
           tile_h - climate_layout::kOuterInset - 1};
 }
 
-// The graph's area as an A8 mask (area_graph::render_mask, in the LVGL
-// heap) and the icon whose color the line takes; owned by the chart and
-// freed with it. The mask is computed again only when the line or the size
-// change.
+// The graph's pictures (area_graph.h): the area and the line as A8 masks in
+// the LVGL heap, drawn recolored in the circle's and the icon's current
+// color; the line's points and its top per column beside them; the icon
+// whose color the line takes. Owned by the chart and freed with it. The
+// masks are computed again only when the line or the size change.
 struct SensorGraphArea {
   lv_obj_t* icon = nullptr;
-  uint8_t* mask = nullptr;
+  uint8_t* masks = nullptr;  // the area's, then the line's
   size_t capacity = 0;
   int16_t* tops = nullptr;
   int32_t tops_capacity = 0;
-  lv_image_dsc_t image = {};
+  area_graph::Point* points = nullptr;
+  int32_t points_capacity = 0;
+  lv_image_dsc_t area = {};
+  lv_image_dsc_t line = {};
+  // The rows each mask uses (area_graph::rows_used): only they are drawn.
+  area_graph::Rows rows;
   uint32_t key = 0;
 };
 
-// Before lv_chart draws its line: the line takes the icon's current color
-// and the area below it, one recolored image, the circle's. The graph's
-// frame is a resting surface, so tile_icon_source::refresh_controls gives it
-// the control fill like the Switch bar's track; its local transparent
-// background keeps it from filling the box.
+static void set_mask(lv_image_dsc_t& image, uint8_t* pixels, int32_t width, int32_t height) {
+  image.header.magic = LV_IMAGE_HEADER_MAGIC;
+  image.header.cf = LV_COLOR_FORMAT_A8;
+  image.header.w = width;
+  image.header.h = height;
+  image.header.stride = width;
+  image.data = pixels;
+  image.data_size = static_cast<size_t>(width) * static_cast<size_t>(height);
+}
+
+template <typename T>
+static bool ensure_capacity(T*& buffer, int32_t& capacity, int32_t count) {
+  if (count <= capacity) return true;
+  lv_free(buffer);
+  buffer = static_cast<T*>(lv_malloc(static_cast<size_t>(count) * sizeof(T)));
+  capacity = buffer ? count : 0;
+  return buffer != nullptr;
+}
+
+// Before lv_chart draws (its line is off, line width 0): the area in the
+// circle's color and the line in the icon's, two recolored images. The
+// graph's frame is a resting surface, so tile_icon_source::refresh_controls
+// gives it the control fill like the Switch bar's track; its local
+// transparent background keeps it from filling the box.
 static void sensor_graph_area_cb(lv_event_t* e) {
   lv_obj_t* chart = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
   lv_layer_t* layer = lv_event_get_layer(e);
@@ -65,60 +90,76 @@ static void sensor_graph_area_cb(lv_event_t* e) {
   auto* area = static_cast<SensorGraphArea*>(lv_event_get_user_data(e));
   if (!layer || !series || !frame || !area) return;
   const ui_theme::SurfaceScope surface = tile_surface::scope(chart);
-  // Set while drawing: lv_chart_set_series_color would invalidate.
-  series->color = area->icon ? lv_obj_get_style_text_color(area->icon, LV_PART_MAIN) : lv_color_hex(ui_theme::text());
-  lv_area_t coords, content;
+  const lv_color_t line_color =
+      area->icon ? lv_obj_get_style_text_color(area->icon, LV_PART_MAIN) : lv_color_hex(ui_theme::text());
+  // Set while drawing (lv_chart_set_series_color would invalidate): the
+  // color update path compares against it.
+  series->color = line_color;
+  lv_area_t coords;
   lv_obj_get_coords(chart, &coords);
-  lv_obj_get_content_coords(chart, &content);
-  // From the line down to the box's bottom (below the content's padding).
-  const int32_t width = lv_area_get_width(&content), height = coords.y2 - content.y1 + 1;
-  if (width < 2 || height < 2) return;
-  if (width > area->tops_capacity) {
-    lv_free(area->tops);
-    area->tops = static_cast<int16_t*>(lv_malloc(static_cast<size_t>(width) * sizeof(int16_t)));
-    area->tops_capacity = area->tops ? width : 0;
-    if (!area->tops) return;
+  const int32_t width = lv_area_get_width(&coords), height = lv_area_get_height(&coords);
+  const int32_t count = static_cast<int32_t>(lv_chart_get_point_count(chart));
+  if (width < 2 || height < 2 || !ensure_capacity(area->tops, area->tops_capacity, width) ||
+      !ensure_capacity(area->points, area->points_capacity, count)) {
+    return;
   }
-  if (!area_graph::column_tops(chart, series, area->tops, width)) return;
-  const uint32_t key = area_graph::area_key(area->tops, width, height, 0, 0);
-  if (!area->mask || key != area->key) {
+  const int32_t points = area_graph::chart_points(chart, series, area->points, count);
+  if (!points) return;
+  const uint32_t key =
+      area_graph::picture_key(area->points, points, {static_cast<uint32_t>(width), static_cast<uint32_t>(height)});
+  if (!area->masks || key != area->key) {
     const size_t bytes = static_cast<size_t>(width) * static_cast<size_t>(height);
-    if (bytes > area->capacity) {
-      if (area->mask) lv_image_cache_drop(&area->image);
-      lv_free(area->mask);
-      area->mask = static_cast<uint8_t*>(lv_malloc(bytes));
-      area->capacity = area->mask ? bytes : 0;
-      if (!area->mask) return;
+    if (2 * bytes > area->capacity) {
+      if (area->masks) {
+        lv_image_cache_drop(&area->area);
+        lv_image_cache_drop(&area->line);
+      }
+      lv_free(area->masks);
+      area->masks = static_cast<uint8_t*>(lv_malloc(2 * bytes));
+      area->capacity = area->masks ? 2 * bytes : 0;
+      if (!area->masks) return;
     }
-    lv_image_cache_drop(&area->image);
-    area_graph::render_mask(area->mask, static_cast<uint32_t>(width), width, height, area->tops);
-    area->image.header.magic = LV_IMAGE_HEADER_MAGIC;
-    area->image.header.cf = LV_COLOR_FORMAT_A8;
-    area->image.header.w = width;
-    area->image.header.h = height;
-    area->image.header.stride = width;
-    area->image.data = area->mask;
-    area->image.data_size = bytes;
+    lv_image_cache_drop(&area->area);
+    lv_image_cache_drop(&area->line);
+    const float line_width = static_cast<float>(tile_layout::scale(3));
+    area_graph::column_tops(area->points, points, area->tops, width);
+    area_graph::render_mask(area->masks, static_cast<uint32_t>(width), width, height, area->tops);
+    area_graph::line_mask(area->masks + bytes, static_cast<uint32_t>(width), width, height, area->points, points,
+                          line_width);
+    area->rows = area_graph::rows_used(area->points, points, height, line_width);
+    set_mask(area->area, area->masks + area->rows.area_top * width, width, height - area->rows.area_top);
+    set_mask(area->line, area->masks + bytes + area->rows.line_top * width, width, area->rows.line_rows);
     area->key = key;
   }
+  if (area->rows.line_rows <= 0) return;
   lv_draw_image_dsc_t image;
   lv_draw_image_dsc_init(&image);
   image.base.layer = layer;
-  image.src = &area->image;
+  image.src = &area->area;
   image.recolor = lv_obj_get_style_bg_color(frame, LV_PART_MAIN);
   image.recolor_opa = LV_OPA_COVER;
   image.opa =
       tone_color::control_opa(ui_surface_style::icon_glow_percent(), tile_icon_disc::see_through(lv_obj_get_parent(frame)));
-  const lv_area_t at = {content.x1, content.y1, content.x1 + width - 1, content.y1 + height - 1};
-  lv_draw_image(layer, &image, &at);
+  const lv_area_t area_at = {coords.x1, coords.y1 + area->rows.area_top, coords.x2, coords.y2};
+  lv_draw_image(layer, &image, &area_at);
+  image.src = &area->line;
+  image.recolor = line_color;
+  image.opa = LV_OPA_COVER;
+  const lv_area_t line_at = {coords.x1, coords.y1 + area->rows.line_top, coords.x2,
+                             coords.y1 + area->rows.line_top + area->rows.line_rows - 1};
+  lv_draw_image(layer, &image, &line_at);
 }
 
 static void sensor_graph_delete_cb(lv_event_t* e) {
   auto* area = static_cast<SensorGraphArea*>(lv_event_get_user_data(e));
   if (!area) return;
-  if (area->mask) lv_image_cache_drop(&area->image);
-  lv_free(area->mask);
+  if (area->masks) {
+    lv_image_cache_drop(&area->area);
+    lv_image_cache_drop(&area->line);
+  }
+  lv_free(area->masks);
   lv_free(area->tops);
+  lv_free(area->points);
   delete area;
 }
 
@@ -345,8 +386,8 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
       lv_obj_set_style_pad_ver(chart, tile_layout::scale(8), LV_PART_MAIN);
 
       series = lv_chart_add_series(chart, lv_color_hex(ui_theme::icon()), LV_CHART_AXIS_PRIMARY_Y);
-      lv_obj_set_style_line_width(chart, tile_layout::scale(3), LV_PART_ITEMS);
-      lv_obj_set_style_line_rounded(chart, true, LV_PART_ITEMS);
+      // The line is one of the graph's pictures (sensor_graph_area_cb).
+      lv_obj_set_style_line_width(chart, 0, LV_PART_ITEMS);
       lv_obj_set_style_size(chart, 0, 0, LV_PART_INDICATOR);
 
       // Initialize with LV_CHART_POINT_NONE; history will replace it.

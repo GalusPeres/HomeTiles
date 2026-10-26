@@ -268,13 +268,16 @@ struct SensorPopupContext {
   int32_t chart_scale = 1;
   uint64_t chart_range_start = 0;
   uint64_t chart_range_end = 0;
-  // The area's picture (area_graph::render_fade): the graph's size in RGB565
-  // in PSRAM, computed again only when the line, the colors or the size
-  // change (area_graph::area_key); the line's top per column beside it.
+  // The graph's picture (graph_picture: area, dashed lines and line) in
+  // RGB565 in PSRAM, computed again only when the line, the colors or the
+  // size change (area_graph::picture_key); the line's points and its top
+  // per column beside it.
   uint16_t* area_pixels = nullptr;
   size_t area_capacity = 0;
   int16_t* area_tops = nullptr;
   size_t area_tops_capacity = 0;
+  area_graph::Point* area_points = nullptr;
+  size_t area_points_capacity = 0;
   lv_image_dsc_t area_image = {};
   uint32_t area_key = 0;
   // Fraction digits of the current numeric state; readouts of history points
@@ -3305,6 +3308,8 @@ static void on_overlay_delete(lv_event_t* e) {
   ctx->area_pixels = nullptr;
   heap_caps_free(ctx->area_tops);
   ctx->area_tops = nullptr;
+  heap_caps_free(ctx->area_points);
+  ctx->area_points = nullptr;
   editable_control_delete(ctx->control); ctx->control = nullptr;
   if (g_sensor_popup_ctx == ctx) {
     g_sensor_first_frame.cancel();
@@ -3346,11 +3351,17 @@ static void on_range_click(lv_event_t* e) {
   request_history_for_context(ctx);
 }
 
-// The area's picture for the chart's current line, colors and size, or null
-// without a line (or memory).
-static const lv_image_dsc_t* graph_area(SensorPopupContext* ctx, int32_t width, int32_t height, uint32_t color,
-                                        uint32_t card) {
+// The graph's picture for the chart's current line, colors and size: the
+// area (below the line the icon color fading from 40 % at the top of the
+// graph to nothing at its bottom, the card above it), the dashed lines at
+// the maximum and the minimum (`dashes`: not for a flat line) and the line
+// itself; null without a line (or memory). Computed again only after a
+// change (area_graph::picture_key).
+static const lv_image_dsc_t* graph_picture(SensorPopupContext* ctx, int32_t width, int32_t height, int32_t fade_top,
+                                           int32_t fade_bottom, bool dashes, uint32_t color, uint32_t card,
+                                           uint32_t dash) {
   if (width < 2 || height < 2) return nullptr;
+  const int32_t count = static_cast<int32_t>(lv_chart_get_point_count(ctx->chart));
   if (static_cast<size_t>(width) > ctx->area_tops_capacity) {
     heap_caps_free(ctx->area_tops);
     ctx->area_tops = static_cast<int16_t*>(
@@ -3358,8 +3369,19 @@ static const lv_image_dsc_t* graph_area(SensorPopupContext* ctx, int32_t width, 
     ctx->area_tops_capacity = ctx->area_tops ? static_cast<size_t>(width) : 0;
     if (!ctx->area_tops) return nullptr;
   }
-  if (!area_graph::column_tops(ctx->chart, ctx->series, ctx->area_tops, width)) return nullptr;
-  const uint32_t key = area_graph::area_key(ctx->area_tops, width, height, color, card);
+  if (static_cast<size_t>(count) > ctx->area_points_capacity) {
+    heap_caps_free(ctx->area_points);
+    ctx->area_points = static_cast<area_graph::Point*>(
+        heap_caps_malloc(static_cast<size_t>(count) * sizeof(area_graph::Point), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    ctx->area_points_capacity = ctx->area_points ? static_cast<size_t>(count) : 0;
+    if (!ctx->area_points) return nullptr;
+  }
+  const int32_t points = area_graph::chart_points(ctx->chart, ctx->series, ctx->area_points, count);
+  if (!points) return nullptr;
+  const uint32_t key = area_graph::picture_key(
+      ctx->area_points, points,
+      {static_cast<uint32_t>(width), static_cast<uint32_t>(height), static_cast<uint32_t>(fade_top),
+       static_cast<uint32_t>(fade_bottom), dashes ? 1u : 0u, color, card, dash});
   if (ctx->area_pixels && key == ctx->area_key) return &ctx->area_image;
   const uint32_t stride = lv_draw_buf_width_to_stride(width, LV_COLOR_FORMAT_RGB565);
   const size_t bytes = static_cast<size_t>(stride) * static_cast<size_t>(height);
@@ -3369,13 +3391,23 @@ static const lv_image_dsc_t* graph_area(SensorPopupContext* ctx, int32_t width, 
     ctx->area_pixels = static_cast<uint16_t*>(heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     ctx->area_capacity = ctx->area_pixels ? bytes : 0;
     if (!ctx->area_pixels) {
-      Serial.printf("[SensorPopup] Graph area picture: %u bytes unavailable\n", static_cast<unsigned>(bytes));
+      Serial.printf("[SensorPopup] Graph picture: %u bytes unavailable\n", static_cast<unsigned>(bytes));
       return nullptr;
     }
   }
   lv_image_cache_drop(&ctx->area_image);
-  area_graph::render_fade(ctx->area_pixels, stride / sizeof(uint16_t), width, height, ctx->area_tops, color, card,
-                          kFadeTopOpa);
+  const uint32_t stride_px = stride / sizeof(uint16_t);
+  area_graph::column_tops(ctx->area_points, points, ctx->area_tops, width);
+  area_graph::render_fade(ctx->area_pixels, stride_px, width, height, ctx->area_tops, fade_top, fade_bottom, color,
+                          card, kFadeTopOpa);
+  if (dashes) {
+    for (const int32_t row : {fade_top, fade_bottom}) {
+      area_graph::draw_dashes(ctx->area_pixels, stride_px, width, height, row - kDashWidth / 2, kDashWidth,
+                              kDashLength, dash, kDashOpa);
+    }
+  }
+  area_graph::draw_line(ctx->area_pixels, stride_px, width, height, ctx->area_points, points,
+                        static_cast<float>(kChartLineWidth), color);
   ctx->area_image.header.magic = LV_IMAGE_HEADER_MAGIC;
   ctx->area_image.header.cf = LV_COLOR_FORMAT_RGB565;
   ctx->area_image.header.w = width;
@@ -3406,11 +3438,10 @@ static bool chart_extremes(const SensorPopupContext* ctx, uint32_t& high, uint32
   return found > 1 && values[high] != values[low];
 }
 
-// Before lv_chart draws its line (mockup sensor-graph-2, issue #131): the
-// line in the header icon's color; the area's picture (below the line the
-// icon color fading from 40 % at the top of the graph to nothing at its
-// bottom, the card above it) as one image; the dashed lines at the maximum
-// and the minimum.
+// The graph (mockup sensor-graph-2, issue #131) as one picture over the
+// chart's whole box (graph_picture): lv_chart draws no line of its own
+// (line width 0), only a single point when there is just one. The line's
+// color, the header icon's, also colors the dots at the extremes.
 static void on_chart_area_draw(lv_event_t* event) {
   const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
   auto* ctx = static_cast<SensorPopupContext*>(lv_event_get_user_data(event));
@@ -3421,37 +3452,23 @@ static void on_chart_area_draw(lv_event_t* event) {
   // Set while drawing: lv_chart_set_series_color would invalidate.
   ctx->series->color = color;
   uint32_t high = 0, low = 0;
-  if (!chart_extremes(ctx, high, low)) return;
-  lv_area_t content;
+  const bool dashes = chart_extremes(ctx, high, low);
+  lv_area_t coords, content;
+  lv_obj_get_coords(ctx->chart, &coords);
   lv_obj_get_content_coords(ctx->chart, &content);
-  // lv_chart maps the minimum one row below the content (y_ofs + h): the
-  // picture reaches it.
-  const int32_t width = lv_area_get_width(&content), height = lv_area_get_height(&content) + 1;
+  // The maximum maps to the content's top row, the minimum one row below it
+  // (lv_chart: y_ofs + h).
+  const int32_t fade_top = content.y1 - coords.y1;
+  const int32_t fade_bottom = fade_top + lv_area_get_height(&content);
   const lv_color_t card = lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN);
-  if (const lv_image_dsc_t* area = graph_area(ctx, width, height, lv_color_to_u32(color) & 0xFFFFFF,
-                                              lv_color_to_u32(card) & 0xFFFFFF)) {
+  if (const lv_image_dsc_t* picture =
+          graph_picture(ctx, lv_area_get_width(&coords), lv_area_get_height(&coords), fade_top, fade_bottom, dashes,
+                        lv_color_to_u32(color) & 0xFFFFFF, lv_color_to_u32(card) & 0xFFFFFF, ui_theme::text() & 0xFFFFFF)) {
     lv_draw_image_dsc_t image;
     lv_draw_image_dsc_init(&image);
     image.base.layer = layer;
-    image.src = area;
-    const lv_area_t at = {content.x1, content.y1, content.x1 + width - 1, content.y1 + height - 1};
-    lv_draw_image(layer, &image, &at);
-  }
-
-  lv_draw_line_dsc_t dash;
-  lv_draw_line_dsc_init(&dash);
-  dash.base.layer = layer;
-  dash.color = lv_color_hex(ui_theme::text());
-  dash.opa = kDashOpa;
-  dash.width = kDashWidth;
-  dash.dash_width = kDashLength;
-  dash.dash_gap = kDashLength;
-  for (const int32_t y : {content.y1, content.y2}) {
-    dash.p1.x = content.x1;
-    dash.p1.y = y;
-    dash.p2.x = content.x2;
-    dash.p2.y = y;
-    lv_draw_line(layer, &dash);
+    image.src = picture;
+    lv_draw_image(layer, &image, &coords);
   }
 }
 
@@ -3649,8 +3666,8 @@ static void build_popup_body(SensorPopupContext* ctx) {
   lv_chart_set_div_line_count(chart, 0, 0);
   lv_chart_set_type(chart, LV_CHART_TYPE_LINE);
   lv_chart_set_update_mode(chart, LV_CHART_UPDATE_MODE_SHIFT);
-  lv_obj_set_style_line_width(chart, kChartLineWidth, LV_PART_ITEMS);
-  lv_obj_set_style_line_rounded(chart, true, LV_PART_ITEMS);
+  // The line is part of the graph's picture (on_chart_area_draw).
+  lv_obj_set_style_line_width(chart, 0, LV_PART_ITEMS);
   lv_obj_set_style_size(chart, 0, 0, LV_PART_INDICATOR);
 
   ctx->series = lv_chart_add_series(chart, lv_color_hex(ui_theme::icon()), LV_CHART_AXIS_PRIMARY_Y);

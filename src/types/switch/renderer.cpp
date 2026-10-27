@@ -619,6 +619,54 @@ void release_timer_cb(lv_timer_t*) {
 
 }  // namespace
 
+namespace {
+
+// A header layout's event data, the user data of its bar's events (the icon
+// button has no bar).
+SwitchEventData* bar_event_data(const SwitchBarView* view) {
+  if (!view || !view->bar) return nullptr;
+  const uint32_t count = lv_obj_get_event_count(view->bar);
+  for (uint32_t i = 0; i < count; ++i) {
+    lv_event_dsc_t* dsc = lv_obj_get_event_dsc(view->bar, i);
+    if (dsc && lv_event_dsc_get_cb(dsc) == bar_event_cb) {
+      return static_cast<SwitchEventData*>(lv_event_dsc_get_user_data(dsc));
+    }
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+void switch_tile_hold_from_popup(GridType grid_type, uint8_t index, uint8_t value, bool level, bool released) {
+  SwitchTileWidgets* widgets = tile_renderer_get_switch_widgets(grid_type);
+  if (!widgets || index >= TILES_PER_GRID) return;
+  SwitchEventData* data = bar_event_data(widgets[index].view);
+  if (!data) return;
+  if (g_drag.data != data) {
+    // Another tile's hold ends now: it shows its reported state.
+    cancel_live_timer();
+    if (g_release_timer) {
+      lv_timer_delete(g_release_timer);
+      release_timer_cb(nullptr);
+    }
+    g_drag = DimmerDrag{};
+    g_drag.data = data;
+  }
+  g_drag.value = value;
+  g_drag.hold_level = level;
+  if (released) {
+    start_hold();
+  } else {
+    // A release's hold timer would end the hold during this gesture.
+    if (g_release_timer) {
+      lv_timer_delete(g_release_timer);
+      g_release_timer = nullptr;
+    }
+    g_drag.dragging = false;
+    g_drag.block_until = millis() + kRemoteBlockMs;
+  }
+}
+
 bool switch_tile_held_on(const SwitchTileWidgets& widgets, bool& on) {
   uint8_t value = 0;
   bool level = false;

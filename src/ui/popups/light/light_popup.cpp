@@ -24,6 +24,7 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
+#include "src/types/switch/renderer.h"
 #include "src/ui/shared/command_pacer.h"
 #include "esp_heap_caps.h"
 #include <lvgl_private.h>
@@ -1224,6 +1225,16 @@ static void sync_bound_tile_from_popup(LightPopupContext* ctx) {
   update_switch_tile_state(static_cast<GridType>(ctx->tile_grid), ctx->tile_index, payload.c_str());
 }
 
+// The tile the popup was opened from keeps the popup's on/off and level
+// against Home Assistant's echoes while the popup changes them
+// (switch_tile_hold_from_popup).
+static void hold_bound_tile(LightPopupContext* ctx, bool released) {
+  if (!ctx || !ctx->available || !ctx->has_tile_ref || ctx->tile_index >= TILES_PER_GRID) return;
+  const bool level = ctx->is_light && ctx->supports_brightness;
+  const uint8_t value = level ? (ctx->is_on ? ctx->val : 0) : (ctx->is_on ? 1 : 0);
+  switch_tile_hold_from_popup(static_cast<GridType>(ctx->tile_grid), ctx->tile_index, value, level, released);
+}
+
 static bool can_live_publish(const LightPopupContext* ctx) {
   if (!ctx || !ctx->available || !ctx->user_dragging || !ctx->drag_moved ||
       !ctx->is_light || !ctx->entity_id.length()) {
@@ -1333,6 +1344,7 @@ static void final_publish_timer_cb(lv_timer_t* timer) {
 static void commit_paced(LightPopupContext* ctx, LightPublishKind kind) {
   if (!ctx) return;
   cancel_pending_live_publish(ctx);
+  hold_bound_tile(ctx, true);
   sync_bound_tile_from_popup(ctx);
   const bool repeat = kind != LightPublishKind::State &&
                       ctx->pacer.final_redundant(publish_signature(ctx, kind));
@@ -2070,8 +2082,12 @@ static void apply_brightness_point(LightPopupContext* ctx, const lv_point_t& poi
     update_header_and_power_visuals(ctx, icon_rgb);
   }
 
-  if (commit) commit_brightness(ctx);
-  else maybe_live_publish_brightness(ctx);
+  if (commit) {
+    commit_brightness(ctx);
+  } else {
+    hold_bound_tile(ctx, false);
+    maybe_live_publish_brightness(ctx);
+  }
 }
 
 // Diagnostics for the color wheel and the Kelvin/brightness sliders: one line per drag

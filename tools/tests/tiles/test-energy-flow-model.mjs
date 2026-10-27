@@ -95,11 +95,12 @@ const near = (a, b, label, eps = 0.02) => assert.ok(Math.abs(a - b) <= eps, `${l
 
 // The dots' speed follows the power (user 2026-10-26, "immer richtig
 // aufgeteilt"): the strongest flow at its power / 2500 W px per frame
-// between 0.5 and 3, the others in proportion, none below 0.15, none idle.
+// between 0.5 and 3, the others in proportion, none below 0.4 (0.15 crept,
+// user 2026-10-27), none idle.
 const [top, mid, low, alone, tiny, capped, half, idle] = device.speeds;
 near(top, 2.28, 'strongest 5.7 kW', 0.001); near(mid, 2.28 * 4100 / 5700, '4.1 kW of 5.7', 0.001);
 near(low, 2.28 * 1900 / 5700, '1.9 kW of 5.7', 0.001);
-near(alone, 0.5, 'a lone 400 W at the slowest top', 0.001); near(tiny, 0.15, '20 W still moves', 0.001);
+near(alone, 0.5, 'a lone 400 W at the slowest top', 0.001); near(tiny, 0.4, '20 W still moves', 0.001);
 near(capped, 3, '12 kW capped', 0.001); near(half, 1.5, 'half of the capped', 0.001); assert.equal(idle, 0, 'no flow, no dot');
 
 // The V2 2x2 tile is the mockup: node centres, straight lines on the disc

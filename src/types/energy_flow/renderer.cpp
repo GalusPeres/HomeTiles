@@ -61,7 +61,8 @@ constexpr uint32_t kIdleLightScreen = 0xCDD0D5;
 // user 2026-10-24): the display's refresh moves them (LV_EVENT_REFR_START),
 // so every frame shows one step and no timer beats against the refresh
 // (b533's 40 ms timer showed its steps for 34 or 51 ms). The step follows
-// the flow's power (flow_model.h dot_speed); a dot is drawn on whole pixels.
+// the flow's power (flow_model.h dot_speed); a dot is drawn smoothed on
+// quarter pixels (flow_geometry.h render_dot).
 
 // The dots' cost in the log: one line per this many ms while they move.
 constexpr uint32_t kMotionLogMs = 10000;
@@ -102,13 +103,13 @@ struct FlowTileState {
   uint32_t line_color[kLineCount] = {};
   float step[kLineCount] = {};  // px per display frame (dot_speed)
   float phase[kLineCount] = {};  // distance along the line
-  lv_point_t dot[kLineCount] = {};
-  // The bends as pictures, drawn once per color (render_bend): LVGL builds
-  // a bend's circle masks again in every frame a dot passes it (b540 log:
-  // ~0.25 ms per bend drawn). Areas relative to the canvas.
-  lv_draw_buf_t* bend_picture[kLineCount] = {};
-  uint32_t bend_color[kLineCount] = {};
-  lv_area_t bend_area[kLineCount] = {};
+  lv_point_t dot[kLineCount] = {};  // in quarter pixels (kDotSteps)
+  // Each line's whole stroke as one picture of coverages over its
+  // line_box (render_stroke), drawn in the line's color now: computed once
+  // with the layout, a color change keeps it. In the LVGL heap, freed with
+  // the tile.
+  uint8_t* stroke_pixels[kLineCount] = {};
+  lv_image_dsc_t stroke[kLineCount] = {};
   bool dirty = false;
 };
 
@@ -133,9 +134,9 @@ struct MotionStats {
   uint32_t lines_us = 0;
   uint32_t lines_max_us = 0;
   uint32_t frame_lines_us = 0;
-  // Within it: straight pieces, bends and dots (count and time).
-  uint32_t piece_n[3] = {};
-  uint32_t piece_us[3] = {};
+  // Within it: line pictures and dots (count and time).
+  uint32_t piece_n[2] = {};
+  uint32_t piece_us[2] = {};
   // LVGL's search for the topmost covering object of each area (from the
   // screen's cover check to the first object drawn).
   uint32_t search_us = 0;
@@ -262,11 +263,20 @@ bool shown_on_screen(lv_obj_t* obj) {
   return true;
 }
 
+// A dot's place now, in quarter pixels.
 lv_point_t dot_point(const FlowTileState& st, uint8_t line) {
   const Polyline& path = st.layout.line[line];
   const float length = polyline_length(path);
   const Point p = point_at(path, st.reverse[line] ? length - st.phase[line] : st.phase[line]);
-  return {round_px(p.x), round_px(p.y)};
+  return {round_px(p.x * kDotSteps), round_px(p.y * kDotSteps)};
+}
+
+// The pixels a dot at `q` (quarter pixels, relative to the canvas) covers,
+// on the screen.
+lv_area_t dot_area(const FlowTileState& st, const lv_area_t& canvas, lv_point_t q) {
+  const int32_t x = canvas.x1 + dot_pixel(q.x) - st.dot_radius, y = canvas.y1 + dot_pixel(q.y) - st.dot_radius;
+  const int32_t size = dot_picture_size(st.dot_radius);
+  return {x, y, x + size - 1, y + size - 1};
 }
 
 // A node ring lies opaque over the ends of its lines; the dots run out from
@@ -300,23 +310,22 @@ bool clip_to_rings(const FlowTileState& st, lv_area_t& area) {
 
 // Redraws a dot's old and new place; false when the rings cover both.
 bool invalidate_dot(const FlowTileState& st, const lv_area_t& canvas, lv_point_t a, lv_point_t b) {
-  const int r = st.dot_radius + 1;
   bool any = false;
   auto invalidate = [&](lv_area_t area) {
     if (!clip_to_rings(st, area)) return;
     lv_obj_invalidate_area(st.canvas, &area);
     any = true;
   };
+  const lv_area_t from = dot_area(st, canvas, a), to = dot_area(st, canvas, b);
   // Neighbouring steps share one small area; a dot that starts over
   // redraws both ends.
-  if (abs(a.x - b.x) <= 2 * r && abs(a.y - b.y) <= 2 * r) {
-    invalidate({canvas.x1 + LV_MIN(a.x, b.x) - r, canvas.y1 + LV_MIN(a.y, b.y) - r,
-                canvas.x1 + LV_MAX(a.x, b.x) + r, canvas.y1 + LV_MAX(a.y, b.y) + r});
+  const int32_t size = dot_picture_size(st.dot_radius);
+  if (abs(from.x1 - to.x1) <= size && abs(from.y1 - to.y1) <= size) {
+    invalidate({LV_MIN(from.x1, to.x1), LV_MIN(from.y1, to.y1), LV_MAX(from.x2, to.x2), LV_MAX(from.y2, to.y2)});
     return any;
   }
-  for (const lv_point_t& p : {a, b}) {
-    invalidate({canvas.x1 + p.x - r, canvas.y1 + p.y - r, canvas.x1 + p.x + r, canvas.y1 + p.y + r});
-  }
+  invalidate(from);
+  invalidate(to);
   return any;
 }
 
@@ -498,7 +507,7 @@ void log_motion(uint32_t now_ms) {
     const uint32_t window = now_ms - m.window_ms;
     Serial.printf("[EnergyFlow] Dots %lu s: frames=%lu (%.1f/s) dots<=%lu areas avg=%.1f max=%lu px avg=%lu "
                   "render avg=%.2f max=%.2f ms layout avg=%lu us draw avg=%lu us flush avg=%lu us n=%.1f "
-                  "tail avg=%lu us lines avg=%lu max=%lu us (line %.1f %lu us arc %.1f %lu us dot %.1f %lu us) "
+                  "tail avg=%lu us lines avg=%lu max=%lu us (line %.1f %lu us dot %.1f %lu us) "
                   "search avg=%lu us step avg=%lu max=%lu us gap max=%.1f ms\n",
                   static_cast<unsigned long>(window / 1000), static_cast<unsigned long>(frames),
                   frames * 1000.0f / window, static_cast<unsigned long>(m.dots_max),
@@ -511,7 +520,6 @@ void log_motion(uint32_t now_ms) {
                   static_cast<unsigned long>(m.lines_us / frames), static_cast<unsigned long>(m.lines_max_us),
                   static_cast<float>(m.piece_n[0]) / frames, static_cast<unsigned long>(m.piece_us[0] / frames),
                   static_cast<float>(m.piece_n[1]) / frames, static_cast<unsigned long>(m.piece_us[1] / frames),
-                  static_cast<float>(m.piece_n[2]) / frames, static_cast<unsigned long>(m.piece_us[2] / frames),
                   static_cast<unsigned long>(m.search_us / frames), static_cast<unsigned long>(m.step_us / frames), static_cast<unsigned long>(m.step_max_us),
                   m.gap_max_us / 1000.0f);
   }
@@ -591,24 +599,7 @@ void wake_motion(lv_obj_t* card) {
   lv_timer_resume(lv_display_get_refr_timer(g_motion_display));
 }
 
-// Whether points first..last of a line, `width` around them, touch the area
-// being drawn: a dot's step redraws a few pixels, and a piece outside them
-// is not handed to LVGL at all.
-bool piece_on_clip(const lv_layer_t* layer, const lv_area_t& canvas, const Polyline& path, uint8_t first,
-                   uint8_t last, int width) {
-  lv_area_t box = {LV_COORD_MAX, LV_COORD_MAX, LV_COORD_MIN, LV_COORD_MIN};
-  for (uint8_t i = first; i <= last; ++i) {
-    box.x1 = LV_MIN(box.x1, round_px(path.p[i].x));
-    box.y1 = LV_MIN(box.y1, round_px(path.p[i].y));
-    box.x2 = LV_MAX(box.x2, round_px(path.p[i].x));
-    box.y2 = LV_MAX(box.y2, round_px(path.p[i].y));
-  }
-  lv_area_increase(&box, width, width);
-  lv_area_move(&box, canvas.x1, canvas.y1);
-  return lv_area_is_on(&box, &layer->_clip_area);
-}
-
-// Counts one drawing of a kind (0 straight, 1 bend, 2 dot) started at
+// Counts one drawing of a kind (0 line picture, 1 dot) started at
 // `started_us` while a dot step's frame is drawn.
 void count_piece(int kind, uint32_t started_us) {
   MotionStats& m = g_motion_stats;
@@ -617,51 +608,7 @@ void count_piece(int kind, uint32_t started_us) {
   m.piece_us[kind] += micros() - started_us;
 }
 
-// Points first..last of a line as straight pieces (two or more points).
-void draw_straight(lv_layer_t* layer, lv_draw_line_dsc_t& dsc, const lv_area_t& canvas, const Polyline& path,
-                   uint8_t first, uint8_t last) {
-  if (last <= first || !piece_on_clip(layer, canvas, path, first, last, dsc.width)) return;
-  const uint32_t started_us = micros();
-  lv_point_precise_t points[kMaxLinePoints];
-  for (uint8_t i = first; i <= last; ++i) {
-    points[i - first].x = canvas.x1 + round_px(path.p[i].x);
-    points[i - first].y = canvas.y1 + round_px(path.p[i].y);
-  }
-  dsc.points = points;
-  dsc.point_cnt = last - first + 1;
-  lv_draw_line(layer, &dsc);
-  count_piece(0, started_us);
-}
-
-// A line's bend: one true circle arc, the stroke centred on its radius,
-// round ends; `cx`/`cy` its centre where it is drawn.
-void bend_arc(const FlowTileState& st, const Polyline& path, int32_t cx, int32_t cy, uint32_t color,
-              lv_draw_arc_dsc_t& dsc) {
-  lv_draw_arc_dsc_init(&dsc);
-  dsc.width = st.line_width;
-  dsc.rounded = 1;
-  dsc.color = lv_color_hex(color);
-  dsc.center = {cx, cy};
-  dsc.radius = static_cast<uint16_t>(path.bend.radius + st.line_width / 2);
-  dsc.start_angle = path.bend.start_angle;
-  dsc.end_angle = path.bend.end_angle;
-}
-
-// The box a bend's stroke covers, its round ends included (relative to the
-// canvas): its quarter of the circle, a stroke width around.
-lv_area_t bend_box(const FlowTileState& st, const Polyline& path) {
-  const int32_t outer = path.bend.radius + st.line_width / 2;
-  const int32_t cx = path.bend.cx, cy = path.bend.cy;
-  const int quarter = path.bend.start_angle % 360;  // 0 right-down, 90 left-down, 180 left-up, 270 right-up
-  const bool left = quarter == 90 || quarter == 180;
-  const bool up = quarter >= 180;
-  lv_area_t box = {left ? cx - outer : cx, up ? cy - outer : cy, left ? cx : cx + outer, up ? cy : cy + outer};
-  const int32_t pad = st.line_width + 2;
-  lv_area_increase(&box, pad, pad);
-  return box;
-}
-
-// Off screen, never shown: draws the bend pictures and the mirrored icon.
+// Off screen, never shown: draws the mirrored icon.
 lv_obj_t* g_picture_canvas = nullptr;
 
 void picture_canvas_deleted(lv_event_t*) { g_picture_canvas = nullptr; }
@@ -674,36 +621,63 @@ lv_obj_t* picture_canvas() {
   return g_picture_canvas;
 }
 
-// Draws a line's bend once into its picture in `color` (outside LVGL's
-// rendering, from refresh); false without memory, the line then draws its
-// arc in every frame as before.
-bool render_bend(FlowTileState& st, uint8_t line, uint32_t color) {
-  const Polyline& path = st.layout.line[line];
-  if (!path.bend.present) return false;
-  if (st.bend_picture[line] && st.bend_color[line] == color) return true;
-  lv_obj_t* canvas = picture_canvas();
-  if (!canvas) return false;
-  const lv_area_t box = bend_box(st, path);
-  lv_draw_buf_t*& picture = st.bend_picture[line];
-  if (!picture) {
-    picture = lv_draw_buf_create(lv_area_get_width(&box), lv_area_get_height(&box), LV_COLOR_FORMAT_ARGB8888,
-                                 LV_STRIDE_AUTO);
-    if (!picture) return false;
+// An A8 picture over `pixels`, drawn recolored (like the Sensor graph's).
+void set_mask(lv_image_dsc_t& image, const uint8_t* pixels, int32_t width, int32_t height) {
+  image.header.magic = LV_IMAGE_HEADER_MAGIC;
+  image.header.cf = LV_COLOR_FORMAT_A8;
+  image.header.w = width;
+  image.header.h = height;
+  image.header.stride = width;
+  image.data = pixels;
+  image.data_size = static_cast<size_t>(width) * static_cast<size_t>(height);
+}
+
+// Every shown line's stroke picture, once with the layout. A line without
+// memory for it draws as an LVGL line through its points instead.
+bool dot_pictures(int radius);
+void render_strokes(FlowTileState& st) {
+  dot_pictures(st.dot_radius);
+  for (uint8_t line = 0; line < kLineCount; ++line) {
+    const lv_area_t& box = st.line_box[line];
+    const int32_t width = lv_area_get_width(&box), height = lv_area_get_height(&box);
+    if (!st.line_shown[line] || st.layout.line[line].count < 2 || width <= 0 || height <= 0) continue;
+    uint8_t* pixels = static_cast<uint8_t*>(lv_malloc(static_cast<size_t>(width) * static_cast<size_t>(height)));
+    if (!pixels) {
+      Serial.printf("[EnergyFlow] No memory for line %u's picture (%ldx%ld)\n", static_cast<unsigned>(line),
+                    static_cast<long>(width), static_cast<long>(height));
+      continue;
+    }
+    render_stroke(pixels, width, height, box.x1, box.y1, st.layout.line[line], static_cast<float>(st.line_width));
+    st.stroke_pixels[line] = pixels;
+    set_mask(st.stroke[line], pixels, width, height);
   }
-  lv_image_cache_drop(picture);
-  lv_draw_buf_clear(picture, nullptr);
-  lv_canvas_set_draw_buf(canvas, picture);
-  lv_layer_t layer;
-  lv_canvas_init_layer(canvas, &layer);
-  lv_draw_arc_dsc_t dsc;
-  bend_arc(st, path, path.bend.cx - box.x1, path.bend.cy - box.y1, color, dsc);
-  lv_draw_arc(&layer, &dsc);
-  lv_canvas_finish_layer(canvas, &layer);
-  // The canvas keeps no reference to a picture that goes with its tile.
-  lv_image_set_src(canvas, nullptr);
-  lv_image_cache_drop(picture);
-  st.bend_area[line] = box;
-  st.bend_color[line] = color;
+}
+
+// The dots' pictures for every quarter pixel position (render_dot), shared
+// by all tiles of the layout's dot radius; false without memory (the dots
+// are then drawn on whole pixels).
+uint8_t* g_dot_pixels = nullptr;
+int g_dot_radius = 0;
+lv_image_dsc_t g_dot_image[kDotSteps * kDotSteps] = {};
+
+bool dot_pictures(int radius) {
+  if (g_dot_pixels && g_dot_radius == radius) return true;
+  const int size = dot_picture_size(radius);
+  const size_t bytes = static_cast<size_t>(size) * static_cast<size_t>(size);
+  if (g_dot_pixels) {
+    for (lv_image_dsc_t& image : g_dot_image) lv_image_cache_drop(&image);
+    lv_free(g_dot_pixels);
+  }
+  g_dot_pixels = static_cast<uint8_t*>(lv_malloc(bytes * kDotSteps * kDotSteps));
+  g_dot_radius = g_dot_pixels ? radius : 0;
+  if (!g_dot_pixels) return false;
+  for (int fy = 0; fy < kDotSteps; ++fy) {
+    for (int fx = 0; fx < kDotSteps; ++fx) {
+      uint8_t* pixels = g_dot_pixels + bytes * (fy * kDotSteps + fx);
+      render_dot(pixels, radius, fx, fy);
+      set_mask(g_dot_image[fy * kDotSteps + fx], pixels, size, size);
+    }
+  }
   return true;
 }
 
@@ -789,63 +763,65 @@ void canvas_draw_cb(lv_event_t* e) {
   const uint32_t started_us = micros();
   lv_area_t canvas;
   lv_obj_get_coords(st->canvas, &canvas);
-  lv_draw_line_dsc_t line_dsc;
-  lv_draw_line_dsc_init(&line_dsc);
-  line_dsc.width = st->line_width;
-  line_dsc.round_start = 1;
-  line_dsc.round_end = 1;
-  // The idle lines first, the flows over them, then their dots.
+  lv_draw_image_dsc_t image_dsc;
+  lv_draw_image_dsc_init(&image_dsc);
+  image_dsc.recolor_opa = LV_OPA_COVER;
+  // The idle lines first, the flows over them, then their dots. A line's
+  // picture holds its whole stroke; LVGL draws only the part being drawn.
   for (int pass = 0; pass < 2; ++pass) {
     for (uint8_t line = 0; line < kLineCount; ++line) {
       if (!st->line_shown[line] || st->line_live[line] != (pass == 1)) continue;
       lv_area_t box = st->line_box[line];
       lv_area_move(&box, canvas.x1, canvas.y1);
       if (!lv_area_is_on(&box, &layer->_clip_area)) continue;
-      const Polyline& path = st->layout.line[line];
-      const lv_color_t color = lv_color_hex(st->line_color[line]);
-      line_dsc.color = color;
-      if (!path.bend.present) {
-        draw_straight(layer, line_dsc, canvas, path, 0, path.count - 1);
-        continue;
-      }
-      // Straight, one true circle arc (the stroke centred on its radius),
-      // straight.
-      draw_straight(layer, line_dsc, canvas, path, 0, path.bend_first);
-      if (piece_on_clip(layer, canvas, path, path.bend_first, path.bend_last, st->line_width)) {
-        const uint32_t arc_started_us = micros();
-        const lv_draw_buf_t* picture = st->bend_picture[line];
-        if (picture && st->bend_color[line] == st->line_color[line]) {
-          // Its picture, only the part being drawn.
-          lv_draw_image_dsc_t image_dsc;
-          lv_draw_image_dsc_init(&image_dsc);
-          image_dsc.src = picture;
-          lv_area_t area = st->bend_area[line];
-          lv_area_move(&area, canvas.x1, canvas.y1);
-          lv_draw_image(layer, &image_dsc, &area);
-        } else {
-          lv_draw_arc_dsc_t arc_dsc;
-          bend_arc(*st, path, canvas.x1 + path.bend.cx, canvas.y1 + path.bend.cy, st->line_color[line], arc_dsc);
-          lv_draw_arc(layer, &arc_dsc);
+      const uint32_t line_started_us = micros();
+      if (st->stroke_pixels[line]) {
+        image_dsc.src = &st->stroke[line];
+        image_dsc.recolor = lv_color_hex(st->line_color[line]);
+        lv_draw_image(layer, &image_dsc, &box);
+      } else {
+        const Polyline& path = st->layout.line[line];
+        lv_point_precise_t points[kMaxLinePoints];
+        for (uint8_t i = 0; i < path.count; ++i) {
+          points[i].x = canvas.x1 + round_px(path.p[i].x);
+          points[i].y = canvas.y1 + round_px(path.p[i].y);
         }
-        count_piece(1, arc_started_us);
+        lv_draw_line_dsc_t line_dsc;
+        lv_draw_line_dsc_init(&line_dsc);
+        line_dsc.width = st->line_width;
+        line_dsc.round_start = 1;
+        line_dsc.round_end = 1;
+        line_dsc.color = lv_color_hex(st->line_color[line]);
+        line_dsc.points = points;
+        line_dsc.point_cnt = path.count;
+        lv_draw_line(layer, &line_dsc);
       }
-      draw_straight(layer, line_dsc, canvas, path, path.bend_last, path.count - 1);
+      count_piece(0, line_started_us);
     }
   }
+  const bool smooth = g_dot_pixels && g_dot_radius == st->dot_radius;
   lv_draw_rect_dsc_t dot_dsc;
   lv_draw_rect_dsc_init(&dot_dsc);
   dot_dsc.radius = LV_RADIUS_CIRCLE;
   dot_dsc.bg_opa = LV_OPA_COVER;
   for (uint8_t line = 0; line < kLineCount; ++line) {
     if (!st->line_live[line]) continue;
-    const lv_point_t p = st->dot[line];
-    const lv_area_t area = {canvas.x1 + p.x - st->dot_radius, canvas.y1 + p.y - st->dot_radius,
-                            canvas.x1 + p.x + st->dot_radius - 1, canvas.y1 + p.y + st->dot_radius - 1};
+    const lv_point_t q = st->dot[line];
+    const lv_area_t area = dot_area(*st, canvas, q);
     if (!lv_area_is_on(&area, &layer->_clip_area)) continue;
-    dot_dsc.bg_color = lv_color_hex(st->line_color[line]);
     const uint32_t dot_started_us = micros();
-    lv_draw_rect(layer, &dot_dsc, &area);
-    count_piece(2, dot_started_us);
+    if (smooth) {
+      const int fx = q.x - dot_pixel(q.x) * kDotSteps, fy = q.y - dot_pixel(q.y) * kDotSteps;
+      image_dsc.src = &g_dot_image[fy * kDotSteps + fx];
+      image_dsc.recolor = lv_color_hex(st->line_color[line]);
+      lv_draw_image(layer, &image_dsc, &area);
+    } else {
+      // Its whole pixel, a circle of the dot's size centred on it.
+      const lv_area_t whole = {area.x1, area.y1, area.x2 - 1, area.y2 - 1};
+      dot_dsc.bg_color = lv_color_hex(st->line_color[line]);
+      lv_draw_rect(layer, &dot_dsc, &whole);
+    }
+    count_piece(1, dot_started_us);
   }
   // Counted while a dot step's frame is drawn (the dots' log line).
   if (g_motion_stats.frame_areas) g_motion_stats.frame_lines_us += micros() - started_us;
@@ -939,7 +915,6 @@ void refresh(FlowTileState& st) {
     st.step[line] = dot_speed(flows.watts[line], strongest);
     if (live) st.dot[line] = dot_point(st, line);
     if (changed && st.line_shown[line]) invalidate_line(st, line);
-    if (st.line_shown[line]) render_bend(st, line, color);
   }
   if (any_live(st)) wake_motion(st.card);
 }
@@ -1006,11 +981,11 @@ void card_delete_cb(lv_event_t* e) {
   for (FlowTileState*& slot : g_tiles) {
     if (slot == st) slot = nullptr;
   }
-  for (lv_draw_buf_t*& picture : st->bend_picture) {
-    if (!picture) continue;
-    lv_image_cache_drop(picture);
-    lv_draw_buf_destroy(picture);
-    picture = nullptr;
+  for (uint8_t line = 0; line < kLineCount; ++line) {
+    if (!st->stroke_pixels[line]) continue;
+    lv_image_cache_drop(&st->stroke[line]);
+    lv_free(st->stroke_pixels[line]);
+    st->stroke_pixels[line] = nullptr;
   }
   // The card goes first, its children after: the feed-in picture lets go
   // of its pixels before they are freed.
@@ -1179,15 +1154,19 @@ lv_obj_t* render_energy_flow_tile(lv_obj_t* parent, int col, int row, const Tile
   for (uint8_t line = 0; line < kLineCount; ++line) {
     const Polyline& path = st->layout.line[line];
     lv_area_t& box = st->line_box[line];
+    // The points a line width and a pixel around: the stroke's smoothed
+    // edge, with points between whole pixels, stays inside (its picture).
+    const int margin = st->line_width + 1;
     box = {LV_COORD_MAX, LV_COORD_MAX, LV_COORD_MIN, LV_COORD_MIN};
     for (uint8_t i = 0; i < path.count; ++i) {
-      box.x1 = LV_MIN(box.x1, round_px(path.p[i].x) - st->line_width);
-      box.y1 = LV_MIN(box.y1, round_px(path.p[i].y) - st->line_width);
-      box.x2 = LV_MAX(box.x2, round_px(path.p[i].x) + st->line_width);
-      box.y2 = LV_MAX(box.y2, round_px(path.p[i].y) + st->line_width);
+      box.x1 = LV_MIN(box.x1, round_px(path.p[i].x) - margin);
+      box.y1 = LV_MIN(box.y1, round_px(path.p[i].y) - margin);
+      box.x2 = LV_MAX(box.x2, round_px(path.p[i].x) + margin);
+      box.y2 = LV_MAX(box.y2, round_px(path.p[i].y) + margin);
     }
     st->line_color[line] = st->idle_color;
   }
+  render_strokes(*st);
 
   st->canvas = lv_obj_create(card);
   lv_obj_remove_style_all(st->canvas);

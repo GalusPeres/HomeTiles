@@ -81,11 +81,10 @@ for (const marker of [
   'st->phase[line] = fmodf(st->phase[line] + st->step[line], length);',
   'if (waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));',
   // Never behind a popup, asleep or off screen; only the dot's area, and
-  // only the line pieces that touch it.
+  // only the part of a line's picture inside it.
   'if (popup_shell_active() || powerManager.isInSleep() || image_screensaver_covers_ui()) return 0;',
   'if (!st || !any_live(*st) || !shown_on_screen(st->card)) continue;',
   'lv_obj_invalidate_area(st.canvas, &area);',
-  'if (last <= first || !piece_on_clip(layer, canvas, path, first, last, dsc.width)) return;',
   // What the dots cost, one log line per 10 s while they move.
   'constexpr uint32_t kMotionLogMs = 10000;',
   'Serial.printf("[EnergyFlow] Dots %lu s: frames=%lu',
@@ -106,8 +105,9 @@ for (const marker of [
   'charging ? charging_icon(has_charge, charge) : haBridgeConfig.findEntityIcon(battery_icon_entity),',
   // Without a card the rings take the global frame line.
   'if (frame_lines) ui_surface_style::apply_global_tile_border(w.ring);',
-  // The bends are true circle arcs (b532's short lines looked wavy).
-  'lv_draw_arc(layer, &arc_dsc);',
+  // Each line is one smoothed stroke with a true circle bend (b532's short
+  // lines looked wavy, b533-b567's LVGL pieces kinked where they met).
+  'render_stroke(pixels, width, height, box.x1, box.y1, st.layout.line[line], static_cast<float>(st.line_width));',
 ]) assert.ok(renderer.includes(marker), `renderer: ${marker}`);
 // The decided node size on every layout: a 56 px disc in a 6 px ring
 // (b532 took the device's smaller tile radius).

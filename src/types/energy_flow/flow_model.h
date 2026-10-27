@@ -138,11 +138,12 @@ inline uint8_t line_source(Line line, const Flows& flows) {
 // slower with the power, "immer richtig aufgeteilt"): the tile's strongest
 // flow runs at its power / kWattsPerPxFrame, held between kTopSpeedMin and
 // kTopSpeedMax; every other flow in proportion to it, none slower than
-// kSlowestSpeed so it still visibly moves.
+// kSlowestSpeed so it still visibly moves (0.15 crept, user 2026-10-27:
+// "die langsamste Bewegung schneller").
 constexpr float kWattsPerPxFrame = 2500.0f;
 constexpr float kTopSpeedMin = 0.5f;
 constexpr float kTopSpeedMax = 3.0f;
-constexpr float kSlowestSpeed = 0.15f;
+constexpr float kSlowestSpeed = 0.4f;
 
 inline float strongest_flow(const Flows& flows) {
   float strongest = 0.0f;

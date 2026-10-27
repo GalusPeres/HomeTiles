@@ -1,9 +1,9 @@
 // Energy flow: what a change redraws. A line that switches on or off redraws
 // only where it runs, its dot included (b539 log: the whole card, 42-49 ms
-// frames on the V2, each time the grid crossed its idle threshold); a bend's
-// picture holds its whole stroke with the round ends (b540 log: LVGL built
-// a bend's circle masks in every frame, ~0.25 ms). Compiles the renderer's
-// real invalidate_line and bend_box with the real layout on the host.
+// frames on the V2, each time the grid crossed its idle threshold); each
+// line's stroke is one picture made once with the layout and kept through
+// color changes (test-energy-flow-stroke.mjs checks its pixels). Compiles
+// the renderer's real invalidate_line with the real layout on the host.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -49,7 +49,6 @@ void lv_obj_invalidate_area(lv_obj_t*, const lv_area_t* a) {marked.push_back(*a)
 int round_px(float value) {return static_cast<int>(lroundf(value));}
 struct FlowTileState {Layout layout; lv_obj_t* canvas = nullptr; int line_width = 4; int dot_radius = 5;};
 ${fn('invalidate_line')}
-${fn('bend_box')}
 static bool marked_at(int x, int y) {
   for (const lv_area_t& a : marked) if (x >= a.x1 && x <= a.x2 && y >= a.y1 && y <= a.y2) return true;
   return false;
@@ -81,30 +80,6 @@ int main() {
     all += size;
     // Never the whole card again: a line redraws a part of it.
     assert(size < 404L * 320L / 2);
-    if (!path.bend.present) continue;
-    // The bend's picture box holds its stroke and both round ends.
-    const lv_area_t box = bend_box(st, path);
-    const float outer = path.bend.radius + st.line_width / 2;
-    const float inner = outer - st.line_width;
-    for (int a = path.bend.start_angle * 4; a <= path.bend.end_angle * 4; ++a) {
-      const float angle = a / 4.0f * 3.14159265f / 180.0f;
-      for (float r = inner; r <= outer; r += 0.5f) {
-        const float x = path.bend.cx + r * cosf(angle), y = path.bend.cy + r * sinf(angle);
-        assert(x >= box.x1 && x <= box.x2 && y >= box.y1 && y <= box.y2);
-      }
-    }
-    for (int end : {path.bend.start_angle, path.bend.end_angle}) {
-      const float angle = end * 3.14159265f / 180.0f;
-      const float mid = outer - st.line_width / 2.0f;
-      const float ex = path.bend.cx + mid * cosf(angle), ey = path.bend.cy + mid * sinf(angle);
-      for (int k = 0; k < 64; ++k) {
-        const float t = k * 2.0f * 3.14159265f / 64.0f;
-        const float x = ex + st.line_width / 2.0f * cosf(t), y = ey + st.line_width / 2.0f * sinf(t);
-        assert(x >= box.x1 && x <= box.x2 && y >= box.y1 && y <= box.y2);
-      }
-    }
-    // A quarter of the circle, not more.
-    assert(box.x2 - box.x1 <= outer + 2 * (st.line_width + 2) + 1 && box.y2 - box.y1 <= outer + 2 * (st.line_width + 2) + 1);
   }
   std::printf("ok %ld\n", all);
 }
@@ -118,10 +93,12 @@ let r = spawnSync(compiler, ['-std=c++17', source, '-o', binary], {encoding: 'ut
 assert.equal(r.status, 0, r.stdout + r.stderr);
 r = spawnSync(binary, [], {encoding: 'utf8'});
 assert.equal(r.status, 0, r.stdout + r.stderr);
-// Wiring: a switched line redraws itself, the bends draw their pictures once
-// per color and fall back to the arc, the pictures go with the tile.
-assert.match(renderer, /if \(changed && st\.line_shown\[line\]\) invalidate_line\(st, line\);\s*if \(st\.line_shown\[line\]\) render_bend\(st, line, color\);/);
+// Wiring: a switched line redraws itself, its picture is made once with
+// the layout and drawn in the line's color now, and goes with the tile.
+assert.match(renderer, /if \(changed && st\.line_shown\[line\]\) invalidate_line\(st, line\);\s*\}/);
 assert.doesNotMatch(renderer, /lv_obj_invalidate\(st\.canvas\)/, 'no whole-card redraw on a value change');
-assert.match(renderer, /if \(picture && st->bend_color\[line\] == st->line_color\[line\]\) \{[\s\S]*?lv_draw_image\(layer, &image_dsc, &area\);\s*\} else \{[\s\S]*?lv_draw_arc\(layer, &arc_dsc\);/);
-assert.match(renderer, /for \(lv_draw_buf_t\*& picture : st->bend_picture\) \{\s*if \(!picture\) continue;\s*lv_image_cache_drop\(picture\);\s*lv_draw_buf_destroy\(picture\);/);
-console.log('Energy flow redraw areas: a switched line redraws only itself with its dot, a bend picture holds its stroke');
+assert.match(renderer, /st->line_color\[line\] = st->idle_color;\s*\}\s*render_strokes\(\*st\);/);
+assert.match(renderer, /if \(st->stroke_pixels\[line\]\) \{\s*image_dsc\.src = &st->stroke\[line\];\s*image_dsc\.recolor = lv_color_hex\(st->line_color\[line\]\);\s*lv_draw_image\(layer, &image_dsc, &box\);/);
+assert.match(renderer, /lv_image_cache_drop\(&st->stroke\[line\]\);\s*lv_free\(st->stroke_pixels\[line\]\);/);
+assert.doesNotMatch(renderer, /lv_draw_arc\(/, 'no LVGL arc beside LVGL lines (kinks where they met)');
+console.log('Energy flow redraw areas: a switched line redraws only itself with its dot, its picture is made once');

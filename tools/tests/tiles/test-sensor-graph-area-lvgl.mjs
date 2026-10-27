@@ -78,7 +78,7 @@ assert.ok(css.includes('.tile.sensor.sensor-graph > .tile-value {') && css.inclu
 // inset, area, grid lines and line as one RGB565 picture, no dots at the
 // extremes any more (user 2026-10-27).
 const popup = read('src/ui/popups/sensor/sensor_popup.cpp');
-for (const gone of ['time_lines', 'y_max_line', 'y_min_line', 'calc_day7_boundary_axis', 'image.tile', 'lv_draw_line_dsc_t dash',
+for (const gone of ['time_lines', 'y_max_line', 'y_min_line', 'image.tile', 'lv_draw_line_dsc_t dash',
   'on_chart_extremes_draw', 'kExtremeDot', 'draw_dashes', 'kFadeTopOpa']) {
   assert.ok(!popup.includes(gone), `popup: no ${gone} any more`);
 }
@@ -111,9 +111,19 @@ assert.ok(popup.includes('constexpr int kGridLineWidth = 1;') && popup.includes(
   popup.includes('return area_graph::zero_row(ctx->chart, top, bottom, lv_font_get_line_height(popup_layout::font20()));') &&
   popup.includes('const int32_t row = graph_zero_row(ctx, 0, lv_obj_get_content_height(ctx->chart));'),
   'popup: faint 1 px lines at max/min/zero/time, the zero line and its label together');
-// The time labels a little further below the graph (user 2026-10-27).
+// The time lines: under the 24H and 6H labels, between the days of 7D,
+// whose labels sit in the middle of their day (as before sensor-graph-2).
+assert.ok(popup.includes('ctx->time_count = static_cast<uint8_t>(calc_day7_boundary_axis(ctx->time_fracs, kTimeAxisMarkerCount));') &&
+  popup.includes('const float center = static_cast<float>(segment_start - range_start) +'),
+  'popup: 7D lines between the days, labels in the middle of their day');
+// The time labels a little further below the graph; the graph gives up that
+// room, so the labels stay where they were (b562 cut them off, user
+// 2026-10-27).
 assert.ok(popup.includes('constexpr int kTimeLabelGap = popup_layout::scale480(12);') &&
-  (popup.match(/kTimeLabelGap\);/g) || []).length === 3, "popup: the time labels' gap below the graph");
+  popup.includes('constexpr int kChartHeight = popup_layout::contentScale(325) - kTimeLabelExtra;') &&
+  popup.includes('kChartHeight + kTimeLabelExtra + 2 * kLabelOverhang + kTimeAxisHeight') &&
+  popup.includes('height = std::max(1, height - kTimeLabelExtra);') &&
+  (popup.match(/kTimeLabelGap\);/g) || []).length === 3, "popup: the time labels' gap comes out of the graph");
 
 const host = await lvglHost(root);
 if (!host) {

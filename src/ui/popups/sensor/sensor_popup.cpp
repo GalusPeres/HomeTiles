@@ -47,7 +47,13 @@ namespace {
 constexpr int kCardWidth = popup_layout::kCardWidth;
 constexpr int kCardPad = popup_layout::kCardPad;
 constexpr int kHeaderPadTop = popup_layout::scale(4);
-constexpr int kChartHeight = popup_layout::contentScale(325);
+// The time labels sit kTimeLabelGap below the graph (user 2026-10-27: a
+// little more room); the graph gives up the extra room (kTimeLabelExtra), so
+// the labels stay where they were and fit on every panel (b562 moved them
+// down instead and cut them off).
+constexpr int kTimeLabelGap = popup_layout::scale480(12);
+constexpr int kTimeLabelExtra = kTimeLabelGap - popup_layout::scale480(8);
+constexpr int kChartHeight = popup_layout::contentScale(325) - kTimeLabelExtra;
 #if defined(DEVICE_LAYOUT_1024X600)
 constexpr int kTimeAxisHeight = 24;  // full UI16 line height plus bottom breathing room
 #elif defined(DEVICE_LAYOUT_480X480)
@@ -63,13 +69,13 @@ constexpr int kChartLineWidth = popup_layout::scale(4);
 // above the maximum and below the minimum (kChartLinePad); below it the
 // header circle's color down to the graph's middle, fading to nothing in its
 // lower half; faint solid 1 px lines at the maximum, the minimum, zero (with
-// its own label, while the line crosses it) and at every time label. The
-// time labels keep a little more room below the graph.
+// its own label, while the line crosses it) and at the times: under the
+// 24H and 6H labels, between the days of 7D (its labels in the middle of
+// their day, as before sensor-graph-2).
 constexpr int kChartLinePad = (kChartLineWidth + 1) / 2;
 constexpr int kGraphInset = popup_layout::kHeaderIconX;
 constexpr int kGridLineWidth = 1;
 constexpr lv_opa_t kGridLineOpa = 20;  // 8 %
-constexpr int kTimeLabelGap = popup_layout::scale480(12);
 // 6H in minutes (raw states; the Bridge reads statistics for 5 minutes and
 // more), 24H in 5-minute steps, 7D in hours (issue #131).
 constexpr uint16_t kHistoryHours6h = 6;
@@ -815,6 +821,10 @@ static time_t next_local_midnight_after(time_t ts) {
   timeinfo.tm_min = 0;
   timeinfo.tm_sec = 0;
   timeinfo.tm_mday += 1;
+  // The next day may have another DST than `ts`: with the old flag the day
+  // after a change started an hour early, and 7D showed that day twice
+  // ("Sun Sun", 2026-10-25).
+  timeinfo.tm_isdst = -1;
   return mktime(&timeinfo);
 }
 
@@ -837,6 +847,7 @@ static time_t next_local_boundary_after(time_t ts, int step) {
   timeinfo.tm_hour = next_hour;
   timeinfo.tm_min = 0;
   timeinfo.tm_sec = 0;
+  timeinfo.tm_isdst = -1;  // as next_local_midnight_after
   return mktime(&timeinfo);
 }
 
@@ -895,6 +906,29 @@ static int calc_day7_label_axis(String out_labels[], float out_frac[], int max_m
     segment_start = segment_end;
   }
 
+  return count;
+}
+
+// The 7D graph's day boundaries (local midnights) as fractions of the
+// range, for its time lines between the days.
+static int calc_day7_boundary_axis(float out_frac[], int max_markers) {
+  time_t now_local = 0;
+  time_t range_start = 0;
+  struct tm today_midnight_tm;
+  if (!get_day7_axis_base(now_local, range_start, today_midnight_tm)) return 0;
+
+  const float span = static_cast<float>(now_local - range_start);
+  if (span <= 0.0f) return 0;
+
+  int count = 0;
+  time_t boundary = next_local_midnight_after(range_start);
+  while (boundary < now_local && count < max_markers) {
+    if (boundary > range_start) {
+      out_frac[count] = static_cast<float>(boundary - range_start) / span;
+      ++count;
+    }
+    boundary = next_local_midnight_after(boundary);
+  }
   return count;
 }
 
@@ -1015,13 +1049,17 @@ static void update_y_axis_layout(SensorPopupContext* ctx) {
   }
 
   // Time labels along the graph, the last one kept inside the card (clamped
-  // below); a faint line at each one's time is part of the graph's picture
-  // (graph_picture).
+  // below); faint lines at the times are part of the graph's picture
+  // (graph_picture): under the 24H and 6H labels, between the days of 7D.
   ctx->time_count = 0;
   int chart_draw_w = chart_right - chart_left;
   if (chart_draw_w < 10) return;
-  for (int i = 0; i < n && i < kTimeAxisMarkerCount; ++i) ctx->time_fracs[i] = fracs[i];
-  ctx->time_count = static_cast<uint8_t>(std::min(n, kTimeAxisMarkerCount));
+  if (ctx->history_range == SensorHistoryRange::Day7) {
+    ctx->time_count = static_cast<uint8_t>(calc_day7_boundary_axis(ctx->time_fracs, kTimeAxisMarkerCount));
+  } else {
+    for (int i = 0; i < n && i < kTimeAxisMarkerCount; ++i) ctx->time_fracs[i] = fracs[i];
+    ctx->time_count = static_cast<uint8_t>(std::min(n, kTimeAxisMarkerCount));
+  }
 
   for (int i = 0; i < kTimeAxisMarkerCount; ++i) {
     if (i < n) {
@@ -2757,9 +2795,11 @@ static void apply_binary_history_payload(SensorPopupContext* ctx,
 
 static void resize_editable_chart(SensorPopupContext* ctx, int height) {
   if (!ctx->chart_wrap || !ctx->chart) return;
-  ctx->chart_height = height;
   constexpr int overhang = popup_layout::contentScale(12);
   lv_obj_set_height(ctx->chart_wrap, height + 2 * overhang + kTimeAxisHeight);
+  // The graph gives up the time labels' extra room (kTimeLabelExtra).
+  height = std::max(1, height - kTimeLabelExtra);
+  ctx->chart_height = height;
   lv_obj_set_height(ctx->chart, height + 2 * kChartLinePad);
   if (ctx->y_min_label) lv_obj_set_y(ctx->y_min_label, height);
   for (int i = 0; i < kTimeAxisMarkerCount; ++i) {
@@ -3681,7 +3721,7 @@ static void build_popup_body(SensorPopupContext* ctx) {
   lv_obj_t* chart_wrap = lv_obj_create(body_box);
   ctx->chart_wrap = chart_wrap;
   lv_obj_remove_style_all(chart_wrap);
-  lv_obj_set_size(chart_wrap, LV_PCT(100), kChartHeight + 2 * kLabelOverhang + kTimeAxisHeight);
+  lv_obj_set_size(chart_wrap, LV_PCT(100), kChartHeight + kTimeLabelExtra + 2 * kLabelOverhang + kTimeAxisHeight);
   lv_obj_center(chart_wrap);
   lv_obj_set_style_bg_opa(chart_wrap, LV_OPA_TRANSP, 0);
   lv_obj_add_flag(chart_wrap, LV_OBJ_FLAG_OVERFLOW_VISIBLE);

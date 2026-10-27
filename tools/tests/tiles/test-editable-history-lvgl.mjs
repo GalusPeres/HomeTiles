@@ -104,7 +104,7 @@ namespace Device { constexpr int kGridGap = SCREEN_WIDTH == 480 ? 10 : 16; }  //
 ${geometry}
 #undef lv_obj_update_layout
 ${popup.slice(popup.indexOf('constexpr int kBinaryTimelineHeight') - '#if defined(DEVICE_LAYOUT_480X480)\n'.length, popup.indexOf('struct HistoryRangeConfig'))}
-constexpr int kCardWidth=popup_layout::kCardWidth,kCardPad=popup_layout::kCardPad,kChartHeight=popup_layout::contentScale(325),kTimeAxisMarkerCount=8,kChartLineWidth=popup_layout::scale(4),kHistoryPoints24h=288;
+constexpr int kCardWidth=popup_layout::kCardWidth,kCardPad=popup_layout::kCardPad,kTimeLabelGap=popup_layout::scale480(12),kTimeLabelExtra=kTimeLabelGap-popup_layout::scale480(8),kChartHeight=popup_layout::contentScale(325)-kTimeLabelExtra,kTimeAxisMarkerCount=8,kChartLineWidth=popup_layout::scale(4),kHistoryPoints24h=288;
 ${popup.slice(popup.indexOf('// The numeric graph (mockup'), popup.indexOf('constexpr uint16_t kHistoryHours24h'))}
 constexpr int kRangeButtonWidth=popup_layout::scale(92),kRangeButtonHeight=popup_layout::kNavHeight,kRangeButtonGap=popup_layout::scale(10);
 #if defined(DEVICE_LAYOUT_480X480)

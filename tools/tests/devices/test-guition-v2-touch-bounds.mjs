@@ -30,6 +30,7 @@ const source = path.join(out, 'test.cpp');
 fs.writeFileSync(source, String.raw`
 #include <lvgl.h>
 #include <algorithm>
+#include <cmath>
 #include <array>
 #include <cassert>
 #include <cstring>
@@ -149,6 +150,18 @@ int main() {
   assert(lv_slider_get_value(slider)==start && "The newest point waits one read");
   poll(input);
   assert(lv_slider_get_value(slider)!=start && "A drag still moves the slider");
+  packet.fill(0); poll(input);
+  // A resting finger: the GSL3680's raw point jitters by 5 to 8 px (b565
+  // log). The point stays put instead of flipping between two places.
+  sample(825,445); poll(input); poll(input);
+  const size_t rest_start=delivered.size();
+  // Raw units as in the log: x within 3, y within 8 (about 2 and 7 px).
+  for(int i=0;i<24;++i){ const int jx[]={0,1,-1,2,-1,0,1,-1}, jy[]={0,4,-3,4,-4,2,-3,3}; sample(825+jx[(i+3)%8],445+jy[i%8]); poll(input); }
+  bool still=true;
+  for(size_t i=rest_start+4;i<delivered.size();++i)
+    still=still && delivered[i].x==delivered[rest_start+4].x && delivered[i].y==delivered[rest_start+4].y;
+  if(!still) for(size_t i=rest_start;i<delivered.size();++i) std::cerr<<delivered[i].x<<","<<delivered[i].y<<" ";
+  assert(still && "A resting finger's jitter must not move the point");
   packet.fill(0); poll(input);
   // Decode all contacts atomically; an invalid later contact cannot expose a
   // partially updated packet or become a replacement pointer.

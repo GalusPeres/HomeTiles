@@ -6,6 +6,7 @@
 
 #include <Arduino.h>
 #include <LittleFS.h>
+#include <cmath>
 #include <cstring>
 #include <utility>
 #include <driver/gpio.h>
@@ -54,7 +55,7 @@ constexpr size_t kSingleWritebackMaxBytes = 64 * 1024;
 constexpr uint32_t kPpaPreviewTimeoutMs = 200;
 constexpr uint32_t kPpaPreviewGraceMs = 800;
 constexpr uint8_t kTouchReleaseDebounceReads = 0;
-constexpr int32_t kTouchJitterThresholdPx = 2;
+constexpr int32_t kTouchJitterThresholdPx = 5;
 constexpr uint8_t kTouchSamplePointCount = 2;
 constexpr uint8_t kInvalidTouchTrackId = 0xFF;
 
@@ -1027,15 +1028,18 @@ bool DeviceGuitionJC8012P4A1V2::getTouch(int16_t& x, int16_t& y) {
     g_touch_stable_y = mapped_y;
     g_touch_active = true;
   } else {
-    const int32_t dx = mapped_x - g_touch_stable_x;
-    const int32_t dy = mapped_y - g_touch_stable_y;
-    const int32_t adx = dx >= 0 ? dx : -dx;
-    const int32_t ady = dy >= 0 ? dy : -dy;
-
-    if (adx <= kTouchJitterThresholdPx && ady <= kTouchJitterThresholdPx) {
-    } else {
-      g_touch_stable_x = mapped_x;
-      g_touch_stable_y = mapped_y;
+    // A dead zone dragged along: the point stays while the raw point
+    // jitters within kTouchJitterThresholdPx of it; a raw point outside
+    // pulls it along at that distance, so a drag moves smoothly instead of
+    // in steps. The GSL3680 jitters 5 to 8 px under a resting finger (b565
+    // log), and the old 2 px threshold let the point flip between two places.
+    const float dx = static_cast<float>(mapped_x - g_touch_stable_x);
+    const float dy = static_cast<float>(mapped_y - g_touch_stable_y);
+    const float distance = sqrtf(dx * dx + dy * dy);
+    if (distance > kTouchJitterThresholdPx) {
+      const float pull = (distance - kTouchJitterThresholdPx) / distance;
+      g_touch_stable_x += static_cast<int32_t>(lroundf(dx * pull));
+      g_touch_stable_y += static_cast<int32_t>(lroundf(dy * pull));
     }
   }
 

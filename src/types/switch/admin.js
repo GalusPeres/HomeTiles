@@ -45,9 +45,13 @@ function maybeFillTitleFromSwitch(tab) {
       const options = select.options ? Array.from(select.options) : [];
       for (const button of group.querySelectorAll('button[data-value]')) {
         button.classList.toggle('active', button.dataset.value === String(select.value));
-        // Value sizes this tile size does not offer stay hidden.
+        // Value sizes this tile size does not offer stay hidden; the others
+        // carry the size this panel draws (syncCompactValueFontOptions), the
+        // Default button only its word so the row keeps its width.
         const option = options.find(o => o.value === button.dataset.value);
         button.classList.toggle('hidden', !!option?.hidden);
+        const name = option?.value === '0' && select.dataset?.defaultLabel ? select.dataset.defaultLabel : option?.textContent;
+        if (name && button.textContent !== name) button.textContent = name;
       }
     }
     // The Switch tile's Orientation row only with a bar (not the icon button).

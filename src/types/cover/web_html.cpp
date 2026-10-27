@@ -3,6 +3,7 @@
 
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
+#include "src/web/server/render/value_size_attrs.h"
 #include "src/web/server/web_admin_utils.h"
 
 void append_cover_fields_html(String& html, const String& tab_id) {
@@ -16,7 +17,9 @@ void append_cover_fields_html(String& html, const String& tab_id) {
   // Sensor value sizes beside the disc, the Sensor value sizes from 1.5 rows.
   const SwitchChoice sizes[] = {{"0", tr.sensor_value_size_default}, {"1", "20"}, {"2", "24"},
                                 {"5", "28"}, {"3", "32"}, {"4", "40"}};
-  append_switch_choice(html, tab_id, "cover_value_font", tr.sensor_value_size, sizes, 6);
+  String size_attrs;
+  append_value_size_attrs(size_attrs, FONT_VALUE, tr.sensor_value_size_default);
+  append_switch_choice(html, tab_id, "cover_value_font", tr.sensor_value_size, sizes, 6, size_attrs);
   if (tab_id != "screensaver") {
     html += "<label>";
     html += tr.popup_open;

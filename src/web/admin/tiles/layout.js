@@ -56,24 +56,48 @@
     if (value === '2') return 24;
     return ['3', '4', '5'].includes(value) ? 28 : 20;
   }
-  // The value size choices a tile shows: Default, 24 and 28 in half-height
-  // tiles; Default, 20, 24, 32 and 40 otherwise (28 is the default there).
-  // A choice the other size lacks moves to the one that looks the same.
-  function syncCompactValueFontOptions(select, halfHeight) {
+  // The value size choices a tile shows: Default, 24 and 28 in the header
+  // row beside the disc (`compact`: half-height tiles, the Sensor graph);
+  // Default, 20, 24, 32 and 40 otherwise (28 is the default there). With
+  // the panel's sizes on the select (value_size_attrs.h) each choice is named
+  // by the size it draws there and each size is offered once: the lists
+  // named the 1280x800 sizes, so a graph tile's "28 (Default)" was its 20 px
+  // title size (user 2026-10-27). A choice the shape lacks moves to the one
+  // that looks the same, else to the nearest size.
+  function syncCompactValueFontOptions(select, compact) {
     if (!select?.options) return;
-    const shown = halfHeight ? ['0', '2', '5'] : ['0', '1', '2', '3', '4'];
-    for (const option of Array.from(select.options)) {
-      const hidden = !shown.includes(option.value);
+    const allowed = compact ? ['0', '2', '5'] : ['0', '1', '2', '3', '4'];
+    const sizes = String(select.dataset?.[compact ? 'compactSizes' : 'sizes'] || '').split(',').map(Number);
+    const known = sizes.length > 5 && sizes.every(size => size > 0);
+    const defaultLabel = select.dataset?.defaultLabel || '';
+    const options = Array.from(select.options);
+    const seen = [];
+    for (const option of options) {
+      const size = known ? sizes[Number(option.value)] : 0;
+      const hidden = !allowed.includes(option.value) || (known && seen.includes(size));
       option.hidden = hidden;
       option.disabled = hidden;
-      if (option.value === '0') {
-        option.textContent = option.textContent.replace(/^\d+(?= )/, halfHeight ? '20' : '28');
-      }
+      if (!hidden) seen.push(size);
+      if (known) option.textContent = option.value === '0' && defaultLabel ? size + ' (' + defaultLabel + ')' : String(size);
+      else if (option.value === '0') option.textContent = option.textContent.replace(/^\d+(?= )/, compact ? '20' : '28');
     }
-    const value = select.value;
-    if (halfHeight && value === '1') select.value = '0';
-    else if (halfHeight && (value === '3' || value === '4')) select.value = '5';
-    else if (!halfHeight && value === '5') select.value = '0';
+    const current = options.find(option => option.value === String(select.value));
+    if (!current?.hidden) return;
+    if (!known) {
+      const value = select.value;
+      if (compact && value === '1') select.value = '0';
+      else if (compact && (value === '3' || value === '4')) select.value = '5';
+      else if (!compact && value === '5') select.value = '0';
+      return;
+    }
+    const want = sizes[Number(current.value)];
+    let best = null;
+    for (const option of options) {
+      if (option.hidden) continue;
+      const distance = Math.abs(sizes[Number(option.value)] - want);
+      if (!best || distance < best.distance) best = {value: option.value, distance};
+    }
+    if (best) select.value = best.value;
   }
   // Number, Select and Date/Time value sizes (1 = 20, 2 = 24, 0 = 28, 3 = 32,
   // 4 = 40): half-height tiles offer 20, 24 and 28 (editable_display_tile).

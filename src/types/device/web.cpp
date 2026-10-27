@@ -6,6 +6,7 @@
 #include "src/core/i18n/i18n.h"
 #include "src/tiles/config/bar_orientation.h"
 #include "src/types/switch/web_html.h"
+#include "src/web/server/render/value_size_attrs.h"
 #include "src/web/server/web_admin_utils.h"
 
 namespace {
@@ -61,7 +62,9 @@ void append_device_fields_html(String& html, const String& tab_id, TileType type
   const SwitchChoice sizes[] = {{"0", tr.sensor_value_size_default}, {"1", "20"}, {"2", "24"},
                                 {"5", "28"}, {"3", "32"}, {"4", "40"}};
   const String field = String(prefix) + "_value_font";
-  append_switch_choice(html, tab_id, field.c_str(), tr.sensor_value_size, sizes, 6);
+  String size_attrs;
+  append_value_size_attrs(size_attrs, FONT_VALUE, tr.sensor_value_size_default);
+  append_switch_choice(html, tab_id, field.c_str(), tr.sensor_value_size, sizes, 6, size_attrs);
   if (tab_id != "screensaver") {
     html += "<label>";
     html += tr.popup_open;

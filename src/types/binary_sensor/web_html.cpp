@@ -2,6 +2,7 @@
 
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
+#include "src/web/server/render/value_size_attrs.h"
 #include "src/web/server/web_admin_utils.h"
 
 void append_binary_sensor_fields_html(String& html, const String& tab_id) {
@@ -18,8 +19,11 @@ void append_binary_sensor_fields_html(String& html, const String& tab_id) {
   html += tr.sensor_value_size;
   html += "</label><select id=\"";
   html += tab_id;
-  html += "_binary_sensor_value_font\"><option value=\"0\">";
-  html += tr.sensor_value_size_default;
+  html += "_binary_sensor_value_font\"";
+  // A full Binary sensor tile shows its state at the title size by default.
+  append_value_size_attrs(html, tile_layout::header_title_font(), tr.sensor_value_size_default);
+  html += "><option value=\"0\">";
+  append_value_size_default(html, tile_layout::header_title_font(), tr.sensor_value_size_default);
   html += "</option><option value=\"1\">20</option><option value=\"2\">24</option>";
   html += "<option value=\"3\">32</option><option value=\"4\">40</option>";
   html += "<option value=\"5\" hidden disabled>28</option></select>";

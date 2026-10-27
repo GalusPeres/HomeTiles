@@ -151,7 +151,9 @@ for (const marker of [
 }
 // Value size like the half-height Sensor: editor field, save and load.
 const html = readRepoFile('src/types/switch/web_html.cpp');
-assert.ok(html.includes('append_switch_choice(html, tab_id, "switch_value_font", tr.sensor_value_size, sizes, 6);'));
+assert.ok(html.includes('append_switch_choice(html, tab_id, "switch_value_font", tr.sensor_value_size, sizes, 6, size_attrs);'));
+// Named by the sizes this panel draws (value_size_attrs.h, user 2026-10-27).
+assert.ok(html.includes('append_value_size_attrs(size_attrs, FONT_VALUE, tr.sensor_value_size_default);'));
 // Tall tiles: the Sensor value sizes and title, the state centered between
 // the disc and the bar, kept centered when a long state steps down.
 // The bar's box, drawing and touch mapping live in the shared level bar.

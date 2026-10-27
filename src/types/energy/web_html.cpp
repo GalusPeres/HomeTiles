@@ -2,6 +2,7 @@
 
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
+#include "src/web/server/render/value_size_attrs.h"
 #include "src/web/server/web_admin_utils.h"
 
 void append_energy_fields_html(String& html, const String& tab_id) {
@@ -32,8 +33,12 @@ void append_energy_fields_html(String& html, const String& tab_id) {
   html += R"html(</label>
               <select id=")html";
   html += tab_id;
-  html += R"html(_energy_value_font">
-                <option value="0">28 (Default)</option>
+  html += "_energy_value_font\"";
+  append_value_size_attrs(html, FONT_VALUE, tr.sensor_value_size_default);
+  html += R"html(>
+                <option value="0">)html";
+  append_value_size_default(html, FONT_VALUE, tr.sensor_value_size_default);
+  html += R"html(</option>
                 <option value="1">20</option>
                 <option value="2">24</option>
                 <option value="3">32</option>

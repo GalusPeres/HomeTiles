@@ -110,7 +110,7 @@ struct EditableControl;
 void editable_control_refresh(EditableControl*);void editable_control_close(EditableControl*);
 ${control.slice(control.indexOf('int editable_control_height('))}
 constexpr int kCardWidth=popup_layout::kCardWidth,kCardPad=popup_layout::kCardPad,kChartHeight=popup_layout::contentScale(325),kTimeAxisMarkerCount=8,kChartLineWidth=popup_layout::scale(4),kHistoryPoints24h=288;
-constexpr int kChartLinePad=(kChartLineWidth+1)/2,kGraphInset=popup_layout::kHeaderIconX;
+constexpr int kChartLinePad=(kChartLineWidth+1)/2,kGraphInset=popup_layout::kHeaderIconX,kTimeLabelGap=popup_layout::scale480(12);
 #if defined(DEVICE_LAYOUT_480X480)
 constexpr int kContentLiftY=6,kBinaryTimelineHeight=22,kBinaryActivityRowHeight=42,kTimeAxisHeight=20;
 #elif defined(DEVICE_LAYOUT_1024X600)
@@ -123,8 +123,8 @@ constexpr int kBinaryVisibleActivityRows = SCREEN_HEIGHT <= 600 ? 4 : 5;
 struct SensorPopupContext {
  bool editable=true,state_history_mode=true,binary_icon_override=false;String editable_kind,entity_id,editable_history_id;SensorHistoryRange editable_requested_range=SensorHistoryRange::Day24;
  lv_obj_t *overlay=nullptr,*card=nullptr,*title_label=nullptr,*icon_label=nullptr,*control_row=nullptr,*range_day_btn=nullptr,*range_week_btn=nullptr,*range_hours_btn=nullptr;int chart_height=kChartHeight;SensorHistoryRange history_range=SensorHistoryRange::Day24;
- lv_obj_t *body_box,*chart_wrap,*chart,*binary_body,*binary_activity_title,*binary_activity_date,*binary_activity_viewport,*binary_activity_status,*binary_history_title,*binary_timeline,*binary_history_status,*y_min_label,*y_max_label,*y_min_line,*y_max_line;
- lv_obj_t *binary_time_labels[8],*time_lines[8],*time_labels[8];lv_chart_series_t* series;
+ lv_obj_t *body_box,*chart_wrap,*chart,*binary_body,*binary_activity_title,*binary_activity_date,*binary_activity_viewport,*binary_activity_status,*binary_history_title,*binary_timeline,*binary_history_status,*y_min_label,*y_max_label,*y_zero_label,*y_min_line,*y_max_line;
+ lv_obj_t *binary_time_labels[8],*time_lines[8],*time_labels[8];lv_chart_series_t* series;float time_fracs[8]={};uint8_t time_count=0;
  // The graph readout is covered by test-editable-history-lvgl.mjs.
  struct {void cancel(){}} readout;
 };
@@ -132,7 +132,7 @@ void clear_chart(SensorPopupContext* ctx,int points){lv_chart_set_point_count(ct
 struct Range{int hours,points;};Range get_history_range_config(SensorHistoryRange range){return range==SensorHistoryRange::Day7?Range{168,288}:Range{24,288};}
 ${fn(popup,'set_label_style')}
 // The graph's drawing is exercised by test-editable-history-lvgl.mjs.
-void on_chart_area_draw(lv_event_t*){}void on_chart_extremes_draw(lv_event_t*){}
+void on_chart_area_draw(lv_event_t*){}void place_zero_label(SensorPopupContext*){}
 void build_chart(SensorPopupContext* ctx){auto* body_box=ctx->body_box;${chartBuild}}
 ${fn(popup,'resize_editable_chart')}
 void update_binary_time_axis(SensorPopupContext*);

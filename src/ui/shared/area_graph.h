@@ -9,12 +9,13 @@
 #include <cstdint>
 #include <initializer_list>
 
-// The pictures of a Sensor graph (an lv_chart with one line series, mockup
-// build/design-mockups/sensor-graph-2, issue #131): the area under the line
-// (the tile in its circle's color, the popup the icon color fading to
-// nothing), the line itself and the popup's dashed max/min (and zero)
-// lines. They are computed once from the line and drawn as images, computed
-// again only when the line, the colors or the size change (picture_key).
+// The pictures of a Sensor graph (an lv_chart with one line series, mockups
+// build/design-mockups/sensor-graph-2 and -3, issue #131): the area under
+// the line (in the circle's color; the popup's fades out in the graph's
+// lower half), the line itself and the popup's faint grid lines (max/min,
+// zero, the time labels'). They are computed once from the line and drawn
+// as images, computed again only when the line, the colors or the size
+// change (picture_key).
 // LVGL's own line costs about 90 ms per popup frame on the P4 (a 4 px
 // anti-aliased polyline of 288 points, b559 log; 1.1 ms against 0.09 ms for
 // the area picture on the host), the area built from a rect and a triangle
@@ -118,9 +119,9 @@ inline uint16_t blend565(uint16_t pixel, uint32_t top, uint32_t opa) {
 }
 
 // The popup's area picture, RGB565, `width` x `height`: below the line
-// `color` over the card `card` fading from `top_opa` at chart row
-// `fade_top` to nothing at row `fade_bottom`, above the line and in gaps the
-// card. Ordered dithering (Bayer 8x8) picks for every pixel one of the two
+// `color` over the card `card` with `top_opa` down to chart row `fade_top`,
+// fading from there to nothing at row `fade_bottom`; above the line and in
+// gaps the card. Ordered dithering (Bayer 8x8) picks for every pixel one of the two
 // RGB565 steps around its exact color, so the 16-bit panels show a smooth
 // fade instead of bands; the fade starts from the card's own step (the card
 // around it shows that step).
@@ -228,13 +229,12 @@ inline void line_mask(uint8_t* pixels, uint32_t stride, int32_t width, int32_t h
   });
 }
 
-// A dashed line `rows` high from row `top`: `dash` pixels on, `dash` off,
-// `color` with `opa` over the picture.
-inline void draw_dashes(uint16_t* pixels, uint32_t stride_px, int32_t width, int32_t height, int32_t top, int32_t rows,
-                        int32_t dash, uint32_t color, uint8_t opa) {
-  for (int32_t y = std::max<int32_t>(0, top); y < std::min<int32_t>(height, top + rows); ++y) {
-    for (int32_t x = 0; x < width; ++x) {
-      if ((x / std::max<int32_t>(1, dash)) % 2) continue;
+// The rectangle `x1`,`y1` to `x2`,`y2` (inclusive, clipped to the picture)
+// in `color` with `opa` over the picture: the popup's grid lines.
+inline void blend_rect(uint16_t* pixels, uint32_t stride_px, int32_t width, int32_t height, int32_t x1, int32_t y1,
+                       int32_t x2, int32_t y2, uint32_t color, uint8_t opa) {
+  for (int32_t y = std::max<int32_t>(0, y1); y <= std::min<int32_t>(height - 1, y2); ++y) {
+    for (int32_t x = std::max<int32_t>(0, x1); x <= std::min<int32_t>(width - 1, x2); ++x) {
       uint16_t& pixel = pixels[y * stride_px + x];
       pixel = blend565(pixel, color, opa);
     }

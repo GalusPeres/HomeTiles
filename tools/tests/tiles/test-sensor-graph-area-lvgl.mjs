@@ -1,16 +1,18 @@
-// The Sensor graph (mockup build/design-mockups/sensor-graph-2, issue #131,
-// user 2026-10-26): the tile draws the area below its line in the circle's
-// color, the popup a dithered fade from 40 % of the icon color to nothing
-// under the line with the card's color above it. Area, line and the popup's
-// dashed lines are pictures computed from the line (area_graph.h) and drawn
-// as images: b558 built the area from a rect and a triangle per segment
-// (about 150 ms per popup frame on the V2), and LVGL's own 4 px line still
-// cost about 90 ms (b559 log; on the host 1.1 ms against 0.09 ms for the
-// picture). Renders the real pictures with LVGL 9.6: the line where lv_chart
-// puts its points, every pixel well below it the area, every pixel well
-// above it the card; the fade sits on exact RGB565 steps and is dithered;
-// the pictures are computed again only after a change; drawing them costs a
-// fraction of LVGL's line. The wiring is checked in the sources.
+// The Sensor graph (mockups build/design-mockups/sensor-graph-2 and -3, issue
+// #131, user 2026-10-26/27): the tile draws the area below its line in the
+// circle's color, the popup the circle's color down to the graph's middle
+// and a dithered fade to nothing below it, the card's color above the line;
+// faint solid 1 px lines (8 %) at the maximum, the minimum, zero and the
+// time labels. Area, line and the popup's lines are pictures computed from
+// the line (area_graph.h) and drawn as images: b558 built the area from a
+// rect and a triangle per segment (about 150 ms per popup frame on the V2),
+// and LVGL's own 4 px line still cost about 90 ms (b559 log; on the host
+// 1.1 ms against 0.09 ms for the picture). Renders the real pictures with
+// LVGL 9.6: the line where lv_chart puts its points, every pixel well below
+// it the area, every pixel well above it the card; the fade sits on exact
+// RGB565 steps and is dithered; the pictures are computed again only after
+// a change; drawing them costs a fraction of LVGL's line. The wiring is
+// checked in the sources.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -72,11 +74,12 @@ const css = read('src/web/assets/admin.css');
 assert.ok(css.includes('.tile.sensor.sensor-graph > .tile-value {') && css.includes('.tile.sensor.sensor-graph { display:block; }'),
   'preview: the Switch header rules cover the graph tile');
 
-// Popup: no vertical lines or guide line objects, labels and graph at the
-// header circle's inset, area, dashed lines and line as one RGB565 picture,
-// the dots at the extremes.
+// Popup: no guide line objects, labels and graph at the header circle's
+// inset, area, grid lines and line as one RGB565 picture, no dots at the
+// extremes any more (user 2026-10-27).
 const popup = read('src/ui/popups/sensor/sensor_popup.cpp');
-for (const gone of ['time_lines', 'y_max_line', 'y_min_line', 'calc_day7_boundary_axis', 'image.tile', 'lv_draw_line_dsc_t dash']) {
+for (const gone of ['time_lines', 'y_max_line', 'y_min_line', 'calc_day7_boundary_axis', 'image.tile', 'lv_draw_line_dsc_t dash',
+  'on_chart_extremes_draw', 'kExtremeDot', 'draw_dashes', 'kFadeTopOpa']) {
   assert.ok(!popup.includes(gone), `popup: no ${gone} any more`);
 }
 assert.ok(popup.includes('constexpr int kGraphInset = popup_layout::kHeaderIconX;') &&
@@ -89,19 +92,28 @@ const measure = popup.slice(popup.indexOf('static lv_coord_t measure_label_text_
   popup.indexOf('static bool get_valid_local_time'));
 assert.equal((measure.match(/lv_obj_get_style_pad_right\(label, LV_PART_MAIN\)/g) || []).length, 1,
   'popup: label width counts the unit room once');
-assert.ok(popup.includes('area_graph::render_fade(ctx->area_pixels, stride_px, width, height, ctx->area_tops, fade_top, fade_bottom, color,') &&
-  popup.includes('area_graph::draw_dashes(ctx->area_pixels, stride_px, width, height, row - kDashWidth / 2, kDashWidth,') &&
+assert.ok(popup.includes('area_graph::render_fade(ctx->area_pixels, stride_px, width, height, ctx->area_tops, (fade_top + fade_bottom) / 2,') &&
+  popup.includes('fade_bottom, area, card, LV_OPA_COVER);') &&
   popup.includes('area_graph::draw_line(ctx->area_pixels, stride_px, width, height, ctx->area_points, points,') &&
   popup.includes('if (ctx->area_pixels && key == ctx->area_key) return &ctx->area_image;') &&
-  popup.includes('lv_obj_set_style_line_width(chart, 0, LV_PART_ITEMS);') &&
-  popup.includes('lv_obj_add_event_cb(chart_wrap, on_chart_extremes_draw, LV_EVENT_DRAW_POST, ctx);'),
-  'popup: one picture (computed again only after a change), no LVGL line, the dots');
-// The dashes at the maximum, the minimum and zero, faint (user 2026-10-27).
-assert.ok(popup.includes('const int32_t zero = dashes ? area_graph::zero_row(ctx->chart, fade_top, fade_bottom, kDashLength) : -1;') &&
+  popup.includes('lv_obj_set_style_line_width(chart, 0, LV_PART_ITEMS);'),
+  'popup: one picture (computed again only after a change), no LVGL line, the area solid down to the middle');
+// The area in the header circle's color (the selected range button's).
+assert.ok(popup.includes('popup_nav_style::fill(card, color, fill, fill_opa);') &&
+  popup.includes('const lv_color_t area = lv_color_mix(fill, card, fill_opa);'),
+  "popup: the area takes the header circle's color");
+// Faint solid lines at the maximum, the minimum, zero and the time labels;
+// the zero line with its own label, a label's height from the others.
+assert.ok(popup.includes('constexpr int kGridLineWidth = 1;') && popup.includes('constexpr lv_opa_t kGridLineOpa = 20;  // 8 %') &&
   popup.includes('for (const int32_t row : {fade_top, fade_bottom, zero}) {') &&
-  popup.includes('constexpr lv_opa_t kDashOpa = 51;  // 20 %'),
-  'popup: a dashed line at zero when the line crosses it, all dashes at 20 %');
-assert.ok(popup.includes('constexpr uint8_t kFadeTopOpa = 102;  // 40 %'), 'popup: 40 % at the top');
+  popup.includes('time_x[i] = static_cast<int32_t>(ctx->time_fracs[i] * width);') &&
+  popup.includes('const int32_t zero = graph_zero_row(ctx, fade_top, fade_bottom);') &&
+  popup.includes('return area_graph::zero_row(ctx->chart, top, bottom, lv_font_get_line_height(popup_layout::font20()));') &&
+  popup.includes('const int32_t row = graph_zero_row(ctx, 0, lv_obj_get_content_height(ctx->chart));'),
+  'popup: faint 1 px lines at max/min/zero/time, the zero line and its label together');
+// The time labels a little further below the graph (user 2026-10-27).
+assert.ok(popup.includes('constexpr int kTimeLabelGap = popup_layout::scale480(12);') &&
+  (popup.match(/kTimeLabelGap\);/g) || []).length === 3, "popup: the time labels' gap below the graph");
 
 const host = await lvglHost(root);
 if (!host) {
@@ -121,6 +133,8 @@ const cpp = String.raw`
 #include "src/ui/shared/area_graph.h"
 
 static const uint32_t kCard = 0x1A1A1A, kFill = 0x6E2A12, kIcon = 0xFF7043;
+// A time line in the popup's graph (picture column), over the flat stretch.
+static const int32_t kTimeX = 183;
 static lv_chart_series_t* g_series = nullptr;
 static bool g_popup = false, g_pictures = true;
 static int g_renders = 0;
@@ -169,10 +183,12 @@ static void area_cb(lv_event_t* e) {
     area_graph::column_tops(g_points.data(), points, g_tops.data(), width);
     if (g_popup) {
       g_picture.assign(width * height, 0);
-      area_graph::render_fade(g_picture.data(), width, width, height, g_tops.data(), fade_top, fade_bottom, kIcon, kCard, 102);
+      area_graph::render_fade(g_picture.data(), width, width, height, g_tops.data(), (fade_top + fade_bottom) / 2, fade_bottom,
+                              kFill, kCard, 255);
       for (const int32_t row : {fade_top, fade_bottom, zero}) {
-        if (row >= 0) area_graph::draw_dashes(g_picture.data(), width, width, height, row - 1, 2, 8, 0xFFFFFF, 51);
+        if (row >= 0) area_graph::blend_rect(g_picture.data(), width, width, height, 0, row, width - 1, row, 0xFFFFFF, 20);
       }
+      area_graph::blend_rect(g_picture.data(), width, width, height, kTimeX, fade_top, kTimeX, fade_bottom, 0xFFFFFF, 20);
       area_graph::draw_line(g_picture.data(), width, width, height, g_points.data(), points, 4.0f, kIcon);
       set_image(g_image, LV_COLOR_FORMAT_RGB565, reinterpret_cast<const uint8_t*>(g_picture.data()), width, height, width * 2);
     } else {
@@ -212,18 +228,19 @@ static int channel(uint32_t rgb, int c) { return (rgb >> (16 - 8 * c)) & 0xFF; }
 
 int main() {
   lv_init();
-  // The fade on exact RGB565 steps with 40 % of the icon over the card in
-  // its first row and the card in its last, dithered: every row mixes the
-  // two steps around its exact color.
+  // The fade on exact RGB565 steps: the circle's color down to the middle
+  // row, from there fading to the card in the last, dithered: every row
+  // mixes the two steps around its exact color.
   {
-    const int width = 64, height = 160;
+    const int width = 64, height = 160, middle = (height - 1) / 2;
     std::vector<int16_t> tops(width, 0);
     std::vector<uint16_t> fade(width * height);
-    area_graph::render_fade(fade.data(), width, width, height, tops.data(), 0, height - 1, kIcon, kCard, 102);
+    area_graph::render_fade(fade.data(), width, width, height, tops.data(), middle, height - 1, kFill, kCard, 255);
     for (int y = 0; y < height; ++y) {
       double sum = 0;
       for (int x = 0; x < width; ++x) sum += (fade[y * width + x] >> 11) * 255.0 / 31;
-      const double exact = 0x1A + (0xFF - 0x1A) * 0.4 * (1.0 - static_cast<double>(y) / (height - 1));
+      const double alpha = y <= middle ? 1.0 : 1.0 - static_cast<double>(y - middle) / (height - 1 - middle);
+      const double exact = 0x1A + (0x6E - 0x1A) * alpha;
       assert(sum / width > exact - 9.0 && sum / width < exact + 9.0 && "the dither keeps the row's mean");
     }
     double previous = 1e9;
@@ -296,6 +313,7 @@ int main() {
       lv_chart_get_point_pos_by_id(chart, g_series, i, &p);
       const int x = coords.x1 + p.x, y = coords.y1 + p.y;
       if (x <= coords.x1 + 2 || x >= coords.x2 - 2) continue;
+      if (g_popup && std::abs(x - (coords.x1 + kTimeX)) <= 1) continue;
       // The line sits on lv_chart's point.
       assert(channel(pixel(shot, x, y), 0) > 0xC0 && "the line passes through lv_chart's point");
       ++line_hits;
@@ -310,7 +328,8 @@ int main() {
           if (red > 0xA0) last_line = std::max(last_line, y2);
         }
       }
-      for (int yy = content.y1; yy <= coords.y2; ++yy) {
+      const int middle = coords.y1 + (content.y1 - coords.y1 + content.y1 - coords.y1 + lv_area_get_height(&content)) / 2;
+      for (int yy = content.y1 + (g_popup ? 1 : 0); yy <= coords.y2; ++yy) {
         const uint32_t q = pixel(shot, x, yy);
         if (yy < first_line - 2) {
           if ((q & 0xF8FCF8) != (kCard & 0xF8FCF8)) std::fprintf(stderr, "above mode=%d x=%d y=%d q=%06x\n", mode, x, yy, (unsigned)q);
@@ -321,8 +340,14 @@ int main() {
           if (q != kFill) std::fprintf(stderr, "below x=%d y=%d q=%06x\n", x, yy, (unsigned)q);
           assert(q == kFill && "below the line: the area");
           ++checked;
+        } else if (yy < middle) {
+          bool near = true;
+          for (int c = 0; c < 3; ++c) near = near && std::abs(channel(q, c) - channel(kFill, c)) <= 10;
+          if (!near) std::fprintf(stderr, "solid x=%d y=%d q=%06x\n", x, yy, (unsigned)q);
+          assert(near && "the circle's color down to the middle");
+          ++checked;
         } else if (yy <= content.y2) {
-          assert(channel(q, 0) >= 0x18 && channel(q, 0) <= 0x7F && "the fade");
+          assert(channel(q, 0) >= 0x18 && channel(q, 0) <= 0x76 && "the fade below it");
           ++checked;
         }
       }
@@ -334,6 +359,15 @@ int main() {
       lv_chart_get_point_pos_by_id(chart, g_series, i, &p);
       for (int yy = content.y1 + 2; yy <= content.y2 - 3; ++yy)
         assert((pixel(shot, coords.x1 + p.x, yy) & 0xF8FCF8) == (kCard & 0xF8FCF8) && "a gap shows the card");
+    }
+    if (g_popup) {
+      // Faint solid lines: 8 % white over the card at the maximum's row and
+      // in the time line's column, where the line is far below.
+      auto faint = [&](uint32_t q) { const int d = channel(q, 2) - 0x1A; return d >= 10 && d <= 28; };
+      int maximum_hits = 0;
+      for (int x = coords.x1 + 2; x <= coords.x2 - 2; ++x) maximum_hits += faint(pixel(shot, x, content.y1)) ? 1 : 0;
+      assert(maximum_hits > (coords.x2 - coords.x1) / 2 && "a faint solid line at the maximum");
+      assert(faint(pixel(shot, coords.x1 + kTimeX, content.y1 + 10)) && "a faint time line");
     }
     // The pictures are computed once; a redraw without a change reuses them.
     assert(g_renders == 1);
@@ -363,9 +397,9 @@ int main() {
     lv_refr_now(display);
     assert(g_renders == 2 && "a changed line computes its pictures again");
     if (g_popup) {
-      // A line running below zero gets a dashed line at zero, on the row
-      // where lv_chart puts the value zero (user 2026-10-27); none while the
-      // range stays above zero or the row almost touches the minimum's.
+      // A line running below zero gets a line at zero, on the row where
+      // lv_chart puts the value zero (user 2026-10-27); none while the range
+      // stays above zero or the row almost touches the minimum's.
       const int32_t top = content.y1 - coords.y1, bottom = top + lv_area_get_height(&content);
       assert(area_graph::zero_row(chart, top, bottom, 8) == -1 && "no zero line above zero");
       lv_chart_set_axis_range(chart, LV_CHART_AXIS_PRIMARY_Y, -5, 1000);
@@ -380,12 +414,13 @@ int main() {
       assert(g_renders == 3);
       lv_draw_buf_t* crossing = lv_snapshot_take(screen, LV_COLOR_FORMAT_XRGB8888);
       assert(crossing);
-      // Columns 16..23 of the picture carry a dash, 8..15 a gap.
+      // A solid faint line: every column lighter than the row below it.
       const int y = coords.y1 + zero;
-      const int dash = channel(pixel(crossing, coords.x1 + 20, y), 2) - channel(pixel(crossing, coords.x1 + 20, y + 4), 2);
-      const int gap = channel(pixel(crossing, coords.x1 + 12, y), 2) - channel(pixel(crossing, coords.x1 + 12, y + 4), 2);
-      if (dash < 24 || gap > 16) std::fprintf(stderr, "zero dash %d gap %d\n", dash, gap);
-      assert(dash >= 24 && gap <= 16 && "a faint dashed line at zero");
+      for (const int column : {12, 20, 60}) {
+        const int lift = channel(pixel(crossing, coords.x1 + column, y), 2) - channel(pixel(crossing, coords.x1 + column, y + 2), 2);
+        if (lift < 8 || lift > 30) std::fprintf(stderr, "zero line column %d lift %d\n", column, lift);
+        assert(lift >= 8 && lift <= 30 && "a faint solid line at zero");
+      }
       lv_draw_buf_destroy(crossing);
     }
     lv_draw_buf_destroy(shot);
@@ -405,4 +440,4 @@ const built = spawnSync(host.cxx, [...host.flags, '-std=c++17', '-I', out, sourc
 assert.equal(built.status, 0, built.stdout + built.stderr);
 const run = spawnSync(binary, [], {encoding: 'utf8'});
 assert.equal(run.status, 0, run.stdout + run.stderr);
-console.log('sensor graph: tile and popup pictures (area, line, dashes) computed once per change, line on lv_chart\'s points, card above, area below, far cheaper than LVGL\'s line');
+console.log('sensor graph: tile and popup pictures (area, line, faint grid lines) computed once per change, line on lv_chart\'s points, card above, area below, far cheaper than LVGL\'s line');

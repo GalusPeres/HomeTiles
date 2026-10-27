@@ -58,20 +58,18 @@ constexpr int kTimeAxisHeight = popup_layout::scale(20);  // space for time labe
 constexpr int kTimeAxisMarkerCount = 8;
 constexpr int kChartLineWidth = popup_layout::scale(4);
 // The numeric graph (mockup build/design-mockups/sensor-graph-2, issue
-// #131): the line in the header icon's color, rounded but cut flush at both
-// ends by the chart's bounds, with room above the maximum and below the
-// minimum (kChartLinePad); below it the icon color fading from 40 % to
-// nothing; dashed lines at the day's maximum and minimum, and at zero when
-// the line crosses it; filled dots in the icon color at its highest and
-// lowest point. The dashes stay faint (20 %, user 2026-10-27).
+// #131; sensor-graph-3, user 2026-10-27): the line in the header icon's
+// color, rounded but cut flush at both ends by the chart's bounds, with room
+// above the maximum and below the minimum (kChartLinePad); below it the
+// header circle's color down to the graph's middle, fading to nothing in its
+// lower half; faint solid 1 px lines at the maximum, the minimum, zero (with
+// its own label, while the line crosses it) and at every time label. The
+// time labels keep a little more room below the graph.
 constexpr int kChartLinePad = (kChartLineWidth + 1) / 2;
 constexpr int kGraphInset = popup_layout::kHeaderIconX;
-constexpr uint8_t kFadeTopOpa = 102;  // 40 %
-constexpr int kDashLength = popup_layout::scale(8);
-constexpr int kDashWidth = std::max(1, popup_layout::scale(2));
-constexpr lv_opa_t kDashOpa = 51;  // 20 %
-constexpr int kExtremeDotSize = popup_layout::scale(16);
-constexpr int kExtremeDotRing = std::max(1, popup_layout::scale(2));
+constexpr int kGridLineWidth = 1;
+constexpr lv_opa_t kGridLineOpa = 20;  // 8 %
+constexpr int kTimeLabelGap = popup_layout::scale480(12);
 // 6H in minutes (raw states; the Bridge reads statistics for 5 minutes and
 // more), 24H in 5-minute steps, 7D in hours (issue #131).
 constexpr uint16_t kHistoryHours6h = 6;
@@ -188,7 +186,11 @@ struct SensorPopupContext {
   lv_chart_series_t* series = nullptr;
   lv_obj_t* y_max_label = nullptr;
   lv_obj_t* y_min_label = nullptr;
+  lv_obj_t* y_zero_label = nullptr;
   lv_obj_t* time_labels[kTimeAxisMarkerCount] = {};
+  // The time labels' places along the graph (0..1), for its time lines.
+  float time_fracs[kTimeAxisMarkerCount] = {};
+  uint8_t time_count = 0;
   lv_obj_t* chart_wrap = nullptr;
   uint16_t point_count = kHistoryPoints24h;
   bool binary_mode = false;
@@ -471,7 +473,7 @@ static void apply_popup_icon_color(SensorPopupContext* ctx, bool known, const ch
     // follows the icon.
     update_range_buttons(ctx);
     editable_control_follow_colors(ctx->control);
-    // The graph's line, fade and dots take the icon's color.
+    // The graph's line and area follow the icon's color.
     if (ctx->chart_wrap) lv_obj_invalidate(ctx->chart_wrap);
   }
 }
@@ -910,6 +912,51 @@ static int calc_time_axis(const SensorPopupContext* ctx, String out_labels[], fl
   return calc_hours_axis(kHistoryHours24h, 6, out_labels, out_frac, max_markers);
 }
 
+// Indices of the series' highest and lowest point (the first of equals);
+// false without two points or with a flat line.
+static bool chart_extremes(const SensorPopupContext* ctx, uint32_t& high, uint32_t& low) {
+  const uint32_t count = ctx->chart && ctx->series ? lv_chart_get_point_count(ctx->chart) : 0;
+  const int32_t* values = count > 1 ? lv_chart_get_series_y_array(ctx->chart, ctx->series) : nullptr;
+  if (!values) return false;
+  uint32_t found = 0;
+  for (uint32_t i = 0; i < count; ++i) {
+    if (values[i] == LV_CHART_POINT_NONE) continue;
+    if (!found++) {
+      high = low = i;
+      continue;
+    }
+    if (values[i] > values[high]) high = i;
+    if (values[i] < values[low]) low = i;
+  }
+  return found > 1 && values[high] != values[low];
+}
+
+// The row of zero between the maximum's row `top` and the minimum's
+// `bottom`, or -1: only under a line that is not flat and crosses zero, a
+// label's height from both ends, so the zero line's label touches neither
+// of theirs (user 2026-10-27).
+static int32_t graph_zero_row(const SensorPopupContext* ctx, int32_t top, int32_t bottom) {
+  uint32_t high = 0, low = 0;
+  if (!chart_extremes(ctx, high, low)) return -1;
+  return area_graph::zero_row(ctx->chart, top, bottom, lv_font_get_line_height(popup_layout::font20()));
+}
+
+// The zero line's label, left like the maximum's and the minimum's and
+// centered on its row; hidden without the line.
+static void place_zero_label(SensorPopupContext* ctx) {
+  if (!ctx || !ctx->y_zero_label || !ctx->chart) return;
+  const int32_t row = graph_zero_row(ctx, 0, lv_obj_get_content_height(ctx->chart));
+  if (row < 0) {
+    lv_obj_add_flag(ctx->y_zero_label, LV_OBJ_FLAG_HIDDEN);
+    return;
+  }
+  value_unit::show(ctx->y_zero_label,
+                   i18n::format_number(configManager.getConfig().language, 0.0f, popup_digits(ctx, 0.0f)), ctx->unit);
+  lv_obj_set_pos(ctx->y_zero_label, kGraphInset, row);
+  value_unit::place(ctx->y_zero_label);
+  lv_obj_remove_flag(ctx->y_zero_label, LV_OBJ_FLAG_HIDDEN);
+}
+
 // Recalculate Y-axis layout based on actual label text widths.
 // Measures max/min labels, repositions guide lines and chart padding.
 static void update_y_axis_layout(SensorPopupContext* ctx) {
@@ -951,6 +998,7 @@ static void update_y_axis_layout(SensorPopupContext* ctx) {
   lv_obj_set_width(ctx->chart, std::max(10, chart_right - chart_left));
   lv_obj_set_style_pad_left(ctx->chart, 0, 0);
   lv_obj_set_style_pad_right(ctx->chart, 0, 0);
+  place_zero_label(ctx);
 
   constexpr int kLabelOverhang = 12;
 
@@ -967,10 +1015,13 @@ static void update_y_axis_layout(SensorPopupContext* ctx) {
   }
 
   // Time labels along the graph, the last one kept inside the card (clamped
-  // below). No vertical lines: the readout cursor shows the time; the dashed
-  // max/min lines are drawn with the graph (on_chart_area_draw).
+  // below); a faint line at each one's time is part of the graph's picture
+  // (graph_picture).
+  ctx->time_count = 0;
   int chart_draw_w = chart_right - chart_left;
   if (chart_draw_w < 10) return;
+  for (int i = 0; i < n && i < kTimeAxisMarkerCount; ++i) ctx->time_fracs[i] = fracs[i];
+  ctx->time_count = static_cast<uint8_t>(std::min(n, kTimeAxisMarkerCount));
 
   for (int i = 0; i < kTimeAxisMarkerCount; ++i) {
     if (i < n) {
@@ -986,7 +1037,7 @@ static void update_y_axis_layout(SensorPopupContext* ctx) {
         if (label_x > max_x) label_x = max_x;
         lv_obj_set_pos(
             ctx->time_labels[i], label_x,
-            kLabelOverhang + ctx->chart_height + popup_layout::scale480(8));
+            kLabelOverhang + ctx->chart_height + kTimeLabelGap);
         lv_obj_clear_flag(ctx->time_labels[i], LV_OBJ_FLAG_HIDDEN);
       }
     } else {
@@ -1006,6 +1057,8 @@ static void clear_chart(SensorPopupContext* ctx, uint16_t points) {
   lv_chart_set_all_value(ctx->chart, ctx->series, LV_CHART_POINT_NONE);
   if (ctx->y_max_label) value_unit::show(ctx->y_max_label, "", "");
   if (ctx->y_min_label) value_unit::show(ctx->y_min_label, "", "");
+  if (ctx->y_zero_label) lv_obj_add_flag(ctx->y_zero_label, LV_OBJ_FLAG_HIDDEN);
+  ctx->time_count = 0;
   for (int i = 0; i < kTimeAxisMarkerCount; ++i) {
     if (ctx->time_labels[i]) lv_obj_add_flag(ctx->time_labels[i], LV_OBJ_FLAG_HIDDEN);
   }
@@ -2710,8 +2763,9 @@ static void resize_editable_chart(SensorPopupContext* ctx, int height) {
   lv_obj_set_height(ctx->chart, height + 2 * kChartLinePad);
   if (ctx->y_min_label) lv_obj_set_y(ctx->y_min_label, height);
   for (int i = 0; i < kTimeAxisMarkerCount; ++i) {
-    if (ctx->time_labels[i]) lv_obj_set_y(ctx->time_labels[i], overhang + height + popup_layout::scale480(8));
+    if (ctx->time_labels[i]) lv_obj_set_y(ctx->time_labels[i], overhang + height + kTimeLabelGap);
   }
+  place_zero_label(ctx);
 }
 
 static int editable_control_top(const SensorPopupContext* ctx) {
@@ -3198,15 +3252,16 @@ static void apply_history_payload(SensorPopupContext* ctx, const char* payload) 
   } else {
     if (ctx->y_max_label) value_unit::show(ctx->y_max_label, "", "");
     if (ctx->y_min_label) value_unit::show(ctx->y_min_label, "", "");
-    // No valid range: hide the time axis too.
+    if (ctx->y_zero_label) lv_obj_add_flag(ctx->y_zero_label, LV_OBJ_FLAG_HIDDEN);
+    // No valid range: hide the time axis (and its lines) too.
+    ctx->time_count = 0;
     for (int i = 0; i < kTimeAxisMarkerCount; ++i) {
       if (ctx->time_labels[i]) lv_obj_add_flag(ctx->time_labels[i], LV_OBJ_FLAG_HIDDEN);
     }
   }
 
   // One refresh is sufficient after the complete buffer, scale and labels
-  // have been prepared; the wrap too, for the dots at the extremes.
-  lv_obj_invalidate(ctx->chart_wrap);
+  // have been prepared.
   lv_chart_refresh(ctx->chart);
   refresh_sensor_readout(ctx);
 
@@ -3386,14 +3441,15 @@ static void on_range_click(lv_event_t* e) {
 }
 
 // The graph's picture for the chart's current line, colors and size: the
-// area (below the line the icon color fading from 40 % at the top of the
-// graph to nothing at its bottom, the card above it), the dashed lines at
-// the maximum and the minimum (`dashes`: not for a flat line) and at zero
-// (`zero`, a row or -1) and the line itself; null without a line (or
-// memory). Computed again only after a change (area_graph::picture_key).
+// area (below the line `area`, the header circle's color, down to the
+// graph's middle and fading to nothing at its bottom, the card above it),
+// faint lines in `grid` at the maximum and the minimum (`lines`: not for a
+// flat line), at zero (`zero`, a row or -1) and at the time labels, and the
+// line itself in `color`; null without a line (or memory). Computed again
+// only after a change (area_graph::picture_key).
 static const lv_image_dsc_t* graph_picture(SensorPopupContext* ctx, int32_t width, int32_t height, int32_t fade_top,
-                                           int32_t fade_bottom, bool dashes, int32_t zero, uint32_t color,
-                                           uint32_t card, uint32_t dash) {
+                                           int32_t fade_bottom, bool lines, int32_t zero, uint32_t color,
+                                           uint32_t area, uint32_t card, uint32_t grid) {
   if (width < 2 || height < 2) return nullptr;
   const int32_t count = static_cast<int32_t>(lv_chart_get_point_count(ctx->chart));
   if (static_cast<size_t>(width) > ctx->area_tops_capacity) {
@@ -3412,10 +3468,20 @@ static const lv_image_dsc_t* graph_picture(SensorPopupContext* ctx, int32_t widt
   }
   const int32_t points = area_graph::chart_points(ctx->chart, ctx->series, ctx->area_points, count);
   if (!points) return nullptr;
+  // The time lines' columns: under the time labels' anchors
+  // (update_y_axis_layout), the chart spanning the graph.
+  int32_t time_x[kTimeAxisMarkerCount];
+  const int time_count = std::min<int>(ctx->time_count, kTimeAxisMarkerCount);
+  uint32_t times = static_cast<uint32_t>(time_count);
+  for (int i = 0; i < time_count; ++i) {
+    time_x[i] = static_cast<int32_t>(ctx->time_fracs[i] * width);
+    times = times * 31u + static_cast<uint32_t>(time_x[i]);
+  }
   const uint32_t key = area_graph::picture_key(
       ctx->area_points, points,
       {static_cast<uint32_t>(width), static_cast<uint32_t>(height), static_cast<uint32_t>(fade_top),
-       static_cast<uint32_t>(fade_bottom), dashes ? 1u : 0u, static_cast<uint32_t>(zero), color, card, dash});
+       static_cast<uint32_t>(fade_bottom), lines ? 1u : 0u, static_cast<uint32_t>(zero), times, color, area, card,
+       grid});
   if (ctx->area_pixels && key == ctx->area_key) return &ctx->area_image;
   const uint32_t stride = lv_draw_buf_width_to_stride(width, LV_COLOR_FORMAT_RGB565);
   const size_t bytes = static_cast<size_t>(stride) * static_cast<size_t>(height);
@@ -3432,14 +3498,19 @@ static const lv_image_dsc_t* graph_picture(SensorPopupContext* ctx, int32_t widt
   lv_image_cache_drop(&ctx->area_image);
   const uint32_t stride_px = stride / sizeof(uint16_t);
   area_graph::column_tops(ctx->area_points, points, ctx->area_tops, width);
-  area_graph::render_fade(ctx->area_pixels, stride_px, width, height, ctx->area_tops, fade_top, fade_bottom, color,
-                          card, kFadeTopOpa);
-  if (dashes) {
+  area_graph::render_fade(ctx->area_pixels, stride_px, width, height, ctx->area_tops, (fade_top + fade_bottom) / 2,
+                          fade_bottom, area, card, LV_OPA_COVER);
+  constexpr int32_t kGridHalf = kGridLineWidth / 2;
+  if (lines) {
     for (const int32_t row : {fade_top, fade_bottom, zero}) {
       if (row < 0) continue;
-      area_graph::draw_dashes(ctx->area_pixels, stride_px, width, height, row - kDashWidth / 2, kDashWidth,
-                              kDashLength, dash, kDashOpa);
+      area_graph::blend_rect(ctx->area_pixels, stride_px, width, height, 0, row - kGridHalf, width - 1,
+                             row - kGridHalf + kGridLineWidth - 1, grid, kGridLineOpa);
     }
+  }
+  for (int i = 0; i < time_count; ++i) {
+    area_graph::blend_rect(ctx->area_pixels, stride_px, width, height, time_x[i] - kGridHalf, fade_top,
+                           time_x[i] - kGridHalf + kGridLineWidth - 1, fade_bottom, grid, kGridLineOpa);
   }
   area_graph::draw_line(ctx->area_pixels, stride_px, width, height, ctx->area_points, points,
                         static_cast<float>(kChartLineWidth), color);
@@ -3454,29 +3525,9 @@ static const lv_image_dsc_t* graph_picture(SensorPopupContext* ctx, int32_t widt
   return &ctx->area_image;
 }
 
-// Indices of the series' highest and lowest point (the first of equals);
-// false without two points or with a flat line.
-static bool chart_extremes(const SensorPopupContext* ctx, uint32_t& high, uint32_t& low) {
-  const uint32_t count = ctx->chart && ctx->series ? lv_chart_get_point_count(ctx->chart) : 0;
-  const int32_t* values = count > 1 ? lv_chart_get_series_y_array(ctx->chart, ctx->series) : nullptr;
-  if (!values) return false;
-  uint32_t found = 0;
-  for (uint32_t i = 0; i < count; ++i) {
-    if (values[i] == LV_CHART_POINT_NONE) continue;
-    if (!found++) {
-      high = low = i;
-      continue;
-    }
-    if (values[i] > values[high]) high = i;
-    if (values[i] < values[low]) low = i;
-  }
-  return found > 1 && values[high] != values[low];
-}
-
-// The graph (mockup sensor-graph-2, issue #131) as one picture over the
-// chart's whole box (graph_picture): lv_chart draws no line of its own
-// (line width 0), only a single point when there is just one. The line's
-// color, the header icon's, also colors the dots at the extremes.
+// The graph (mockups sensor-graph-2 and -3, issue #131) as one picture over
+// the chart's whole box (graph_picture): lv_chart draws no line of its own
+// (line width 0), only a single point when there is just one.
 static void on_chart_area_draw(lv_event_t* event) {
   const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
   auto* ctx = static_cast<SensorPopupContext*>(lv_event_get_user_data(event));
@@ -3487,7 +3538,7 @@ static void on_chart_area_draw(lv_event_t* event) {
   // Set while drawing: lv_chart_set_series_color would invalidate.
   ctx->series->color = color;
   uint32_t high = 0, low = 0;
-  const bool dashes = chart_extremes(ctx, high, low);
+  const bool lines = chart_extremes(ctx, high, low);
   lv_area_t coords, content;
   lv_obj_get_coords(ctx->chart, &coords);
   lv_obj_get_content_coords(ctx->chart, &content);
@@ -3495,49 +3546,28 @@ static void on_chart_area_draw(lv_event_t* event) {
   // (lv_chart: y_ofs + h).
   const int32_t fade_top = content.y1 - coords.y1;
   const int32_t fade_bottom = fade_top + lv_area_get_height(&content);
-  // A line running below zero gets a dashed line at zero too, unless it
-  // would almost touch the maximum's or the minimum's (user 2026-10-27).
-  const int32_t zero = dashes ? area_graph::zero_row(ctx->chart, fade_top, fade_bottom, kDashLength) : -1;
+  // A line running below zero gets a line at zero too, with its label
+  // (place_zero_label), unless that label would touch the maximum's or the
+  // minimum's (user 2026-10-27).
+  const int32_t zero = graph_zero_row(ctx, fade_top, fade_bottom);
   const lv_color_t card = lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN);
+  // The area takes the header circle's color (popup_nav_style::fill, also
+  // the selected range button's), as the tile's area takes its circle's: 40 %
+  // of a light icon color looked far lighter than the circle (user
+  // 2026-10-27).
+  lv_color_t fill;
+  lv_opa_t fill_opa;
+  popup_nav_style::fill(card, color, fill, fill_opa);
+  const lv_color_t area = lv_color_mix(fill, card, fill_opa);
   if (const lv_image_dsc_t* picture =
-          graph_picture(ctx, lv_area_get_width(&coords), lv_area_get_height(&coords), fade_top, fade_bottom, dashes,
-                        zero, lv_color_to_u32(color) & 0xFFFFFF, lv_color_to_u32(card) & 0xFFFFFF,
-                        ui_theme::text() & 0xFFFFFF)) {
+          graph_picture(ctx, lv_area_get_width(&coords), lv_area_get_height(&coords), fade_top, fade_bottom, lines,
+                        zero, lv_color_to_u32(color) & 0xFFFFFF, lv_color_to_u32(area) & 0xFFFFFF,
+                        lv_color_to_u32(card) & 0xFFFFFF, ui_theme::text() & 0xFFFFFF)) {
     lv_draw_image_dsc_t image;
     lv_draw_image_dsc_init(&image);
     image.base.layer = layer;
     image.src = picture;
     lv_draw_image(layer, &image, &coords);
-  }
-}
-
-// After the graph: filled dots in the icon's color at the highest and the
-// lowest point (issue #131), ringed in the card's color like the cursor dot.
-static void on_chart_extremes_draw(lv_event_t* event) {
-  const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
-  auto* ctx = static_cast<SensorPopupContext*>(lv_event_get_user_data(event));
-  lv_layer_t* layer = lv_event_get_layer(event);
-  if (!ctx || !layer || !ctx->chart || !ctx->card || lv_obj_has_flag(ctx->chart_wrap, LV_OBJ_FLAG_HIDDEN)) return;
-  uint32_t high = 0, low = 0;
-  if (!chart_extremes(ctx, high, low)) return;
-  lv_area_t coords;
-  lv_obj_get_coords(ctx->chart, &coords);
-  lv_draw_rect_dsc_t dot;
-  lv_draw_rect_dsc_init(&dot);
-  dot.base.layer = layer;
-  dot.bg_color = ctx->series->color;
-  dot.bg_opa = LV_OPA_COVER;
-  dot.radius = LV_RADIUS_CIRCLE;
-  dot.border_color = lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN);
-  dot.border_width = kExtremeDotRing;
-  dot.border_opa = LV_OPA_COVER;
-  for (const uint32_t index : {high, low}) {
-    lv_point_t point;
-    lv_chart_get_point_pos_by_id(ctx->chart, ctx->series, index, &point);
-    const int32_t x = coords.x1 + point.x - kExtremeDotSize / 2;
-    const int32_t y = coords.y1 + point.y - kExtremeDotSize / 2;
-    const lv_area_t area = {x, y, x + kExtremeDotSize - 1, y + kExtremeDotSize - 1};
-    lv_draw_rect(layer, &dot, &area);
   }
 }
 
@@ -3681,6 +3711,14 @@ static void build_popup_body(SensorPopupContext* ctx) {
   lv_label_set_text(y_min, "");
   lv_obj_set_pos(y_min, kGraphInset, kChartHeight);  // font center ~kChartHeight+kLabelOverhang = on bottom guide line
 
+  // Zero label: on the zero line while the line crosses it (place_zero_label).
+  lv_obj_t* y_zero = lv_label_create(chart_wrap);
+  ctx->y_zero_label = y_zero;
+  set_label_style(y_zero, lv_color_hex(ui_theme::text()), y_font);
+  lv_obj_set_style_text_align(y_zero, LV_TEXT_ALIGN_LEFT, 0);
+  lv_label_set_text(y_zero, "");
+  lv_obj_add_flag(y_zero, LV_OBJ_FLAG_HIDDEN);
+
   // Time labels below the graph, positioned by update_y_axis_layout.
   for (int i = 0; i < kTimeAxisMarkerCount; ++i) {
     lv_obj_t* tlbl = lv_label_create(chart_wrap);
@@ -3688,7 +3726,7 @@ static void build_popup_body(SensorPopupContext* ctx) {
     lv_obj_set_style_text_align(tlbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(tlbl, LV_SIZE_CONTENT);
     lv_label_set_text(tlbl, "");
-    lv_obj_set_pos(tlbl, 0, kLabelOverhang + kChartHeight + 2);
+    lv_obj_set_pos(tlbl, 0, kLabelOverhang + kChartHeight + kTimeLabelGap);
     lv_obj_add_flag(tlbl, LV_OBJ_FLAG_HIDDEN);
     ctx->time_labels[i] = tlbl;
   }
@@ -3715,8 +3753,6 @@ static void build_popup_body(SensorPopupContext* ctx) {
   ctx->series = lv_chart_add_series(chart, lv_color_hex(ui_theme::icon()), LV_CHART_AXIS_PRIMARY_Y);
   lv_obj_add_event_cb(chart, on_chart_area_draw,
                       static_cast<lv_event_code_t>(LV_EVENT_DRAW_MAIN | LV_EVENT_PREPROCESS), ctx);
-  // Before the readout cursor (attach_chart_readout), which stays on top.
-  lv_obj_add_event_cb(chart_wrap, on_chart_extremes_draw, LV_EVENT_DRAW_POST, ctx);
   clear_chart(ctx, get_history_range_config(ctx->history_range).points);
 
   lv_obj_move_foreground(ctx->icon_label);

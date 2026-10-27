@@ -38,8 +38,8 @@ const readoutFunctions = ['get_value_font', 'set_label_text_if_changed', 'numeri
   'apply_chart_readout', 'apply_timeline_readout', 'on_sensor_readout_apply', 'sensor_readout_graph',
   'sensor_readout_is_latest', 'on_sensor_readout_end', 'refresh_sensor_readout',
   'build_readout_band', 'keep_chart_history', 'attach_chart_readout', 'attach_timeline_readout',
-  // The graph's fade, cover, dashed lines and dots (mockup sensor-graph-2).
-  'graph_picture', 'chart_extremes', 'on_chart_area_draw', 'on_chart_extremes_draw'];
+  // The graph's picture: area, grid lines and line (mockups sensor-graph-2 and -3).
+  'graph_picture', 'on_chart_area_draw'];
 const cpp = `
 #include <lvgl.h>
 #include "src/ui/popups/popup_first_frame.h"
@@ -49,7 +49,6 @@ const cpp = `
 #include <lvgl_private.h>
 // The graph's drawing (defined with the readout functions below).
 static void on_chart_area_draw(lv_event_t*);
-static void on_chart_extremes_draw(lv_event_t*);
 void hide_popup_shell(lv_obj_t*){}
 lv_obj_t* header_value_source=nullptr;
 void show_popup_shell(lv_obj_t*,lv_obj_t*,lv_obj_t*,lv_obj_t*,lv_obj_t*,void(*)()=nullptr,lv_obj_t* value=nullptr){header_value_source=value;}
@@ -155,7 +154,9 @@ bool is_popup_visible(SensorPopupContext*);
 static void attach_timeline_readout(SensorPopupContext*);
 static void keep_chart_history(SensorPopupContext*,const std::vector<float>&,int32_t,uint64_t,uint64_t,uint16_t);
 int history_layout_calls=0;
-${['update_binary_time_axis','update_y_axis_layout','resize_editable_chart','editable_control_top','layout_editable_history','extract_epoch','extract_numeric','binary_state_code','binary_state_color','binary_state_priority','binary_state_identifier','state_history_color','local_date_key','on_binary_timeline_draw','refresh_binary_labels','refresh_binary_activity_rows','on_binary_activity_scroll','clear_binary_history','ensure_binary_view','binary_timeline_hex_nibble','decode_state_timeline'].map(n => n==='layout_editable_history' ? fn(popup,n).replace('{','{ ++history_layout_calls;') : fn(popup,n)).join('\n')}
+// The zero line's label (defined with the readout functions below).
+static uint8_t popup_digits(const SensorPopupContext*,float);
+${['chart_extremes','graph_zero_row','place_zero_label','update_binary_time_axis','update_y_axis_layout','resize_editable_chart','editable_control_top','layout_editable_history','extract_epoch','extract_numeric','binary_state_code','binary_state_color','binary_state_priority','binary_state_identifier','state_history_color','local_date_key','on_binary_timeline_draw','refresh_binary_labels','refresh_binary_activity_rows','on_binary_activity_scroll','clear_binary_history','ensure_binary_view','binary_timeline_hex_nibble','decode_state_timeline'].map(n => n==='layout_editable_history' ? fn(popup,n).replace('{','{ ++history_layout_calls;') : fn(popup,n)).join('\n')}
 ${readoutFunctions.map(n => fn(popup,n)).join('\n')}
 void update_value_label(SensorPopupContext*ctx,const String& value,const String& unit){ctx->unit=unit;if(ctx->value_label)lv_label_set_text(ctx->value_label,value.c_str());}
 void apply_binary_history_payload(SensorPopupContext*,DynamicJsonDocument&){assert(false&&"Unexpected binary response");}
@@ -186,6 +187,8 @@ void touch_release(){touch_down=false;lv_indev_read(touch);}
 bool white_at(const std::vector<uint32_t>&pixels,int x,int y){return (pixels[y*SCREEN_WIDTH+x]&0xffffff)==0xffffff;}
 bool near_color(uint32_t pixel,uint32_t color){for(int shift:{0,8,16}){const int a=(pixel>>shift)&255,b=(color>>shift)&255;if(std::abs(a-b)>12)return false;}return true;}
 void snapshot(const char*file,const std::vector<uint32_t>&pixels){std::ofstream out(file,std::ios::binary);auto u16=[&](uint16_t v){out.write(reinterpret_cast<char*>(&v),2);};auto u32=[&](uint32_t v){out.write(reinterpret_cast<char*>(&v),4);};out.write("BM",2);u32(54+pixels.size()*4);u32(0);u32(54);u32(40);u32(SCREEN_WIDTH);u32(-SCREEN_HEIGHT);u16(1);u16(32);u32(0);u32(pixels.size()*4);u32(0);u32(0);u32(0);u32(0);out.write(reinterpret_cast<const char*>(pixels.data()),pixels.size()*4);}
+// The history's values (a Number graph); a run below zero gets a zero line.
+std::vector<int> history_values{20,60,100,40,80};
 int main(int argc,char**argv){
  lv_init();auto*display=lv_display_create(SCREEN_WIDTH,SCREEN_HEIGHT);std::vector<uint32_t>pixels(SCREEN_WIDTH*SCREEN_HEIGHT);
  lv_display_set_color_format(display,LV_COLOR_FORMAT_XRGB8888);lv_display_set_buffers(display,pixels.data(),nullptr,pixels.size()*4,LV_DISPLAY_RENDER_MODE_FULL);
@@ -200,7 +203,7 @@ int main(int argc,char**argv){
  auto payload=[&](bool empty=false,bool error=false){auto cfg=get_history_range_config(ctx.editable_requested_range);JsonDocument doc;doc["entity_id"]="test.entity";doc["request_id"]=ctx.editable_history_id.c_str();doc["hours"]=cfg.hours;doc["period_minutes"]=cfg.period_minutes;doc["kind"]="editable";doc["unit"]="%";doc["range_start"]=1788768000;doc["range_end"]=1788854400;doc["history_available"]=!error;
   if(error)doc["error"]="recorder_unavailable";
   auto values=doc["values"].to<JsonArray>();auto activity=doc["activity"].to<JsonArray>();auto palette=doc["palette"].to<JsonArray>();palette.add("Home");palette.add("Office");
-  if(!empty&&!error){for(int v:{20,60,100,40,80})values.add(v);for(int i=0;i<40;++i){auto item=activity.add<JsonObject>();item["timestamp"]=1788854400+i*60;item["state"]=ctx.editable_kind=="time"?"17:00:00":ctx.editable_kind=="select"?"Home":"32";}doc["timeline_points"]=4;doc["timeline_encoding"]="palette4-hex";doc["timeline_data"]="0011";}
+  if(!empty&&!error){for(int v:history_values)values.add(v);for(int i=0;i<40;++i){auto item=activity.add<JsonObject>();item["timestamp"]=1788854400+i*60;item["state"]=ctx.editable_kind=="time"?"17:00:00":ctx.editable_kind=="select"?"Home":"32";}doc["timeline_points"]=4;doc["timeline_encoding"]="palette4-hex";doc["timeline_data"]="0011";}
   String result;serializeJson(doc,static_cast<std::string&>(result));return result;
  };
  int section_top=-1,select_activity_y=-1,select_viewport_height=-1;
@@ -308,6 +311,26 @@ int main(int argc,char**argv){
   // A tap is released before any frame shows a readout.
   touch_at(content.x1+10,content.y1+10);touch_release();lv_refr_now(display);
   assert(ctx.readout_kind==kReadoutNone&&!shown(ctx.readout_value_label)&&!shown(ctx.value_box));
+  // A line running below zero: a faint line at zero and its own label on
+  // the zero row, left like the maximum's (user 2026-10-27); gone again
+  // with a range above zero.
+  history_values={-60,60,100,-20,80};load_kind("number");
+  const int32_t zero_height=lv_obj_get_content_height(ctx.chart),zero_gap=lv_font_get_line_height(popup_layout::font20());
+  const int32_t zero_row=area_graph::zero_row(ctx.chart,0,zero_height,zero_gap);
+  // A small graph (the 480x480 editors' 40 px) has no room for a third label.
+  if(zero_height>=4*zero_gap)assert(zero_row>0&&"Room for the zero line");
+  assert(shown(ctx.y_zero_label)==(zero_row>0)&&"The zero line and its label come together");
+  if(zero_row>0){
+   assert(lv_obj_get_y(ctx.y_zero_label)==zero_row&&lv_obj_get_x(ctx.y_zero_label)==kGraphInset&&"The zero label sits on the zero line");
+   assert(lv_label_get_text(ctx.y_zero_label)[0]=='0'&&strcmp(value_unit::unit_text(ctx.y_zero_label),"%")==0&&"The zero label shows 0 and the unit");
+   lv_point_t top;lv_chart_get_point_pos_by_id(ctx.chart,ctx.series,2,&top);lv_area_t chart_area;lv_obj_get_coords(ctx.chart,&chart_area);
+   const int x=chart_area.x1+top.x+2,y=chart_area.y1+lv_obj_get_style_pad_top(ctx.chart,LV_PART_MAIN)+zero_row;
+   const int lift=int(pixels[y*SCREEN_WIDTH+x]&0xff)-int(pixels[(y+2)*SCREEN_WIDTH+x]&0xff);
+   if(lift<4||lift>32)std::cerr<<"zero line lift "<<lift<<std::endl;
+   assert(lift>=4&&lift<=32&&"A faint line at zero over the area");
+  }
+  history_values={20,60,100,40,80};load_kind("number");
+  assert(!shown(ctx.y_zero_label)&&"No zero label above zero");
   // Time editors have no graph; the same area never starts a readout.
   load_kind("time");touch_at(content.x1+width/2,content.y1+ctx.chart_height/2);lv_refr_now(display);
   assert(ctx.readout_kind==kReadoutNone&&!shown(ctx.readout_value_label));touch_release();

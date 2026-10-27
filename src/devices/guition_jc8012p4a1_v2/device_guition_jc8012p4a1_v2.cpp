@@ -28,7 +28,6 @@
 #include "src/devices/common/p4_dsi_cpu_rotate.h"
 #include "src/devices/common/touch_one_euro.h"
 #include "src/devices/guition_jc8012p4a1_v2/vendor/displays_config.h"
-#include "src/devices/guition_jc8012p4a1_v2/touch_trace.h"
 #include "src/devices/guition_jc8012p4a1_v2/vendor/gsl3680_touch.h"
 #include "src/devices/guition_jc8012p4a1_v2/vendor/guition_sdmmc.h"
 #include "src/devices/guition_jc8012p4a1_v2/vendor/jd9365_init_cmds.h"
@@ -107,7 +106,6 @@ TouchOneEuro g_touch_filter_x;
 TouchOneEuro g_touch_filter_y;
 uint32_t g_touch_last_ms = 0;
 uint8_t g_touch_active_track_id = kInvalidTouchTrackId;
-TouchTrace g_touch_trace;
 
 void log_step(const char* message) {
   Serial.print("[Device/Guition JC8012P4A1 V2] ");
@@ -965,8 +963,6 @@ bool DeviceGuitionJC8012P4A1V2::getTouch(int16_t& x, int16_t& y) {
       y = static_cast<int16_t>(g_touch_stable_y);
       return true;
     }
-    if (g_touch_active) g_touch_trace.release(millis());
-    else g_touch_trace.empty_read();
     g_touch_active = false;
     g_touch_release_reads = 0;
     g_touch_active_track_id = kInvalidTouchTrackId;
@@ -997,8 +993,6 @@ bool DeviceGuitionJC8012P4A1V2::getTouch(int16_t& x, int16_t& y) {
     }
   }
 
-  const bool id_changed = g_touch_active && g_touch_active_track_id != kInvalidTouchTrackId &&
-                          track_ids[selected] != g_touch_active_track_id;
   g_touch_active_track_id = track_ids[selected];
 
   int32_t mapped_x = 0;
@@ -1027,7 +1021,6 @@ bool DeviceGuitionJC8012P4A1V2::getTouch(int16_t& x, int16_t& y) {
   const uint32_t now = millis();
   const bool fresh = !g_touch_active;
   if (!g_touch_active) {
-    g_touch_trace.press(now, mapped_x, mapped_y);
     g_touch_filter_x.reset(static_cast<float>(mapped_x));
     g_touch_filter_y.reset(static_cast<float>(mapped_y));
     g_touch_stable_x = mapped_x;
@@ -1062,7 +1055,6 @@ bool DeviceGuitionJC8012P4A1V2::getTouch(int16_t& x, int16_t& y) {
   g_touch_next_y = g_touch_stable_y;
   x = static_cast<int16_t>(shown_x);
   y = static_cast<int16_t>(shown_y);
-  g_touch_trace.sample(now, shown_x, shown_y, count, id_changed);
 
   static uint32_t touch_log_counter = 0;
   if (++touch_log_counter % 20 == 1) {

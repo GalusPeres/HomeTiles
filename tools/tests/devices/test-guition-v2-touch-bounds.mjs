@@ -72,10 +72,7 @@ int32_t g_touch_stable_x=0, g_touch_stable_y=0, g_touch_next_x=0, g_touch_next_y
 #include "src/devices/common/touch_one_euro.h"
 TouchOneEuro g_touch_filter_x, g_touch_filter_y;
 uint32_t g_touch_last_ms=0;
-// The board's touch diagnostics (touch_trace.h) log through the Serial stub.
 uint32_t millis(){static uint32_t now=0;return now+=9;}  // the panel polls about every 9 ms
-#include "src/devices/guition_jc8012p4a1_v2/touch_trace.h"
-TouchTrace g_touch_trace;
 ${fn(board, `${target.cls}::getTouch`).replace(`${target.cls}::getTouch`, 'read_board_touch')}
 void contact(int index, uint16_t x, uint16_t y, uint8_t id=1) {
   const int offset=4+index*4;

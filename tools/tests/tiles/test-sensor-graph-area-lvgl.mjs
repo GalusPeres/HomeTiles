@@ -252,9 +252,16 @@ int main() {
       for (int x = 0; x < width; ++x) sum += (fade[y * width + x] >> 11) * 255.0 / 31;
       const double t = y <= middle ? 0.0 : static_cast<double>(y - middle) / (height - 1 - middle);
       const double alpha = 1.0 - t * t * (3.0 - 2.0 * t);
-      const double exact = 0x1A + (0x6E - 0x1A) * alpha;
+      // Both ends on the RGB565 steps LVGL shows: red 0x1A -> 3, 0x6E -> 13.
+      const double exact = (3 + (13 - 3) * alpha) * 255.0 / 31;
       assert(sum / width > exact - 4.0 && sum / width < exact + 4.0 && "the dither keeps the row's mean");
     }
+    // The solid part is the circle's flat color (the RGB565 step LVGL shows
+    // for it), no dither texture: a dithered end gave the solid part a
+    // texture that vanished in a flat band where the fade passed a step
+    // (b563, user 2026-10-27).
+    for (int y = 0; y < middle; ++y)
+      for (int x = 0; x < width; ++x) assert(fade[y * width + x] == area_graph::rgb565(kFill) && "a flat solid part");
     // No kink where the solid part ends: the first eight fade rows drop far
     // less than eight rows in the fade's middle (a straight fade drops
     // evenly).

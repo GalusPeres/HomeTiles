@@ -123,10 +123,15 @@ inline uint16_t blend565(uint16_t pixel, uint32_t top, uint32_t opa) {
 // fading from there to nothing at row `fade_bottom` along a smoothstep
 // curve; above the line and in gaps the card. A straight fade starts with a
 // kink, which the eye sees as a lighter band where the solid part ends
-// (Mach band, user 2026-10-27). Ordered dithering (Bayer 8x8) picks for every pixel one of the two
-// RGB565 steps around its exact color, so the 16-bit panels show a smooth
-// fade instead of bands; the fade starts from the card's own step (the card
-// around it shows that step).
+// (Mach band, user 2026-10-27). Ordered dithering (Bayer 8x8) picks for
+// every pixel one of the two RGB565 steps around its exact color, so the
+// 16-bit panels show a smooth fade instead of bands. Both ends are the
+// RGB565 steps LVGL shows for their colors (the card around and the header
+// circle): the solid part is the circle's flat color and only the fade
+// between them is dithered. A dithered end (its exact color between two
+// steps) gave the solid part a texture the circle lacks, and where the fade
+// passed a whole step that texture vanished in a flat band (b563, user
+// 2026-10-27).
 inline void render_fade(uint16_t* pixels, uint32_t stride_px, int32_t width, int32_t height, const int16_t* tops,
                         int32_t fade_top, int32_t fade_bottom, uint32_t color, uint32_t card, uint8_t top_opa) {
   static constexpr uint8_t kBayer[8][8] = {
@@ -138,8 +143,9 @@ inline void render_fade(uint16_t* pixels, uint32_t stride_px, int32_t width, int
   const uint16_t plain = rgb565(card);
   const float from[3] = {static_cast<float>(plain >> 11), static_cast<float>((plain >> 5) & 0x3F),
                          static_cast<float>(plain & 0x1F)};
-  const float to[3] = {((color >> 16) & 0xFF) * 31 / 255.0f, ((color >> 8) & 0xFF) * 63 / 255.0f,
-                       (color & 0xFF) * 31 / 255.0f};
+  const uint16_t solid = rgb565(color);
+  const float to[3] = {static_cast<float>(solid >> 11), static_cast<float>((solid >> 5) & 0x3F),
+                       static_cast<float>(solid & 0x1F)};
   const float span = static_cast<float>(std::max<int32_t>(1, fade_bottom - fade_top));
   for (int32_t y = 0; y < height; ++y) {
     const float t = std::min(1.0f, std::max(0.0f, (y - fade_top) / span));

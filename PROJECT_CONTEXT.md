@@ -14,7 +14,7 @@ Last reviewed: 2026-10-26
 
 - FW v0.9.5 (hotfix) and FW + Bridge v0.9.4 released 2026-10-23. Bridge beta v0.9.6b1.
 - Pairing by IP without mDNS (#114, Bridge #16): read-only `GET /api/link` + Bridge menu step; HA ok on Tab5 (b513, b16).
-- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b561.
+- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b562.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build; a cache stays warm when only repo headers changed and the LVGL config fingerprint matches.
 - Docs CI runs on pinned Chrome for Testing 154.0.8037.57; a tag's docs run uses the tag's workflow, so after a release dispatch docs on `main`.
 - Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need their icons on HomeTiles-staging (tag = FW_VERSION).
@@ -92,7 +92,7 @@ Last reviewed: 2026-10-26
 - Editable tiles 21 Number, 22 Select, 23 Date/Time reuse Sensor persistence/popups (`PackedTileV7` unchanged); drafts coalesce 600 ms, sliders publish on release. Open: S3 froze adding Number to an active screensaver.
 - Lock/Alarm/Fan (24-26, `src/types/device/`): sealed commands need pairing + Web Admin password; HW ok 2026-10-02.
 - Calendar 27 (PR #127, `docs-dev/calendar.md`): Bridge v0.9.6b1 `events` (`entity_search` 5); V2 HW pending.
-- Sensor graph (#131): area, line, popup dashes (max/min, zero if crossed) are pictures (`area_graph.h`), never LVGL lines (90-150 ms); tile: Switch header, clip_corner frame, only 24 h answers, asks after connect + every 5 min; popup 7D/24H/6H (6H numeric only). HW pending.
+- Sensor graph (#131, mockup sensor-graph-3): pictures (`area_graph.h`), no LVGL lines; popup area circle color, fades in lower half; 1 px 8 % lines max/min/zero/time + zero label; tile only 24 h; popup 7D/24H/6H (6H numeric). HW pending.
 - Switch layouts `sensor_decimals` 0-3, 4-6 upright bar (`bar_orientation.h`; Fan upright = 1; sim ok, HW pending); `command_pacer.h` pacing: reporter test pending (#11).
 - Scene tile is "Button": picker searches scenes/scripts/buttons (`entity_search` 4), entity in `sensor_entity`.
 - Direct link: TCP 8140, Bridge = broker, frames sealed with pairing keys (`docs-dev/bridge-link.md`). The panel declares every entity it uses; without a password only released entities and the Energy Dashboard categories reach it. Picker lists Recent/Favorites/All (b369): V2 HW pending.

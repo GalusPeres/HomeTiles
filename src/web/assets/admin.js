@@ -17263,7 +17263,7 @@ function maybeFillTitleFromWeather(tab) {
   // as fit the card's real width with even room between and around their
   // widest text (textW, measured by the device in its language).
   function weatherForecastGap(textW) {
-    return Math.trunc(textW * 85 / 100);
+    return Math.trunc(textW * 50 / 100);
   }
   function weatherForecastCount(cardW, textW) {
     const gap = weatherForecastGap(textW);

@@ -4785,6 +4785,10 @@ static void apply_tile_graph_history(const char* target_entity, const char* payl
   String json = payload;
   String entity_id;
   if (!extract_json_string_field(json, "entity_id", entity_id)) return;
+  // A tile shows the day: the popup's 6H and 7D answers come through here
+  // too and replaced it until the next refresh.
+  float hours = 24.0f;
+  if (extract_json_number_field(json, "hours", hours) && lroundf(hours) != 24) return;
 
   // Find matching tile with graph in active grid
   const TileGridConfig& grid = tileConfig.getActiveGrid();

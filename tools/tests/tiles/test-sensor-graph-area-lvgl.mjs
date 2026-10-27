@@ -96,6 +96,11 @@ assert.ok(popup.includes('area_graph::render_fade(ctx->area_pixels, stride_px, w
   popup.includes('lv_obj_set_style_line_width(chart, 0, LV_PART_ITEMS);') &&
   popup.includes('lv_obj_add_event_cb(chart_wrap, on_chart_extremes_draw, LV_EVENT_DRAW_POST, ctx);'),
   'popup: one picture (computed again only after a change), no LVGL line, the dots');
+// The dashes at the maximum, the minimum and zero, faint (user 2026-10-27).
+assert.ok(popup.includes('const int32_t zero = dashes ? area_graph::zero_row(ctx->chart, fade_top, fade_bottom, kDashLength) : -1;') &&
+  popup.includes('for (const int32_t row : {fade_top, fade_bottom, zero}) {') &&
+  popup.includes('constexpr lv_opa_t kDashOpa = 51;  // 20 %'),
+  'popup: a dashed line at zero when the line crosses it, all dashes at 20 %');
 assert.ok(popup.includes('constexpr uint8_t kFadeTopOpa = 102;  // 40 %'), 'popup: 40 % at the top');
 
 const host = await lvglHost(root);
@@ -152,7 +157,10 @@ static void area_cb(lv_event_t* e) {
   g_tops.resize(width);
   const int32_t points = area_graph::chart_points(chart, g_series, g_points.data(), count);
   if (!points) return;
-  const uint32_t key = area_graph::picture_key(g_points.data(), points, {uint32_t(width), uint32_t(height), g_popup ? 1u : 0u});
+  const int32_t fade_top = content.y1 - coords.y1, fade_bottom = fade_top + lv_area_get_height(&content);
+  const int32_t zero = g_popup ? area_graph::zero_row(chart, fade_top, fade_bottom, 8) : -1;
+  const uint32_t key =
+      area_graph::picture_key(g_points.data(), points, {uint32_t(width), uint32_t(height), g_popup ? 1u : 0u, uint32_t(zero)});
   if (key != g_key) {
     ++g_renders;
     g_key = key;
@@ -160,10 +168,11 @@ static void area_cb(lv_event_t* e) {
     lv_image_cache_drop(&g_line);
     area_graph::column_tops(g_points.data(), points, g_tops.data(), width);
     if (g_popup) {
-      const int32_t fade_top = content.y1 - coords.y1, fade_bottom = fade_top + lv_area_get_height(&content);
       g_picture.assign(width * height, 0);
       area_graph::render_fade(g_picture.data(), width, width, height, g_tops.data(), fade_top, fade_bottom, kIcon, kCard, 102);
-      for (const int32_t row : {fade_top, fade_bottom}) area_graph::draw_dashes(g_picture.data(), width, width, height, row - 1, 2, 8, 0xFFFFFF, 89);
+      for (const int32_t row : {fade_top, fade_bottom, zero}) {
+        if (row >= 0) area_graph::draw_dashes(g_picture.data(), width, width, height, row - 1, 2, 8, 0xFFFFFF, 51);
+      }
       area_graph::draw_line(g_picture.data(), width, width, height, g_points.data(), points, 4.0f, kIcon);
       set_image(g_image, LV_COLOR_FORMAT_RGB565, reinterpret_cast<const uint8_t*>(g_picture.data()), width, height, width * 2);
     } else {
@@ -353,6 +362,32 @@ int main() {
     lv_chart_set_value_by_id(chart, g_series, 10, 900);
     lv_refr_now(display);
     assert(g_renders == 2 && "a changed line computes its pictures again");
+    if (g_popup) {
+      // A line running below zero gets a dashed line at zero, on the row
+      // where lv_chart puts the value zero (user 2026-10-27); none while the
+      // range stays above zero or the row almost touches the minimum's.
+      const int32_t top = content.y1 - coords.y1, bottom = top + lv_area_get_height(&content);
+      assert(area_graph::zero_row(chart, top, bottom, 8) == -1 && "no zero line above zero");
+      lv_chart_set_axis_range(chart, LV_CHART_AXIS_PRIMARY_Y, -5, 1000);
+      assert(area_graph::zero_row(chart, top, bottom, 8) == -1 && "no zero line on the minimum's");
+      lv_chart_set_axis_range(chart, LV_CHART_AXIS_PRIMARY_Y, -500, 1000);
+      lv_chart_set_value_by_id(chart, g_series, 0, 0);
+      const int32_t zero = area_graph::zero_row(chart, top, bottom, 8);
+      lv_point_t at_zero;
+      lv_chart_get_point_pos_by_id(chart, g_series, 0, &at_zero);
+      assert(zero > top + 8 && zero < bottom - 8 && zero == at_zero.y && "the zero line on lv_chart's zero");
+      lv_refr_now(display);
+      assert(g_renders == 3);
+      lv_draw_buf_t* crossing = lv_snapshot_take(screen, LV_COLOR_FORMAT_XRGB8888);
+      assert(crossing);
+      // Columns 16..23 of the picture carry a dash, 8..15 a gap.
+      const int y = coords.y1 + zero;
+      const int dash = channel(pixel(crossing, coords.x1 + 20, y), 2) - channel(pixel(crossing, coords.x1 + 20, y + 4), 2);
+      const int gap = channel(pixel(crossing, coords.x1 + 12, y), 2) - channel(pixel(crossing, coords.x1 + 12, y + 4), 2);
+      if (dash < 24 || gap > 16) std::fprintf(stderr, "zero dash %d gap %d\n", dash, gap);
+      assert(dash >= 24 && gap <= 16 && "a faint dashed line at zero");
+      lv_draw_buf_destroy(crossing);
+    }
     lv_draw_buf_destroy(shot);
     lv_obj_delete(screen);
   }

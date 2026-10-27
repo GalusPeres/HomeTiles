@@ -257,10 +257,13 @@ static String build_external_temp_history_payload(const char* entity_id,
   }
   if (points == 0) points = 1;
 
-  const uint16_t samples_per_bucket = static_cast<uint16_t>(
-      (period_minutes + kExternalTempHistorySampleMinutes - 1U) / kExternalTempHistorySampleMinutes);
+  // The samples (one per kExternalTempHistorySampleMinutes) the buckets
+  // cover by time: a bucket shorter than a sample (the popup's 6H asks for
+  // minutes) shares its sample with its neighbours instead of taking one of
+  // its own, which drew 30 hours as six.
   const uint32_t requested_base_points =
-      static_cast<uint32_t>(points) * static_cast<uint32_t>(samples_per_bucket);
+      (static_cast<uint32_t>(points) * period_minutes + kExternalTempHistorySampleMinutes - 1U) /
+      kExternalTempHistorySampleMinutes;
   const uint16_t clamped_base_points = static_cast<uint16_t>(
       requested_base_points > kExternalTempHistoryPoints ? kExternalTempHistoryPoints : requested_base_points);
   const uint16_t available_base_points =
@@ -296,9 +299,13 @@ static String build_external_temp_history_payload(const char* entity_id,
 
     float sum = 0.0f;
     uint16_t valid_count = 0;
-    for (uint16_t sample = 0; sample < samples_per_bucket; ++sample) {
-      const uint32_t virtual_index =
-          static_cast<uint32_t>(bucket) * static_cast<uint32_t>(samples_per_bucket) + sample;
+    const uint32_t first_sample =
+        static_cast<uint32_t>(bucket) * period_minutes / kExternalTempHistorySampleMinutes;
+    const uint32_t end_sample = std::max<uint32_t>(
+        first_sample + 1U,
+        ((static_cast<uint32_t>(bucket) + 1U) * period_minutes + kExternalTempHistorySampleMinutes - 1U) /
+            kExternalTempHistorySampleMinutes);
+    for (uint32_t virtual_index = first_sample; virtual_index < end_sample; ++virtual_index) {
       if (virtual_index < missing_base_points) continue;
 
       const uint32_t local_offset = virtual_index - missing_base_points;

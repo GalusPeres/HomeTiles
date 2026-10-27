@@ -12,13 +12,13 @@
 // The pictures of a Sensor graph (an lv_chart with one line series, mockup
 // build/design-mockups/sensor-graph-2, issue #131): the area under the line
 // (the tile in its circle's color, the popup the icon color fading to
-// nothing), the line itself and the popup's dashed max/min lines. They are
-// computed once from the line and drawn as images, computed again only when
-// the line, the colors or the size change (picture_key). LVGL's own line
-// costs about 90 ms per popup frame on the P4 (a 4 px anti-aliased polyline
-// of 288 points, b559 log; 1.1 ms against 0.09 ms for the area picture on
-// the host), the area built from a rect and a triangle per segment about
-// 150 ms (b558).
+// nothing), the line itself and the popup's dashed max/min (and zero)
+// lines. They are computed once from the line and drawn as images, computed
+// again only when the line, the colors or the size change (picture_key).
+// LVGL's own line costs about 90 ms per popup frame on the P4 (a 4 px
+// anti-aliased polyline of 288 points, b559 log; 1.1 ms against 0.09 ms for
+// the area picture on the host), the area built from a rect and a triangle
+// per segment about 150 ms (b558).
 namespace area_graph {
 
 // A point of the line in the chart's coordinates (lv_chart's own
@@ -239,6 +239,18 @@ inline void draw_dashes(uint16_t* pixels, uint32_t stride_px, int32_t width, int
       pixel = blend565(pixel, color, opa);
     }
   }
+}
+
+// The row of the value zero in a picture over the chart's box, as lv_chart
+// maps its values (`top`: the content's top row, the maximum; `bottom` one
+// row below the content, the minimum): -1 unless the y range runs from below
+// zero to above it and the row keeps `min_gap` from both ends.
+inline int32_t zero_row(lv_obj_t* chart, int32_t top, int32_t bottom, int32_t min_gap) {
+  const auto* data = reinterpret_cast<const lv_chart_t*>(chart);
+  const int32_t low = data->ymin[LV_CHART_AXIS_PRIMARY_Y], high = data->ymax[LV_CHART_AXIS_PRIMARY_Y];
+  if (low >= 0 || high <= 0) return -1;
+  const int32_t row = bottom - lv_map(0, low, high, 0, bottom - top);
+  return row - top >= min_gap && bottom - row >= min_gap ? row : -1;
 }
 
 }  // namespace area_graph

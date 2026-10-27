@@ -2,14 +2,14 @@
 // further into the past, so 7D now sits left: Sensor (also Binary Sensor,
 // Number, Select and Date/Time history and Activity), Weather and Energy.
 // Energy's day button names today instead of 24H, since it counts from
-// midnight.
+// midnight. Numeric Sensor graphs add 6H right of 24H (issue #131).
 import assert from 'node:assert/strict';
 
 import {readRepoFile} from '../../lib/admin-source.mjs';
 
 const sensor = readRepoFile('src/ui/popups/sensor/sensor_popup.cpp');
-assert.match(sensor, /ctx->range_week_btn = make_range_button\("7D"\);\s*ctx->range_day_btn = make_range_button\("24H"\);/,
-  'Sensor history: 7D is created first, so the flex row puts it left');
+assert.match(sensor, /ctx->range_week_btn = make_range_button\("7D"\);\s*ctx->range_day_btn = make_range_button\("24H"\);\s*ctx->range_hours_btn = make_range_button\("6H"\);/,
+  'Sensor history: 7D is created first, so the flex row puts it left; 6H right of 24H');
 
 const energy = readRepoFile('src/ui/popups/energy/energy_popup.cpp');
 assert.match(energy, /ctx->week_btn = make_button_label\(period_row, "7D", &ctx->week_label\);\s*ctx->day_btn = make_button_label\(period_row, today_button_label\(\), &ctx->day_label\);/,

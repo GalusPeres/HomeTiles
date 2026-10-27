@@ -61,16 +61,22 @@ constexpr int kChartLineWidth = popup_layout::scale(4);
 // #131): the line in the header icon's color, rounded but cut flush at both
 // ends by the chart's bounds, with room above the maximum and below the
 // minimum (kChartLinePad); below it the icon color fading from 40 % to
-// nothing; dashed lines at the day's maximum and minimum; filled dots in the
-// icon color at its highest and lowest point.
+// nothing; dashed lines at the day's maximum and minimum, and at zero when
+// the line crosses it; filled dots in the icon color at its highest and
+// lowest point. The dashes stay faint (20 %, user 2026-10-27).
 constexpr int kChartLinePad = (kChartLineWidth + 1) / 2;
 constexpr int kGraphInset = popup_layout::kHeaderIconX;
 constexpr uint8_t kFadeTopOpa = 102;  // 40 %
 constexpr int kDashLength = popup_layout::scale(8);
 constexpr int kDashWidth = std::max(1, popup_layout::scale(2));
-constexpr lv_opa_t kDashOpa = 89;  // 35 %
+constexpr lv_opa_t kDashOpa = 51;  // 20 %
 constexpr int kExtremeDotSize = popup_layout::scale(16);
 constexpr int kExtremeDotRing = std::max(1, popup_layout::scale(2));
+// 6H in minutes (raw states; the Bridge reads statistics for 5 minutes and
+// more), 24H in 5-minute steps, 7D in hours (issue #131).
+constexpr uint16_t kHistoryHours6h = 6;
+constexpr uint16_t kHistoryPeriodMinutes6h = 1;
+constexpr uint16_t kHistoryPoints6h = 360;
 constexpr uint16_t kHistoryHours24h = 24;
 constexpr uint16_t kHistoryPeriodMinutes24h = 5;
 constexpr uint16_t kHistoryPoints24h = 288;
@@ -135,6 +141,7 @@ constexpr uint64_t kReadoutMinEpoch = 1704067200ULL;
 enum class SensorHistoryRange : uint8_t {
   Day24,
   Day7,
+  Hours6,  // numeric graphs only: the Bridge's state histories know 24 h and 7 d
 };
 
 struct HistoryRangeConfig {
@@ -175,6 +182,7 @@ struct SensorPopupContext {
   lv_obj_t* range_row = nullptr;
   lv_obj_t* range_day_btn = nullptr;
   lv_obj_t* range_week_btn = nullptr;
+  lv_obj_t* range_hours_btn = nullptr;
   lv_obj_t* chart = nullptr;
   int chart_height = kChartHeight;
   lv_chart_series_t* series = nullptr;
@@ -341,6 +349,8 @@ static HistoryRangeConfig get_history_range_config(SensorHistoryRange range) {
   switch (range) {
     case SensorHistoryRange::Day7:
       return {kHistoryHours7d, kHistoryPeriodMinutes7d, kHistoryPoints7d};
+    case SensorHistoryRange::Hours6:
+      return {kHistoryHours6h, kHistoryPeriodMinutes6h, kHistoryPoints6h};
     case SensorHistoryRange::Day24:
     default:
       return {kHistoryHours24h, kHistoryPeriodMinutes24h, kHistoryPoints24h};
@@ -539,6 +549,7 @@ static void update_range_buttons(SensorPopupContext* ctx) {
   const auto selected = ctx->editable ? ctx->editable_requested_range : ctx->history_range;
   style_range_button(ctx, ctx->range_day_btn, selected == SensorHistoryRange::Day24);
   style_range_button(ctx, ctx->range_week_btn, selected == SensorHistoryRange::Day7);
+  style_range_button(ctx, ctx->range_hours_btn, selected == SensorHistoryRange::Hours6);
 }
 
 }  // namespace
@@ -563,6 +574,20 @@ static void set_range_buttons_visible(SensorPopupContext* ctx, bool visible) {
     lv_obj_clear_flag(ctx->range_row, LV_OBJ_FLAG_HIDDEN);
   } else {
     lv_obj_add_flag(ctx->range_row, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
+// Numeric graphs offer 6H right of 24H (issue #131); binary, state and
+// editable histories keep 24H and 7D, the two ranges the Bridge answers for
+// them. The row stays centred on its buttons.
+static void show_hours_button(SensorPopupContext* ctx, bool shown) {
+  if (!ctx || !ctx->range_row || !ctx->range_hours_btn) return;
+  const int buttons = shown ? 3 : 2;
+  lv_obj_set_width(ctx->range_row, kRangeButtonWidth * buttons + kRangeButtonGap * (buttons - 1));
+  if (shown) {
+    lv_obj_remove_flag(ctx->range_hours_btn, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_add_flag(ctx->range_hours_btn, LV_OBJ_FLAG_HIDDEN);
   }
 }
 
@@ -670,6 +695,7 @@ static void apply_init_to_context(SensorPopupContext* ctx, const SensorPopupInit
                                      configManager.getConfig().language, 7));
       }
     }
+    show_hours_button(ctx, false);
     if (ctx->binary_mode) {
       update_binary_state(ctx, init.value, init.binary_available,
                           init.binary_device_class, init.binary_last_changed,
@@ -690,6 +716,7 @@ static void apply_init_to_context(SensorPopupContext* ctx, const SensorPopupInit
       lv_obj_t* label = lv_obj_get_child(ctx->range_week_btn, 0);
       if (label) lv_label_set_text(label, "7D");
     }
+    show_hours_button(ctx, true);
     update_value_label(ctx, init.value, init.unit);
   }
   // A warm history retains its geometry unless the new header needs more
@@ -789,7 +816,8 @@ static time_t next_local_midnight_after(time_t ts) {
   return mktime(&timeinfo);
 }
 
-static time_t next_local_6h_boundary_after(time_t ts) {
+// The next full hour after `ts` divisible by `step` (a divisor of 24).
+static time_t next_local_boundary_after(time_t ts, int step) {
   struct tm timeinfo;
 #ifdef _WIN32
   localtime_s(&timeinfo, &ts);
@@ -798,7 +826,7 @@ static time_t next_local_6h_boundary_after(time_t ts) {
 #endif
 
   const int current_hour = timeinfo.tm_hour;
-  int next_hour = ((current_hour / 6) + 1) * 6;
+  int next_hour = ((current_hour / step) + 1) * step;
   if (next_hour >= 24) {
     next_hour -= 24;
     timeinfo.tm_mday += 1;
@@ -810,19 +838,21 @@ static time_t next_local_6h_boundary_after(time_t ts) {
   return mktime(&timeinfo);
 }
 
-static int calc_day24_axis(String out_labels[], float out_frac[], int max_markers) {
+// Hour labels at every `step` full hours of the last `hours` hours: 24H
+// every 6 hours, 6H every 2 hours.
+static int calc_hours_axis(uint16_t hours, int step, String out_labels[], float out_frac[], int max_markers) {
   struct tm now_tm;
   if (!get_valid_local_time(now_tm)) return 0;
 
   time_t now_local = mktime(&now_tm);
   if (now_local <= 0) return 0;
 
-  const time_t range_start = now_local - static_cast<time_t>(kHistoryHours24h) * 60 * 60;
+  const time_t range_start = now_local - static_cast<time_t>(hours) * 60 * 60;
   const float span = static_cast<float>(now_local - range_start);
   if (span <= 0.0f) return 0;
 
   int count = 0;
-  time_t boundary = next_local_6h_boundary_after(range_start);
+  time_t boundary = next_local_boundary_after(range_start, step);
   while (boundary < now_local && count < max_markers) {
     struct tm boundary_tm;
 #ifdef _WIN32
@@ -833,7 +863,7 @@ static int calc_day24_axis(String out_labels[], float out_frac[], int max_marker
     out_labels[count] = format_time_axis_label(boundary_tm.tm_hour);
     out_frac[count] = static_cast<float>(boundary - range_start) / span;
     ++count;
-    boundary = next_local_6h_boundary_after(boundary);
+    boundary = next_local_boundary_after(boundary, step);
   }
 
   return count;
@@ -873,8 +903,11 @@ static int calc_time_axis(const SensorPopupContext* ctx, String out_labels[], fl
   if (ctx->history_range == SensorHistoryRange::Day7) {
     return calc_day7_label_axis(out_labels, out_frac, max_markers);
   }
+  if (ctx->history_range == SensorHistoryRange::Hours6) {
+    return calc_hours_axis(kHistoryHours6h, 2, out_labels, out_frac, max_markers);
+  }
 
-  return calc_day24_axis(out_labels, out_frac, max_markers);
+  return calc_hours_axis(kHistoryHours24h, 6, out_labels, out_frac, max_markers);
 }
 
 // Recalculate Y-axis layout based on actual label text widths.
@@ -3327,8 +3360,9 @@ static void on_range_click(lv_event_t* e) {
   lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
   if (!ctx || !target) return;
 
-  SensorHistoryRange next_range =
-      (target == ctx->range_week_btn) ? SensorHistoryRange::Day7 : SensorHistoryRange::Day24;
+  const SensorHistoryRange next_range = target == ctx->range_week_btn    ? SensorHistoryRange::Day7
+                                        : target == ctx->range_hours_btn ? SensorHistoryRange::Hours6
+                                                                         : SensorHistoryRange::Day24;
   if (!ctx->editable && ctx->history_range == next_range) return;
   // A new range starts at its newest point.
   ctx->readout.cancel();
@@ -3354,12 +3388,12 @@ static void on_range_click(lv_event_t* e) {
 // The graph's picture for the chart's current line, colors and size: the
 // area (below the line the icon color fading from 40 % at the top of the
 // graph to nothing at its bottom, the card above it), the dashed lines at
-// the maximum and the minimum (`dashes`: not for a flat line) and the line
-// itself; null without a line (or memory). Computed again only after a
-// change (area_graph::picture_key).
+// the maximum and the minimum (`dashes`: not for a flat line) and at zero
+// (`zero`, a row or -1) and the line itself; null without a line (or
+// memory). Computed again only after a change (area_graph::picture_key).
 static const lv_image_dsc_t* graph_picture(SensorPopupContext* ctx, int32_t width, int32_t height, int32_t fade_top,
-                                           int32_t fade_bottom, bool dashes, uint32_t color, uint32_t card,
-                                           uint32_t dash) {
+                                           int32_t fade_bottom, bool dashes, int32_t zero, uint32_t color,
+                                           uint32_t card, uint32_t dash) {
   if (width < 2 || height < 2) return nullptr;
   const int32_t count = static_cast<int32_t>(lv_chart_get_point_count(ctx->chart));
   if (static_cast<size_t>(width) > ctx->area_tops_capacity) {
@@ -3381,7 +3415,7 @@ static const lv_image_dsc_t* graph_picture(SensorPopupContext* ctx, int32_t widt
   const uint32_t key = area_graph::picture_key(
       ctx->area_points, points,
       {static_cast<uint32_t>(width), static_cast<uint32_t>(height), static_cast<uint32_t>(fade_top),
-       static_cast<uint32_t>(fade_bottom), dashes ? 1u : 0u, color, card, dash});
+       static_cast<uint32_t>(fade_bottom), dashes ? 1u : 0u, static_cast<uint32_t>(zero), color, card, dash});
   if (ctx->area_pixels && key == ctx->area_key) return &ctx->area_image;
   const uint32_t stride = lv_draw_buf_width_to_stride(width, LV_COLOR_FORMAT_RGB565);
   const size_t bytes = static_cast<size_t>(stride) * static_cast<size_t>(height);
@@ -3401,7 +3435,8 @@ static const lv_image_dsc_t* graph_picture(SensorPopupContext* ctx, int32_t widt
   area_graph::render_fade(ctx->area_pixels, stride_px, width, height, ctx->area_tops, fade_top, fade_bottom, color,
                           card, kFadeTopOpa);
   if (dashes) {
-    for (const int32_t row : {fade_top, fade_bottom}) {
+    for (const int32_t row : {fade_top, fade_bottom, zero}) {
+      if (row < 0) continue;
       area_graph::draw_dashes(ctx->area_pixels, stride_px, width, height, row - kDashWidth / 2, kDashWidth,
                               kDashLength, dash, kDashOpa);
     }
@@ -3460,10 +3495,14 @@ static void on_chart_area_draw(lv_event_t* event) {
   // (lv_chart: y_ofs + h).
   const int32_t fade_top = content.y1 - coords.y1;
   const int32_t fade_bottom = fade_top + lv_area_get_height(&content);
+  // A line running below zero gets a dashed line at zero too, unless it
+  // would almost touch the maximum's or the minimum's (user 2026-10-27).
+  const int32_t zero = dashes ? area_graph::zero_row(ctx->chart, fade_top, fade_bottom, kDashLength) : -1;
   const lv_color_t card = lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN);
   if (const lv_image_dsc_t* picture =
           graph_picture(ctx, lv_area_get_width(&coords), lv_area_get_height(&coords), fade_top, fade_bottom, dashes,
-                        lv_color_to_u32(color) & 0xFFFFFF, lv_color_to_u32(card) & 0xFFFFFF, ui_theme::text() & 0xFFFFFF)) {
+                        zero, lv_color_to_u32(color) & 0xFFFFFF, lv_color_to_u32(card) & 0xFFFFFF,
+                        ui_theme::text() & 0xFFFFFF)) {
     lv_draw_image_dsc_t image;
     lv_draw_image_dsc_init(&image);
     image.base.layer = layer;
@@ -3529,7 +3568,7 @@ static void build_popup_body(SensorPopupContext* ctx) {
   lv_obj_t* range_row = lv_obj_create(card);
   ctx->range_row = range_row;
   lv_obj_remove_style_all(range_row);
-  lv_obj_set_size(range_row, (kRangeButtonWidth * 2) + kRangeButtonGap, popup_layout::kNavHeight);
+  lv_obj_set_size(range_row, (kRangeButtonWidth * 3) + kRangeButtonGap * 2, popup_layout::kNavHeight);
   lv_obj_align(range_row, LV_ALIGN_BOTTOM_MID, 0, -popup_layout::kNavBottomInset);
   lv_obj_set_style_bg_opa(range_row, LV_OPA_TRANSP, 0);
   lv_obj_set_layout(range_row, LV_LAYOUT_FLEX);
@@ -3562,11 +3601,14 @@ static void build_popup_body(SensorPopupContext* ctx) {
     return btn;
   };
 
-  // 7D sits left of 24H: the longer range reaches further into the past.
+  // 7D sits left of 24H and 6H right of it: the longer range reaches further
+  // into the past.
   ctx->range_week_btn = make_range_button("7D");
   ctx->range_day_btn = make_range_button("24H");
+  ctx->range_hours_btn = make_range_button("6H");
   lv_obj_add_event_cb(ctx->range_day_btn, on_range_click, LV_EVENT_CLICKED, ctx);
   lv_obj_add_event_cb(ctx->range_week_btn, on_range_click, LV_EVENT_CLICKED, ctx);
+  lv_obj_add_event_cb(ctx->range_hours_btn, on_range_click, LV_EVENT_CLICKED, ctx);
   update_range_buttons(ctx);
   set_range_buttons_visible(ctx, false);
 

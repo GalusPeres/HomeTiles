@@ -143,9 +143,9 @@ bool isMdiIconDisabled(const String&){return false;}String getMdiChar(const Stri
 void update_binary_state(SensorPopupContext*,const String&,bool,const String&,uint64_t,const String&){assert(false);}
 void hide_pin_popup(){}void hide_camera_popup(){}void hide_climate_popup(){}void hide_cover_popup(){}void hide_light_popup(){}void hide_weather_popup(){}void hide_energy_popup(){}void hide_media_popup(){}void hide_device_popup(){}void hide_calendar_popup(){}
 void viewNavigationPopupShown(lv_obj_t*,const char*){}
-HistoryRangeConfig get_history_range_config(SensorHistoryRange r){return r==SensorHistoryRange::Day7?HistoryRangeConfig{168,35,288}:HistoryRangeConfig{24,5,288};}
+HistoryRangeConfig get_history_range_config(SensorHistoryRange r){return r==SensorHistoryRange::Day7?HistoryRangeConfig{168,35,288}:r==SensorHistoryRange::Hours6?HistoryRangeConfig{6,1,360}:HistoryRangeConfig{24,5,288};}
 ${fn(control, 'editable_control_height')}
-${['set_label_style','set_range_buttons_visible','style_range_button','update_range_buttons','accept_editable_history_range','clear_chart'].map(n => fn(popup,n)).join('\n')}
+${['set_label_style','set_range_buttons_visible','show_hours_button','style_range_button','update_range_buttons','accept_editable_history_range','clear_chart'].map(n => fn(popup,n)).join('\n')}
 void build_chart(SensorPopupContext* ctx){auto* body_box=ctx->body_box;${chartBuild}}
 ${fn(popup,'measure_label_text_width')}
 int calc_time_axis(const SensorPopupContext* ctx,String* labels,float* fracs,int){int count=ctx->history_range==SensorHistoryRange::Day7?7:4;for(int i=0;i<count;++i){labels[i]=std::to_string(i);fracs[i]=float(i)/(count-1);}return count;}
@@ -345,7 +345,10 @@ int main(int argc,char**argv){
  auto open=[&](){const bool cached=reusable_sensor_body(&ctx,init);const int before=requests,layouts=history_layout_calls,opening_layouts=opening_layout_calls;show_sensor_popup(init);assert(opening_layout_calls==opening_layouts&&"Opening must not force a whole-screen layout before its first frame");assert(popup_open_pending(ctx.card)&&PopupFirstFrame::any_pending()&&g_sensor_open_pending&&requests==before&&history_layout_calls==layouts);assert(shown(ctx.body_box)==cached&&"Matching cached content must be visible in the first frame");finish_sensor_popup_open();assert(g_sensor_open_pending&&requests==before);lv_refr_now(display);process_popup_open();assert(!g_sensor_open_pending&&g_sensor_first_frame.pending()&&shown(ctx.body_box));lv_refr_now(display);};
  auto open_and_load=[&](){open();apply_history_payload(&ctx,payload().c_str());assert(ctx.history_loaded);};
  for(const char*kind:{"number","select","time"}){
-  haBridgeConfig.payload=kind;open_and_load();const auto children=lv_obj_get_child_count(ctx.binary_activity_viewport);const auto count=ctx.binary_activity.size();const int requested=requests,layouts=history_layout_calls;
+  haBridgeConfig.payload=kind;open_and_load();
+  // The Bridge answers editable histories for 24 hours and 7 days only.
+  assert(!shown(ctx.range_hours_btn)&&lv_obj_get_width(ctx.range_row)==kRangeButtonWidth*2+kRangeButtonGap&&"Editable histories offer no 6H");
+  const auto children=lv_obj_get_child_count(ctx.binary_activity_viewport);const auto count=ctx.binary_activity.size();const int requested=requests,layouts=history_layout_calls;
   for(int i=0;i<20;++i){hide_sensor_popup();show_sensor_popup(init);assert(requests==requested&&ctx.binary_activity.size()==count&&lv_obj_get_child_count(ctx.binary_activity_viewport)==children&&history_layout_calls==layouts);assert(shown(ctx.chart_wrap)==(ctx.editable_kind=="number"));assert(PopupFirstFrame::any_pending());hide_sensor_popup();assert(!PopupFirstFrame::any_pending());}
   haBridgeConfig.payload=String(kind)+"|state_changed";open();assert(requests==requested+1&&ctx.binary_activity.size()==count);
   haBridgeConfig.payload=String(kind)+"|state_changed_again";apply_history_payload(&ctx,payload().c_str());hide_sensor_popup();open();assert(requests==requested+2&&"A response to an old state must not mark the current state fresh");
@@ -363,6 +366,7 @@ int main(int argc,char**argv){
  const auto* sensor_graph=ctx.chart;const int sensor_layouts=history_layout_calls;
  for(int i=0;i<20;++i){hide_sensor_popup();open();assert(ctx.chart==sensor_graph&&shown(ctx.value_box)&&shown(ctx.chart_wrap));assert(lv_chart_get_y_array(ctx.chart,ctx.series)[0]==123&&"Warm Sensor opens must not clear the cached graph");assert(history_layout_calls==sensor_layouts);}
  init.entity_id="sensor.other";open();assert(lv_chart_get_y_array(ctx.chart,ctx.series)[0]==LV_CHART_POINT_NONE&&"A different entity must not inherit the previous graph");
+ assert(shown(ctx.range_hours_btn)&&lv_obj_get_width(ctx.range_row)==kRangeButtonWidth*3+kRangeButtonGap*2&&"Numeric graphs offer 6H right of 24H");
  {
   // Numeric Sensors read exact history values in the old value row. Large
   // spans are stored as rounded integers in the chart itself.
@@ -393,6 +397,11 @@ int main(int argc,char**argv){
   assert(ctx.history_range==SensorHistoryRange::Day7&&ctx.readout_kind==kReadoutNone&&ctx.readout_latest&&!shown(ctx.readout_value_label));
   apply_history_payload(&ctx,R"({"entity_id":"sensor.other","hours":168,"period_minutes":35,"unit":"C","values":[20,null,19.25]})");
   assert(ctx.readout_point==2&&strcmp(ctx.readout_value_text,"19.25")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"C")==0&&ctx.readout_latest);
+  // 6H takes only its own answer, in minutes.
+  lv_obj_send_event(ctx.range_hours_btn,LV_EVENT_CLICKED,nullptr);assert(ctx.history_range==SensorHistoryRange::Hours6&&ctx.readout_kind==kReadoutNone);
+  apply_history_payload(&ctx,R"({"entity_id":"sensor.other","hours":24,"period_minutes":5,"unit":"C","values":[1,2]})");assert(ctx.readout_kind==kReadoutNone&&"6H ignores a day");
+  apply_history_payload(&ctx,R"({"entity_id":"sensor.other","hours":6,"period_minutes":1,"unit":"C","values":[1,2,3]})");
+  assert(ctx.readout_point==2&&strcmp(ctx.readout_value_text,"3.00")==0&&ctx.readout_latest&&"6H shows its newest point");
   lv_obj_send_event(ctx.range_day_btn,LV_EVENT_CLICKED,nullptr);assert(ctx.history_range==SensorHistoryRange::Day24&&ctx.readout_kind==kReadoutNone);
   apply_history_payload(&ctx,R"({"entity_id":"sensor.other","hours":24,"period_minutes":5,"unit":"C","values":[21.5,null,22.25,1234.56]})");
   touch_at(content.x1+width/3,content.y1+4);lv_refr_now(display);

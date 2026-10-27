@@ -14,14 +14,14 @@ Last reviewed: 2026-10-26
 
 - FW v0.9.5 (hotfix) and FW + Bridge v0.9.4 released 2026-10-23. Bridge beta v0.9.6b1.
 - Pairing by IP without mDNS (#114, Bridge #16): read-only `GET /api/link` + Bridge menu step; HA ok on Tab5 (b513, b16).
-- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b567.
+- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b568.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build; a cache stays warm when only repo headers changed and the LVGL config fingerprint matches.
 - Docs CI runs on pinned Chrome for Testing 154.0.8037.57; a tag's docs run uses the tag's workflow, so after a release dispatch docs on `main`.
 - Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need their icons on HomeTiles-staging (tag = FW_VERSION).
 
 ## Active work
 
-- Power flow tile 28 ("Leistungsfluss", `src/types/energy_flow/`, picture 65): nodes in `/_tile_flow_entities`, options in key_code, node tap = Sensor popup; V2 HW ok b542.
+- Power flow tile 28 ("Leistungsfluss", `src/types/energy_flow/`, picture 65): nodes in `/_tile_flow_entities`, options in key_code, node tap = Sensor popup; V2 HW ok b542; smooth lines/dots b568.
 - Media popup (v0.9.4): layouts `sensor_display_mode` 0 cover left, 1 centre (`media_popup_layout.h`); controls only with their HA feature bit; menu box (built once): speakers (group count), source, library; tile/head icon state form (`state_icon.h`).
 - Issue #116 (JC4880, camera popup ended after 18-60 min): the Bridge closed after 5 s without a chunk ACK. Bridge v0.9.4b5 waits 45 s and logs one warning; FW logs data gaps >= 1 s and the Wi-Fi signal at stream end. Reporter confirmation pending. A camera stream pauses the wake word (b499 HW ok). `build/analysis/2026-10-21-analyse.md`.
 - Issue #119 (Guition V1): the core's Helix missed MPEG-2.5 frames and overwrote its memory. Own Helix (b501) `src/audio/helix_mp3`, TLS in PSRAM, position/length/pause, Bridge player bar. Speaker audio comes from the Bridge (`docs-dev/audio-stream.md`): FFmpeg -> mono PCM (44.1 kHz music / 22.05 kHz speech) over the camera tcp-ack listener (`HTAUD/1`, two 4 KB blocks in flight); panels announce `"stream":"tcp-ack-v1"`, older ones download. HW ok (169 -> 148 KB playing, camera 30 FPS beside a song). Camera sound: live track of cameras with sound, picture waits for the sound (lip sync; b507 30 FPS HW ok, b508 even gaps HW pending). Small player, no queue; a pause frees the stream (b512/b15); the wake word is deaf while a clip plays.

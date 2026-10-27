@@ -229,7 +229,8 @@ static int channel(uint32_t rgb, int c) { return (rgb >> (16 - 8 * c)) & 0xFF; }
 int main() {
   lv_init();
   // The fade on exact RGB565 steps: the circle's color down to the middle
-  // row, from there fading to the card in the last, dithered: every row
+  // row, from there fading to the card in the last along a smoothstep curve
+  // (no kink, no Mach band where the solid part ends), dithered: every row
   // mixes the two steps around its exact color.
   {
     const int width = 64, height = 160, middle = (height - 1) / 2;
@@ -239,10 +240,24 @@ int main() {
     for (int y = 0; y < height; ++y) {
       double sum = 0;
       for (int x = 0; x < width; ++x) sum += (fade[y * width + x] >> 11) * 255.0 / 31;
-      const double alpha = y <= middle ? 1.0 : 1.0 - static_cast<double>(y - middle) / (height - 1 - middle);
+      const double t = y <= middle ? 0.0 : static_cast<double>(y - middle) / (height - 1 - middle);
+      const double alpha = 1.0 - t * t * (3.0 - 2.0 * t);
       const double exact = 0x1A + (0x6E - 0x1A) * alpha;
-      assert(sum / width > exact - 9.0 && sum / width < exact + 9.0 && "the dither keeps the row's mean");
+      assert(sum / width > exact - 4.0 && sum / width < exact + 4.0 && "the dither keeps the row's mean");
     }
+    // No kink where the solid part ends: the first eight fade rows drop far
+    // less than eight rows in the fade's middle (a straight fade drops
+    // evenly).
+    auto row_mean = [&](int y) {
+      double sum = 0;
+      for (int x = 0; x < width; ++x) sum += (fade[y * width + x] >> 11) * 255.0 / 31;
+      return sum / width;
+    };
+    const int centre = (middle + height - 1) / 2;
+    const double start_drop = row_mean(middle) - row_mean(middle + 8);
+    const double centre_drop = row_mean(centre - 4) - row_mean(centre + 4);
+    if (!(start_drop < centre_drop * 0.5)) std::fprintf(stderr, "fade start drop %.2f centre drop %.2f\n", start_drop, centre_drop);
+    assert(start_drop < centre_drop * 0.5 && "the fade starts without a kink");
     double previous = 1e9;
     for (int block = 0; block + 8 <= height; block += 8) {
       double sum = 0;

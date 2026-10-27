@@ -120,8 +120,10 @@ inline uint16_t blend565(uint16_t pixel, uint32_t top, uint32_t opa) {
 
 // The popup's area picture, RGB565, `width` x `height`: below the line
 // `color` over the card `card` with `top_opa` down to chart row `fade_top`,
-// fading from there to nothing at row `fade_bottom`; above the line and in
-// gaps the card. Ordered dithering (Bayer 8x8) picks for every pixel one of the two
+// fading from there to nothing at row `fade_bottom` along a smoothstep
+// curve; above the line and in gaps the card. A straight fade starts with a
+// kink, which the eye sees as a lighter band where the solid part ends
+// (Mach band, user 2026-10-27). Ordered dithering (Bayer 8x8) picks for every pixel one of the two
 // RGB565 steps around its exact color, so the 16-bit panels show a smooth
 // fade instead of bands; the fade starts from the card's own step (the card
 // around it shows that step).
@@ -141,7 +143,7 @@ inline void render_fade(uint16_t* pixels, uint32_t stride_px, int32_t width, int
   const float span = static_cast<float>(std::max<int32_t>(1, fade_bottom - fade_top));
   for (int32_t y = 0; y < height; ++y) {
     const float t = std::min(1.0f, std::max(0.0f, (y - fade_top) / span));
-    const float alpha = top_opa / 255.0f * (1.0f - t);
+    const float alpha = top_opa / 255.0f * (1.0f - t * t * (3.0f - 2.0f * t));
     float level[3];
     for (int c = 0; c < 3; ++c) level[c] = from[c] + (to[c] - from[c]) * alpha;
     // The row's eight dithered colors.

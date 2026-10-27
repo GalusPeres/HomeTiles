@@ -60,7 +60,7 @@ struct { int width=800, height=1280; } display_cfg;
 bool g_touch_active=false;
 uint8_t g_touch_release_reads=0, g_touch_active_track_id=kInvalidTouchTrackId, g_rotation=0;
 bool g_upright=false;  // landscape UI (the upright mapping: test-upright-layout.mjs)
-int32_t g_touch_stable_x=0, g_touch_stable_y=0;
+int32_t g_touch_stable_x=0, g_touch_stable_y=0, g_touch_next_x=0, g_touch_next_y=0;
 // The board's touch diagnostics (touch_trace.h) log through the Serial stub.
 uint32_t millis(){static uint32_t now=0;return now+=20;}
 #include "src/devices/guition_jc8012p4a1_v2/touch_trace.h"
@@ -127,6 +127,29 @@ int main() {
     assert(lv_slider_get_value(slider)==(rotation==0 ? 0 : 100));
     packet.fill(0); poll(input);
   }
+  // Lifting a finger: the GSL3680 moves its last point by a few pixels just
+  // before the release (b564 log: 648,487 -> 652,489, up to 19 px). The
+  // board reports each point one read late and drops the newest one when the
+  // finger lifts, so the slider keeps the value from before the lift.
+  g_rotation=0;
+  lv_slider_set_value(slider,50,LV_ANIM_OFF);
+  // Drag to a place and hold still there (LVGL moves the slider on a move).
+  sample(825,340); poll(input); poll(input);
+  sample(825,300); poll(input); poll(input); poll(input);
+  const int held=lv_slider_get_value(slider);
+  assert(held!=50 && "The drag reached the slider");
+  sample(825,280); poll(input);
+  packet.fill(0); poll(input);
+  if(lv_slider_get_value(slider)!=held) std::cerr<<"lift moved the slider "<<held<<" -> "<<lv_slider_get_value(slider)<<std::endl;
+  assert(lv_slider_get_value(slider)==held && "The point a lifting finger reports last is dropped");
+  // A real drag still arrives, one read later.
+  sample(825,300); poll(input); poll(input);
+  const int start=lv_slider_get_value(slider);
+  sample(825,200); poll(input);
+  assert(lv_slider_get_value(slider)==start && "The newest point waits one read");
+  poll(input);
+  assert(lv_slider_get_value(slider)!=start && "A drag still moves the slider");
+  packet.fill(0); poll(input);
   // Decode all contacts atomically; an invalid later contact cannot expose a
   // partially updated packet or become a replacement pointer.
   for(auto bad: {std::array<uint16_t,2>{1651,445}, {4095,445}, {825,891}, {825,65535}}) {

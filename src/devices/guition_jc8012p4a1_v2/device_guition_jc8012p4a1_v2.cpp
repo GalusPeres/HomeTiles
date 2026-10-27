@@ -98,6 +98,9 @@ bool g_touch_active = false;
 uint8_t g_touch_release_reads = 0;
 int32_t g_touch_stable_x = 0;
 int32_t g_touch_stable_y = 0;
+// The newest point, reported with the next read (getTouch).
+int32_t g_touch_next_x = 0;
+int32_t g_touch_next_y = 0;
 uint8_t g_touch_active_track_id = kInvalidTouchTrackId;
 TouchTrace g_touch_trace;
 
@@ -1017,6 +1020,7 @@ bool DeviceGuitionJC8012P4A1V2::getTouch(int16_t& x, int16_t& y) {
   if (mapped_y >= logical_h) mapped_y = logical_h - 1;
 
   const uint32_t now = millis();
+  const bool fresh = !g_touch_active;
   if (!g_touch_active) {
     g_touch_trace.press(now, mapped_x, mapped_y);
     g_touch_stable_x = mapped_x;
@@ -1035,9 +1039,17 @@ bool DeviceGuitionJC8012P4A1V2::getTouch(int16_t& x, int16_t& y) {
     }
   }
 
-  x = static_cast<int16_t>(g_touch_stable_x);
-  y = static_cast<int16_t>(g_touch_stable_y);
-  g_touch_trace.sample(now, g_touch_stable_x, g_touch_stable_y, count, id_changed);
+  // One read late (about 9 ms): the newest point waits for the next read,
+  // and a finger lifting drops it. The GSL3680 moves its last point before
+  // a lift by 2 to 20 px (b564 log, e.g. 648,487 -> 652,489 just before the
+  // release), and sliders and the graph cursor kept that as their value.
+  const int32_t shown_x = fresh ? g_touch_stable_x : g_touch_next_x;
+  const int32_t shown_y = fresh ? g_touch_stable_y : g_touch_next_y;
+  g_touch_next_x = g_touch_stable_x;
+  g_touch_next_y = g_touch_stable_y;
+  x = static_cast<int16_t>(shown_x);
+  y = static_cast<int16_t>(shown_y);
+  g_touch_trace.sample(now, shown_x, shown_y, count, id_changed);
 
   static uint32_t touch_log_counter = 0;
   if (++touch_log_counter % 20 == 1) {

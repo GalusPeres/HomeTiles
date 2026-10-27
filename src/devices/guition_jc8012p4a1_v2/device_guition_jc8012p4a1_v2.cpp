@@ -26,6 +26,7 @@
 #include "src/devices/common/p4_dsi_ui_ppa.h"
 #include "src/devices/common/p4_dsi_camera_presenter.h"
 #include "src/devices/common/p4_dsi_cpu_rotate.h"
+#include "src/devices/common/touch_one_euro.h"
 #include "src/devices/guition_jc8012p4a1_v2/vendor/displays_config.h"
 #include "src/devices/guition_jc8012p4a1_v2/touch_trace.h"
 #include "src/devices/guition_jc8012p4a1_v2/vendor/gsl3680_touch.h"
@@ -55,7 +56,6 @@ constexpr size_t kSingleWritebackMaxBytes = 64 * 1024;
 constexpr uint32_t kPpaPreviewTimeoutMs = 200;
 constexpr uint32_t kPpaPreviewGraceMs = 800;
 constexpr uint8_t kTouchReleaseDebounceReads = 0;
-constexpr int32_t kTouchJitterThresholdPx = 5;
 constexpr uint8_t kTouchSamplePointCount = 2;
 constexpr uint8_t kInvalidTouchTrackId = 0xFF;
 
@@ -102,6 +102,10 @@ int32_t g_touch_stable_y = 0;
 // The newest point, reported with the next read (getTouch).
 int32_t g_touch_next_x = 0;
 int32_t g_touch_next_y = 0;
+// The touch point's smoothing per axis and the time of the last read.
+TouchOneEuro g_touch_filter_x;
+TouchOneEuro g_touch_filter_y;
+uint32_t g_touch_last_ms = 0;
 uint8_t g_touch_active_track_id = kInvalidTouchTrackId;
 TouchTrace g_touch_trace;
 
@@ -1024,24 +1028,29 @@ bool DeviceGuitionJC8012P4A1V2::getTouch(int16_t& x, int16_t& y) {
   const bool fresh = !g_touch_active;
   if (!g_touch_active) {
     g_touch_trace.press(now, mapped_x, mapped_y);
+    g_touch_filter_x.reset(static_cast<float>(mapped_x));
+    g_touch_filter_y.reset(static_cast<float>(mapped_y));
     g_touch_stable_x = mapped_x;
     g_touch_stable_y = mapped_y;
     g_touch_active = true;
   } else {
-    // A dead zone dragged along: the point stays while the raw point
-    // jitters within kTouchJitterThresholdPx of it; a raw point outside
-    // pulls it along at that distance, so a drag moves smoothly instead of
-    // in steps. The GSL3680 jitters 5 to 8 px under a resting finger (b565
-    // log), and the old 2 px threshold let the point flip between two places.
-    const float dx = static_cast<float>(mapped_x - g_touch_stable_x);
-    const float dy = static_cast<float>(mapped_y - g_touch_stable_y);
-    const float distance = sqrtf(dx * dx + dy * dy);
-    if (distance > kTouchJitterThresholdPx) {
-      const float pull = (distance - kTouchJitterThresholdPx) / distance;
-      g_touch_stable_x += static_cast<int32_t>(lroundf(dx * pull));
-      g_touch_stable_y += static_cast<int32_t>(lroundf(dy * pull));
+    // The 1-euro filter (touch_one_euro.h) in place of a dead zone: a
+    // dragged 5 px dead zone (b566) stopped the jitter but made sliders
+    // start late and move in small bursts (user 2026-10-27). Whole pixels
+    // with a pixel of hysteresis, so a value resting near a half pixel does
+    // not flip between two pixels.
+    const float dt_s = static_cast<float>(now - g_touch_last_ms) / 1000.0f;
+    const float step_s = dt_s < 0.001f ? 0.001f : dt_s > 0.05f ? 0.05f : dt_s;
+    const float fx = g_touch_filter_x.filter(static_cast<float>(mapped_x), step_s);
+    const float fy = g_touch_filter_y.filter(static_cast<float>(mapped_y), step_s);
+    if (fabsf(fx - static_cast<float>(g_touch_stable_x)) >= 1.0f) {
+      g_touch_stable_x = static_cast<int32_t>(lroundf(fx));
+    }
+    if (fabsf(fy - static_cast<float>(g_touch_stable_y)) >= 1.0f) {
+      g_touch_stable_y = static_cast<int32_t>(lroundf(fy));
     }
   }
+  g_touch_last_ms = now;
 
   // One read late (about 9 ms): the newest point waits for the next read,
   // and a finger lifting drops it. The GSL3680 moves its last point before

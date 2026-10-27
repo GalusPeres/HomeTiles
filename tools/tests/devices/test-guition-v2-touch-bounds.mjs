@@ -6,10 +6,14 @@ import {fileURLToPath} from 'node:url';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 import {lvglHost} from '../../lib/lvgl-host.mjs';
 
+// The Guition V2 (and the V3 built from it) and the V1 share the GSL3680:
+// the same touch path runs for both boards' own sources (2026-10-27).
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
-const vendor = read('src/devices/guition_jc8012p4a1_v2/vendor/gsl3680_touch.cpp');
-const board = read('src/devices/guition_jc8012p4a1_v2/device_guition_jc8012p4a1_v2.cpp');
+const boards = [
+  {name: 'V2', dir: 'guition_jc8012p4a1_v2', file: 'device_guition_jc8012p4a1_v2.cpp', cls: 'DeviceGuitionJC8012P4A1V2'},
+  {name: 'V1', dir: 'guition_jc8012p4a1', file: 'device_guition_jc8012p4a1.cpp', cls: 'DeviceGuitionJC8012P4A1'},
+];
 const fn = (source, name) => {
   const found = cppFunctionDefinitions(source).find(entry => entry.name === name);
   assert(found, name);
@@ -20,11 +24,14 @@ const constants = (source, names) => names.map(name => {
   assert(match, name);
   return match[0];
 }).join('\n');
+const host = await lvglHost(root);
+if (!host) { console.log('SKIP: Guition V1/V2 touch needs native LVGL and a C++ compiler'); process.exit(0); }
+for (const target of boards) {
+const vendor = read(`src/devices/${target.dir}/vendor/gsl3680_touch.cpp`);
+const board = read(`src/devices/${target.dir}/${target.file}`);
 const state = vendor.match(/struct TouchState\s*\{[\s\S]*?\n\};/);
 assert(state);
-const host = await lvglHost(root);
-if (!host) { console.log('SKIP: Guition V2 touch needs native LVGL and a C++ compiler'); process.exit(0); }
-const out = path.join(root, 'build/tests/guition-v2-touch-bounds');
+const out = path.join(root, 'build/tests/guition-touch-bounds', target.name);
 fs.mkdirSync(out, {recursive: true});
 const source = path.join(out, 'test.cpp');
 fs.writeFileSync(source, String.raw`
@@ -44,7 +51,7 @@ constexpr esp_err_t ESP_OK = 0;
 #define ESP_LOGW(...) ((void)0)
 struct Logger { template<class... T> void printf(const char*, T...) {} } Serial;
 ${constants(vendor, ['kMaxContacts', 'kRawMaxX', 'kRawMaxY', 'kNativeWidth', 'kNativeHeight'])}
-${constants(board, ['kTouchSamplePointCount', 'kTouchReleaseDebounceReads', 'kTouchJitterThresholdPx', 'kInvalidTouchTrackId'])}
+${constants(board, ['kTouchSamplePointCount', 'kTouchReleaseDebounceReads', 'kInvalidTouchTrackId'])}
 ${state[0]}
 TouchState g_state;
 std::array<uint8_t,24> packet{};
@@ -62,11 +69,14 @@ bool g_touch_active=false;
 uint8_t g_touch_release_reads=0, g_touch_active_track_id=kInvalidTouchTrackId, g_rotation=0;
 bool g_upright=false;  // landscape UI (the upright mapping: test-upright-layout.mjs)
 int32_t g_touch_stable_x=0, g_touch_stable_y=0, g_touch_next_x=0, g_touch_next_y=0;
+#include "src/devices/common/touch_one_euro.h"
+TouchOneEuro g_touch_filter_x, g_touch_filter_y;
+uint32_t g_touch_last_ms=0;
 // The board's touch diagnostics (touch_trace.h) log through the Serial stub.
-uint32_t millis(){static uint32_t now=0;return now+=20;}
+uint32_t millis(){static uint32_t now=0;return now+=9;}  // the panel polls about every 9 ms
 #include "src/devices/guition_jc8012p4a1_v2/touch_trace.h"
 TouchTrace g_touch_trace;
-${fn(board, 'DeviceGuitionJC8012P4A1V2::getTouch').replace('DeviceGuitionJC8012P4A1V2::getTouch', 'read_board_touch')}
+${fn(board, `${target.cls}::getTouch`).replace(`${target.cls}::getTouch`, 'read_board_touch')}
 void contact(int index, uint16_t x, uint16_t y, uint8_t id=1) {
   const int offset=4+index*4;
   packet[offset]=y; packet[offset+1]=y>>8;
@@ -120,11 +130,13 @@ int main() {
         assert(delivered[i].x==middle.x && delivered[i].y==middle.y &&
                "Press/release consumers, including the color field, must retain the last valid point");
     }
-    // Genuine drags to both edges must remain immediate and reach the endpoints.
+    // Genuine drags to both edges reach the endpoints within three reads
+    // (about 27 ms): one read waits for a lift, and the smoothing needs one
+    // more after a sudden jump across the screen.
     sample(825,445); poll(input);
-    sample(825,0); poll(input); poll(input);
+    sample(825,0); poll(input); poll(input); poll(input);
     assert(lv_slider_get_value(slider)==(rotation==0 ? 100 : 0));
-    sample(825,890); poll(input); poll(input);
+    sample(825,890); poll(input); poll(input); poll(input);
     assert(lv_slider_get_value(slider)==(rotation==0 ? 0 : 100));
     packet.fill(0); poll(input);
   }
@@ -134,9 +146,10 @@ int main() {
   // finger lifts, so the slider keeps the value from before the lift.
   g_rotation=0;
   lv_slider_set_value(slider,50,LV_ANIM_OFF);
-  // Drag to a place and hold still there (LVGL moves the slider on a move).
+  // Drag to a place and hold still there (LVGL moves the slider on a move)
+  // until the smoothing settled.
   sample(825,340); poll(input); poll(input);
-  sample(825,300); poll(input); poll(input); poll(input);
+  sample(825,300); for(int i=0;i<30;++i) poll(input);
   const int held=lv_slider_get_value(slider);
   assert(held!=50 && "The drag reached the slider");
   sample(825,280); poll(input);
@@ -152,7 +165,9 @@ int main() {
   assert(lv_slider_get_value(slider)!=start && "A drag still moves the slider");
   packet.fill(0); poll(input);
   // A resting finger: the GSL3680's raw point jitters by 5 to 8 px (b565
-  // log). The point stays put instead of flipping between two places.
+  // log). The point stays put instead of flipping between two places, and a
+  // slow drag moves it in many small steps, never in bursts (b566's dead
+  // zone moved sliders in bursts).
   sample(825,445); poll(input); poll(input);
   const size_t rest_start=delivered.size();
   // Raw units as in the log: x within 3, y within 8 (about 2 and 7 px).
@@ -162,6 +177,19 @@ int main() {
     still=still && delivered[i].x==delivered[rest_start+4].x && delivered[i].y==delivered[rest_start+4].y;
   if(!still) for(size_t i=rest_start;i<delivered.size();++i) std::cerr<<delivered[i].x<<","<<delivered[i].y<<" ";
   assert(still && "A resting finger's jitter must not move the point");
+  packet.fill(0); poll(input);
+  // A slow drag after resting (1 raw unit, about 1 px, per read): the point
+  // keeps close behind the finger. b566's 5 px dead zone trailed it by its
+  // radius and started late, which made sliders feel sluggish.
+  sample(825,445); for(int i=0;i<10;++i) poll(input);
+  for(int i=1;i<=40;++i){ sample(825,445-i); poll(input); }
+  const lv_point_t dragged=delivered.back();
+  packet.fill(0); poll(input);
+  sample(825,405); poll(input); poll(input);  // a new press reports the raw point exactly
+  const lv_point_t finger=delivered.back();
+  const int lag=std::abs(dragged.y-finger.y);
+  if(lag>3) std::cerr<<"slow drag lag "<<lag<<" px"<<std::endl;
+  assert(lag<=3 && "A slow drag keeps close behind the finger");
   packet.fill(0); poll(input);
   // Decode all contacts atomically; an invalid later contact cannot expose a
   // partially updated packet or become a replacement pointer.
@@ -188,5 +216,6 @@ const binary = path.join(out, process.platform === 'win32' ? 'test.exe' : 'test'
 let result = spawnSync(host.cxx, [...host.flags, '-std=c++17', source, host.archive, '-o', binary], {encoding:'utf8'});
 assert.equal(result.status,0,result.stdout+result.stderr);
 result=spawnSync(binary,[],{encoding:'utf8'});
-assert.equal(result.status,0,result.stdout+result.stderr);
-console.log(result.stdout.trim());
+assert.equal(result.status,0,target.name+': '+result.stdout+result.stderr);
+console.log(target.name+': '+result.stdout.trim());
+}

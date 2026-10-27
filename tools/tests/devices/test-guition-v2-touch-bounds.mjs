@@ -61,6 +61,10 @@ bool g_touch_active=false;
 uint8_t g_touch_release_reads=0, g_touch_active_track_id=kInvalidTouchTrackId, g_rotation=0;
 bool g_upright=false;  // landscape UI (the upright mapping: test-upright-layout.mjs)
 int32_t g_touch_stable_x=0, g_touch_stable_y=0;
+// The board's touch diagnostics (touch_trace.h) log through the Serial stub.
+uint32_t millis(){static uint32_t now=0;return now+=20;}
+#include "src/devices/guition_jc8012p4a1_v2/touch_trace.h"
+TouchTrace g_touch_trace;
 ${fn(board, 'DeviceGuitionJC8012P4A1V2::getTouch').replace('DeviceGuitionJC8012P4A1V2::getTouch', 'read_board_touch')}
 void contact(int index, uint16_t x, uint16_t y, uint8_t id=1) {
   const int offset=4+index*4;

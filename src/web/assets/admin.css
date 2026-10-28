@@ -1847,7 +1847,8 @@
         text-overflow:ellipsis;
       }
     }
-    .gauge-fields { padding-left:4px; }
+    /* The range row lines up with the fields above (user 2026-10-28: Min / Max was indented). */
+    .gauge-fields { padding-left:0; }
     .gauge-fields.hidden { display:none; }
 
     /* Notification */

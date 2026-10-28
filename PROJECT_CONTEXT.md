@@ -14,7 +14,7 @@ Last reviewed: 2026-10-26
 
 - FW v0.9.5 (hotfix) and FW + Bridge v0.9.4 released 2026-10-23. Bridge beta v0.9.6b1.
 - Pairing by IP without mDNS (#114, Bridge #16): read-only `GET /api/link` + Bridge menu step; HA ok on Tab5 (b513, b16).
-- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b570.
+- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b571.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build; a cache stays warm when only repo headers changed and the LVGL config fingerprint matches.
 - Docs CI: pinned Chrome for Testing 154.0.8037.57; after a release dispatch docs on `main` (a tag's run uses its own workflow).
 - Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need their icons on HomeTiles-staging (tag = FW_VERSION).

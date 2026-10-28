@@ -5,6 +5,7 @@
 #include <lvgl_private.h>
 #include <string.h>
 
+#include "src/core/display/display_flush_gate.h"
 #include "src/fonts/glyph_cache.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/types/types_registry.h"
@@ -26,6 +27,8 @@ constexpr int kShownTiles = 8;
 
 struct TileTime {
   uint32_t start_us;
+  uint32_t main_end_us;    // its card's own main draw ended, the children follow
+  uint32_t post_begin_us;  // its children ended, the card's post draw follows
   uint32_t sum_us;
   uint16_t width;
   uint16_t height;
@@ -91,6 +94,12 @@ uint32_t g_part_count[kParts] = {};
 uint32_t g_part_start_us[kParts] = {};
 // The styles LVGL walks for every property of a drawn piece, summed by kind.
 uint32_t g_part_styles[kParts] = {};
+// A tile in each band split in three (user 2026-10-28: how much of LVGL's
+// walk lies around the parts): its card's own main draw, its children with
+// everything they draw, its card's post draw.
+uint32_t g_card_main_us = 0;
+uint32_t g_card_children_us = 0;
+uint32_t g_card_post_us = 0;
 
 // Every other logged frame runs without the element and task timing (a lite
 // frame, user 2026-10-28): the same page in both shows what the probe itself
@@ -258,6 +267,40 @@ size_t task_kind(const lv_draw_task_t* task) {
   return kParts;
 }
 
+// The draw tasks outside the watched tile parts (user 2026-10-28: what makes
+// the rest of a frame): those of a tile's element made after it was watched,
+// summed, and every other object's tasks, pixel work and fills.
+constexpr int kRestObjects = 64;
+struct RestTime {
+  lv_obj_t* obj;
+  uint32_t cycles;
+  uint16_t tasks;
+  uint16_t fills;
+};
+RestTime g_rest[kRestObjects] = {};
+uint32_t g_rest_tile_cycles = 0;
+uint32_t g_rest_tile_tasks = 0;
+
+int tile_of(lv_obj_t* obj);
+
+void note_rest(lv_obj_t* obj, int type, uint32_t cycles) {
+  if (obj && tile_of(obj) >= 0) {
+    g_rest_tile_cycles += cycles;
+    ++g_rest_tile_tasks;
+    return;
+  }
+  uint32_t slot = (static_cast<uint32_t>(reinterpret_cast<uintptr_t>(obj)) >> 3) % kRestObjects;
+  for (int probe = 0; probe < kRestObjects; ++probe, slot = (slot + 1) % kRestObjects) {
+    RestTime& rest = g_rest[slot];
+    if (rest.tasks && rest.obj != obj) continue;
+    rest.obj = obj;
+    rest.cycles += cycles;
+    ++rest.tasks;
+    if (type == LV_DRAW_TASK_TYPE_FILL) ++rest.fills;
+    return;
+  }
+}
+
 // With one draw unit (LV_USE_OS none) LVGL hands it the layer's first waiting
 // task and draws it before dispatch returns.
 int32_t timed_dispatch(lv_draw_unit_t* unit, lv_layer_t* layer) {
@@ -265,6 +308,8 @@ int32_t timed_dispatch(lv_draw_unit_t* unit, lv_layer_t* layer) {
   lv_draw_task_t* task = lv_draw_get_available_task(layer, nullptr, 0);
   const size_t kind = task ? task_kind(task) : kParts;
   const int type = task && task->type < kTaskTypes ? task->type : 0;
+  const lv_draw_dsc_base_t* base = task ? static_cast<const lv_draw_dsc_base_t*>(task->draw_dsc) : nullptr;
+  lv_obj_t* obj = base ? base->obj : nullptr;
   const uint32_t start = esp_cpu_get_cycle_count();
   const int32_t taken = g_sw_dispatch(unit, layer);
   const uint32_t cycles = esp_cpu_get_cycle_count() - start;
@@ -273,6 +318,7 @@ int32_t timed_dispatch(lv_draw_unit_t* unit, lv_layer_t* layer) {
     TaskTime& slot = g_tasks[kind][type];
     slot.cycles += cycles;
     ++slot.count;
+    if (kind == kParts) note_rest(obj, type, cycles);
   }
   return taken;
 }
@@ -320,12 +366,29 @@ void tile_cb(lv_event_t* e) {
   const size_t index = packed & 0xFF;
   if (index >= TILES_PER_GRID) return;
   TileTime& tile = g_tiles[index];
-  if (lv_event_get_code(e) == LV_EVENT_DRAW_MAIN_BEGIN) {
-    tile.start_us = micros();
+  const lv_event_code_t code = lv_event_get_code(e);
+  const uint32_t now = micros();
+  if (code == LV_EVENT_DRAW_MAIN_BEGIN) {
+    tile.start_us = now;
+    tile.main_end_us = 0;
+    tile.post_begin_us = 0;
     return;
   }
   if (!tile.start_us) return;
-  tile.sum_us += micros() - tile.start_us;
+  if (code == LV_EVENT_DRAW_MAIN_END) {
+    tile.main_end_us = now;
+    return;
+  }
+  if (code == LV_EVENT_DRAW_POST_BEGIN) {
+    tile.post_begin_us = now;
+    return;
+  }
+  tile.sum_us += now - tile.start_us;
+  if (tile.main_end_us && tile.post_begin_us) {
+    g_card_main_us += tile.main_end_us - tile.start_us;
+    g_card_children_us += tile.post_begin_us - tile.main_end_us;
+    g_card_post_us += now - tile.post_begin_us;
+  }
   tile.start_us = 0;
   lv_obj_t* card = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
   tile.card = card;
@@ -479,6 +542,71 @@ void log_tasks(uint32_t frame_us) {
   Serial.println(line);
 }
 
+// Where LVGL's walk around the pixels goes (user 2026-10-28: "du wolltest
+// doch noch wo anders ansetzen"): in the tiles their cards' own main draws,
+// their children (their parts apart) and their cards' post draws; outside
+// them the pixels, the draw dispatch waiting for the band copy
+// (display_flush_gate.h, mostly at a band's first fill) and the remainder:
+// LVGL's own loop over the bands and the other objects' events and styles.
+void log_walk(uint32_t frame_us) {
+  if (!g_sw_dispatch) return;
+  const float cycles_per_ms = getCpuFrequencyMhz() * 1000.0f;
+  uint32_t tiles_us = 0;
+  for (const TileTime& tile : g_tiles) tiles_us += tile.sum_us;
+  uint32_t children_parts_us = 0;
+  for (size_t part = kLabel; part < kParts; ++part) children_parts_us += g_part_us[part];
+  uint64_t rest_cycles = 0;
+  for (int type = 0; type < kTaskTypes; ++type) rest_cycles += g_tasks[kParts][type].cycles;
+  const float rest_ms = (frame_us > tiles_us + g_flush_us ? frame_us - tiles_us - g_flush_us : 0) / 1000.0f;
+  const float rest_pixels_ms = (rest_cycles > g_rest_tile_cycles ? rest_cycles - g_rest_tile_cycles : 0) / cycles_per_ms;
+  const float wait_ms = display_flush_gate::g_wait_us / 1000.0f;
+  const float loop_ms = rest_ms - rest_pixels_ms - wait_ms;
+  Serial.printf(
+      "[FrameProbe] walk tiles %.1f ms: card main %.1f, children %.1f (their parts %.1f), card post %.1f | rest %.1f ms:"
+      " pixels %.1f, copy wait %.1f, LVGL loop and other objects %.1f | late tile tasks %lu %.1f ms\n",
+      tiles_us / 1000.0f, g_card_main_us / 1000.0f, g_card_children_us / 1000.0f, children_parts_us / 1000.0f,
+      g_card_post_us / 1000.0f, rest_ms, rest_pixels_ms, wait_ms, loop_ms > 0 ? loop_ms : 0.0f,
+      static_cast<unsigned long>(g_rest_tile_tasks), g_rest_tile_cycles / cycles_per_ms);
+}
+
+// The objects outside the tiles that drew the most: kind, size and place,
+// layer (scr, top, sys) and depth, then tasks, fills and pixel work in ms.
+void log_rest() {
+  const float cycles_per_ms = getCpuFrequencyMhz() * 1000.0f;
+  char line[640];
+  unsigned objects = 0;
+  for (const RestTime& rest : g_rest) objects += rest.tasks ? 1 : 0;
+  int used = snprintf(line, sizeof(line), "[FrameProbe] rest objects %u:", objects);
+  bool shown[kRestObjects] = {};
+  for (int rank = 0; rank < 8 && used > 0 && used < static_cast<int>(sizeof(line)); ++rank) {
+    int best = -1;
+    for (int i = 0; i < kRestObjects; ++i) {
+      if (shown[i] || !g_rest[i].tasks) continue;
+      if (best < 0 || g_rest[i].cycles > g_rest[best].cycles) best = i;
+    }
+    if (best < 0) break;
+    shown[best] = true;
+    const RestTime& rest = g_rest[best];
+    if (!rest.obj) {
+      used += snprintf(line + used, sizeof(line) - used, " none t%u f%u %.2f", static_cast<unsigned>(rest.tasks),
+                       static_cast<unsigned>(rest.fills), rest.cycles / cycles_per_ms);
+      continue;
+    }
+    lv_area_t area;
+    lv_obj_get_coords(rest.obj, &area);
+    int depth = 0;
+    for (lv_obj_t* parent = lv_obj_get_parent(rest.obj); parent; parent = lv_obj_get_parent(parent)) ++depth;
+    const lv_obj_t* root = lv_obj_get_screen(rest.obj);
+    const char* layer = root == lv_layer_top() ? "top" : root == lv_layer_sys() ? "sys" : "scr";
+    used += snprintf(line + used, sizeof(line) - used, " %s %ldx%ld@%ld,%ld %s d%d t%u f%u %.2f",
+                     kPartNames[part_of(rest.obj)], static_cast<long>(lv_area_get_width(&area)),
+                     static_cast<long>(lv_area_get_height(&area)), static_cast<long>(area.x1),
+                     static_cast<long>(area.y1), layer, depth, static_cast<unsigned>(rest.tasks),
+                     static_cast<unsigned>(rest.fills), rest.cycles / cycles_per_ms);
+  }
+  Serial.println(line);
+}
+
 // The tile an element belongs to: the index its card is watched with.
 int tile_of(lv_obj_t* obj) {
   for (int depth = 0; obj && depth < 8; ++depth, obj = lv_obj_get_parent(obj)) {
@@ -544,6 +672,13 @@ void display_cb(lv_event_t* e) {
     memset(g_fonts, 0, sizeof(g_fonts));
     memset(g_part_styles, 0, sizeof(g_part_styles));
     memset(g_tasks, 0, sizeof(g_tasks));
+    memset(g_rest, 0, sizeof(g_rest));
+    g_rest_tile_cycles = 0;
+    g_rest_tile_tasks = 0;
+    g_card_main_us = 0;
+    g_card_children_us = 0;
+    g_card_post_us = 0;
+    display_flush_gate::g_wait_us = 0;
     g_glyphs_start = glyph_cache_stats();
     g_corners_start = rounded_corners::stats();
     g_frame_pixels = pixels;
@@ -580,6 +715,8 @@ void display_cb(lv_event_t* e) {
     }
     log_frame(frame_us);
     log_tasks(frame_us);
+    log_walk(frame_us);
+    log_rest();
     log_elements();
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
     log_cache();
@@ -602,6 +739,8 @@ void watch(lv_obj_t* card, uint8_t index, uint8_t type) {
   }
   void* packed = reinterpret_cast<void*>(static_cast<uintptr_t>(index) | (static_cast<uintptr_t>(type) << 8));
   lv_obj_add_event_cb(card, tile_cb, LV_EVENT_DRAW_MAIN_BEGIN, packed);
+  lv_obj_add_event_cb(card, tile_cb, LV_EVENT_DRAW_MAIN_END, packed);
+  lv_obj_add_event_cb(card, tile_cb, LV_EVENT_DRAW_POST_BEGIN, packed);
   lv_obj_add_event_cb(card, tile_cb, LV_EVENT_DRAW_POST_END, packed);
   // Its parts as built now (an element made later is not counted).
   watch_part(card, kCard);

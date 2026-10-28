@@ -101,6 +101,28 @@ for (const code of ['LV_EVENT_DRAW_MAIN_BEGIN', 'LV_EVENT_DRAW_POST_END', 'LV_EV
   'LV_EVENT_FLUSH_FINISH', 'LV_EVENT_REFR_READY']) {
   assert.ok(probe.includes(code), code);
 }
+// b603 (user 2026-10-28: where LVGL's walk around the pixels goes): a tile in
+// each band splits into its card's main draw, its children and its card's
+// post draw; outside the tiles the pixels, the dispatch's wait for the band
+// copy and the remainder; the objects outside the tiles that drew most.
+const watch = probe.slice(probe.indexOf('void watch(lv_obj_t* card, uint8_t index, uint8_t type) {'));
+for (const event of ['LV_EVENT_DRAW_MAIN_BEGIN', 'LV_EVENT_DRAW_MAIN_END', 'LV_EVENT_DRAW_POST_BEGIN', 'LV_EVENT_DRAW_POST_END']) {
+  assert.ok(watch.includes(`lv_obj_add_event_cb(card, tile_cb, ${event}, packed);`), `the card times ${event}`);
+}
+assert.ok(probe.includes('g_card_children_us += tile.post_begin_us - tile.main_end_us;'), 'the children span between main and post');
+assert.ok(probe.includes('if (kind == kParts) note_rest(obj, type, cycles);'), 'only tasks outside the watched parts');
+assert.ok(probe.includes('if (obj && tile_of(obj) >= 0) {'), 'a tile element made later counts apart');
+assert.ok(probe.includes('" pixels %.1f, copy wait %.1f, LVGL loop and other objects %.1f | late tile tasks %lu %.1f ms\\n"') &&
+  probe.includes('"[FrameProbe] rest objects %u:"'), 'two English lines');
+for (const reset of ['memset(g_rest, 0, sizeof(g_rest));', 'g_card_main_us = 0;', 'display_flush_gate::g_wait_us = 0;']) {
+  assert.ok(probe.slice(probe.indexOf('void display_cb('), probe.indexOf('g_frame_start_us = micros();')).includes(reset),
+    `${reset} starts over with a measured frame`);
+}
+assert.ok(probe.indexOf('log_tasks(frame_us);') < probe.indexOf('log_walk(frame_us);') &&
+  probe.indexOf('log_walk(frame_us);') < probe.indexOf('log_rest();'), 'logged after the tasks line');
+const gate = read('src/core/display/display_flush_gate.h');
+assert.match(gate, /if \(!g_backend\.done\(\)\) \{\s*if \(!g_wait_since_us\) g_wait_since_us = clock_us\(\) \| 1U;\s*return false;\s*\}\s*if \(g_wait_since_us\) \{\s*g_wait_us \+= clock_us\(\) - g_wait_since_us;/,
+  'the gate times its wait from the first refusal to the finished copy');
 const code = probe.replace(/\/\/[^\n]*/g, '');
 assert.doesNotMatch(code, /\bnew\b|malloc|String\b|std::vector/, 'no allocation per frame');
 console.log('Tile frame probe: large frames log their per-tile draw time');

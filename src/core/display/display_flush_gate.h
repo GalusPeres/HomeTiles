@@ -1,6 +1,11 @@
 #pragma once
 
 #include <stdint.h>
+#if defined(ARDUINO)
+#include <Arduino.h>
+#else
+#include <chrono>
+#endif
 
 // A full frame on the V2 is drawn in 29 bands of 28 rows; after each band the
 // PPA rotated it into the framebuffer while the CPU waited, 0.8 ms per band
@@ -41,11 +46,32 @@ inline bool begin(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t* da
   return true;
 }
 
+// How long the draw dispatch waited for copies, summed (tile_frame_probe
+// starts it over per measured frame).
+inline uint32_t g_wait_us = 0;
+inline uint32_t g_wait_since_us = 0;
+
+inline uint32_t clock_us() {
+#if defined(ARDUINO)
+  return micros();
+#else
+  return static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::steady_clock::now().time_since_epoch()).count());
+#endif
+}
+
 // For the draw dispatch: false while the last band's copy still reads the
 // draw buffer; a finished copy is completed here.
 inline bool ready() {
   if (!g_pending) return true;
-  if (!g_backend.done()) return false;
+  if (!g_backend.done()) {
+    if (!g_wait_since_us) g_wait_since_us = clock_us() | 1U;
+    return false;
+  }
+  if (g_wait_since_us) {
+    g_wait_us += clock_us() - g_wait_since_us;
+    g_wait_since_us = 0;
+  }
   g_backend.finish();
   g_pending = false;
   return true;
@@ -53,6 +79,7 @@ inline bool ready() {
 
 // Waits for a copy still under way (before any other flush).
 inline void settle() {
+  g_wait_since_us = 0;
   if (!g_pending) return;
   g_backend.finish();
   g_pending = false;

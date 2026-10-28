@@ -78,10 +78,12 @@ static constexpr int W = 760, H = 420, kBand = 28;
 static std::vector<uint16_t> g_screen(W * H);
 static std::vector<uint16_t> g_band(W * kBand);
 
-// The fake engine: reads the band only when it completes, a few polls later.
+// The fake engine: reads the band only when it completes, a few polls and at
+// least 300 us later (the gate's wait is timed).
 static lv_area_t g_area;
 static const uint16_t* g_data = nullptr;
 static int g_polls = 0, g_started = 0, g_busy = 0;
+static uint32_t g_begin_us = 0;
 static void copy(const lv_area_t& a, const uint16_t* src) {
   const int w = a.x2 - a.x1 + 1;
   for (int y = a.y1; y <= a.y2; ++y) memcpy(&g_screen[y * W + a.x1], src + (y - a.y1) * w, w * 2);
@@ -90,11 +92,12 @@ static bool fake_begin(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_
   g_area = {x, y, x + w - 1, y + h - 1};
   g_data = data;
   g_polls = 0;
+  g_begin_us = display_flush_gate::clock_us();
   ++g_started;
   return true;
 }
 static bool fake_done() {
-  if (++g_polls >= 4) return true;
+  if (++g_polls >= 4 && display_flush_gate::clock_us() - g_begin_us >= 300) return true;
   ++g_busy;
   return false;
 }
@@ -187,8 +190,12 @@ int main() {
   display_flush_gate::g_dispatch_gated = false;
   display_flush_gate::install_dispatch();
   g_started = g_busy = 0;
+  display_flush_gate::g_wait_us = 0;
+  const uint32_t render_start_us = display_flush_gate::clock_us();
   const std::vector<uint16_t> gated_plain = render();
+  const uint32_t render_us = display_flush_gate::clock_us() - render_start_us;
   const int plain_started = g_started, plain_busy = g_busy;
+  const uint32_t wait_us = display_flush_gate::g_wait_us;
 
   display_flush_gate::set_backend({nullptr, nullptr, nullptr});
   build(true);
@@ -199,10 +206,11 @@ int main() {
 
   printf("{\"gated\":%d,\"plainDiffs\":%u,\"plainStarted\":%d,\"plainBusy\":%d,\"keptDiffs\":%u,"
          "\"keptStarted\":%d,\"keptBusy\":%d,\"ungatedDiffs\":%u,\"ungatedStarted\":%d,\"pending\":%d,"
-         "\"cornersDrawn\":%u}\n",
+         "\"cornersDrawn\":%u,\"waitUs\":%u,\"renderUs\":%u,\"waitOpen\":%u}\n",
          display_flush_gate::g_dispatch_gated ? 1 : 0, diff(sync_plain, gated_plain), plain_started, plain_busy,
          diff(sync_kept, gated_kept), g_started, g_busy, ungated_diffs, ungated_started,
-         display_flush_gate::g_pending ? 1 : 0, rounded_corners::stats().drawn);
+         display_flush_gate::g_pending ? 1 : 0, rounded_corners::stats().drawn, static_cast<unsigned>(wait_us),
+         static_cast<unsigned>(render_us), static_cast<unsigned>(display_flush_gate::g_wait_since_us));
   return 0;
 }
 `;
@@ -230,4 +238,7 @@ assert.equal(run.keptStarted, bands - 1);
 assert.ok(run.keptBusy > 0 && run.cornersDrawn > 0, `kept corners drawn behind the gate ${JSON.stringify(run)}`);
 assert.equal(run.keptDiffs, 0, `kept corners: every pixel as with synchronous copies ${JSON.stringify(run)}`);
 assert.equal(run.pending, 0, 'a frame ends with every copy done');
+// b603: the dispatch's wait for the copies is timed for the FrameProbe.
+assert.ok(run.waitUs >= 300 && run.waitUs <= run.renderUs, `the wait is timed within the frame ${JSON.stringify(run)}`);
+assert.equal(run.waitOpen, 0, 'no wait left open after the frame');
 console.log(`PASS: band copies run in the background without a wrong pixel ${JSON.stringify(run)}`);

@@ -2329,6 +2329,83 @@ static void finish_media_popup_open(const MediaPopupInit& init) {
   apply_init_to_context(g_media_popup_ctx, current);
 }
 
+// A kept body shows in the first frame (prepare_media_popup_open), and the
+// player is built again with other colors only in the content step after
+// that frame: the time and volume bars and the buttons kept the last
+// opening's colors for a frame (user 2026-10-28: "die ganze Zeitleiste noch
+// rot", everything else beige). The parts that show a color take the new
+// ones here as build_player gives them; the rebuild after the frame draws
+// the same.
+static void recolor_slider(MediaSlider& slider, const MediaColors& c) {
+  const lv_color_t fill = lv_color_hex(c.tinted ? c.icon : c.control_icon);
+  if (slider.track) {
+    lv_obj_set_style_bg_color(slider.track, c.control, 0);
+    lv_obj_set_style_bg_opa(slider.track, c.control_opa, 0);
+  }
+  if (slider.cap) lv_obj_set_style_bg_color(slider.cap, fill, 0);
+  if (slider.input) {
+    lv_obj_set_style_bg_color(slider.input, fill, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(slider.input, lv_color_hex(c.control_icon), LV_PART_KNOB);
+  }
+}
+
+// A round button (round_button): the press fill and its icon.
+static void recolor_button(lv_obj_t* btn, lv_obj_t* label, const MediaColors& c) {
+  if (!btn) return;
+  popup_nav_style::style_press_fill(btn, c.control, c.control_opa);
+  if (label) lv_obj_set_style_text_color(label, lv_color_hex(c.control_icon), 0);
+}
+
+static void recolor_player(MediaPopupContext* ctx) {
+  if (!ctx->player) return;
+  const MediaColors& c = ctx->colors;
+  if (ctx->cover_clip) {
+    lv_obj_set_style_bg_color(ctx->cover_clip, c.control, 0);
+    style_cover_clip(ctx, ctx->cover_image && !lv_obj_has_flag(ctx->cover_image, LV_OBJ_FLAG_HIDDEN));
+    // A cover baked over the last card color: its corners clipped until the
+    // rebuild bakes it over this one.
+    if (ctx->cover_baked && ctx->cover_corner_card != c.card) lv_obj_set_style_clip_corner(ctx->cover_clip, true, 0);
+  }
+  if (ctx->bars) lv_obj_set_style_bg_color(ctx->bars, lv_color_hex(c.icon), 0);
+  if (ctx->media_title_label) lv_obj_set_style_text_color(ctx->media_title_label, lv_color_hex(c.text), 0);
+  for (lv_obj_t* label : {ctx->artist_label, ctx->album_label, ctx->seek_current_label, ctx->seek_duration_label,
+                          ctx->volume_value_label}) {
+    if (label) lv_obj_set_style_text_color(label, lv_color_hex(c.secondary), 0);
+  }
+  recolor_slider(ctx->seek_slider, c);
+  recolor_slider(ctx->volume_slider, c);
+  for (lv_obj_t* label : {ctx->shuffle_label, ctx->previous_label, ctx->play_pause_label, ctx->next_label,
+                          ctx->repeat_label, ctx->volume_icon_label}) {
+    recolor_button(label ? lv_obj_get_parent(label) : nullptr, label, c);
+  }
+  // Shuffle and repeat in their state's color, their dots in the icon's.
+  for (lv_obj_t* label : {ctx->shuffle_label, ctx->repeat_label}) {
+    lv_obj_t* dot = label ? lv_obj_get_child(lv_obj_get_parent(label), 1) : nullptr;
+    if (!dot) continue;
+    lv_obj_set_style_bg_color(dot, lv_color_hex(c.icon), 0);
+    style_toggle(label, c, !lv_obj_has_flag(dot, LV_OBJ_FLAG_HIDDEN));
+  }
+  // Play: the round button in the icon role, its icon in the card's color.
+  if (lv_obj_t* play = ctx->play_pause_label ? lv_obj_get_parent(ctx->play_pause_label) : nullptr) {
+    lv_obj_set_style_bg_color(play, lv_color_hex(c.control_icon), 0);
+    lv_obj_set_style_bg_color(play, lv_color_hex(ui_theme::text_soft()), LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(play, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_text_color(ctx->play_pause_label, lv_color_hex(c.card), 0);
+  }
+  if (ctx->menu_button) recolor_button(ctx->menu_button, lv_obj_get_child(ctx->menu_button, 0), c);
+}
+
+// After the shell (the controls follow its disc), before the first frame.
+static void recolor_kept_player(MediaPopupContext* ctx, const MediaPopupInit& init) {
+  if (!ctx || !ctx->player || !popup_open_pending(ctx->card)) return;
+  // Another entity or layout shows its body only after the content step.
+  if (ctx->entity_id != init.entity_id || ctx->centered != init.cover_centered) return;
+  const MediaColors colors = compute_colors(init.bg_color ? init.bg_color : ui_theme::popup_card(), init.icon_color);
+  if (colors_key(colors) == colors_key(ctx->colors)) return;
+  ctx->colors = colors;
+  recolor_player(ctx);
+}
+
 static void prepare_media_popup_open(const MediaPopupInit& init) {
   auto* ctx = g_media_popup_ctx;
   const ui_theme::SurfaceScope popup_scope = body_scope(ctx);
@@ -2392,6 +2469,7 @@ void show_media_popup(const MediaPopupInit& init) {
     show_popup_shell(g_media_popup_ctx->overlay, g_media_popup_ctx->card, g_media_popup_ctx->title_label,
                      g_media_popup_ctx->icon_label, g_media_popup_ctx->close_button, nullptr,
                      g_media_popup_ctx->value_label);
+    recolor_kept_player(g_media_popup_ctx, init);
     if (g_media_popup_ctx->motion_timer) lv_timer_resume(g_media_popup_ctx->motion_timer);
     return;
   }

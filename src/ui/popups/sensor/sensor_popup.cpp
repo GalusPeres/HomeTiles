@@ -3921,7 +3921,8 @@ void show_sensor_popup(const SensorPopupInit& init) {
   editable_control_close(ctx->control);
   // A matching resident body is part of the first frame. Only a different
   // entity or layout needs the header while its content is being rebound.
-  if (!reusable_sensor_body(ctx, init)) {
+  const bool kept_body = reusable_sensor_body(ctx, init);
+  if (!kept_body) {
     for (auto* body : {ctx->body_box, ctx->control_row, ctx->value_box, ctx->range_row}) {
       if (body) lv_obj_add_flag(body, LV_OBJ_FLAG_HIDDEN);
     }
@@ -3938,6 +3939,13 @@ void show_sensor_popup(const SensorPopupInit& init) {
   if (g_sensor_popup_ctx && g_sensor_popup_ctx->card) viewNavigationPopupShown(g_sensor_popup_ctx->card, init.entity_id.c_str());
   show_popup_shell(g_sensor_popup_ctx->overlay, g_sensor_popup_ctx->card, g_sensor_popup_ctx->title_label, g_sensor_popup_ctx->icon_label, g_sensor_popup_ctx->close_button,
                    nullptr, g_sensor_popup_ctx->value_label);
+  // The kept body shows in the first frame: its range buttons and editor
+  // take this tile's card color now, after the shell (they follow its disc),
+  // not only when the icon's color changed (user 2026-10-28).
+  if (kept_body) {
+    update_range_buttons(ctx);
+    editable_control_follow_colors(ctx->control);
+  }
 }
 
 void preload_sensor_popup() {

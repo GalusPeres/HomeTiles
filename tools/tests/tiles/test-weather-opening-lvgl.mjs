@@ -112,6 +112,8 @@ WeatherPopupInit g_pending_weather_init;bool g_weather_open_pending=false;
 void hide_pin_popup(){}void hide_camera_popup(){}void hide_climate_popup(){}void hide_cover_popup(){}void hide_light_popup(){}void hide_sensor_popup(){}void hide_energy_popup(){}void hide_media_popup(){}void hide_device_popup(){}void hide_calendar_popup(){}
 void viewNavigationPopupShown(lv_obj_t*,const char*){++opens;}
 void finish_weather_popup_open(){++completed_opens;g_weather_open_pending=false;g_weather_body.restore();g_weather_popup_ctx->has_rendered_data=true;g_weather_popup_ctx->rendered_entity_id=g_weather_popup_ctx->entity_id;}
+// The kept body's colors before the first frame (test-popup-kept-body-colors.mjs).
+int recolors=0;void apply_init_to_context(WeatherPopupContext*,const WeatherPopupInit&){++recolors;}
 void build_popup_ui(WeatherPopupContext*ctx,const WeatherPopupInit&){popup=create_popup_body([](lv_event_t*){hide_popup_shell(popup.card);},nullptr,0x223344);ctx->card=popup.card;ctx->overlay=popup.overlay;ctx->location_label=popup.title;ctx->icon_label=popup.icon;ctx->close_button=popup.close;}
 ${fn(read('src/ui/popups/weather/weather_popup.cpp'),'show_weather_popup')}
 ${strip(read('src/types/weather/renderer.cpp')).replace('render_weather_tile(', 'render_weather_tile_content(')}

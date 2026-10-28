@@ -172,6 +172,7 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
     target[index].gauge_max = 100;
     target[index].chart = nullptr;
     target[index].series = nullptr;
+    target[index].look = nullptr;
   }
 
   if (tile.sensor_entity.length() && grid_type != GridType::SCREENSAVER) {

@@ -3,6 +3,7 @@
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
 #include "src/web/server/render/value_size_attrs.h"
+#include "src/types/sensor/sensor_look.h"
 
 void append_sensor_fields_html(String& html, const String& tab_id) {
   const auto& tr = i18n::strings(configManager.getConfig().language);
@@ -64,7 +65,21 @@ void append_sensor_fields_html(String& html, const String& tab_id) {
                   <option value="2">)html";
   html += tr.sensor_display_graph;
   html += R"html(</option>
-                </select>
+)html";
+  // The looks below the header (sensor_look.h), in the lab's order.
+  const char* const looks[] = {tr.sensor_display_level_side, tr.sensor_display_level_up, tr.sensor_display_stripes,
+                               tr.sensor_display_stripes_up,  tr.sensor_display_arc,      tr.sensor_display_arc_value,
+                               tr.sensor_display_tick_arc,    tr.sensor_display_tick_arc_value,
+                               tr.sensor_display_ring,        tr.sensor_display_tick_ring};
+  for (size_t i = 0; i < sizeof(looks) / sizeof(looks[0]); ++i) {
+    html += "                  <option value=\"";
+    html += String(static_cast<int>(sensor_look::kLevelSide + i));
+    html += "\">";
+    html += looks[i];
+    html += "</option>
+";
+  }
+  html += R"html(                </select>
                 <div id=")html";
   html += tab_id;
   html += R"html(_sensor_gauge_fields" class="gauge-fields hidden">
@@ -80,6 +95,10 @@ void append_sensor_fields_html(String& html, const String& tab_id) {
                   <input type="number" id=")html";
   html += tab_id;
   html += R"html(_sensor_gauge_max" step="any" placeholder="100">
+                  <div id=")html";
+  html += tab_id;
+  // The gauge's own shape (display mode 1); the looks fit their box.
+  html += R"html(_sensor_gauge_shape_fields" class="gauge-shape-fields">
                   <label>)html";
   html += tr.sensor_arc_degree;
   html += R"html(</label>
@@ -98,6 +117,7 @@ void append_sensor_fields_html(String& html, const String& tab_id) {
                   <input type="number" id=")html";
   html += tab_id;
   html += R"html(_sensor_gauge_y_offset" min="-100" max="200" step="1" placeholder="12">
+                  </div>
                 </div>
                 <div id=")html";
   html += tab_id;

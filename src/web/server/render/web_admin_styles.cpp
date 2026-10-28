@@ -407,6 +407,15 @@ void appendPreviewScaleVars(String& html, const char* selector = ":root", bool p
                GRID_CELL_H - climate_layout::kOuterInset -
                    climate_layout::content_top(header.disc, tile_icon_disc::inset()));
   }
+  {
+    // The Sensor looks' sizes in panel pixels (types/sensor/look_view.cpp):
+    // arc width, stripe band, stripe width, smallest gap, arc stripe pitch.
+    html += "--sensor-look-metrics:";
+    for (const int px : {12, 16, 6, 5, 11}) {
+      html += String(tile_layout::scale(px));
+      html += px == 11 ? ";" : " ";
+    }
+  }
   html += "--settings-panel-width:";
   html += String(settings_panel_target_width_px());
   html += "px;";

@@ -18,6 +18,8 @@
 #include "src/types/value/value_control.h"
 #include "src/ui/shared/area_graph.h"
 #include "src/ui/shared/ui_theme.h"
+#include "src/types/sensor/look_view.h"
+#include "src/types/sensor/sensor_look.h"
 
 static const lv_font_t* get_sensor_value_font(const Tile& tile) {
   return tile_layout::value_font_for_choice(tile.sensor_value_font, FONT_VALUE);
@@ -180,6 +182,36 @@ static void sensor_graph_delete_cb(lv_event_t* e) {
   delete area;
 }
 
+// The head of the looks with the value inside their arc or ring
+// (sensor_look::value_inside, lab B/G): the title alone beside the corner
+// disc, right-aligned like the Switch tile's tall title, up to two lines
+// centred on the disc.
+static lv_obj_t* create_title_head(lv_obj_t* card, const Tile& tile) {
+  if (!tile.title.length()) return nullptr;
+  const int card_w = tile_geometry::extent(tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP);
+  const int inset = tile_icon_disc::inset();
+  const int icon_width =
+      FONT_MDI_ICONS ? lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0) : 0;
+  const int disc = tile_icon_disc::header_diameter(icon_width);
+  const int text_x = inset + disc + 2 * inset;
+  const int pad_x = lv_obj_get_style_pad_left(card, LV_PART_MAIN);
+  const int pad_y = lv_obj_get_style_pad_top(card, LV_PART_MAIN);
+  // The right edge of the Switch tall title (tile_header.h).
+  const int right = pad_x - tile_layout::scale_480(4);
+  const lv_font_t* font = tile_layout::header_title_font();
+  lv_obj_t* title = lv_label_create(card);
+  if (!title) return nullptr;
+  set_label_style(title, lv_color_hex(ui_theme::text()), font);
+  lv_obj_set_width(title, std::max(1, card_w - text_x - right));
+  lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_RIGHT, 0);
+  // Top-aligned titles grow upwards by half a line for their second line,
+  // so one or two lines stay centred on the disc.
+  hometiles_title::tile(title, tile.title.c_str(), true);
+  lv_obj_set_pos(title, text_x - pad_x, inset + disc / 2 - lv_font_get_line_height(font) / 2 - pad_y);
+  lv_obj_clear_flag(title, LV_OBJ_FLAG_CLICKABLE);
+  return title;
+}
+
 struct SensorEventData {
   String entity_id;
   String title;
@@ -208,9 +240,11 @@ lv_obj_t* render_sensor_tile(lv_obj_t* parent, int col, int row, const Tile& til
     return nullptr;
   }
 
-  const uint8_t display_mode = tile.span_h == 0.5f ? 0 : tile.sensor_display_mode;  // 0=none, 1=gauge, 2=graph
+  // 0 the value, 1 the gauge, 2 the graph, then the looks (sensor_look.h).
+  const uint8_t display_mode = tile.span_h == 0.5f ? 0 : tile.sensor_display_mode;
   const bool gauge_enabled = (display_mode == 1);
   const bool graph_enabled = (display_mode == 2);
+  const bool look_enabled = sensor_look::is_look(display_mode);
   // The bounds with their decimals (gauge_range.h, issue #83).
   float gauge_min = sensor_gauge::value(tile.sensor_gauge_min, tile.sensor_gauge_decimals);
   float gauge_max = sensor_gauge::value(tile.sensor_gauge_max, tile.sensor_gauge_decimals);
@@ -272,8 +306,8 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
 
   lv_obj_t* title_label = nullptr;
   // Right-aligned title label, shown only when a title is set. The graph
-  // tile's header (tile_header) makes its own.
-  if (tile.title.length() > 0 && !graph_enabled) {
+  // tile's header (tile_header) and the looks make their own.
+  if (tile.title.length() > 0 && !graph_enabled && !look_enabled) {
     title_label = lv_label_create(card);
     if (title_label) {
       set_label_style(title_label, lv_color_hex(ui_theme::text()),
@@ -420,13 +454,47 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
     v = header.state;
   }
 
+  // The looks (sensor_look.h, gauge lab 2026-10-28) in the graph's box: the
+  // Switch header with the value beside the disc, or the title alone with
+  // the value inside the arc or ring (20 on one-row tiles, 24 on taller
+  // ones, its top at the middle of the arc's inside).
+  lv_obj_t* look = nullptr;
+  if (look_enabled) {
+    const lv_area_t box = sensor_graph_box(tile);
+    look = sensor_look_view::create(card, tile, icon_lbl, box, gauge_min, gauge_max);
+    if (sensor_look::value_inside(display_mode)) {
+      title_label = create_title_head(card, tile);
+      const lv_font_t* font = tile.span_h > 1 ? tile_layout::content_font_24() : tile_layout::content_font_20();
+      v = lv_label_create(card);
+      if (v) {
+        const int card_w = tile_geometry::extent(tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP);
+        set_label_style(v, lv_color_hex(ui_theme::text()), font);
+        lv_label_set_long_mode(v, LV_LABEL_LONG_DOT);
+        lv_obj_set_width(v, card_w);
+        lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_CENTER, 0);
+        lv_label_set_text(v, "--");
+        lv_obj_clear_flag(v, LV_OBJ_FLAG_CLICKABLE);
+        // The lab places the value's em box (line height 1); the label's
+        // line is Inter's ascent plus descent, 1.211 em.
+        const int32_t line_h = lv_font_get_line_height(font);
+        const int32_t size = (line_h * 1000 + 605) / 1211;
+        const int32_t top = look ? sensor_look_view::value_top(look, size) : 0;
+        lv_obj_set_pos(v, -lv_obj_get_style_pad_left(card, LV_PART_MAIN), top - (line_h - size) / 2);
+      }
+    } else {
+      const tile_header::Header header = tile_header::create(card, tile, false, box.y1);
+      title_label = header.title;
+      v = header.state;
+    }
+  }
+
   // Value label combines the value and unit.
   if (!v) v = lv_label_create(card);
   if (!v) {
     Serial.println("[TileRenderer] ERROR: Could not create value label");
     return card;
   }
-  if (!graph_enabled) {
+  if (!graph_enabled && !look_enabled) {
     set_label_style(v, lv_color_hex(ui_theme::text()), get_sensor_value_font(tile));
     lv_label_set_long_mode(v, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(v, LV_PCT(100));
@@ -444,8 +512,8 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   if (gauge_enabled) {
     lv_obj_align(v, LV_ALIGN_BOTTOM_MID, 0,
                  tile_layout::scale(12) + value_y_offset - (gauge_extra_h - gauge_shift));
-  } else if (graph_enabled) {
-    // The header placed it beside the disc.
+  } else if (graph_enabled || look_enabled) {
+    // The header placed it beside the disc, or the look in its arc.
   } else {
     lv_obj_align(v, LV_ALIGN_CENTER, 0,
                  tile_layout::scale(28) + value_y_offset);
@@ -470,9 +538,11 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
     target[index].gauge_max = gauge_max;
     target[index].chart = chart;
     target[index].series = series;
+    target[index].look = look;
   }
-  // The graph's area takes the circle's color (after add_round made the disc).
-  if (chart) tile_icon_source::refresh_controls(card);
+  // The graph's area and the look's track take the circle's color (after
+  // add_round made the disc).
+  if (chart || look) tile_icon_source::refresh_controls(card);
 
   // PPA presents the screensaver as a complete fullscreen frame. Popups would
   // add a second overlay, so this mode disables them. Normal grids retain

@@ -549,6 +549,34 @@
     // color whenever it is tinted, in every tile color; else the neutral step.
     const controls = tinted || lightCircle ? tone : toneFill(card, given || [255, 255, 255], false, glowPct, seeThrough);
     tileElem.style.setProperty('--control-fill', rgba(controls.controlColor, controls.controlOpa));
+    // A Sensor look with a color bar (admin-look.js): every place in the
+    // colors this tile gives an icon of that color, the steps above for
+    // another icon color.
+    tileElem.sensorLookTones = rgb => {
+      const placeTinted = glow && iconDiscTinted('rgb(' + rgb.join(',') + ')');
+      let placeCircle = card;
+      if (placeTinted && !(fill > 0) && !seeThrough && typeof tileTintBackground === 'function') {
+        const base = String(getComputedStyle(tileElem).getPropertyValue('--tile-card') || '').trim();
+        const familyHex = tileTintBackground(base || '#1A1A1A', toneHex(rgb), ICON_FILL_DEFAULT);
+        placeCircle = [1, 3, 5].map(i => parseInt(familyHex.slice(i, i + 2), 16));
+      }
+      let placeTone = toneFill(placeCircle, rgb, placeTinted, glowPct, seeThrough);
+      if (lightCircle) {
+        const shown = toneReadableIcon(rgb);
+        const picked = placeTinted || !iconDiscTinted('rgb(' + shown.join(',') + ')') ? shown : (panelRole('icon') || shown);
+        const over = toneNoColor(picked) ? [189, 189, 189] : picked;
+        const share = Number(panelVar('--pv-light-circle', '0.8'));
+        const amount = glowPct * (Number.isFinite(share) ? share : 0.8) / 100;
+        placeTone = { controlColor: toneBlend(card, over, Math.round(Math.min(1, Math.max(amount, 0.1)) * 255)), controlOpa: 255 };
+      }
+      if (placeTinted && !seeThrough && tileElem.dataset.surface === 'jewel' && typeof toneJewelFill === 'function') {
+        placeTone = toneJewelFill(card, rgb, glowPct, Number(tileElem.dataset.jewelStrength) || 20);
+      }
+      const placeControls = placeTinted || lightCircle ? placeTone : toneFill(card, rgb, false, glowPct, seeThrough);
+      return { lit: toneHex(toneReadableIcon(rgb)), off: rgba(placeControls.controlColor, placeControls.controlOpa) };
+    };
+    tileElem.style.setProperty('--icon-shown', given ? toneHex(toneReadableIcon(given)) : 'currentColor');
+    if (typeof renderSensorLookPreview === 'function') renderSensorLookPreview(tileElem);
     // The icon, readable like on the device (the same with every tile color,
     // Circle strength and circle option).
     if (!given) return;

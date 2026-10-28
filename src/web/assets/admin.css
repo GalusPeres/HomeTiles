@@ -1990,11 +1990,13 @@
     .tile.switch.switch-bar,
     .tile.cover.switch-bar,
     .tile.device.switch-bar,
-    .tile.sensor.sensor-graph { display:block; }
+    .tile.sensor.sensor-graph,
+    .tile.sensor.sensor-look-head { display:block; }
     .tile.switch.switch-bar > .tile-icon,
     .tile.cover.switch-bar > .tile-icon,
     .tile.device.switch-bar > .tile-icon,
-    .tile.sensor.sensor-graph > .tile-icon { margin:0; }
+    .tile.sensor.sensor-graph > .tile-icon,
+    .tile.sensor.sensor-look-head > .tile-icon { margin:0; }
     /* Title and state left-aligned beside the corner disc like the
        half-height tiles (compact_sensor_layout): two insets from the disc,
        the block centered on it, the state at the half-height value size. */
@@ -2002,7 +2004,8 @@
     .tile.cover.switch-bar,
     .tile.device.switch-bar,
     .tile.climate.climate-header,
-    .tile.sensor.sensor-graph {
+    .tile.sensor.sensor-graph,
+    .tile.sensor.sensor-look-head {
       --switch-text-left:calc(3 * var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) - 3px);
       --switch-text-top:calc(var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) / 2 - 3px
         - (var(--compact-title-line, 12px) + var(--compact-value-line, 12px)) / 2);
@@ -2016,7 +2019,9 @@
     .tile.climate.climate-header > .tile-title,
     .tile.climate.climate-header > .tile-switch-state,
     .tile.sensor.sensor-graph > .tile-title,
-    .tile.sensor.sensor-graph > .tile-value {
+    .tile.sensor.sensor-look-head > .tile-title,
+    .tile.sensor.sensor-graph > .tile-value,
+    .tile.sensor.sensor-look-head > .tile-value {
       position:absolute;
       left:var(--switch-text-left);
       right:calc(2 * var(--compact-inset, 3px) - 3px);
@@ -2034,7 +2039,8 @@
     .tile.cover.switch-bar > .tile-title,
     .tile.device.switch-bar > .tile-title,
     .tile.climate.climate-header > .tile-title,
-    .tile.sensor.sensor-graph > .tile-title {
+    .tile.sensor.sensor-graph > .tile-title,
+    .tile.sensor.sensor-look-head > .tile-title {
       /* On the LVGL baseline like the half-height tiles (--compact-*-dy). */
       top:calc(var(--switch-text-top) + var(--compact-title-dy, 0px));
       font-size:var(--compact-title-font, 10px);
@@ -2044,7 +2050,8 @@
     .tile.cover.switch-bar > .tile-switch-state,
     .tile.device.switch-bar > .tile-switch-state,
     .tile.climate.climate-header > .tile-switch-state,
-    .tile.sensor.sensor-graph > .tile-value {
+    .tile.sensor.sensor-graph > .tile-value,
+    .tile.sensor.sensor-look-head > .tile-value {
       top:calc(var(--switch-text-top) + var(--compact-title-line, 12px) + var(--compact-value-dy, 0px));
       bottom:auto;
       font-size:var(--compact-value-font, 10px);
@@ -2054,23 +2061,55 @@
     .tile.cover.switch-bar:not(:has(> .tile-title)) > .tile-switch-state,
     .tile.device.switch-bar:not(:has(> .tile-title)) > .tile-switch-state,
     .tile.climate.climate-header:not(:has(> .tile-title)) > .tile-switch-state,
-    .tile.sensor.sensor-graph:not(:has(> .tile-title)) > .tile-value {
+    .tile.sensor.sensor-graph:not(:has(> .tile-title)) > .tile-value,
+    .tile.sensor.sensor-look-head:not(:has(> .tile-title)) > .tile-value {
       top:calc(var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) / 2 - 3px
         - var(--compact-value-line, 12px) / 2 + var(--compact-value-dy, 0px));
     }
     .tile.switch.switch-bar.compact-value-24,
     .tile.cover.switch-bar.compact-value-24,
     .tile.device.switch-bar.compact-value-24,
-    .tile.sensor.sensor-graph.compact-value-24 {
+    .tile.sensor.sensor-graph.compact-value-24,
+    .tile.sensor.sensor-look-head.compact-value-24 {
       --compact-value-font:var(--compact-value-font-24); --compact-value-line:var(--compact-value-line-step-24);
       --compact-value-dy:var(--compact-value-dy-24);
     }
     .tile.switch.switch-bar.compact-value-28,
     .tile.cover.switch-bar.compact-value-28,
     .tile.device.switch-bar.compact-value-28,
-    .tile.sensor.sensor-graph.compact-value-28 {
+    .tile.sensor.sensor-graph.compact-value-28,
+    .tile.sensor.sensor-look-head.compact-value-28 {
       --compact-value-font:var(--compact-value-font-28); --compact-value-line:var(--compact-value-line-step-28);
       --compact-value-dy:var(--compact-value-dy-28);
+    }
+    /* Sensor looks (types/sensor/sensor_look.h, admin-look.js): the SVG over
+       the whole card in panel pixels; with the value inside the arc or ring
+       the title alone right-aligned and centred on the disc like the panel's
+       (sensor renderer create_title_head), the value's em box placed by the
+       script (line height 1, the panel's top). */
+    .tile.sensor.sensor-look-inside { display:block; }
+    .tile.sensor.sensor-look-inside > .tile-icon { margin:0; }
+    .tile.sensor > .sensor-look-svg {
+      position:absolute; left:-3px; top:-3px; width:calc(100% + 6px); height:calc(100% + 6px);
+      pointer-events:none; overflow:visible;
+    }
+    .tile.sensor.sensor-look-inside > .tile-title {
+      position:absolute;
+      left:calc(3 * var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) - 3px);
+      right:calc(var(--tile-header-title-right, 8px) - 3px);
+      top:calc(var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) / 2 - 3px);
+      transform:translateY(-50%);
+      width:auto; max-width:none; margin:0; padding:0;
+      font-size:var(--fs20, 10px);
+      line-height:1.35;
+      text-align:right;
+      white-space:pre-line;
+      overflow:hidden;
+    }
+    .tile.sensor.sensor-look-inside > .tile-value {
+      position:absolute; left:-3px; right:-3px; width:auto; max-width:none; margin:0; padding:0;
+      bottom:auto; transform:none; line-height:1; text-align:center; white-space:nowrap;
+      overflow:hidden; text-overflow:ellipsis;
     }
     /* From 1.5 rows (switch_layout::sensor_look): the Sensor title top
        right, the state at a Sensor value size centered between the disc and

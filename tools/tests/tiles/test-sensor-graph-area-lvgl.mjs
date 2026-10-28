@@ -78,7 +78,7 @@ const layoutJs = read('src/web/admin/tiles/layout.js');
 assert.ok(layoutJs.includes("const sensorGraph = Number(type) === 1 && Number(mode) === 2 && !halfHeight;") &&
   layoutJs.includes("el.classList.toggle('sensor-graph', sensorGraph);"), 'preview: the graph tile class');
 const css = read('src/web/assets/admin.css');
-assert.ok(css.includes('.tile.sensor.sensor-graph > .tile-value {') && css.includes('.tile.sensor.sensor-graph { display:block; }'),
+assert.ok(css.includes('.tile.sensor.sensor-graph > .tile-value,') && css.includes('.tile.sensor.sensor-graph,' + String.fromCharCode(10) + '    .tile.sensor.sensor-look-head { display:block; }'),
   'preview: the Switch header rules cover the graph tile');
 
 // Popup: no guide line objects, labels and graph at the header circle's

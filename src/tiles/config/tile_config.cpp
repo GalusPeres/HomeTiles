@@ -1,6 +1,7 @@
 #include "src/core/text/title_text.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/types/sensor/gauge_range.h"
+#include "src/types/sensor/sensor_look.h"
 #include "src/tiles/config/tile_layouts.h"
 #include "src/devices/device.h"
 #include "src/core/config/config_manager.h"
@@ -1465,7 +1466,7 @@ static void packTile(const Tile& in, PackedTileV7& out) {
     out.image_slideshow_sec = static_cast<uint16_t>(
         (out.image_slideshow_sec & kSlideshowValueMask) | packIconDiscOptions(in));
   }
-  out.sensor_gauge_enabled = (in.sensor_display_mode <= 2) ? in.sensor_display_mode : 0;
+  out.sensor_gauge_enabled = (in.sensor_display_mode <= sensor_look::kLastMode) ? in.sensor_display_mode : 0;
   out.sensor_gauge_min = in.sensor_gauge_min;
   out.sensor_gauge_max = in.sensor_gauge_max;
   if (shouldNormalizeGaugeRange(in.type)) {
@@ -1606,7 +1607,7 @@ static void unpackTileV7(const PackedTileV7& in, Tile& out) {
     out.sensor_decimals = 0xFF;
   }
   out.sensor_value_font = clampSensorValueFont(in.sensor_value_font);
-  out.sensor_display_mode = (in.sensor_gauge_enabled <= 2) ? in.sensor_gauge_enabled : 0;
+  out.sensor_display_mode = (in.sensor_gauge_enabled <= sensor_look::kLastMode) ? in.sensor_gauge_enabled : 0;
   out.sensor_gauge_min = in.sensor_gauge_min;
   out.sensor_gauge_max = in.sensor_gauge_max;
   if (shouldNormalizeGaugeRange(out.type)) {
@@ -1723,7 +1724,7 @@ static void unpackTileV6(const PackedTileV6& in, Tile& out) {
     out.sensor_decimals = 0xFF;
   }
   out.sensor_value_font = clampSensorValueFont(in.sensor_value_font);
-  out.sensor_display_mode = (in.sensor_gauge_enabled <= 2) ? in.sensor_gauge_enabled : 0;
+  out.sensor_display_mode = (in.sensor_gauge_enabled <= sensor_look::kLastMode) ? in.sensor_gauge_enabled : 0;
   out.sensor_gauge_min = in.sensor_gauge_min;
   out.sensor_gauge_max = in.sensor_gauge_max;
   if (shouldNormalizeGaugeRange(out.type)) {

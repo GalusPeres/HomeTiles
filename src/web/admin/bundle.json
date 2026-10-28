@@ -42,6 +42,7 @@
     "src/web/admin/hardware/editor.js",
     "src/web/admin/core/bootstrap.js",
     "src/types/sensor/admin-format.js",
+    "src/types/sensor/admin-look.js",
     "src/types/binary_sensor/admin-state.js",
     "src/types/sensor/admin-editor.js",
     "src/types/binary_sensor/admin-editor.js",

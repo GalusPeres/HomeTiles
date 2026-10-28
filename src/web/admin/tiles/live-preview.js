@@ -28,6 +28,20 @@
     // stays in the size fields (page-fields.js).
     const pageTile = tileElem.classList.contains('page-field-tile');
     const tileSpan = name => pageTile ? 1 : Number(document.getElementById(prefix + '_tile_' + name)?.value || 1);
+    // The edited tile's size, and for a Sensor look its gauge range and
+    // color record from the editor (admin-look.js setSensorLookData).
+    const sensorLookLayout = () => {
+      const layout = {span_w: tileSpan('span_w'), span_h: tileSpan('span_h')};
+      if (document.getElementById(prefix + '_tile_type')?.value !== '1') return layout;
+      const number = id => {
+        const raw = document.getElementById(prefix + id)?.value;
+        return raw === undefined || String(raw).trim() === '' ? undefined : Number(raw);
+      };
+      layout.sensor_gauge_min = number('_sensor_gauge_min');
+      layout.sensor_gauge_max = number('_sensor_gauge_max');
+      layout.icon_colors = typeof collectIconColorRecord === 'function' ? collectIconColorRecord(tab) : '';
+      return layout;
+    };
 
     const wasActive = currentTileTab === tab && currentTileIndex >= 0;
     const typeWas = tileElem.dataset.type || '0';
@@ -178,8 +192,7 @@
       applyTileAriaLabel(tileElem, '', type);
       if (wasActive) tileElem.classList.add('active');
       updateLayoutFromInputs(tab);
-    applyCompactSensorPreview(tileElem, type, {span_w:tileSpan('span_w'),
-      span_h:tileSpan('span_h')},
+    applyCompactSensorPreview(tileElem, type, sensorLookLayout(),
       document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
       return;
     }
@@ -423,8 +436,7 @@
     }
     if (type === '5') updateSwitchValuePreview(tab);
     updateLayoutFromInputs(tab);
-    applyCompactSensorPreview(tileElem, type, {span_w:tileSpan('span_w'),
-      span_h:tileSpan('span_h')},
+    applyCompactSensorPreview(tileElem, type, sensorLookLayout(),
       document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
     // The analog and the wall clock place their face once the tile has its
     // size and classes again (updateLayoutFromInputs, applyCompactSensorPreview):

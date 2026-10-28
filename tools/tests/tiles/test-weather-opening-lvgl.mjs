@@ -131,6 +131,9 @@ void show_sensor_popup(const SensorPopupInit&){++sensor_opens;}void request_tile
 // The graph tile's header and area (types/sensor/renderer.cpp).
 ${strip(read('src/tiles/runtime/tile_header.h'))}
 ${strip(read('src/ui/shared/area_graph.h'))}
+${strip(read('src/types/sensor/sensor_look.h'))}
+${strip(read('src/types/sensor/look_view.h'))}
+${strip(read('src/types/sensor/look_view.cpp'))}
 ${strip(read('src/types/sensor/renderer.cpp')).replace('render_sensor_tile(', 'render_sensor_tile_content(')}
 lv_obj_t* render_sensor_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint8_t index, GridType grid_type) {
  auto* card = render_sensor_tile_content(parent,col,row,tile,index,grid_type);

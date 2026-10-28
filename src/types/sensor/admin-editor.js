@@ -67,10 +67,14 @@
       return;
     }
     const displayMode = document.getElementById(prefix + '_sensor_display_mode')?.value || '0';
+    // The range belongs to the gauge and every look (display modes 3 and
+    // up, sensor_look.h); the arc, size and offset to the gauge alone.
     if (gaugeWrap) {
-      if (displayMode === '1') gaugeWrap.classList.remove('hidden');
+      if (displayMode === '1' || isSensorLookMode(displayMode)) gaugeWrap.classList.remove('hidden');
       else gaugeWrap.classList.add('hidden');
     }
+    const shapeWrap = document.getElementById(prefix + '_sensor_gauge_shape_fields');
+    if (shapeWrap) shapeWrap.classList.toggle('hidden', displayMode !== '1');
     if (graphWrap) {
       if (displayMode === '2') graphWrap.classList.remove('hidden');
       else graphWrap.classList.add('hidden');

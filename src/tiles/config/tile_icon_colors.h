@@ -617,6 +617,21 @@ inline bool own_state_colors_icon(const char* record) {
          (layer.mode == SourceMode::Rules && layer.self && layer.enabled && layer.icon);
 }
 
+// The color bar that colors the icon from the tile's own numeric state
+// (own_state_colors_icon), for looks that show a rule's color at every
+// place of their gauge (sensor_look.h). False without one.
+inline bool own_bar(const char* record, Bar& bar) {
+  if (!record || !is_v2(record) || !own_state_colors_icon(record)) return false;
+  const char* p = line_end(second_line(record));
+  while (*p == '\n') {
+    const char* begin = p + 1;
+    const char* end = line_end(begin);
+    p = end;
+    if (starts_with(begin, end, "bar ")) return parse_bar(begin, end, bar);
+  }
+  return false;
+}
+
 // Icon color for a known entity state. `state` is the raw Home Assistant
 // state; `display`, when set, is the displayed text (for example the
 // translated Binary sensor state) that state lines may also match. Returns

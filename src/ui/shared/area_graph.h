@@ -194,7 +194,7 @@ inline void render_mask(uint8_t* pixels, uint32_t stride, int32_t width, int32_t
   }
 }
 
-// Cuts the bottom corners of a mask `width` x `height` round with `radius`,
+// Cuts the bottom corners of a mask `width` x `height` round with the radius,
 // anti-aliased (coverage of the pixel's centre against the corner circle):
 // the tile graph box's shape without a clip_corner layer.
 inline void round_bottom_corners(uint8_t* pixels, uint32_t stride, int32_t width, int32_t height, int32_t radius) {

@@ -14,4 +14,6 @@ struct SensorTileWidgets {
   float gauge_max = 100;
   lv_obj_t* chart = nullptr;
   lv_chart_series_t* series = nullptr;
+  // A look below the header (sensor_look_view, display modes 3 and up).
+  lv_obj_t* look = nullptr;
 };

@@ -152,14 +152,24 @@
     // the panel's before the history arrives.
     const sensorGraph = Number(type) === 1 && Number(mode) === 2 && !halfHeight;
     el.classList.toggle('sensor-graph', sensorGraph);
-    const valueSize = (compact && !compactIconTitle) || (switchHeader && !switchTall) || sensorGraph
-      ? compactValueSize(valueFont) : 20;
+    // The looks below the header (types/sensor/sensor_look.h, admin-look.js):
+    // the graph's header with the value beside the disc, or the title alone
+    // right-aligned with the value inside the arc or ring.
+    const sensorLook = Number(type) === 1 && !halfHeight && typeof isSensorLookMode === 'function' && isSensorLookMode(mode);
+    const lookInside = sensorLook && sensorLookValueInside(mode);
+    el.classList.toggle('sensor-look-head', sensorLook && !lookInside);
+    el.classList.toggle('sensor-look-inside', lookInside);
+    if (el.dataset) el.dataset.lookTall = Number(layout?.span_h) > 1 ? '1' : '0';
+    if (typeof setSensorLookData === 'function') setSensorLookData(el, sensorLook ? mode : 0, layout);
+    const valueSize = (compact && !compactIconTitle) || (switchHeader && !switchTall) || sensorGraph ||
+      (sensorLook && !lookInside) ? compactValueSize(valueFont) : 20;
     el.classList.toggle('compact-value-24', valueSize === 24);
     el.classList.toggle('compact-value-28', valueSize === 28);
     el.classList.toggle('clock-compact', Number(type) === 9 && halfHeight);
     // A half-height Text tile: the text alone (tile_geometry::compact_text).
     el.classList.toggle('text-compact', Number(type) === 10 && halfHeight);
     if (Number(type) === 9) fitCompactClockPreview(el);
+    if (typeof renderSensorLookPreview === 'function') renderSensorLookPreview(el);
   }
 
   // Every bound is the shown grid (placeCols/placeRows, the server's

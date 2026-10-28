@@ -27,6 +27,7 @@
 #include "src/ui/ui_manager.h"
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
+#include "src/types/sensor/look_view.h"
 #include "src/ui/popups/media/media_popup.h"
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/types/types_registry.h"
@@ -365,6 +366,7 @@ static void clear_sensor_widgets(GridType grid_type) {
     target[i].gauge_max = 100;
     target[i].chart = nullptr;
     target[i].series = nullptr;
+    target[i].look = nullptr;
   }
 }
 
@@ -5274,6 +5276,13 @@ void update_sensor_tile_value(GridType grid_type, uint8_t grid_index, const char
       lv_arc_set_value(target[grid_index].gauge, mapped);
     }
   }
+  // A look shows the value on its gauge; an unknown or unavailable state
+  // empties it.
+  if (lv_obj_t* look = target[grid_index].look) {
+    float numeric = NAN;
+    if (!value || !parse_sensor_number(String(value), numeric)) numeric = NAN;
+    sensor_look_view::set_value(look, numeric);
+  }
 
   String displayValue = value ? String(value) : String();
   displayValue.trim();
@@ -5323,5 +5332,7 @@ void update_sensor_tile_value(GridType grid_type, uint8_t grid_index, const char
         !lv_color_eq(lv_chart_get_series_color(chart, series), lv_obj_get_style_text_color(icon, LV_PART_MAIN))) {
       lv_obj_invalidate(chart);
     }
+    // A look's lit places take the icon's color when it draws.
+    if (target[grid_index].look) sensor_look_view::sync_color(target[grid_index].look);
   }
 }

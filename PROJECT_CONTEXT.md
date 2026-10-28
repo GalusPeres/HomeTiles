@@ -13,17 +13,17 @@ Last reviewed: 2026-10-26
 ## Releases and builds
 
 - FW v0.9.5 (hotfix) and FW + Bridge v0.9.4 released 2026-10-23. Bridge beta v0.9.6b1.
-- Pairing by IP without mDNS (#114, Bridge #16): read-only `GET /api/link` + Bridge menu step; HA ok on Tab5 (b513).
-- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b576.
+- Pairing by IP without mDNS (#114, Bridge #16): `GET /api/link` + Bridge menu step; HA ok (b513).
+- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b577.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build; a cache stays warm when only repo headers changed and the LVGL config fingerprint matches.
 - Docs CI: pinned Chrome for Testing 154.0.8037.57; after a release dispatch docs on `main` (a tag runs its own workflow).
-- Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need their icons on HomeTiles-staging (tag = FW_VERSION).
+- Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need icons on HomeTiles-staging (tag = FW_VERSION).
 
 ## Active work
 
 - Power flow tile 28 ("Leistungsfluss", `src/types/energy_flow/`, picture 65): nodes in `/_tile_flow_entities`, options in key_code, node tap = Sensor popup; V2 HW ok b542; smooth lines/dots b568.
-- Media popup: layouts `sensor_display_mode` 0 cover left, 1 centre (`media_popup_layout.h`); controls only with their HA feature bit; menu box: speakers (group count), source, library; tile/head icon state form (`state_icon.h`).
-- Issue #116 (JC4880, camera popup ended after 18-60 min): the Bridge closed after 5 s without chunk ACK; v0.9.4b5 waits 45 s, one warning; FW logs gaps >= 1 s and Wi-Fi signal at stream end. Reporter pending. A camera stream pauses the wake word. `build/analysis/2026-10-21-analyse.md`.
+- Media popup: layouts `sensor_display_mode` 0 cover left, 1 centre; controls only with their HA feature bit; menu box: speakers (group count), source, library; tile/head icon state form (`state_icon.h`).
+- Issue #116 (JC4880, camera popup ended after 18-60 min): the Bridge closed after 5 s without chunk ACK; v0.9.4b5 waits 45 s, one warning; FW logs gaps >= 1 s and Wi-Fi signal at stream end. Reporter pending; a stream pauses the wake word.
 - Issue #119 (Guition V1): the core's Helix overran its memory on MPEG-2.5 frames; own Helix (b501) `src/audio/helix_mp3`, TLS in PSRAM. Speaker audio from the Bridge (`docs-dev/audio-stream.md`): FFmpeg -> mono PCM over the camera tcp-ack listener (`HTAUD/1`); panels announce `"stream":"tcp-ack-v1"`, older ones download. HW ok. Camera sound: lip-synced live track (b507 HW ok, b508 even gaps HW pending). Small player, no queue; a pause frees the stream; the wake word is deaf while a clip plays.
 - Voice: microphone and wake word listening off on a new panel (b500, `2054a82a`); listening is its own setting, the chosen word stays (`applyWakeWordsCommand`). Bridge v0.9.4b6: Listening switch, word-only Wake word, battery auto-sleep removed. HW/HA test pending. Mic button + audio settings: mockup first; #91 Audio page declined.
 
@@ -31,6 +31,7 @@ Last reviewed: 2026-10-26
 
 - Guition S3 XIP/`-O2` (`5279456`): risk, no gain; XIP needs 5.4 of the 8 MB PSRAM.
 - LVGL 2 draw threads: global compressed-font RLE state, glyph artifacts, no gain.
+- LVGL drawing into PSRAM (b576 full band): a full frame 385 ms vs 170 ms in the SRAM band.
 - S3 GT911 (fw 0x1060) steps slow drags and ignores config writes (also esp32-macropad #101).
 - P4 OTA: throttling, PSRAM staging, TLS-to-flash streaming, Hosted restart, permanent SDIO buffers.
 - Issue #30: a8204 markers, 20 MHz, 1-bit alone, 2.9.3 rollback. `JC-C6-slave_v2.3.2.bin` is packet mode: never flash it alone.

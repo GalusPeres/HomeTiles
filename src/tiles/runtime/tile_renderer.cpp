@@ -4983,14 +4983,36 @@ void process_tile_graph_queue() {
   }
 }
 
+// Whether a graph tile's chart holds a day (a point that is not
+// LV_CHART_POINT_NONE).
+static bool tile_graph_has_day(const SensorTileWidgets& widgets) {
+  if (!widgets.chart || !widgets.series) return false;
+  const int32_t* values = lv_chart_get_series_y_array(widgets.chart, widgets.series);
+  const uint32_t count = lv_chart_get_point_count(widgets.chart);
+  for (uint32_t i = 0; values && i < count; ++i) {
+    if (values[i] != LV_CHART_POINT_NONE) return true;
+  }
+  return false;
+}
+
 // Graph tiles ask for their day when they are built; offline that request
 // is dropped (mqttPublishHistoryRequest), so a tile built at boot stayed
 // empty until its popup asked (user log 2026-10-26). The shown grid's graph
 // tiles ask again once the connection is up and every five minutes after
 // (the Bridge's day comes in 5-minute steps), so the graph follows the day.
+// A tile still without its day asks again every 15 s, and at once when its
+// page is shown (tile_graph_request_soon): the first request after
+// connecting timed out while the Bridge was not ready yet, and its late
+// answer came while another page was shown, where apply_tile_graph_history
+// finds no tile for it (user log 2026-10-28: graphs empty until pressed).
 constexpr uint32_t kTileGraphRefreshMs = 5UL * 60UL * 1000UL;
+constexpr uint32_t kTileGraphRetryMs = 15UL * 1000UL;
 static bool g_tile_graph_online = false;
 static uint32_t g_tile_graph_asked_ms = 0;
+static uint32_t g_tile_graph_retried_ms = 0;
+static bool g_tile_graph_page_shown = false;
+
+void tile_graph_request_soon() { g_tile_graph_page_shown = true; }
 
 void tile_graph_service_periodic() {
   if (!networkManager.isMqttConnected()) {
@@ -4998,13 +5020,20 @@ void tile_graph_service_periodic() {
     return;
   }
   const uint32_t now = millis();
-  if (g_tile_graph_online && (uint32_t)(now - g_tile_graph_asked_ms) < kTileGraphRefreshMs) return;
-  g_tile_graph_online = true;
-  g_tile_graph_asked_ms = now;
+  const bool refresh = !g_tile_graph_online || (uint32_t)(now - g_tile_graph_asked_ms) >= kTileGraphRefreshMs;
+  const bool retry = g_tile_graph_page_shown || (uint32_t)(now - g_tile_graph_retried_ms) >= kTileGraphRetryMs;
+  if (!refresh && !retry) return;
+  g_tile_graph_page_shown = false;
+  g_tile_graph_retried_ms = now;
+  if (refresh) {
+    g_tile_graph_online = true;
+    g_tile_graph_asked_ms = now;
+  }
   const TileGridConfig& grid = tileConfig.getActiveGrid();
   for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
     const Tile& tile = grid.tiles[i];
     if (tile.type != TILE_SENSOR || tile.sensor_display_mode != 2 || !g_tab0_sensors[i].chart) continue;
+    if (!refresh && tile_graph_has_day(g_tab0_sensors[i])) continue;
     if (tile.sensor_entity.length()) request_tile_graph_history(tile.sensor_entity.c_str());
   }
 }

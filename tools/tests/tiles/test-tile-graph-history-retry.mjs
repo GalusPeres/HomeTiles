@@ -50,7 +50,7 @@ struct Tile {
 };
 struct TileGridConfig { Tile tiles[TILES_PER_GRID]; };
 struct { TileGridConfig grid; const TileGridConfig& getActiveGrid() const { return grid; } } tileConfig;
-struct SensorTileWidgets { void* chart = nullptr; };
+struct SensorTileWidgets { void* chart = nullptr; bool day = false; };
 SensorTileWidgets sensors[TILES_PER_GRID];
 SensorTileWidgets* g_tab0_sensors = sensors;
 bool online = false;
@@ -60,11 +60,13 @@ uint32_t millis() { return now_ms; }
 std::vector<std::string> requests, applied;
 void request_tile_graph_history(const char* entity) { requests.push_back(entity); }
 static void apply_tile_graph_history(const char*, const char* payload) { applied.push_back(payload); }
+static bool tile_graph_has_day(const SensorTileWidgets& widgets) { return widgets.day; }
 
 ${slice('struct TileGraphHistoryUpdate {', 'static size_t g_tile_graph_next = 0;')}
 ${fn('queue_tile_graph_history')}
 ${fn('process_tile_graph_queue')}
-${slice('constexpr uint32_t kTileGraphRefreshMs', 'static uint32_t g_tile_graph_asked_ms = 0;')}
+${slice('constexpr uint32_t kTileGraphRefreshMs', 'static bool g_tile_graph_page_shown = false;')}
+${fn('tile_graph_request_soon')}
 ${fn('tile_graph_service_periodic')}
 
 int main() {
@@ -78,11 +80,26 @@ int main() {
   // Offline: nothing asks.
   tile_graph_service_periodic();
   std::printf("offline %zu\n", requests.size());
-  // The connection comes up: the graph tile asks at once, then not again
-  // within five minutes.
+  // The connection comes up: the graph tile asks at once. Its answer is
+  // lost (a timeout, another page): it asks again after 15 s and at once
+  // when its page is shown, never before.
   online = true;
   tile_graph_service_periodic();
+  now_ms += 10000;
+  tile_graph_service_periodic();
+  std::printf("early %zu\n", requests.size());
+  now_ms += 5000;
+  tile_graph_service_periodic();
+  std::printf("retry %zu\n", requests.size());
+  now_ms += 1000;
+  tile_graph_request_soon();
+  tile_graph_service_periodic();
+  std::printf("shown %zu\n", requests.size());
+  // With its day it does not ask again within five minutes.
+  sensors[0].day = true;
   now_ms += 60000;
+  tile_graph_service_periodic();
+  tile_graph_request_soon();
   tile_graph_service_periodic();
   std::printf("online %zu %s\n", requests.size(), requests.empty() ? "" : requests[0].c_str());
   // Five minutes after: again.
@@ -119,10 +136,17 @@ if (output !== null) {
     return [key, rest];
   }));
   assert.deepEqual(rows.offline, ['0'], 'offline: no request');
-  assert.deepEqual(rows.online, ['1', 'sensor.hauslast'], 'online: the graph tile asks at once, once');
-  assert.deepEqual(rows.refresh, ['2'], 'five minutes after: again');
-  assert.deepEqual(rows.reconnect, ['3'], 'a reconnect asks at once');
+  assert.deepEqual(rows.early, ['1'], 'online: the graph tile asks at once, not again within 15 s');
+  assert.deepEqual(rows.retry, ['2'], 'still without its day: again after 15 s');
+  assert.deepEqual(rows.shown, ['3'], 'its page shown: at once');
+  assert.deepEqual(rows.online, ['3', 'sensor.hauslast'], 'with its day: no retry, also not on showing');
+  assert.deepEqual(rows.refresh, ['4'], 'five minutes after: again');
+  assert.deepEqual(rows.reconnect, ['5'], 'a reconnect asks at once');
+  assert.ok(renderer.includes('if (!refresh && tile_graph_has_day(g_tab0_sensors[i])) continue;'),
+    'only tiles without their day retry');
+  assert.ok(readRepoFile('src/ui/tabs/tiles/tab_tiles_unified.cpp').includes('tile_graph_request_soon();'),
+    'a shown cached page asks for missing days');
   assert.deepEqual(rows.applied, ['2', 'first', 'second'], 'two answers in one pass: both, oldest first');
   assert.deepEqual(rows.bounded, ['4', '2', '5'], 'bounded queue: the newest four, oldest first');
 }
-console.log('tile graph history: asks after connecting and every five minutes, every queued answer applied');
+console.log('tile graph history: asks after connecting, every 15 s and on showing until it has its day, every five minutes after, every queued answer applied');

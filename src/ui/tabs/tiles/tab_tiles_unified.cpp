@@ -2475,6 +2475,8 @@ void tiles_process_reload_requests() {
         // never nest a full-screen refresh inside the cache transaction.
         lv_obj_invalidate(target->grid);
         target->last_used_ms = millis();
+        // Graph tiles whose day came while this page was hidden ask again.
+        tile_graph_request_soon();
         schedule_preview_load(GridType::TAB0);
         schedule_navigation_preload(folder_id, tileConfig.getActiveGrid());
         log_folder_switch_memory("folder-switch-cached", folder_id);

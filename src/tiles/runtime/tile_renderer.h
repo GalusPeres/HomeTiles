@@ -155,6 +155,8 @@ void process_tile_graph_queue();  // Call from the main loop before lv_timer_han
 // Graph tiles of the shown grid ask for their day again once the connection
 // is up and every five minutes; call from the main loop.
 void tile_graph_service_periodic();
+// A page was shown: its graph tiles without a day ask at once.
+void tile_graph_request_soon();
 void request_tile_graph_history(const char* entity_id);  // Request history for an entity.
 
 void tile_renderer_snapshot_tab0(TileWidgetCache* out);

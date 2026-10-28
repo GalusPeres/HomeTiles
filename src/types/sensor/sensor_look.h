@@ -178,10 +178,14 @@ inline Arc auto_arc(const Box& box, float sw) {
   return best;
 }
 
-// Where a value inside an arc puts its top (lab: the middle of the arc's
-// inside, between the inner edge at its top and the line between its ends).
+// Where a value inside an arc or ring puts its top: the middle of the
+// inside, between the inner edge at the top and the line between the ends,
+// or the inner edge at the bottom of a closed ring. One rule on every size
+// and look (user 2026-10-28: as on the 1 x 1.5 battery arc, "immer mittig").
 inline float arc_value_top(const Arc& arc) {
-  return (arc.cy - arc.r + arc.sw * 0.5f + arc.cy - arc.r * std::cos(arc.half)) * 0.5f;
+  const float inner_bottom = arc.cy + arc.r - arc.sw * 0.5f;
+  const float bottom = std::min(inner_bottom, arc.cy - arc.r * std::cos(arc.half));
+  return (arc.cy - arc.r + arc.sw * 0.5f + bottom) * 0.5f;
 }
 
 // The closed ring in the box (lab G/GS): as large as the box's shorter side,
@@ -594,12 +598,12 @@ inline void emit_look(const Spec& spec, Emit&& emit) {
 }
 
 // Where the value's top goes for a look with the value inside (picture
-// rows, the value `size` px high): rings and arcs of stripes that nearly
-// close (270 degrees and more) centre it (lab G, GS, SM), other arcs put its
-// top at the middle of their inside (lab B, BS, SM).
+// rows, the value `size` px high, its em box): open arcs of every size at
+// the middle of their inside (arc_value_top, the battery arc); a closed ring
+// centres the value's digits on its centre: Inter's digits sit around the
+// middle of the em box (user 2026-10-28: cy - 0.6 size looked too high).
 inline float value_top(uint8_t mode, const Arc& arc, float size) {
-  if (is_ring(mode)) return arc.cy - size * 0.6f;
-  if (mode == kTickArcValue && 2 * arc.half >= 1.5f * kPi) return arc.cy - size * 0.6f;
+  if (is_ring(mode)) return arc.cy - size * 0.5f;
   return arc_value_top(arc);
 }
 

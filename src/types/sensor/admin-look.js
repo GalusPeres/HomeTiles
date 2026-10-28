@@ -106,12 +106,13 @@
     return null;
   }
 
-  // sensor_look::value_top: rings and nearly closed arcs of stripes centre
-  // the value, other arcs put its top at the middle of their inside.
+  // sensor_look::value_top: open arcs put the value's top at the middle of
+  // their inside, a closed ring centres its digits on the ring's centre.
   function sensorLookValueTop(mode, arc, size) {
     mode = Number(mode);
-    if (mode === 11 || mode === 12 || (mode === 10 && 2 * arc.half >= 1.5 * Math.PI)) return arc.cy - size * 0.6;
-    return (arc.cy - arc.r + arc.sw / 2 + arc.cy - arc.r * Math.cos(arc.half)) / 2;
+    if (mode >= 11 && mode <= 14) return arc.cy - size * 0.5;
+    const bottom = Math.min(arc.cy + arc.r - arc.sw / 2, arc.cy - arc.r * Math.cos(arc.half));
+    return (arc.cy - arc.r + arc.sw / 2 + bottom) / 2;
   }
 
   // ---- Shapes as SVG (the lab's drawing, box-local coordinates) ----

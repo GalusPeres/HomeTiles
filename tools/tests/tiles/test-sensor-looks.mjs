@@ -275,7 +275,15 @@ int main() {
       discs += e.shape == Shape::Disc ? 1 : 0;
     });
     assert(pieces == kRulePieces && discs == 2 && "closed ring: pieces, a start and a value end");
-    assert(std::fabs(value_top(kRing, ring_arc, 24) - (ring_arc.cy - 14.4f)) < 0.01f && "the value centred in a ring");
+    // A closed ring centres the value's digits on its centre (the em box
+    // half above it; cy - 0.6 size looked too high, user 2026-10-28); open
+    // arcs keep the top at the middle of their inside on every size.
+    assert(std::fabs(value_top(kRing, ring_arc, 24) - (ring_arc.cy - 12)) < 0.01f && "a ring's digits on its centre");
+    {
+      Arc open = ring_arc;
+      open.half = 145 * kPi / 180;
+      assert(std::fabs(value_top(kTickArcValue, open, 24) - arc_value_top(open)) < 0.01f && "no ring rule for open arcs");
+    }
     // A ring of stripes: evenly around, 11 px apart, none doubled at the top.
     spec.mode = kTickRing;
     spec.arc = ring(box, 16);

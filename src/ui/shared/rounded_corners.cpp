@@ -27,7 +27,9 @@ struct CornerSet {
   lv_image_dsc_t corner[4];
 };
 
-CornerSet g_sets[kMaxSets] = {};
+// In LVGL's heap (PSRAM on the panels), made with the first corner set: the
+// SRAM draw band gets the internal RAM left above its reserve (S3 b605).
+CornerSet* g_sets = nullptr;
 int g_set_count = 0;
 uint32_t g_frame = 1;
 Stats g_stats = {};
@@ -107,6 +109,11 @@ void release(CornerSet& set) {
 // is replaced, but never one used in this frame: its corners may still be
 // queued (a frame finishes all its draw tasks before the next one starts).
 const CornerSet* find(Kind kind, int32_t radius, uint8_t level) {
+  if (!g_sets) g_sets = static_cast<CornerSet*>(lv_malloc_zeroed(sizeof(CornerSet) * kMaxSets));
+  if (!g_sets) {
+    ++g_stats.declined;
+    return nullptr;
+  }
   CornerSet* oldest = nullptr;
   for (int i = 0; i < g_set_count; ++i) {
     CornerSet& set = g_sets[i];
@@ -210,8 +217,10 @@ const CornerSet* marked(const lv_draw_task_t* task) {
   if (task->type != LV_DRAW_TASK_TYPE_FILL && task->type != LV_DRAW_TASK_TYPE_BORDER) return nullptr;
   const auto* base = static_cast<const lv_draw_dsc_base_t*>(task->draw_dsc);
   const uintptr_t at = base ? reinterpret_cast<uintptr_t>(base->user_data) : 0;
-  const uintptr_t first = reinterpret_cast<uintptr_t>(&g_sets[0]);
-  if (at < first || at >= first + sizeof(g_sets) || (at - first) % sizeof(CornerSet)) return nullptr;
+  const uintptr_t first = reinterpret_cast<uintptr_t>(g_sets);
+  if (!g_sets || at < first || at >= first + sizeof(CornerSet) * kMaxSets || (at - first) % sizeof(CornerSet)) {
+    return nullptr;
+  }
   const CornerSet* set = reinterpret_cast<const CornerSet*>(at);
   return set->coverage ? set : nullptr;
 }

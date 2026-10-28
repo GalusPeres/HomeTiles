@@ -83,16 +83,16 @@ assert.ok(probe.includes('if (!g_measuring || g_lite) return;') && probe.include
   'a lite frame times nothing inside');
 assert.ok(probe.includes('"[FrameProbe] top elements"') && probe.includes('note_element(obj, static_cast<uint8_t>(part), us, g_task_cycles_total - g_element_start_cycles);'),
   'the top elements with the pixel work inside them');
-assert.ok(probe.includes('memset(g_elements, 0, sizeof(g_elements));'), 'the elements start over per frame');
+assert.ok(probe.includes('memset(g_elements, 0, sizeof(ElementTime) * kElements);'), 'the elements start over per frame');
 assert.ok(probe.indexOf('task_kind(task)') < probe.indexOf('const uint32_t start = esp_cpu_get_cycle_count();'),
   'the task is classified before the timed draw');
-assert.ok(probe.includes('" | pixels=%.1f ms widgets=%.1f ms flush=%.1f ms"') && probe.includes('memset(g_tasks, 0, sizeof(g_tasks));'),
+assert.ok(probe.includes('" | pixels=%.1f ms widgets=%.1f ms flush=%.1f ms"') && probe.includes('memset(g_tasks, 0, sizeof(TaskTime) * kTaskKinds * kTaskTypes);'),
   'the split starts over per frame');
 // The fills and lines drawn from kept corners in the frame (b593, rounded_corners.h).
 assert.ok(probe.includes('" | corners fills=%lu borders=%lu sets=%lu (%lu KB) built=%lu declined=%lu"') &&
   probe.includes('g_corners_start = rounded_corners::stats();'), 'the corner counts start with the frame');
 assert.ok(probe.includes('"[FrameProbe] card t%d radius=%ld bg_opa=%u grad=%u outline=%ld/%u border=%ld/%u post=%u shadow=%ld image=%u"'));
-assert.ok(probe.includes('memset(g_fonts, 0, sizeof(g_fonts));'), 'the fonts start over per frame');
+assert.ok(probe.includes('memset(g_fonts, 0, sizeof(FontTime) * kFonts);'), 'the fonts start over per frame');
 // The styles per drawn piece by kind (user 2026-10-28: the clock's see-through
 // card cost 0.35 ms per piece with 17 styles).
 assert.ok(probe.includes('g_part_styles[part] += obj->style_cnt;') && probe.includes('"[FrameProbe] styles per piece"'));
@@ -114,7 +114,7 @@ assert.ok(probe.includes('if (kind == kParts) note_rest(obj, type, cycles);'), '
 assert.ok(probe.includes('if (obj && tile_of(obj) >= 0) {'), 'a tile element made later counts apart');
 assert.ok(probe.includes('" pixels %.1f, copy wait %.1f, LVGL loop and other objects %.1f | late tile tasks %lu %.1f ms\\n"') &&
   probe.includes('"[FrameProbe] rest objects %u:"'), 'two English lines');
-for (const reset of ['memset(g_rest, 0, sizeof(g_rest));', 'g_card_main_us = 0;', 'display_flush_gate::g_wait_us = 0;']) {
+for (const reset of ['memset(g_rest, 0, sizeof(RestTime) * kRestObjects);', 'g_card_main_us = 0;', 'display_flush_gate::g_wait_us = 0;']) {
   assert.ok(probe.slice(probe.indexOf('void display_cb('), probe.indexOf('g_frame_start_us = micros();')).includes(reset),
     `${reset} starts over with a measured frame`);
 }
@@ -123,6 +123,10 @@ assert.ok(probe.indexOf('log_tasks(frame_us);') < probe.indexOf('log_walk(frame_
 const gate = read('src/core/display/display_flush_gate.h');
 assert.match(gate, /if \(!g_backend\.done\(\)\) \{\s*if \(!g_wait_since_us\) g_wait_since_us = clock_us\(\) \| 1U;\s*return false;\s*\}\s*if \(g_wait_since_us\) \{\s*g_wait_us \+= clock_us\(\) - g_wait_since_us;/,
   'the gate times its wait from the first refusal to the finished copy');
+// Its tables are made once, with the first watched tile, in LVGL's heap
+// (test-draw-band-internal-ram.mjs); nothing else allocates.
 const code = probe.replace(/\/\/[^\n]*/g, '');
-assert.doesNotMatch(code, /\bnew\b|malloc|String\b|std::vector/, 'no allocation per frame');
+const once = code.slice(code.indexOf('bool alloc_tables() {'), code.indexOf('}  // namespace\n\nvoid watch('));
+assert.ok(once.includes('lv_malloc_zeroed('), 'the tables are made in one place');
+assert.doesNotMatch(code.replace(once, ''), /\bnew\b|malloc|String\b|std::vector/, 'no allocation per frame');
 console.log('Tile frame probe: large frames log their per-tile draw time');

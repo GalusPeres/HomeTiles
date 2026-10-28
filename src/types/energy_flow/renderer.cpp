@@ -393,7 +393,9 @@ struct DrawProbe {
   uint32_t sum_us = 0;
 };
 constexpr size_t kMaxProbes = 96;
-DrawProbe g_probes[kMaxProbes];
+// In LVGL's heap (PSRAM on the panels), made with the first probe: the SRAM
+// draw band gets the internal RAM left above its reserve (S3 b605).
+DrawProbe* g_probes = nullptr;
 size_t g_probe_count = 0;
 
 void probe_cb(lv_event_t* e) {
@@ -422,6 +424,8 @@ void probe_cb(lv_event_t* e) {
 
 void add_probe(lv_obj_t* obj, char tag, uint8_t level) {
   if (!obj || g_probe_count >= kMaxProbes) return;
+  if (!g_probes) g_probes = static_cast<DrawProbe*>(lv_malloc_zeroed(sizeof(DrawProbe) * kMaxProbes));
+  if (!g_probes) return;
   for (size_t i = 0; i < g_probe_count; ++i) {
     if (g_probes[i].obj == obj) return;
   }

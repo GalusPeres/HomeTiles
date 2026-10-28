@@ -8,13 +8,13 @@ Last reviewed: 2026-10-26
 - Device support and validation: `docs/index.md`; ESP32-P4/ESP-Hosted patches: `tools/esp-hosted-3.3.7-rx-fix/README.md`
 - Release procedure: `RELEASING.md`. Live bug status: newest GitHub issue comments; recheck online before changing an issue status.
 - Bridge publishing requires separate authorization. Docs: `docs/`, `mkdocs.yml`, `overrides/` (gh-pages).
-- This file stays below 160 lines and 12 KiB (`tools/tests/build/test-project-context-size.mjs`); current facts only.
+- This file: below 160 lines and 12 KiB (`test-project-context-size.mjs`); current facts only.
 
 ## Releases and builds
 
 - FW v0.9.5 (hotfix) and FW + Bridge v0.9.4 released 2026-10-23. Bridge beta v0.9.6b1.
 - Pairing by IP, no mDNS (#114, Bridge #16): `GET /api/link`; HA ok (b513).
-- Test builds stay `v0.6.12bNNN` on purpose (System Update then offers releases); beta define in `firmware_version.h`, last b605.
+- Test builds stay `v0.6.12bNNN` on purpose (System Update then offers releases); beta define in `firmware_version.h`, last b606.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build; a cache stays warm when only repo headers changed and the LVGL config fingerprint matches.
 - Docs CI: Chrome for Testing 154.0.8037.57; dispatch docs (`main`) after a release.
 - Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need icons on HomeTiles-staging (tag = FW_VERSION).
@@ -63,7 +63,7 @@ Last reviewed: 2026-10-26
 
 ## Memory, flash, performance
 
-- LVGL PSRAM S3 2 MiB / P4 12 MiB; internal/DMA band <= 72 KiB; page caches S3 4 / P4 6. Bindings, popup history, Select options, slot state, queues and grids live in PSRAM.
+- LVGL PSRAM S3 2 / P4 12 MiB; SRAM band <= 72 KiB = DMA free - 150 KB (big tables in LVGL heap, S3 b606); page caches S3 4 / P4 6; bindings, popup history, Select options, slots, queues, grids in PSRAM.
 - S3 mallocs > 32 B prefer PSRAM (b324): internal free 42 -> ~89 KB, text-heavy steps slower. Open: S3 Web Admin pages block the loop 1-6 s.
 - Icon file: all 7447 MDI icons in LittleFS `/_mdi_icons_<px>.bin` (`tools/generate-icon-files.mjs`), 399 built in, one PSRAM raw cache; icon + text fonts unpack each glyph once (`glyph_cache.c`, P4 512 KB, S3 256, b599); a missing file downloads once from its release; System page Icons card.
 - `-fno-exceptions` (-300 KiB per image), unused LVGL widgets off, Admin CSS minified. LVGL 9.6.0 (lvgl#10306, caches `hometiles-lvgl96-*`).

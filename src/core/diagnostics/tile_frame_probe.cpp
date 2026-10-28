@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "src/core/display/display_flush_gate.h"
+#include "src/core/firmware/firmware_version.h"
 #include "src/fonts/glyph_cache.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/types/types_registry.h"
@@ -20,6 +21,9 @@
 #endif
 
 namespace tile_frame_probe {
+// Test builds only: the timing slows every other measured frame (S3 b605:
+// Home 246 ms timed, 210-225 ms lite), so a release carries no probe.
+#if defined(HOMETILES_BETA_BUILD)
 namespace {
 
 constexpr uint32_t kFrameSharePercent = 40;
@@ -46,14 +50,15 @@ struct FontTime {
   uint32_t us;
   uint32_t count;
 };
-FontTime g_fonts[kFonts] = {};
+FontTime* g_fonts = nullptr;
 glyph_cache_stats_t g_glyphs_start = {};
 rounded_corners::Stats g_corners_start = {};
 kept_shadow::Stats g_shadows_start = {};
 
 void note_font(lv_obj_t* label, uint32_t us) {
   const lv_font_t* font = lv_obj_get_style_text_font(label, LV_PART_MAIN);
-  for (FontTime& slot : g_fonts) {
+  for (int i = 0; i < kFonts; ++i) {
+    FontTime& slot = g_fonts[i];
     if (slot.font && slot.font != font) continue;
     slot.font = font;
     slot.us += us;
@@ -77,7 +82,7 @@ char font_kind(const lv_font_t* font) {
   return dsc && dsc->bitmap_format != LV_FONT_FMT_TXT_PLAIN ? 'z' : 'p';
 }
 
-TileTime g_tiles[TILES_PER_GRID];
+TileTime* g_tiles = nullptr;
 lv_display_t* g_display = nullptr;
 bool g_measuring = false;
 uint32_t g_frame_start_us = 0;
@@ -121,7 +126,7 @@ struct ElementTime {
   uint16_t pieces;
   uint8_t part;
 };
-ElementTime g_elements[kElements] = {};
+ElementTime* g_elements = nullptr;
 uint32_t g_element_start_cycles = 0;
 
 void note_element(lv_obj_t* obj, uint8_t part, uint32_t us, uint32_t task_cycles) {
@@ -250,7 +255,7 @@ struct TaskTime {
   uint32_t cycles;
   uint32_t count;
 };
-TaskTime g_tasks[kTaskKinds][kTaskTypes] = {};
+TaskTime (*g_tasks)[kTaskTypes] = nullptr;
 int32_t (*g_sw_dispatch)(lv_draw_unit_t*, lv_layer_t*) = nullptr;
 
 // The tile part a draw task belongs to: the part its widget is watched as.
@@ -279,7 +284,7 @@ struct RestTime {
   uint16_t tasks;
   uint16_t fills;
 };
-RestTime g_rest[kRestObjects] = {};
+RestTime* g_rest = nullptr;
 uint32_t g_rest_tile_cycles = 0;
 uint32_t g_rest_tile_tasks = 0;
 
@@ -401,7 +406,7 @@ void tile_cb(lv_event_t* e) {
 
 void log_frame(uint32_t frame_us) {
   uint32_t tiles_us = 0;
-  for (const TileTime& tile : g_tiles) tiles_us += tile.sum_us;
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) tiles_us += g_tiles[i].sum_us;
   char line[640];
   int used = snprintf(line, sizeof(line),
                       "[FrameProbe] frame %.1f ms px=%lu flushes=%lu flush=%.1f ms tiles=%.1f ms rest=%.1f ms |",
@@ -564,7 +569,7 @@ void log_walk(uint32_t frame_us) {
   if (!g_sw_dispatch) return;
   const float cycles_per_ms = getCpuFrequencyMhz() * 1000.0f;
   uint32_t tiles_us = 0;
-  for (const TileTime& tile : g_tiles) tiles_us += tile.sum_us;
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) tiles_us += g_tiles[i].sum_us;
   uint32_t children_parts_us = 0;
   for (size_t part = kLabel; part < kParts; ++part) children_parts_us += g_part_us[part];
   uint64_t rest_cycles = 0;
@@ -587,7 +592,7 @@ void log_rest() {
   const float cycles_per_ms = getCpuFrequencyMhz() * 1000.0f;
   char line[640];
   unsigned objects = 0;
-  for (const RestTime& rest : g_rest) objects += rest.tasks ? 1 : 0;
+  for (int i = 0; i < kRestObjects; ++i) objects += g_rest[i].tasks ? 1 : 0;
   int used = snprintf(line, sizeof(line), "[FrameProbe] rest objects %u:", objects);
   bool shown[kRestObjects] = {};
   for (int rank = 0; rank < 8 && used > 0 && used < static_cast<int>(sizeof(line)); ++rank) {
@@ -676,15 +681,15 @@ void display_cb(lv_event_t* e) {
     if (!g_measuring) return;
     g_lite = !g_lite;
     g_task_cycles_total = 0;
-    memset(g_elements, 0, sizeof(g_elements));
-    memset(g_tiles, 0, sizeof(g_tiles));
+    memset(g_elements, 0, sizeof(ElementTime) * kElements);
+    memset(g_tiles, 0, sizeof(TileTime) * TILES_PER_GRID);
     memset(g_part_us, 0, sizeof(g_part_us));
     memset(g_part_count, 0, sizeof(g_part_count));
     memset(g_part_start_us, 0, sizeof(g_part_start_us));
-    memset(g_fonts, 0, sizeof(g_fonts));
+    memset(g_fonts, 0, sizeof(FontTime) * kFonts);
     memset(g_part_styles, 0, sizeof(g_part_styles));
-    memset(g_tasks, 0, sizeof(g_tasks));
-    memset(g_rest, 0, sizeof(g_rest));
+    memset(g_tasks, 0, sizeof(TaskTime) * kTaskKinds * kTaskTypes);
+    memset(g_rest, 0, sizeof(RestTime) * kRestObjects);
     g_rest_tile_cycles = 0;
     g_rest_tile_tasks = 0;
     g_card_main_us = 0;
@@ -737,10 +742,35 @@ void display_cb(lv_event_t* e) {
   }
 }
 
+// The tables in LVGL's heap (PSRAM on the panels), not in internal RAM: the
+// SRAM draw band gets the internal RAM left above its reserve, and 17 KB of
+// new tables had shrunk the S3 band from 50 to 31 rows (b605, 16 bands per
+// frame instead of 10, each walking the widgets again).
+bool alloc_tables() {
+  g_fonts = static_cast<FontTime*>(lv_malloc_zeroed(sizeof(FontTime) * kFonts));
+  g_tiles = static_cast<TileTime*>(lv_malloc_zeroed(sizeof(TileTime) * TILES_PER_GRID));
+  g_elements = static_cast<ElementTime*>(lv_malloc_zeroed(sizeof(ElementTime) * kElements));
+  g_tasks = static_cast<TaskTime(*)[kTaskTypes]>(lv_malloc_zeroed(sizeof(TaskTime) * kTaskKinds * kTaskTypes));
+  g_rest = static_cast<RestTime*>(lv_malloc_zeroed(sizeof(RestTime) * kRestObjects));
+  if (g_fonts && g_tiles && g_elements && g_tasks && g_rest) return true;
+  lv_free(g_fonts);
+  lv_free(g_tiles);
+  lv_free(g_elements);
+  lv_free(g_tasks);
+  lv_free(g_rest);
+  g_fonts = nullptr;
+  g_tiles = nullptr;
+  g_elements = nullptr;
+  g_tasks = nullptr;
+  g_rest = nullptr;
+  return false;
+}
+
 }  // namespace
 
 void watch(lv_obj_t* card, uint8_t index, uint8_t type) {
   if (!card || index >= TILES_PER_GRID) return;
+  if (!g_tiles && !alloc_tables()) return;
   if (!g_display) {
     g_display = lv_obj_get_display(card);
     if (!g_display) return;
@@ -759,5 +789,11 @@ void watch(lv_obj_t* card, uint8_t index, uint8_t type) {
   watch_part(card, kCard);
   watch_children(card);
 }
+
+#else
+
+void watch(lv_obj_t*, uint8_t, uint8_t) {}
+
+#endif
 
 }  // namespace tile_frame_probe

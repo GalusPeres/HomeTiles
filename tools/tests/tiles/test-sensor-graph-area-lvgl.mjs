@@ -29,22 +29,29 @@ for (const gone of ['lv_draw_triangle', 'lv_draw_rect', 'lv_draw_line', 'for_eac
   assert.ok(!areaGraph.includes(gone), `area_graph.h: no ${gone} (pictures drawn as images)`);
 }
 
-// Tile: the Switch header beside the disc, the graph in a rounded frame
-// below it whose clip_corner cuts line and area at the bottom corners, the
-// frame one radius taller upwards so the top stays open; area and line two
-// A8 masks recolored in the circle's and the icon's current color.
+// Tile: the Switch header beside the disc, the graph in a frame below it;
+// area and line two A8 masks recolored in the circle's and the icon's
+// current color, the box's round bottom corners cut into the masks. A
+// clip_corner frame drew the graph three times per redraw, twice into
+// ARGB8888 layers (user 2026-10-28: graph tiles slowed the UI). The masks
+// are rebuilt only when the chart's raw values, range or size change
+// (area_graph::data_key): chart_points asks lv_chart for every point.
 const tile = read('src/types/sensor/renderer.cpp');
 assert.ok(tile.includes('const tile_header::Header header = tile_header::create(card, tile, false, box.y1);'),
   'graph tile: the Switch header beside the disc');
-assert.ok(tile.includes('lv_obj_set_style_clip_corner(frame, true, LV_PART_MAIN);') &&
-  tile.includes('lv_obj_set_size(frame, lv_area_get_width(&box), lv_area_get_height(&box) + radius);') &&
-  tile.includes('tile_icon_disc::mark_surface(frame);') && tile.includes('chart = lv_chart_create(frame);'),
-  'graph tile: a rounded surface frame clips the graph');
+assert.ok(!tile.includes('lv_obj_set_style_clip_corner(frame') &&
+  tile.includes('lv_obj_set_size(frame, lv_area_get_width(&box), lv_area_get_height(&box));') &&
+  tile.includes('tile_icon_disc::mark_surface(frame);') && tile.includes('chart = lv_chart_create(frame);') &&
+  tile.includes('area_graph::round_bottom_corners(area->masks, static_cast<uint32_t>(width), width, height, radius);') &&
+  tile.includes('area_graph::round_bottom_corners(area->masks + bytes, static_cast<uint32_t>(width), width, height, radius);'),
+  'graph tile: a surface frame without clip_corner, the round corners in the masks');
 assert.ok(tile.includes('area_graph::render_mask(area->masks, static_cast<uint32_t>(width), width, height, area->tops);') &&
   tile.includes('area_graph::line_mask(area->masks + bytes,') &&
   tile.includes('image.recolor = lv_obj_get_style_bg_color(frame, LV_PART_MAIN);') &&
   tile.includes('image.recolor = line_color;') &&
-  tile.includes('if (!area->masks || key != area->key) {') &&
+  tile.includes('const uint32_t key = area_graph::data_key(') &&
+  tile.includes('if (!area->built || key != area->key) {') &&
+  tile.indexOf('area_graph::chart_points(chart, series, area->points, count)') > tile.indexOf('if (!area->built || key != area->key) {') &&
   tile.includes('static_cast<lv_event_code_t>(LV_EVENT_DRAW_MAIN | LV_EVENT_PREPROCESS), area);') &&
   tile.includes('lv_obj_add_event_cb(chart, sensor_graph_delete_cb, LV_EVENT_DELETE, area);') &&
   tile.includes('lv_obj_set_style_line_width(chart, 0, LV_PART_ITEMS);'),
@@ -236,8 +243,35 @@ static uint32_t pixel(const lv_draw_buf_t* buf, int x, int y) {
 }
 static int channel(uint32_t rgb, int c) { return (rgb >> (16 - 8 * c)) & 0xFF; }
 
+static int g_draws = 0;
+static void count_cb(lv_event_t*) { ++g_draws; }
+
 int main() {
   lv_init();
+  // The round bottom corners in a mask: the corner pixel cut away, the
+  // pixels outside the corner bands and the top corners untouched, an
+  // anti-aliased edge along the curve.
+  {
+    const int width = 60, height = 40, radius = 16;
+    std::vector<uint8_t> mask(width * height, 0xFF);
+    area_graph::round_bottom_corners(mask.data(), width, width, height, radius);
+    assert(mask[(height - 1) * width] == 0 && mask[(height - 1) * width + width - 1] == 0 && "corner pixels cut");
+    assert(mask[0] == 0xFF && mask[width - 1] == 0xFF && "top corners untouched");
+    assert(mask[(height - 1) * width + radius] == 0xFF && mask[(height - radius - 1) * width] == 0xFF &&
+           "outside the corner bands untouched");
+    int soft = 0;
+    for (int x = 0; x < radius; ++x) {
+      const uint8_t a = mask[(height - 1) * width + x], b = mask[(height - 1) * width + width - 1 - x];
+      assert(a == b && "both corners alike");
+      soft += a > 0 && a < 0xFF ? 1 : 0;
+    }
+    assert(soft >= 1 && "an anti-aliased edge");
+    // The cut follows a circle: the diagonal pixel at r(1 - 1/sqrt2) from
+    // the corner is about half covered.
+    const int d = static_cast<int>(radius * (1.0 - 0.70710678));
+    const uint8_t diag = mask[(height - 1 - d) * width + d];
+    assert(diag > 0x20 && diag < 0xE0 && "the edge on the corner circle");
+  }
   // The fade on exact RGB565 steps: the circle's color down to the middle
   // row, from there fading to the card in the last along a smoothstep curve
   // (no kink, no Mach band where the solid part ends), dithered: every row
@@ -294,6 +328,50 @@ int main() {
   static std::vector<uint32_t> buffer(320 * 220);
   lv_display_set_buffers(display, buffer.data(), nullptr, buffer.size() * 4, LV_DISPLAY_RENDER_MODE_FULL);
   lv_display_set_flush_cb(display, [](lv_display_t* d, const lv_area_t*, uint8_t*) { lv_display_flush_ready(d); });
+  // A rounded frame with clip_corner draws its chart three times per redraw
+  // (bottom band, top band, middle), the two bands into ARGB8888 layers; the
+  // tile's frame without it draws the chart once. The data key follows the
+  // chart's values, range and size and nothing else.
+  {
+    lv_obj_t* screen = lv_obj_create(nullptr);
+    lv_obj_set_style_pad_all(screen, 0, 0);
+    lv_obj_t* frame = lv_obj_create(screen);
+    lv_obj_set_pos(frame, 20, 30);
+    lv_obj_set_size(frame, 280, 168);
+    lv_obj_set_style_pad_all(frame, 0, 0);
+    lv_obj_set_style_border_width(frame, 0, 0);
+    lv_obj_set_style_bg_opa(frame, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_radius(frame, 16, 0);
+    lv_obj_t* chart = lv_chart_create(frame);
+    lv_obj_set_size(chart, 280, 168);
+    lv_chart_set_type(chart, LV_CHART_TYPE_LINE);
+    lv_obj_set_style_line_width(chart, 0, LV_PART_ITEMS);
+    lv_chart_series_t* series = lv_chart_add_series(chart, lv_color_hex(kIcon), LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_set_point_count(chart, 50);
+    for (int i = 0; i < 50; ++i) lv_chart_set_value_by_id(chart, series, i, 20 + (i * 7) % 60);
+    lv_obj_add_event_cb(chart, count_cb, static_cast<lv_event_code_t>(LV_EVENT_DRAW_MAIN | LV_EVENT_PREPROCESS), nullptr);
+    lv_screen_load(screen);
+    lv_refr_now(display);
+    lv_obj_set_style_clip_corner(frame, true, 0);
+    g_draws = 0;
+    lv_obj_invalidate(frame);
+    lv_refr_now(display);
+    assert(g_draws == 3 && "clip_corner draws the chart three times");
+    lv_obj_set_style_clip_corner(frame, false, 0);
+    g_draws = 0;
+    lv_obj_invalidate(frame);
+    lv_refr_now(display);
+    assert(g_draws == 1 && "without clip_corner the chart draws once");
+    const uint32_t key = area_graph::data_key(chart, series, {280, 168, 16});
+    assert(key == area_graph::data_key(chart, series, {280, 168, 16}) && "an unchanged chart keeps its key");
+    assert(key != area_graph::data_key(chart, series, {281, 168, 16}) && "a new size changes the key");
+    lv_chart_set_value_by_id(chart, series, 7, 99);
+    const uint32_t changed = area_graph::data_key(chart, series, {280, 168, 16});
+    assert(changed != key && "a new value changes the key");
+    lv_chart_set_axis_range(chart, LV_CHART_AXIS_PRIMARY_Y, 0, 200);
+    assert(area_graph::data_key(chart, series, {280, 168, 16}) != changed && "a new range changes the key");
+    lv_obj_delete(screen);
+  }
   for (int mode = 0; mode < 2; ++mode) {
     g_popup = mode == 1;
     g_renders = 0;
@@ -472,4 +550,4 @@ const built = spawnSync(host.cxx, [...host.flags, '-std=c++17', '-I', out, sourc
 assert.equal(built.status, 0, built.stdout + built.stderr);
 const run = spawnSync(binary, [], {encoding: 'utf8'});
 assert.equal(run.status, 0, run.stdout + run.stderr);
-console.log('sensor graph: tile and popup pictures (area, line, faint grid lines) computed once per change, line on lv_chart\'s points, card above, area below, far cheaper than LVGL\'s line');
+console.log('sensor graph: tile corners in the masks (one draw pass, no clip_corner layers), masks rebuilt by the chart data key; tile and popup pictures (area, line, faint grid lines) computed once per change, line on lv_chart\'s points, card above, area below, far cheaper than LVGL\'s line');

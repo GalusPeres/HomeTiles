@@ -42,7 +42,10 @@ static lv_area_t sensor_graph_box(const Tile& tile) {
 // the LVGL heap, drawn recolored in the circle's and the icon's current
 // color; the line's points and its top per column beside them; the icon
 // whose color the line takes. Owned by the chart and freed with it. The
-// masks are computed again only when the line or the size change.
+// masks are computed again only when the line or the size change: `key`
+// covers the chart's raw values, range, size and corner radius
+// (area_graph::data_key), so an unchanged graph never asks lv_chart for its
+// points (one padding lookup per point) while it redraws.
 struct SensorGraphArea {
   lv_obj_t* icon = nullptr;
   uint8_t* masks = nullptr;  // the area's, then the line's
@@ -56,6 +59,7 @@ struct SensorGraphArea {
   // The rows each mask uses (area_graph::rows_used): only they are drawn.
   area_graph::Rows rows;
   uint32_t key = 0;
+  bool built = false;
 };
 
 static void set_mask(lv_image_dsc_t& image, uint8_t* pixels, int32_t width, int32_t height) {
@@ -81,7 +85,11 @@ static bool ensure_capacity(T*& buffer, int32_t& capacity, int32_t count) {
 // circle's color and the line in the icon's, two recolored images. The
 // graph's frame is a resting surface, so tile_icon_source::refresh_controls
 // gives it the control fill like the Switch bar's track; its local
-// transparent background keeps it from filling the box.
+// transparent background keeps it from filling the box. The box's round
+// bottom corners are part of the masks (area_graph::round_bottom_corners):
+// the frame's clip_corner drew the graph three times per redraw, twice into
+// ARGB8888 layers that were masked and blended again (user 2026-10-28: graph
+// tiles slowed the UI).
 static void sensor_graph_area_cb(lv_event_t* e) {
   lv_obj_t* chart = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
   lv_layer_t* layer = lv_event_get_layer(e);
@@ -99,15 +107,20 @@ static void sensor_graph_area_cb(lv_event_t* e) {
   lv_obj_get_coords(chart, &coords);
   const int32_t width = lv_area_get_width(&coords), height = lv_area_get_height(&coords);
   const int32_t count = static_cast<int32_t>(lv_chart_get_point_count(chart));
-  if (width < 2 || height < 2 || !ensure_capacity(area->tops, area->tops_capacity, width) ||
-      !ensure_capacity(area->points, area->points_capacity, count)) {
-    return;
-  }
-  const int32_t points = area_graph::chart_points(chart, series, area->points, count);
-  if (!points) return;
-  const uint32_t key =
-      area_graph::picture_key(area->points, points, {static_cast<uint32_t>(width), static_cast<uint32_t>(height)});
-  if (!area->masks || key != area->key) {
+  if (width < 2 || height < 2) return;
+  const int32_t radius = std::min<int32_t>(lv_obj_get_style_radius(frame, LV_PART_MAIN), std::min(width / 2, height));
+  const uint32_t key = area_graph::data_key(
+      chart, series, {static_cast<uint32_t>(width), static_cast<uint32_t>(height), static_cast<uint32_t>(radius)});
+  if (!area->built || key != area->key) {
+    area->rows = {};
+    if (!ensure_capacity(area->tops, area->tops_capacity, width) ||
+        !ensure_capacity(area->points, area->points_capacity, count)) {
+      return;
+    }
+    const int32_t points = area_graph::chart_points(chart, series, area->points, count);
+    area->key = key;
+    area->built = points > 0;
+    if (!points) return;
     const size_t bytes = static_cast<size_t>(width) * static_cast<size_t>(height);
     if (2 * bytes > area->capacity) {
       if (area->masks) {
@@ -117,7 +130,10 @@ static void sensor_graph_area_cb(lv_event_t* e) {
       lv_free(area->masks);
       area->masks = static_cast<uint8_t*>(lv_malloc(2 * bytes));
       area->capacity = area->masks ? 2 * bytes : 0;
-      if (!area->masks) return;
+      if (!area->masks) {
+        area->built = false;
+        return;
+      }
     }
     lv_image_cache_drop(&area->area);
     lv_image_cache_drop(&area->line);
@@ -126,10 +142,11 @@ static void sensor_graph_area_cb(lv_event_t* e) {
     area_graph::render_mask(area->masks, static_cast<uint32_t>(width), width, height, area->tops);
     area_graph::line_mask(area->masks + bytes, static_cast<uint32_t>(width), width, height, area->points, points,
                           line_width);
+    area_graph::round_bottom_corners(area->masks, static_cast<uint32_t>(width), width, height, radius);
+    area_graph::round_bottom_corners(area->masks + bytes, static_cast<uint32_t>(width), width, height, radius);
     area->rows = area_graph::rows_used(area->points, points, height, line_width);
     set_mask(area->area, area->masks + area->rows.area_top * width, width, height - area->rows.area_top);
     set_mask(area->line, area->masks + bytes + area->rows.line_top * width, width, area->rows.line_rows);
-    area->key = key;
   }
   if (area->rows.line_rows <= 0) return;
   lv_draw_image_dsc_t image;
@@ -344,9 +361,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
     const lv_area_t box = sensor_graph_box(tile);
     // The frame: a resting surface (the area's color, see
     // sensor_graph_area_cb) with the Switch bar's radius that never fills
-    // itself; clip_corner cuts the graph's line and area at its bottom
-    // corners. It reaches one radius above the box, so its top corners cut
-    // nothing and the graph's top stays open.
+    // itself; the graph's masks take its bottom corners, the top stays open.
     lv_obj_t* frame = lv_obj_create(card);
     if (frame) {
       tile_icon_disc::mark_surface(frame);
@@ -355,17 +370,15 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
       lv_obj_set_style_shadow_width(frame, 0, LV_PART_MAIN);
       lv_obj_set_style_pad_all(frame, 0, LV_PART_MAIN);
       ui_surface_style::apply_radius(frame, climate_layout::kControlRadius, 0);
-      lv_obj_set_style_clip_corner(frame, true, LV_PART_MAIN);
       lv_obj_remove_flag(frame, LV_OBJ_FLAG_CLICKABLE);
       lv_obj_remove_flag(frame, LV_OBJ_FLAG_SCROLLABLE);
-      const int32_t radius = lv_obj_get_style_radius(frame, LV_PART_MAIN);
       // Positions inside the card's content box (its paddings).
-      lv_obj_set_size(frame, lv_area_get_width(&box), lv_area_get_height(&box) + radius);
-      lv_obj_set_pos(frame, box.x1 - tile_layout::scale_480(20), box.y1 - radius - tile_layout::scale_480(24));
+      lv_obj_set_size(frame, lv_area_get_width(&box), lv_area_get_height(&box));
+      lv_obj_set_pos(frame, box.x1 - tile_layout::scale_480(20), box.y1 - tile_layout::scale_480(24));
       chart = lv_chart_create(frame);
       if (chart) {
         lv_obj_set_size(chart, lv_area_get_width(&box), lv_area_get_height(&box));
-        lv_obj_set_pos(chart, 0, radius);
+        lv_obj_set_pos(chart, 0, 0);
       }
     }
     if (chart) {

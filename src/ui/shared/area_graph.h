@@ -58,6 +58,25 @@ inline uint32_t picture_key(const Point* points, int32_t count, std::initializer
   return hash;
 }
 
+// A key of a chart's line from its raw values, y range and `extra` (size,
+// corners): cheap enough for every draw, while chart_points asks lv_chart for
+// every point's position, which looks up the chart's paddings each time.
+inline uint32_t data_key(lv_obj_t* chart, lv_chart_series_t* series, std::initializer_list<uint32_t> extra) {
+  const auto* data = reinterpret_cast<const lv_chart_t*>(chart);
+  const uint32_t count = chart && series ? lv_chart_get_point_count(chart) : 0;
+  const int32_t* values = count ? lv_chart_get_series_y_array(chart, series) : nullptr;
+  uint32_t hash = 2166136261u;
+  auto mix = [&hash](uint32_t value) { hash = (hash ^ value) * 16777619u; };
+  mix(count);
+  if (data) {
+    mix(static_cast<uint32_t>(data->ymin[LV_CHART_AXIS_PRIMARY_Y]));
+    mix(static_cast<uint32_t>(data->ymax[LV_CHART_AXIS_PRIMARY_Y]));
+  }
+  for (uint32_t i = 0; values && i < count; ++i) mix(static_cast<uint32_t>(values[i]));
+  for (const uint32_t value : extra) mix(value);
+  return hash;
+}
+
 // The line's top in every column of a picture `width` wide (rows of the
 // chart, linear between the points as lv_chart draws its line); -1 where a
 // gap leaves no line.
@@ -172,6 +191,26 @@ inline void render_mask(uint8_t* pixels, uint32_t stride, int32_t width, int32_t
   for (int32_t y = 0; y < height; ++y) {
     uint8_t* row = pixels + y * stride;
     for (int32_t x = 0; x < width; ++x) row[x] = tops[x] >= 0 && y >= tops[x] ? 0xFF : 0x00;
+  }
+}
+
+// Cuts the bottom corners of a mask `width` x `height` round with `radius`,
+// anti-aliased (coverage of the pixel's centre against the corner circle):
+// the tile graph box's shape without a clip_corner layer.
+inline void round_bottom_corners(uint8_t* pixels, uint32_t stride, int32_t width, int32_t height, int32_t radius) {
+  radius = std::min(radius, std::min(width / 2, height));
+  if (radius <= 0) return;
+  const float r = static_cast<float>(radius);
+  for (int32_t dy = 0; dy < radius; ++dy) {
+    uint8_t* row = pixels + (height - radius + dy) * stride;
+    const float py = dy + 0.5f;
+    for (int32_t dx = 0; dx < radius; ++dx) {
+      const float px = r - (dx + 0.5f);
+      const float coverage = r + 0.5f - std::sqrt(px * px + py * py);
+      if (coverage >= 1.0f) continue;
+      const uint32_t keep = coverage <= 0.0f ? 0u : static_cast<uint32_t>(coverage * 255.0f + 0.5f);
+      for (uint8_t* pixel : {row + dx, row + width - 1 - dx}) *pixel = static_cast<uint8_t>((*pixel * keep + 127) / 255);
+    }
   }
 }
 

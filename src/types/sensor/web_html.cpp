@@ -23,8 +23,16 @@ void append_sensor_fields_html(String& html, const String& tab_id) {
   html += R"html(_sensor_fields" class="type-fields">
               )html";
   appendEntityPickerField(html, tab_id, "sensor_entity", tr.sensor_entity, "sensors");
-  html += R"html(
-              <label>)html";
+  html += "\n";
+  // The value size first under Advanced (user 2026-10-28), like the
+  // Switch's: one row high the half-height sizes, taller the full-size ones
+  // (syncCompactValueFontOptions).
+  const SwitchChoice sizes[] = {{"0", tr.sensor_value_size_default}, {"1", "20"}, {"2", "24"},
+                                {"5", "28"}, {"3", "32"}, {"4", "40"}};
+  String size_attrs;
+  append_value_size_attrs(size_attrs, FONT_VALUE, tr.sensor_value_size_default);
+  append_switch_choice(html, tab_id, "sensor_value_font", tr.sensor_value_size, sizes, 6, size_attrs);
+  html += R"html(              <label>)html";
   html += tr.sensor_unit;
   html += R"html(</label>
               <input type="text" id=")html";
@@ -127,13 +135,6 @@ void append_sensor_fields_html(String& html, const String& tab_id) {
                 </div>
 )html";
   }
-  // The Sensor value sizes like the Switch's: one row high the half-height
-  // ones, taller the full-size ones (syncCompactValueFontOptions).
-  const SwitchChoice sizes[] = {{"0", tr.sensor_value_size_default}, {"1", "20"}, {"2", "24"},
-                                {"5", "28"}, {"3", "32"}, {"4", "40"}};
-  String size_attrs;
-  append_value_size_attrs(size_attrs, FONT_VALUE, tr.sensor_value_size_default);
-  append_switch_choice(html, tab_id, "sensor_value_font", tr.sensor_value_size, sizes, 6, size_attrs);
   html += R"html(                <label for=")html";
   html += tab_id;
   html += R"html(_sensor_value_y_offset">)html";

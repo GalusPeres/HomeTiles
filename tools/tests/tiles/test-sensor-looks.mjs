@@ -69,6 +69,10 @@ assert.ok(editor.includes("row('sensor_orientation', bar);") && editor.includes(
   editor.includes("if (gaugeOption) gaugeOption.hidden = layout.dataset?.gauge !== '1' && !gauge;") &&
   editor.includes("if (shapeWrap) shapeWrap.classList.toggle('hidden', !gauge);"),
   'only the rows the layout uses; the old gauge only on a tile that has it');
+// The value size first under Advanced, the value's Y offset only with the
+// old gauge (user 2026-10-28).
+assert.ok(html.indexOf('"sensor_value_font", tr.sensor_value_size') < html.indexOf('tr.sensor_unit') &&
+  editor.includes('const offsetShown = gauge;'), 'value size first, offset only with the gauge');
 assert.ok(read('src/types/switch/admin.js').includes("'sensor_layout', 'sensor_form',") &&
   read('src/web/admin/tiles/editor.js').includes("bindLive(document.getElementById(prefix + '_' + field), 'change', 'sensorChoice_' + field, () => applySensorLayoutChoices(tab));") &&
   read('src/web/assets/admin.css').includes('.type-fields.show > .switch-choices.hidden { display:none; }'),

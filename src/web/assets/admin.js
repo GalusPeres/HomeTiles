@@ -16831,7 +16831,8 @@ function maybeFillTitleFromSensor(tab) {
     // The value size everywhere: alone, in the head, inside an arc or ring
     // (its Default there the look's 20 or 24).
     row('sensor_value_font', true);
-    const offsetShown = c.layout === 0 || gauge;
+    // The value's Y offset with the old gauge only (user 2026-10-28).
+    const offsetShown = gauge;
     const offsetLabel = typeof document.querySelector === 'function'
       ? document.querySelector('label[for="' + prefix + '_sensor_value_y_offset"]') : null;
     if (offsetLabel) offsetLabel.classList.toggle('hidden', !offsetShown);

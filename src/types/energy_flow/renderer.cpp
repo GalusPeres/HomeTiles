@@ -258,13 +258,18 @@ void color_node(FlowTileState& st, NodeWidgets& node, uint32_t rgb) {
   }
 }
 
-bool shown_on_screen(lv_obj_t* obj) {
-  if (!obj || lv_obj_get_screen(obj) != lv_screen_active()) return false;
+// What keeps `obj` off the screen: the first hidden object from it up (itself
+// included), or its screen when that is not the active one; null when shown.
+lv_obj_t* hidden_by(lv_obj_t* obj) {
+  lv_obj_t* screen = lv_obj_get_screen(obj);
+  if (screen != lv_screen_active()) return screen;
   for (lv_obj_t* o = obj; o; o = lv_obj_get_parent(o)) {
-    if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) return false;
+    if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) return o;
   }
-  return true;
+  return nullptr;
 }
+
+bool shown_on_screen(lv_obj_t* obj) { return obj && !hidden_by(obj); }
 
 // A dot's place now, in quarter pixels.
 lv_point_t dot_point(const FlowTileState& st, uint8_t line) {
@@ -354,35 +359,72 @@ bool any_live(const FlowTileState& st) {
   return false;
 }
 
+// Why the last frame moved no dot (the log compares these pointers).
+constexpr const char* kStillNoFlow = "no flow";
+constexpr const char* kStillPopup = "popup";
+constexpr const char* kStillSleep = "sleep";
+constexpr const char* kStillScreensaver = "screensaver";
+constexpr const char* kStillHidden = "hidden";
+constexpr const char* kStillWaiting = "waiting";
+constexpr const char* kStillRefused = "not visible";
+
+// What hid a flow tile in the last frame that found it hidden (for the log;
+// sizes, not the object, which may be gone when it is logged).
+struct HiddenBy {
+  bool screen;
+  uint8_t depth;
+  int32_t width;
+  int32_t height;
+};
+HiddenBy g_hidden_by = {};
+
+bool any_flow() {
+  for (const FlowTileState* st : g_tiles) {
+    if (st && any_live(*st)) return true;
+  }
+  return false;
+}
+
 // One step of every shown dot; the number of dots that moved. `waiting`:
-// a dot is shown that did not change its pixel this frame. `still`: why
-// nothing moved (for the log).
+// the next frame should come (a dot shown that did not change its pixel, or
+// a flow that cannot be shown yet). `still`: why nothing moved.
 uint32_t step_dots(bool& waiting, const char*& still) {
   waiting = false;
-  still = "no flow";
+  still = kStillNoFlow;
   // Nothing moves where nobody sees it: behind a popup, asleep, or under the
   // screensaver (b539 log: there the dots ran on at ~47 frames a second and
-  // redrew the screensaver above them in every area).
+  // redrew the screensaver above them in every area). Behind a popup a flow
+  // keeps asking for frames, so its dots go on with the frame that closes it.
   if (popup_shell_active()) {
-    still = "popup";
+    still = kStillPopup;
+    waiting = any_flow();
     return 0;
   }
   if (powerManager.isInSleep()) {
-    still = "sleep";
+    still = kStillSleep;
     return 0;
   }
   if (image_screensaver_covers_ui()) {
-    still = "screensaver";
+    still = kStillScreensaver;
     return 0;
   }
   uint32_t moved = 0;
   for (FlowTileState* st : g_tiles) {
     if (!st || !any_live(*st)) continue;
-    if (!shown_on_screen(st->card)) {
-      still = "hidden";
+    if (lv_obj_t* hider = st->card ? hidden_by(st->card) : nullptr) {
+      // A hidden flow keeps asking for frames: the page turn, tab or overlay
+      // that shows it again may leave no frame that steps the dots, and they
+      // stood until the next state arrived (user 2026-10-28: ~5 s after every
+      // page turn, b608 log "last frame: hidden").
+      uint8_t depth = 0;
+      for (lv_obj_t* o = st->card; o && o != hider; o = lv_obj_get_parent(o)) ++depth;
+      g_hidden_by = {hider == lv_obj_get_screen(st->card) && hider != st->card, depth, lv_obj_get_width(hider),
+                     lv_obj_get_height(hider)};
+      still = kStillHidden;
+      waiting = true;
       continue;
     }
-    still = "waiting";
+    still = kStillWaiting;
     lv_area_t canvas;
     lv_obj_get_coords(st->canvas, &canvas);
     for (uint8_t line = 0; line < kLineCount; ++line) {
@@ -399,7 +441,7 @@ uint32_t step_dots(bool& waiting, const char*& still) {
       // Not visible yet: the dot stays where it is drawn and the next frame
       // tries again.
       if (redraw == DotRedraw::kRefused) {
-        still = "not visible";
+        still = kStillRefused;
         waiting = true;
         continue;
       }
@@ -581,7 +623,22 @@ const char* g_still_reason = nullptr;
 uint32_t g_still_since_ms = 0;
 bool g_woken_by_state = false;
 
-// Once per stop that lasted kStillLogMs: what the last frame without a move
+// A frame without a move. A hidden tile logs once what hides it; only a
+// stop with the tile shown (waiting for its pixel or refused) starts the
+// stall clock: time on another page or behind a popup is no stall.
+void note_still(const char* still, uint32_t now_ms) {
+  if (still != g_still_reason && still == kStillHidden) {
+    Serial.printf("[EnergyFlow] Dots wait: tile hidden by %s %ldx%ld, %u levels up\n",
+                  g_hidden_by.screen ? "another screen" : "an object", static_cast<long>(g_hidden_by.width),
+                  static_cast<long>(g_hidden_by.height), static_cast<unsigned>(g_hidden_by.depth));
+  }
+  const bool stalled = still == kStillWaiting || still == kStillRefused;
+  if (!stalled) g_still_since_ms = 0;
+  else if (!g_still_since_ms || still != g_still_reason) g_still_since_ms = now_ms | 1;
+  g_still_reason = still;
+}
+
+// Once per stall that lasted kStillLogMs: what the last frame without a move
 // saw and what woke the dots.
 void log_still(uint32_t now_ms) {
   if (!g_still_since_ms || now_ms - g_still_since_ms < kStillLogMs) return;
@@ -604,10 +661,7 @@ void motion_display_cb(lv_event_t* e) {
     const uint32_t moved = step_dots(waiting, still);
     const uint32_t now_ms = millis();
     if (!moved) {
-      // The time counts from the frame whose reason changed (a page turn
-      // shows the tile again), not from leaving the page.
-      if (!g_still_since_ms || still != g_still_reason) g_still_since_ms = now_ms | 1;
-      g_still_reason = still;
+      note_still(still, now_ms);
       if (waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));
       return;
     }

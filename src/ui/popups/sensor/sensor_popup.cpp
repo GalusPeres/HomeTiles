@@ -337,6 +337,9 @@ static bool g_pending_icon_refresh = false;
 static PopupFirstFrame g_sensor_first_frame;
 static SensorPopupInit g_pending_sensor_init;
 static bool g_sensor_open_pending = false;
+// A numeric graph's history asked for when the popup opened, not after its
+// first frame (request_history_early).
+static bool g_sensor_early_history = false;
 
 static void ensure_binary_view(SensorPopupContext* ctx);
 static void layout_editable_history(SensorPopupContext* ctx);
@@ -3377,6 +3380,24 @@ static void request_history_for_context(SensorPopupContext* ctx) {
   mqttPublishHistoryRequest(ctx->entity_id.c_str(), cfg.hours, cfg.period_minutes, cfg.points);
 }
 
+// A numeric graph asks for its 24 h history with the popup's first frame:
+// asked after that frame (finish_sensor_popup_open), the graph came a whole
+// frame plus the Bridge's answer late, on the S3 ~80 ms + ~80 ms (user
+// 2026-10-28: the coloured graphs come later than the old ones). Its answer
+// waits in g_pending_history until the body is bound. Editable values and
+// state histories keep the regular request.
+static void request_history_early(const SensorPopupInit& init) {
+  g_sensor_early_history = false;
+  if (init.editable || init.binary_mode || init.state_history_mode || !should_request_history(init.entity_id)) {
+    return;
+  }
+  const HistoryRangeConfig cfg = get_history_range_config(SensorHistoryRange::Day24);
+  // Set first: a stored answer comes back inside the request
+  // (replay_history_response).
+  g_sensor_early_history = true;
+  mqttPublishHistoryRequest(init.entity_id.c_str(), cfg.hours, cfg.period_minutes, cfg.points);
+}
+
 static uint32_t state_history_refresh_interval_ms(
     const SensorPopupContext* ctx) {
   return ctx && ctx->history_range == SensorHistoryRange::Day7
@@ -3415,6 +3436,7 @@ static void set_sensor_popup_visible(SensorPopupContext* ctx, bool visible) {
   } else {
     g_sensor_first_frame.cancel();
     g_sensor_open_pending = false;
+    g_sensor_early_history = false;
     g_pending_sensor_init = SensorPopupInit{};
     hide_popup_shell(ctx->card);
     cancel_popup_open(ctx->card);
@@ -3551,6 +3573,7 @@ static const lv_image_dsc_t* graph_picture(SensorPopupContext* ctx, int32_t widt
     }
   }
   lv_image_cache_drop(&ctx->area_image);
+  const uint32_t started_us = micros();
   const uint32_t stride_px = stride / sizeof(uint16_t);
   area_graph::column_tops(ctx->area_points, points, ctx->area_tops, width);
   area_graph::render_fade(ctx->area_pixels, stride_px, width, height, ctx->area_tops, (fade_top + fade_bottom) / 2,
@@ -3577,6 +3600,10 @@ static const lv_image_dsc_t* graph_picture(SensorPopupContext* ctx, int32_t widt
   ctx->area_image.data = reinterpret_cast<const uint8_t*>(ctx->area_pixels);
   ctx->area_image.data_size = bytes;
   ctx->area_key = key;
+  // Computed once per new line, size or color, inside the first frame that
+  // draws it.
+  Serial.printf("[SensorPopup] Graph picture %ldx%ld, %ld points in %lu us\n", static_cast<long>(width),
+                static_cast<long>(height), static_cast<long>(points), static_cast<unsigned long>(micros() - started_us));
   return &ctx->area_image;
 }
 
@@ -3895,7 +3922,8 @@ static void finish_sensor_popup_open() {
   g_sensor_popup_ctx->readout_refresh_pending = reuse_history;
   // Present the controls before applying a returned history in another pass.
   g_sensor_first_frame.begin();
-  if (!fresh_history) request_history_for_context(g_sensor_popup_ctx);
+  if (!fresh_history && !g_sensor_early_history) request_history_for_context(g_sensor_popup_ctx);
+  g_sensor_early_history = false;
 }
 
 void show_sensor_popup(const SensorPopupInit& init) {
@@ -3935,6 +3963,9 @@ void show_sensor_popup(const SensorPopupInit& init) {
   apply_sensor_header_value(ctx, init);
   defer_popup_content(g_sensor_popup_ctx->card, finish_sensor_popup_open);
   set_sensor_popup_visible(ctx, true);
+  // Once visible: a stored answer comes back inside the request and is only
+  // kept for a visible popup (queue_sensor_popup_history).
+  request_history_early(init);
   lv_obj_invalidate(ctx->card);
   if (g_sensor_popup_ctx && g_sensor_popup_ctx->card) viewNavigationPopupShown(g_sensor_popup_ctx->card, init.entity_id.c_str());
   show_popup_shell(g_sensor_popup_ctx->overlay, g_sensor_popup_ctx->card, g_sensor_popup_ctx->title_label, g_sensor_popup_ctx->icon_label, g_sensor_popup_ctx->close_button,
@@ -3970,6 +4001,7 @@ void preload_sensor_popup() {
 void hide_sensor_popup() {
   g_sensor_first_frame.cancel();
   g_sensor_open_pending = false;
+  g_sensor_early_history = false;
   g_pending_sensor_init = SensorPopupInit{};
   if (g_sensor_popup_ctx) {
     g_sensor_popup_ctx->readout.cancel();
@@ -4006,7 +4038,9 @@ void queue_sensor_popup_icon_refresh() { g_pending_icon_refresh = true; }
 
 void queue_sensor_popup_history(const char* entity_id, const char* payload, size_t len) {
   if (!payload || len == 0) return;
-  if (g_sensor_open_pending) return;
+  // While the popup opens only the early request's answer is kept (for the
+  // entity it opens with); it is applied once the body is bound.
+  if (g_sensor_open_pending && !g_sensor_early_history) return;
   if (!g_sensor_popup_ctx || !is_popup_visible(g_sensor_popup_ctx)) return;
 
   String payload_text = String(payload).substring(0, len);
@@ -4017,8 +4051,8 @@ void queue_sensor_popup_history(const char* entity_id, const char* payload, size
   }
 
   // Ignore history updates for other entities while this popup is open.
-  if (incoming_entity.length() &&
-      !g_sensor_popup_ctx->entity_id.equalsIgnoreCase(incoming_entity)) {
+  const String& shown_entity = g_sensor_open_pending ? g_pending_sensor_init.entity_id : g_sensor_popup_ctx->entity_id;
+  if (incoming_entity.length() && !shown_entity.equalsIgnoreCase(incoming_entity)) {
     return;
   }
 

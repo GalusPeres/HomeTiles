@@ -82,10 +82,12 @@ for (const marker of [
   'if (waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));',
   // Never behind a popup, asleep or off screen; only the dot's area, and
   // only the part of a line's picture inside it.
-  'if (popup_shell_active()) {\n    still = "popup";\n    return 0;\n  }',
-  'if (powerManager.isInSleep()) {\n    still = "sleep";\n    return 0;\n  }',
-  'if (image_screensaver_covers_ui()) {\n    still = "screensaver";\n    return 0;\n  }',
-  'if (!st || !any_live(*st)) continue;\n    if (!shown_on_screen(st->card)) {',
+  // (behind a popup and off screen they keep asking for frames,
+  // test-energy-flow-dots-resume.mjs).
+  'if (popup_shell_active()) {\n    still = kStillPopup;\n    waiting = any_flow();\n    return 0;\n  }',
+  'if (powerManager.isInSleep()) {\n    still = kStillSleep;\n    return 0;\n  }',
+  'if (image_screensaver_covers_ui()) {\n    still = kStillScreensaver;\n    return 0;\n  }',
+  'if (!st || !any_live(*st)) continue;\n    if (lv_obj_t* hider = st->card ? hidden_by(st->card) : nullptr) {',
   'lv_obj_invalidate_area(st.canvas, &area);',
   // What the dots cost, one log line per 10 s while they move.
   'constexpr uint32_t kMotionLogMs = 10000;',

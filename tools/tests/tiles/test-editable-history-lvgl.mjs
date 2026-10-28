@@ -96,7 +96,7 @@ String normalize_state_history_value(const String& value){return value;}
 String format_state_history_label(const String& value){return value;}
 String format_state_history_date(uint64_t){return "Today · 09/07/2026";}
 String format_binary_activity_time(uint64_t,bool){return "11:16:39 AM";}
-uint32_t ticks=100;uint32_t millis(){return ticks;}
+uint32_t ticks=100;uint32_t millis(){return ticks;}uint32_t micros(){return ticks*1000;}
 struct Logger{void println(const char*){}template<class... T>void printf(const char*,T...){}}Serial;
 int opening_layout_calls=0;
 void counted_opening_layout(lv_obj_t* object){++opening_layout_calls;lv_obj_update_layout(object);}
@@ -121,7 +121,7 @@ struct EditableControl;
 ${popup.match(/struct HistoryRangeConfig \{[\s\S]*?\n};/)[0]}
 ${popup.match(/struct SensorPopupContext \{[\s\S]*?\n};/)[0]}
 ${read('src/ui/popups/sensor/sensor_popup.h').match(/struct SensorPopupInit \{[\s\S]*?\n};/)[0]}
-SensorPopupContext* g_sensor_popup_ctx=nullptr;PopupFirstFrame g_sensor_first_frame;SensorPopupInit g_pending_sensor_init;bool g_sensor_open_pending=false;
+SensorPopupContext* g_sensor_popup_ctx=nullptr;PopupFirstFrame g_sensor_first_frame;SensorPopupInit g_pending_sensor_init;bool g_sensor_open_pending=false;bool g_sensor_early_history=false;
 struct Pending{bool valid=false;}g_pending_history,g_pending_binary_state;
 // clear_chart() and clear_binary_history() drop a kept readout.
 static void clear_sensor_readout(SensorPopupContext*);static void refresh_sensor_readout(SensorPopupContext*);
@@ -166,6 +166,9 @@ ${fn(popup,'apply_history_payload')}
 ${fn(popup,'editable_history_fingerprint')}
 int requests=0;
 void request_history_for_context(SensorPopupContext*ctx){ctx->editable_history_id=std::to_string(++requests);ctx->history_request_fingerprint=editable_history_fingerprint(ctx->entity_id);}
+// Editable values never ask early (request_history_early's first check,
+// test-sensor-popup-early-history.mjs); they keep the request after the first frame.
+void request_history_early(const SensorPopupInit&){g_sensor_early_history=false;}
 #include "src/tiles/config/tile_icon_colors.h"
 ${ruleIconSource(root, {codepoint: true})}
 ${['popup_icon_state_known','apply_popup_icon_color','apply_editable_icon_color','show_header_value'].map(n=>fn(popup,n)).join('\n')}

@@ -76,8 +76,7 @@ void append_sensor_fields_html(String& html, const String& tab_id) {
     html += String(static_cast<int>(sensor_look::kLevelSide + i));
     html += "\">";
     html += looks[i];
-    html += "</option>
-";
+    html += "</option>\n";
   }
   html += R"html(                </select>
                 <div id=")html";

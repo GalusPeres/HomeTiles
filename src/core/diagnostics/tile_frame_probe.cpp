@@ -9,6 +9,7 @@
 #include "src/fonts/glyph_cache.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/types/types_registry.h"
+#include "src/ui/shared/kept_shadow.h"
 #include "src/ui/shared/rounded_corners.h"
 
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
@@ -48,6 +49,7 @@ struct FontTime {
 FontTime g_fonts[kFonts] = {};
 glyph_cache_stats_t g_glyphs_start = {};
 rounded_corners::Stats g_corners_start = {};
+kept_shadow::Stats g_shadows_start = {};
 
 void note_font(lv_obj_t* label, uint32_t us) {
   const lv_font_t* font = lv_obj_get_style_text_font(label, LV_PART_MAIN);
@@ -533,11 +535,21 @@ void log_tasks(uint32_t frame_us) {
   // Fills and lines drawn from kept corners in this frame (rounded_corners.h).
   const rounded_corners::Stats corners = rounded_corners::stats();
   if (used > 0 && used < static_cast<int>(sizeof(line))) {
-    snprintf(line + used, sizeof(line) - used, " | corners fills=%lu borders=%lu sets=%lu (%lu KB) built=%lu declined=%lu",
-             static_cast<unsigned long>(corners.fills - g_corners_start.fills),
-             static_cast<unsigned long>(corners.borders - g_corners_start.borders),
-             static_cast<unsigned long>(corners.masks), static_cast<unsigned long>(corners.bytes / 1024),
-             static_cast<unsigned long>(corners.built), static_cast<unsigned long>(corners.declined));
+    used += snprintf(line + used, sizeof(line) - used,
+                     " | corners fills=%lu borders=%lu sets=%lu (%lu KB) built=%lu declined=%lu",
+                     static_cast<unsigned long>(corners.fills - g_corners_start.fills),
+                     static_cast<unsigned long>(corners.borders - g_corners_start.borders),
+                     static_cast<unsigned long>(corners.masks), static_cast<unsigned long>(corners.bytes / 1024),
+                     static_cast<unsigned long>(corners.built), static_cast<unsigned long>(corners.declined));
+  }
+  // Box shadows drawn from kept corners in this frame and left to LVGL
+  // (kept_shadow.h).
+  const kept_shadow::Stats shadows = kept_shadow::stats();
+  if (used > 0 && used < static_cast<int>(sizeof(line))) {
+    snprintf(line + used, sizeof(line) - used, " | shadows kept=%lu lvgl=%lu sets=%lu (%lu KB)",
+             static_cast<unsigned long>(shadows.drawn - g_shadows_start.drawn),
+             static_cast<unsigned long>(shadows.lvgl - g_shadows_start.lvgl), static_cast<unsigned long>(shadows.sets),
+             static_cast<unsigned long>(shadows.bytes / 1024));
   }
   Serial.println(line);
 }
@@ -681,6 +693,7 @@ void display_cb(lv_event_t* e) {
     display_flush_gate::g_wait_us = 0;
     g_glyphs_start = glyph_cache_stats();
     g_corners_start = rounded_corners::stats();
+    g_shadows_start = kept_shadow::stats();
     g_frame_pixels = pixels;
     g_flush_us = 0;
     g_flushes = 0;

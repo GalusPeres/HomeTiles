@@ -16,7 +16,8 @@
 // every corner pixel gets the mask value and blend LVGL would give it. It
 // stays one task: b593 added the parts as tasks of their own, and creating
 // those (~12 us each) cost what the corners saved. Gradients, drop shadows,
-// partial sides and translucent borders keep LVGL's own drawing.
+// partial sides and translucent borders keep LVGL's own drawing; box shadows
+// are drawn by the same dispatch from kept corners (kept_shadow.h).
 
 #include <stdint.h>
 

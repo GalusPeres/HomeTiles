@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "src/core/display/display_flush_gate.h"
+#include "src/ui/shared/kept_shadow.h"
 
 namespace rounded_corners {
 namespace {
@@ -219,7 +220,8 @@ int32_t (*g_next_dispatch)(lv_draw_unit_t*, lv_layer_t*) = nullptr;
 
 // With one software draw unit and no OS, LVGL hands the unit the layer's first
 // waiting task, which it draws before returning (lv_draw_sw.c dispatch). A
-// marked task is drawn here the same way, every other one by LVGL.
+// marked task and a box shadow with kept corners (kept_shadow.h) are drawn
+// here the same way, every other one by LVGL.
 int32_t corner_dispatch(lv_draw_unit_t* unit, lv_layer_t* layer) {
   // The last band's copy to the panel may still read the draw buffer
   // (display_flush_gate.h); this draws marked tasks itself, so it waits too.
@@ -229,19 +231,22 @@ int32_t corner_dispatch(lv_draw_unit_t* unit, lv_layer_t* layer) {
   }
   lv_draw_task_t* task = lv_draw_get_available_task(layer, nullptr, 0);
   const CornerSet* set = task ? marked(task) : nullptr;
-  if (!set) return g_next_dispatch(unit, layer);
+  const kept_shadow::Set* shadow = task && !set ? kept_shadow::find(task) : nullptr;
+  if (!set && !shadow) return g_next_dispatch(unit, layer);
   if (!lv_draw_layer_alloc_buf(layer)) {
     task->state = LV_DRAW_TASK_STATE_FAILED;
     return LV_DRAW_UNIT_IDLE;
   }
   task->state = LV_DRAW_TASK_STATE_IN_PROGRESS;
-  if (task->type == LV_DRAW_TASK_TYPE_FILL) {
+  if (shadow) {
+    kept_shadow::draw(task, *shadow);
+  } else if (task->type == LV_DRAW_TASK_TYPE_FILL) {
     draw_fill(task, *set);
   } else {
     draw_border(task, *set);
   }
   task->state = LV_DRAW_TASK_STATE_FINISHED;
-  ++g_stats.drawn;
+  if (set) ++g_stats.drawn;
   lv_draw_dispatch_request();
   return 1;
 }

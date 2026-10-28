@@ -221,7 +221,7 @@ const source = path.join(out, 'test.cpp');
 fs.writeFileSync(source, cpp);
 const binary = path.join(out, process.platform === 'win32' ? 'test.exe' : 'test');
 let result = spawnSync(host.cxx, [...host.flags, '-std=c++17', '-O1', '-w', source,
-  path.join(root, 'src/core/display/display_flush_gate.cpp'), path.join(root, 'src/ui/shared/rounded_corners.cpp'),
+  path.join(root, 'src/core/display/display_flush_gate.cpp'), path.join(root, 'src/ui/shared/rounded_corners.cpp'), path.join(root, 'src/ui/shared/kept_shadow.cpp'),
   host.archive, '-o', binary], {encoding: 'utf8'});
 assert.equal(result.status, 0, result.stdout + result.stderr);
 result = spawnSync(binary, [], {encoding: 'utf8'});

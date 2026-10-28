@@ -57,6 +57,9 @@ bool parse_sun(const char* json, SunTimes& out);
 // Without times for that date it is day.
 bool is_night(const SunTimes& sun, const char* date, int minute);
 
+// True when it is night now by `sun` (day without a local time or times).
+bool night_now(const SunTimes& sun);
+
 // The icon for the current local time: its night variant after sunset.
 String for_now(const String& icon_name, const SunTimes& sun);
 

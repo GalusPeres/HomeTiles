@@ -170,6 +170,9 @@ static void tab5_note_flush(uint32_t pixels, uint32_t flush_us, uint32_t push_us
 // is too scarce we fall back to the previous PSRAM double buffer, so behaviour
 // is never worse than before.
 static constexpr size_t kInternalDrawReserveBytes = 150 * 1024;  // keep free for WiFi/SDIO/lwIP
+// 72 KB on every board. The V2 with 100 KB (b588/b589, 40 rows) hung its PPA
+// rotation on a 614x71 piece of a wide tile drawn alone (crash log, user
+// 2026-10-28); with 72 KB that tile's pieces stay at most 58 rows.
 static constexpr size_t kInternalDrawMaxBytes     = 72 * 1024;   // cap one SRAM band
 static constexpr size_t kInternalDrawMinLines     = 16;          // below this SRAM isn't worth it
 // Restore after OTA preparation: Wi-Fi, MQTT and the server already own

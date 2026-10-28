@@ -1,5 +1,7 @@
 #include "src/web/server/assets/web_admin_assets.h"
 
+#include "src/web/server/web_admin_utils.h"
+
 #include <algorithm>
 
 #include "src/web/generated/admin_assets_meta.h"
@@ -57,6 +59,7 @@ void sendGzipProgmemAsset(WebServer& server,
 
   server.send(200, asset.content_type, "");
 
+  WebSendPacer pacer;
   for (size_t offset = 0; offset < asset.size; offset += chunk_size) {
     const size_t length = std::min(chunk_size, asset.size - offset);
     server.sendContent_P(
@@ -65,6 +68,7 @@ void sendGzipProgmemAsset(WebServer& server,
     // much shorter without increasing SDIO pressure per write.
     delay(2);
     yield();
+    pacer.wait();
   }
 }
 

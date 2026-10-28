@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#include "src/fonts/glyph_cache.h"
+
 namespace mdi_icon_cache {
 namespace {
 
@@ -135,6 +137,7 @@ void set_source(mdi_icon_loader_t* loader, const Source* source) {
   State* s = state_of(loader);
   if (!s) return;
   clear(s);
+  glyph_cache_clear();  // nothing unpacked from the old source stays
   s->has_source = source != nullptr && source->read != nullptr;
   s->source = s->has_source ? *source : Source{nullptr, nullptr};
 }

@@ -475,6 +475,33 @@ inline void emit_level(const Spec& spec, bool up, Emit&& emit) {
   emit(fill);
 }
 
+// A piece of an arc band cut straight at its ends: its corner points and
+// the outermost points of the quarter turns it spans, a pixel wider than the
+// band. Its coverage is 0 outside them. The whole circle as bounds cost each
+// of a rule arc's 48 pieces a scan of the circle: 1.2 million coverage calls
+// per mask build, ~620 ms on the Guition V2 (b583 log).
+inline void slice_bounds(Element& e, const Box& box) {
+  const float cx = e.p[0], cy = e.p[1];
+  const float outer = e.p[2] + e.p[3] + 1, inner = std::max(0.0f, e.p[2] - e.p[3] - 1);
+  float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
+  auto take = [&](float r, float a) {
+    const float x = cx + r * std::sin(a), y = cy - r * std::cos(a);
+    x0 = std::min(x0, x);
+    y0 = std::min(y0, y);
+    x1 = std::max(x1, x);
+    y1 = std::max(y1, y);
+  };
+  for (const float a : {e.p[4], e.p[5]}) {
+    take(outer, a);
+    take(inner, a);
+  }
+  for (int quarter = 0; quarter < 4; ++quarter) {
+    const float a = quarter * kPi * 0.5f;
+    if (angle_in(a, e.p[4], e.p[5])) take(outer, a);
+  }
+  bound(e, x0, y0, x1, y1, box);
+}
+
 inline Element arc_element(Shape shape, const Arc& arc, float a0, float a1, uint8_t layer, bool lit, float place,
                            const Box& box) {
   Element e;
@@ -484,7 +511,8 @@ inline Element arc_element(Shape shape, const Arc& arc, float a0, float a1, uint
   e.place = place;
   const float p[8] = {arc.cx, arc.cy, arc.r, arc.sw * 0.5f, a0, a1, 0, 0};
   std::copy(p, p + 8, e.p);
-  arc_bounds(e, box);
+  if (shape == Shape::ArcSlice) slice_bounds(e, box);
+  else arc_bounds(e, box);
   return e;
 }
 

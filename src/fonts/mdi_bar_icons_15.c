@@ -7,6 +7,8 @@
 
 #include "lvgl.h"
 
+#include "src/fonts/glyph_cache.h"
+
 #ifndef MDI_BAR_ICONS_15
 #define MDI_BAR_ICONS_15 1
 #endif
@@ -206,7 +208,7 @@ const lv_font_t mdi_bar_icons_15 = {
 lv_font_t mdi_bar_icons_15 = {
 #endif
     .get_glyph_dsc = lv_font_get_glyph_dsc_fmt_txt,    /*Function pointer to get glyph's data*/
-    .get_glyph_bitmap = lv_font_get_bitmap_fmt_txt,    /*Function pointer to get glyph's bitmap*/
+    .get_glyph_bitmap = glyph_cache_bitmap,    /*Unpacked once, src/fonts/glyph_cache.c*/
     .line_height = 15,          /*The maximum line height required by the font*/
     .base_line = 2,             /*Baseline measured from the bottom of the line*/
 #if !(LVGL_VERSION_MAJOR == 6 && LVGL_VERSION_MINOR == 0)

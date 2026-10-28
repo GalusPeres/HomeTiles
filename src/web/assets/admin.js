@@ -6081,6 +6081,11 @@ async function saveGestureEdge(select) {
   function isScreensaverTileTab(tab) {
     return tab === 'screensaver';
   }
+  // The first of the screensaver's rows at the bottom of a layout's screen
+  // with `rows` rows: two, three upright (screensaver_places::first_row).
+  function screensaverFirstRow(key, rows) {
+    return Math.max(0, rows - (key === 'portrait' ? 3 : 2));
+  }
   function firstAllowedGridRow(tab, classic = false) {
     // The screensaver's two rows at the bottom of the shown grid, three
     // upright (screensaver_places.cpp); in the layout window at the bottom
@@ -6090,8 +6095,7 @@ async function saveGestureEdge(select) {
     if (classic) return Math.max(0, GRID_ROWS - 2);
     const inWindow = typeof layoutWindow !== 'undefined' && layoutWindow;
     const key = inWindow ? layoutWindow.key : typeof ACTIVE_LAYOUT === 'string' ? ACTIVE_LAYOUT : 'classic';
-    const rows = inWindow ? LAYOUTS[key].rows : placeRows(tab);
-    return Math.max(0, rows - (key === 'portrait' ? 3 : 2));
+    return screensaverFirstRow(key, inWindow ? LAYOUTS[key].rows : placeRows(tab));
   }
   function restoreCurrentTileSelectionUi() {
     if (currentTileIndex === -1 || !currentTileTab) return;
@@ -13847,10 +13851,13 @@ async function saveGestureEdge(select) {
     return {cols: Math.max(...cols, Math.min(...cols) + 2),
       rows: Math.max(...rows, Math.min(...rows) + 2) + (layoutWindow?.extraRows || 0)};
   }
-  function layoutInside(tile, key) {
+  // On the layout's screen; a screensaver tile (`tab`) only in its rows at
+  // the bottom, the panel refuses a place above them (/api/layouts).
+  function layoutInside(tile, key, tab) {
     const L = LAYOUTS[key];
+    const top = tab !== undefined && isScreensaverTileTab(tab) ? screensaverFirstRow(key, L.rows) : 0;
     return tile.col >= -1e-6 && tile.col + tile.span_w <= L.cols + 1e-6 &&
-      tile.row >= -1e-6 && tile.row + tile.span_h <= L.rows + 1e-6;
+      tile.row >= top - 1e-6 && tile.row + tile.span_h <= L.rows + 1e-6;
   }
   // The head on the layout's screen: the X and the time keep their distance
   // to its right edge.
@@ -14062,11 +14069,15 @@ async function saveGestureEdge(select) {
     const L = LAYOUTS[key];
     const tiles = layoutBase(tab);
     const shift = isScreensaverTileTab(tab) ? L.rows - LAYOUTS[from].rows : 0;
+    // The screensaver's rows at the bottom: three upright, two otherwise. A
+    // tile above them there goes to the storage, as the panel leaves it out
+    // (screensaver_places::find).
+    const top = isScreensaverTileTab(tab) ? screensaverFirstRow(key, L.rows) : 0;
     if (from === 'classic') {
       tiles.forEach(tile => {
         if (!layoutUsed(tile)) return;
-        if (classicHidden(tab, tile.view_id)) tile._unplaced = true;
         tile.row += shift;
+        if (classicHidden(tab, tile.view_id) || tile.row < top - 1e-6) tile._unplaced = true;
       });
     } else {
       // The other layout as its window shows it: saved, or its first take-over.
@@ -14074,7 +14085,7 @@ async function saveGestureEdge(select) {
       tiles.forEach((tile, index) => {
         const p = source[index];
         if (!layoutUsed(tile)) return;
-        if (layoutShown(p) && layoutInside(p, from)) {
+        if (layoutShown(p) && layoutInside(p, from, tab) && p.row + shift >= top - 1e-6) {
           Object.assign(tile, {col: p.col, row: p.row + shift, span_w: p.span_w, span_h: p.span_h});
           delete tile._unplaced;
         } else if (!layoutBarHidden(tile, tab)) {
@@ -14350,15 +14361,15 @@ async function saveGestureEdge(select) {
   // Red: half over the screen's edge, or a folder or the Settings tile
   // without a place (it could not be reached); a tile wholly in the storage
   // is only dimmed.
-  function layoutRed(tile, key) {
-    return !layoutInside(tile, key) && (layoutMustReach(tile.type) || !layoutParked(tile, key));
+  function layoutRed(tile, key, tab) {
+    return !layoutInside(tile, key, tab) && (layoutMustReach(tile.type) || !layoutParked(tile, key));
   }
   function redCount(tab) {
-    return getTilesData(tab).filter(tile => layoutShown(tile) && layoutRed(tile, layoutWindow.key)).length;
+    return getTilesData(tab).filter(tile => layoutShown(tile) && layoutRed(tile, layoutWindow.key, tab)).length;
   }
   function parkedCount(tab) {
-    return getTilesData(tab).filter(tile => layoutShown(tile) && !layoutRed(tile, layoutWindow.key) &&
-      !layoutInside(tile, layoutWindow.key)).length;
+    return getTilesData(tab).filter(tile => layoutShown(tile) && !layoutRed(tile, layoutWindow.key, tab) &&
+      !layoutInside(tile, layoutWindow.key, tab)).length;
   }
   // A folder's list holds one entry per classic cell plus the storage's
   // entries (grid_slots.h). With no more tiles than that in a layout's
@@ -14373,9 +14384,9 @@ async function saveGestureEdge(select) {
         el.dataset.col !== undefined
         ? {type: el.dataset.type, col: Number(el.dataset.col), row: Number(el.dataset.row),
           span_w: Number(el.dataset.spanW), span_h: Number(el.dataset.spanH)} : null;
-      const red = !!place && layoutRed(place, layoutWindow.key);
+      const red = !!place && layoutRed(place, layoutWindow.key, tab);
       el.classList.toggle('setup-red', red);
-      el.classList.toggle('setup-parked', !!place && !red && !layoutInside(place, layoutWindow.key));
+      el.classList.toggle('setup-parked', !!place && !red && !layoutInside(place, layoutWindow.key, tab));
     });
     // Folders and the Settings tile carry a badge on their top right corner
     // like the page tabs: a green tick when they have a place (still

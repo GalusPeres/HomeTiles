@@ -134,6 +134,7 @@ struct Tile{String title="Weather\nMunich",sensor_entity="weather.home",icon_nam
 namespace weather_sensors { inline uint32_t mix_hash(const String&,const String&,uint32_t h){return h;} inline void apply_temperature(const String&,const String&,float&,bool&){} inline void append_humidity(const String&,String&){} }
 ${read('src/tiles/config/tile_config.h').match(/static constexpr uint8_t SENSOR_VALUE_FONT_MAX = \d+;/)[0]}
 struct TileGridConfig{Tile tiles[TILES_PER_GRID];};struct TileConfigStub{TileGridConfig grid;const TileGridConfig&getActiveGrid()const{return grid;}}tileConfig;
+const Tile* tile_renderer_get_tile_config(GridType,uint8_t index){return &tileConfig.grid.tiles[index];}
 namespace tile_icon_source { inline lv_obj_t* card_icon(lv_obj_t*) { return nullptr; } inline void refresh_card(lv_obj_t*, const Tile&) {} inline uint32_t popup_background(lv_obj_t*, uint32_t fallback) { return fallback; } }
 constexpr int TILE_POPUP_OPEN_SHORT_PRESS=1;
 int getTilePopupOpenMode(const Tile&t){return t.popup_open_mode;}

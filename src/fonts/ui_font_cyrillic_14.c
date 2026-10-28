@@ -10,6 +10,8 @@
 #include "lvgl.h"
 #endif
 
+#include "src/fonts/glyph_cache.h"
+
 #ifndef UI_FONT_CYRILLIC_14
 #define UI_FONT_CYRILLIC_14 1
 #endif
@@ -839,7 +841,7 @@ const lv_font_t ui_font_cyrillic_14 = {
 lv_font_t ui_font_cyrillic_14 = {
 #endif
     .get_glyph_dsc = lv_font_get_glyph_dsc_fmt_txt,    /*Function pointer to get glyph's data*/
-    .get_glyph_bitmap = lv_font_get_bitmap_fmt_txt,    /*Function pointer to get glyph's bitmap*/
+    .get_glyph_bitmap = glyph_cache_bitmap,    /*Unpacked once, src/fonts/glyph_cache.c*/
     .line_height = 17,          /*The maximum line height required by the font*/
     .base_line = 3,             /*Baseline measured from the bottom of the line*/
 #if !(LVGL_VERSION_MAJOR == 6 && LVGL_VERSION_MINOR == 0)

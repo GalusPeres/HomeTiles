@@ -47,6 +47,11 @@
   function isScreensaverTileTab(tab) {
     return tab === 'screensaver';
   }
+  // The first of the screensaver's rows at the bottom of a layout's screen
+  // with `rows` rows: two, three upright (screensaver_places::first_row).
+  function screensaverFirstRow(key, rows) {
+    return Math.max(0, rows - (key === 'portrait' ? 3 : 2));
+  }
   function firstAllowedGridRow(tab, classic = false) {
     // The screensaver's two rows at the bottom of the shown grid, three
     // upright (screensaver_places.cpp); in the layout window at the bottom
@@ -56,8 +61,7 @@
     if (classic) return Math.max(0, GRID_ROWS - 2);
     const inWindow = typeof layoutWindow !== 'undefined' && layoutWindow;
     const key = inWindow ? layoutWindow.key : typeof ACTIVE_LAYOUT === 'string' ? ACTIVE_LAYOUT : 'classic';
-    const rows = inWindow ? LAYOUTS[key].rows : placeRows(tab);
-    return Math.max(0, rows - (key === 'portrait' ? 3 : 2));
+    return screensaverFirstRow(key, inWindow ? LAYOUTS[key].rows : placeRows(tab));
   }
   function restoreCurrentTileSelectionUi() {
     if (currentTileIndex === -1 || !currentTileTab) return;

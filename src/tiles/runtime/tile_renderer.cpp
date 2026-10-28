@@ -33,6 +33,7 @@
 #include "src/types/types_registry.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
+#include "src/core/diagnostics/tile_frame_probe.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_color_rules.h"
 #include "src/tiles/runtime/tile_icon_source.h"
@@ -45,6 +46,7 @@
 #include "src/web/server/web_admin.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/ui/shared/ui_surface_style.h"
+#include "src/ui/shared/rounded_corners.h"
 #include <Arduino.h>
 #include <HTTPClient.h>
 #include <Network.h>
@@ -367,6 +369,7 @@ static void clear_sensor_widgets(GridType grid_type) {
     target[i].chart = nullptr;
     target[i].series = nullptr;
     target[i].look = nullptr;
+    target[i].editable_hash = 0;
   }
 }
 
@@ -479,19 +482,6 @@ void reset_weather_widget(GridType grid_type, uint8_t grid_index) {
 
 void reset_weather_widgets(GridType grid_type) {
   clear_weather_widgets(grid_type);
-}
-
-// Drop only the cached payload hashes, keeping the widget pointers intact.
-// Used when a grid is restored from a folder cache: the widgets are reused, so
-// without this the hash short-circuit in update_weather_tile_state() would skip
-// re-applying the cached payload and the tile could stay blank ("--").
-void tile_renderer_invalidate_weather_payload(GridType grid_type) {
-  WeatherTileWidgets* target = g_tab0_weather;
-  if (grid_type == GridType::TAB1) target = g_tab1_weather;
-  else if (grid_type == GridType::TAB2) target = g_tab2_weather;
-  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
-    target[i].last_payload_hash = 0;
-  }
 }
 
 static void clear_media_widgets(GridType grid_type) {
@@ -2567,13 +2557,27 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
   // State colors follow the tile's surface (tile_surface, tile_icon_disc.h).
   const ui_theme::SurfaceScope surface = tile_surface::scope(widgets.icon_label ? widgets.icon_label : widgets.temp_label);
 
-  const TileGridConfig& grid = tileConfig.getActiveGrid();
-  const Tile& tile = grid.tiles[grid_index];
+  // The tile of the grid these widgets belong to: a hidden folder being built
+  // (tile_renderer_set_build_grid) has its own sizes, so its forecast count
+  // and condition room are its own, not those of the shown folder's tile at
+  // the same index.
+  const Tile* tile_ptr = tile_renderer_get_tile_config(grid_type, grid_index);
+  if (!tile_ptr) return;
+  const Tile& tile = *tile_ptr;
   // The temperature/humidity sensors (weather_sensors.h) count as part of
   // the state, so a sensor change re-renders an unchanged weather payload.
+  // So do today's date and day or night: the forecast's day names and the
+  // night icons change with them under the same payload. With all of them
+  // in the hash a restored folder keeps its weather as drawn (V2 b597: the
+  // full re-render on every turn to Home).
+  String today_date;
+  const bool has_today = get_local_today_date(today_date);
+  weather_icons::SunTimes sun;
+  weather_icons::parse_sun(payload, sun);
+  const bool night = weather_icons::night_now(sun);
   const uint32_t payload_hash = weather_sensors::mix_hash(
       tile.weather_temperature_sensor, tile.weather_humidity_sensor,
-      fnv1a_hash(payload));
+      fnv1a_hash(payload) ^ (fnv1a_hash(today_date.c_str()) * 31U) ^ (night ? 0x9E3779B9U : 0U));
   if (widgets.last_payload_hash == payload_hash) {
     return;
   }
@@ -2595,8 +2599,6 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
   }
   // Home Assistant reports partly cloudy and sunny at night too; the bridge
   // sun times switch them to their night icons.
-  weather_icons::SunTimes sun;
-  weather_icons::parse_sun(json.c_str(), sun);
   theme_schedule::note_sun(sun);
   icon_name = weather_icons::for_now(icon_name, sun);
 
@@ -2676,8 +2678,6 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
   const lv_coord_t card_h = tile_geometry::extent(
       tile.row, tile.span_h < 1 ? 1.0f : tile.span_h, GRID_CELL_H, GRID_GAP);
   const uint8_t forecast_limit = weather_shows_forecast(card_h) ? weather_forecast_count(card_w) : 0;
-  String today_date;
-  const bool has_today = get_local_today_date(today_date);
 
   if (widgets.temp_label) {
     // The temperature's unit a step smaller after it (value_unit.h); with
@@ -5246,6 +5246,12 @@ lv_obj_t* render_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint
     const ui_theme::SurfaceScope scope(surface_theme >= 0 ? surface_theme : ui_theme::kThemeSurface);
     lv_obj_t* tile_obj =
         desc->render(parent, col, row, tile, index, grid_type, scene_cb);
+    // Its rounded fill, frame line, icon discs, control bars and pills drawn
+    // from kept corners (rounded_corners.h). First, so the probe below times
+    // the corners with everything else.
+    rounded_corners::attach_tree(tile_obj);
+    // What it costs in large frames (tile_frame_probe.h).
+    tile_frame_probe::watch(tile_obj, index, static_cast<uint8_t>(tile.type));
     tile_surface::set(tile_obj, surface);
     if (const uint8_t rule = tile_surface_rule_of(tile, grid_type)) {
       // A tile filled from the start stays filled (its base is kJewel).

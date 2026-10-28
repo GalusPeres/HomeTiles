@@ -13,30 +13,33 @@ Last reviewed: 2026-10-26
 ## Releases and builds
 
 - FW v0.9.5 (hotfix) and FW + Bridge v0.9.4 released 2026-10-23. Bridge beta v0.9.6b1.
-- Pairing by IP without mDNS (#114, Bridge #16): `GET /api/link` + Bridge menu step; HA ok (b513).
-- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); beta define in `firmware_version.h`, last b577.
+- Pairing by IP, no mDNS (#114, Bridge #16): `GET /api/link`; HA ok (b513).
+- Test builds stay `v0.6.12bNNN` on purpose (System Update then offers releases); beta define in `firmware_version.h`, last b600.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build; a cache stays warm when only repo headers changed and the LVGL config fingerprint matches.
-- Docs CI: pinned Chrome for Testing 154.0.8037.57; after a release dispatch docs on `main` (a tag runs its own workflow).
+- Docs CI: Chrome for Testing 154.0.8037.57; dispatch docs (`main`) after a release.
 - Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need icons on HomeTiles-staging (tag = FW_VERSION).
 
 ## Active work
 
 - Power flow tile 28 ("Leistungsfluss", `src/types/energy_flow/`, picture 65): nodes in `/_tile_flow_entities`, options in key_code, node tap = Sensor popup; V2 HW ok b542; smooth lines/dots b568.
-- Media popup: layouts `sensor_display_mode` 0 cover left, 1 centre; controls only with their HA feature bit; menu box: speakers (group count), source, library; tile/head icon state form (`state_icon.h`).
-- Issue #116 (JC4880, camera popup ended after 18-60 min): the Bridge closed after 5 s without chunk ACK; v0.9.4b5 waits 45 s, one warning; FW logs gaps >= 1 s and Wi-Fi signal at stream end. Reporter pending; a stream pauses the wake word.
-- Issue #119 (Guition V1): the core's Helix overran its memory on MPEG-2.5 frames; own Helix (b501) `src/audio/helix_mp3`, TLS in PSRAM. Speaker audio from the Bridge (`docs-dev/audio-stream.md`): FFmpeg -> mono PCM over the camera tcp-ack listener (`HTAUD/1`); panels announce `"stream":"tcp-ack-v1"`, older ones download. HW ok. Camera sound: lip-synced live track (b507 HW ok, b508 even gaps HW pending). Small player, no queue; a pause frees the stream; the wake word is deaf while a clip plays.
-- Voice: microphone and wake word listening off on a new panel (b500, `2054a82a`); listening is its own setting, the chosen word stays (`applyWakeWordsCommand`). Bridge v0.9.4b6: Listening switch, word-only Wake word, battery auto-sleep removed. HW/HA test pending. Mic button + audio settings: mockup first; #91 Audio page declined.
+- Media popup: layouts `sensor_display_mode` 0 cover left, 1 centre; controls only with their HA feature bit; menu box: speakers, source, library; tile/head icon state form (`state_icon.h`).
+- #116 (JC4880 camera popup ended after 18-60 min): Bridge waits 45 s for a chunk ACK (v0.9.4b5); FW logs gaps >= 1 s. Reporter pending.
+- Issue #119 (Guition V1): own Helix (b501, `src/audio/helix_mp3`): the core's overran on MPEG-2.5; TLS in PSRAM. Speaker audio from the Bridge (`docs-dev/audio-stream.md`): FFmpeg -> mono PCM over the camera tcp-ack listener (`HTAUD/1`); panels announce `"stream":"tcp-ack-v1"`. HW ok. Camera sound: lip-synced live track (b507 HW ok, b508 even gaps HW pending).
+- Voice: mic/wake word off on a new panel (b500), listening its own setting, the word stays; Bridge v0.9.4b6 Listening switch. HW/HA test pending. Mic button + audio settings: mockup first; #91 declined.
 
 ## Do not retry (rejected with evidence)
 
 - Guition S3 XIP/`-O2` (`5279456`): risk, no gain; XIP needs 5.4 of the 8 MB PSRAM.
-- LVGL 2 draw threads: global compressed-font RLE state, glyph artifacts, no gain.
-- LVGL drawing into PSRAM (b576 full band): a full frame 385 ms vs 170 ms in the SRAM band.
+- LVGL 2 draw threads: shared font RLE state, glyph artifacts.
+- LVGL drawing into PSRAM (b576): frame 385 vs 170 ms.
+- Page pictures by CPU copy (b579): 60 ms copy each way, page turn 350 vs 230 ms.
+- V2 band 100 KB (b588/b589): 14 % faster, but the PPA hung on a 614x71 piece.
+- Page turn in tile columns (b587): flush 85 vs 22 ms, page came up in blocks. PSRAM is not the cost (b586).
 - S3 GT911 (fw 0x1060) steps slow drags and ignores config writes (also esp32-macropad #101).
 - P4 OTA: throttling, PSRAM staging, TLS-to-flash streaming, Hosted restart, permanent SDIO buffers.
 - Issue #30: a8204 markers, 20 MHz, 1-bit alone, 2.9.3 rollback. `JC-C6-slave_v2.3.2.bin` is packet mode: never flash it alone.
 - Camera: `-skip_loop_filter` (drift, PSNR 18.6 dB), key-frame-only fallback (1 FPS), H.264 decoding on the panel (no HW decoder), `-flags low_delay` (one decode thread).
-- Entity picker lists taken from the Bridge (b232-235 loop); b126 cover fade and b128 UI frame swap (lag); Wi-Fi power saving (P4 Hosted TX asserts, S3 link drops).
+- Entity picker lists taken from the Bridge (b232-235 loop); b126 cover fade, b128/b582 frame swap (lag); Wi-Fi power saving (P4 Hosted TX asserts, S3 link drops).
 
 ## Hardware validation
 
@@ -56,14 +59,16 @@ Last reviewed: 2026-10-26
 - Flash-write blue flash: cache-safe DSI/DMA/CSI objects (`tools/esp-idf-3.3.7-p4-cache-safe`).
 - #38: reporter SKU10153001-V2 vs maintainer SKU10153002-V2. Exact-V2 fixes `e1a9297`. SD (#55): reporter card init fails, a failed V2 mount stays final until restart, init cause open. Interrupt-WDT cause unproven.
 - #37: packets up to 65,535 bytes with bounded queues/ACKs; reporter confirmation pending.
+- lwIP TCP buffers sit in internal RAM (64 KB/socket): Web Admin answers pause above 24 KB (`WebSendPacer`, b600).
 
 ## Memory, flash, performance
 
-- LVGL PSRAM S3 2 MiB / P4 12 MiB; internal/DMA band <= 72 KiB; page caches S3 4 / P4 6. Bindings, popup history, Select options, renderer slot state, Binary Sensor queue and grids live in PSRAM.
+- LVGL PSRAM S3 2 MiB / P4 12 MiB; internal/DMA band <= 72 KiB; page caches S3 4 / P4 6. Bindings, popup history, Select options, slot state, queues and grids live in PSRAM.
 - S3 mallocs > 32 B prefer PSRAM (b324): internal free 42 -> ~89 KB, text-heavy steps slower. Open: S3 Web Admin pages block the loop 1-6 s.
-- Icon file: all 7447 MDI icons in LittleFS `/_mdi_icons_<px>.bin` (`tools/generate-icon-files.mjs`), 399 built in, one fixed PSRAM glyph cache; a missing file downloads once from its release; System page Icons card.
-- `-fno-exceptions` (-300 KiB per image), unused LVGL widgets off, Admin CSS minified (`formatCssDelivery`). LVGL 9.6.0 (lvgl#10306, caches `hometiles-lvgl96-*`).
-- Perf (released): nav preload (S3 max 3 grids, reserve, pressure release), shadow/circle caches, P4 CPU rotation for small areas, S3 PCLK 12 MHz.
+- Icon file: all 7447 MDI icons in LittleFS `/_mdi_icons_<px>.bin` (`tools/generate-icon-files.mjs`), 399 built in, one PSRAM raw cache; icon + text fonts unpack each glyph once (`glyph_cache.c`, P4 512 KB, S3 256, b599); a missing file downloads once from its release; System page Icons card.
+- `-fno-exceptions` (-300 KiB per image), unused LVGL widgets off, Admin CSS minified. LVGL 9.6.0 (lvgl#10306, caches `hometiles-lvgl96-*`).
+- Perf (released): nav preload (S3 max 3 grids), shadow/circle caches, P4 CPU rotation for small areas, S3 PCLK 12 MHz.
+- Cards/discs draw rounded fills and frame lines from kept corner masks (`rounded_corners.h`, b594); clock face one object.
 - Pending: artwork, sleep/wake, camera soak, memory minima.
 
 ## Camera

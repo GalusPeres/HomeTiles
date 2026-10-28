@@ -1,6 +1,7 @@
 #include "src/web/server/web_admin_utils.h"
 #include "src/core/text/title_text.h"
 #include <WiFi.h>
+#include <esp_heap_caps.h>
 #include <algorithm>
 #include <vector>
 #include <ctype.h>
@@ -190,15 +191,44 @@ void sendChunkedResponse(WebServer& server,
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(code, content_type, "");
 
+  WebSendPacer pacer;
   const size_t len = body.length();
   for (size_t offset = 0; offset < len; offset += chunk_size) {
     const size_t end = std::min(offset + chunk_size, len);
     server.sendContent(body.substring(offset, end));
     delay(2);
     yield();
+    pacer.wait();
   }
 
   server.sendContent("");
   delay(2);
   yield();
+}
+
+WebSendPacer::WebSendPacer()
+    : start_free_(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)), lowest_free_(start_free_) {}
+
+void WebSendPacer::wait() {
+  // At most 200 ms per chunk and 2 s per response: a stalled link still
+  // finishes the response as before.
+  constexpr uint32_t kChunkWaitMs = 200;
+  constexpr uint32_t kResponseWaitMs = 2000;
+  const uint32_t started = millis();
+  for (;;) {
+    const uint32_t free_now = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    if (free_now < lowest_free_) lowest_free_ = free_now;
+    if (free_now + kInFlightBytes >= start_free_) break;
+    const uint32_t waited = millis() - started;
+    if (waited >= kChunkWaitMs || waited_ms_ + waited >= kResponseWaitMs) break;
+    delay(2);
+  }
+  waited_ms_ += millis() - started;
+}
+
+WebSendPacer::~WebSendPacer() {
+  if (waited_ms_ < 10) return;
+  Serial.printf("[WebAdmin] Response paced for the network: waited %lu ms, internal free %u -> %u KB\n",
+                static_cast<unsigned long>(waited_ms_), static_cast<unsigned>(start_free_ / 1024),
+                static_cast<unsigned>(lowest_free_ / 1024));
 }

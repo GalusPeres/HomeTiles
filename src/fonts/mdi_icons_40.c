@@ -10,6 +10,7 @@
 #include "lvgl.h"
 
 #include "src/devices/device_select.h"
+#include "src/fonts/glyph_cache.h"
 #include "src/tiles/icons/mdi_icon_loader.h"
 
 #ifndef MDI_ICONS_40
@@ -14022,7 +14023,7 @@ static const lv_font_fmt_txt_dsc_t font_dsc = {
 
 const lv_font_t mdi_icons_40 = {
     .get_glyph_dsc = mdi_icon_loader_glyph_dsc,
-    .get_glyph_bitmap = lv_font_get_bitmap_fmt_txt,
+    .get_glyph_bitmap = glyph_cache_bitmap,
     .line_height = 42,
     .base_line = 6,
     .subpx = LV_FONT_SUBPX_NONE,

@@ -1,4 +1,7 @@
 #include "src/web/server/web_admin.h"
+
+#include <esp_heap_caps.h>
+
 #include "src/web/server/assets/web_admin_assets.h"
 #include "src/web/server/assets/web_admin_fonts.h"
 #include "src/web/server/web_admin_utils.h"
@@ -42,6 +45,10 @@ void WebAdminServer::setGithubUpdateInstallFailed(const char* error) {
   github_install_error = error ? error : "Update failed";
 }
 
+// The Web Admin's heap watch (WebAdminServer::start()/handle()).
+static constexpr uint32_t kHeapDropBytes = 16U * 1024U;
+static bool g_heap_drop_named = false;
+
 void webAdminMarkActivity() {
   g_web_admin_last_activity_ms = millis();
 }
@@ -76,6 +83,28 @@ bool WebAdminServer::start() {
     };
     server.collectHeaders(request_headers,
                           sizeof(request_headers) / sizeof(request_headers[0]));
+    // A request whose handler lowers the lowest internal heap since boot by
+    // 16 KB or more is named with its path and time (V2 b596: 19 KB internal
+    // free while the Web Admin loaded its folders after a restart). Read here,
+    // around the handler, the path before it: once the handler ran the server
+    // has cleared it (b597 after handleClient(), b598 after next() printed none).
+    server.addMiddleware([](WebServer& web, Middleware::Callback next) {
+      const String path = web.uri();
+      const uint32_t lowest_before = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+      const uint32_t started_ms = millis();
+      const bool handled = next();
+      const uint32_t lowest_after = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+      if (lowest_after + kHeapDropBytes < lowest_before) {
+        g_heap_drop_named = true;
+        Serial.printf("[Mem] Web Admin request %s lowered the internal minimum %u -> %u KB in %lu ms"
+                      " (free %u KB, largest %u KB)\n",
+                      path.c_str(), static_cast<unsigned>(lowest_before / 1024),
+                      static_cast<unsigned>(lowest_after / 1024), static_cast<unsigned long>(millis() - started_ms),
+                      static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+                      static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024));
+      }
+      return handled;
+    });
 #if HOMETILES_LOOP_STALL_DIAGNOSTICS
     // Names the request whose handler runs in the loop stall diagnostics.
     server.addMiddleware([](WebServer& web, Middleware::Callback next) {
@@ -320,8 +349,18 @@ void WebAdminServer::stop() {
 
 void WebAdminServer::handle() {
   if (!running) return;
+  // The heap watch of the request handlers (start()) names a request that
+  // lowers the lowest internal heap since boot; a drop outside any handler
+  // (accepting, reading the request) is logged here.
+  const uint32_t lowest_before = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+  g_heap_drop_named = false;
   server.handleClient();
   loop_stall::webIdle();
+  const uint32_t lowest_after = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+  if (!g_heap_drop_named && lowest_after + kHeapDropBytes < lowest_before) {
+    Serial.printf("[Mem] Web Admin lowered the internal minimum %u -> %u KB outside a request handler\n",
+                  static_cast<unsigned>(lowest_before / 1024), static_cast<unsigned>(lowest_after / 1024));
+  }
   webAdminServiceOta();
 }
 

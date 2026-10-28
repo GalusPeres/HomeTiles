@@ -257,7 +257,7 @@ int main() {
 `);
 const binary = path.join(out, process.platform === 'win32' ? 'test.exe' : 'test');
 let run = spawnSync(host.cxx, ['-I', path.join(out, 'shim'), ...host.flags, '-std=c++17', '-Wno-deprecated-declarations', source,
-  path.join(root, 'src/types/clock/clock_face.cpp'), host.archive, '-o', binary], {encoding: 'utf8'});
+  path.join(root, 'src/types/clock/clock_face.cpp'), path.join(root, 'src/ui/shared/rounded_corners.cpp'), host.archive, '-o', binary], {encoding: 'utf8'});
 assert.equal(run.status, 0, run.stdout + run.stderr);
 run = spawnSync(binary, [], {encoding: 'utf8'});
 assert.equal(run.status, 0, run.stdout + run.stderr);

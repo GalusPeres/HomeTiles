@@ -37,7 +37,7 @@ assert.doesNotMatch(show, /save|commit|tile_layouts::set/);
 // badge (a tick on the screen, "!" in the storage).
 const windowJs = fs.readFileSync(path.join(root, 'src/web/admin/tiles/layout-window.js'), 'utf8').replace(/\r\n/g, '\n');
 assert.match(windowJs, /function layoutMustReach\(type\) \{ return \[4, 7\]\.includes\(Number\(type\)\); \}/);
-assert.match(windowJs, /return !layoutInside\(tile, key\) && \(layoutMustReach\(tile\.type\) \|\| !layoutParked\(tile, key\)\);/);
+assert.match(windowJs, /return !layoutInside\(tile, key, tab\) && \(layoutMustReach\(tile\.type\) \|\| !layoutParked\(tile, key\)\);/);
 assert.match(windowJs, /:scope > \.tile:is\(\[data-type="4"\], \[data-type="7"\]\):not\(\.empty\)/);
 assert.match(windowJs, /if \(Number\(tile\.type\) === 7\) settingsMissing\+\+;/);
 assert.match(windowJs, /if \(settingsMissing\) notes\.push\(\['missing', 'cog-outline', t\('layoutSettingsMissing'\)\]\);/);

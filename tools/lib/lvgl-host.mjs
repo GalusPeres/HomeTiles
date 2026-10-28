@@ -27,6 +27,8 @@ export async function lvglHost(root) {
   const fonts = [
     ...walk(path.join(root, 'src/fonts')).filter(p => /(?:ui_(font_(12|14|16|20|24|28|32|40|48|56|64|72|80|96|cyrillic_12|cyrillic_14|cyrillic_16|cyrillic_20|cyrillic_24)|symbols_(20|24))|mdi_bar_icons_(15|18|22|26|34)|weather_icons_(32|40|48))\.c$/.test(p)),
     ...walk(path.join(root, 'tools/mdi-fonts')).filter(p => /mdi_icons_(32|40|48)\.c$/.test(p)),
+    // The icon fonts unpack their glyphs through it.
+    path.join(root, 'src/fonts/glyph_cache.c'),
   ];
   const objects = [], pending = [];
   for (const file of [...sources.filter(p => p.endsWith('.c')), ...fonts]) {

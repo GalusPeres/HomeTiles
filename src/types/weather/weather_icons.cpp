@@ -134,13 +134,17 @@ bool is_night(const SunTimes& sun, const char* date, int minute) {
   return false;
 }
 
-String for_now(const String& icon_name, const SunTimes& sun) {
-  if (!sun.count) return icon_name;
+bool night_now(const SunTimes& sun) {
+  if (!sun.count) return false;
   struct tm now {};
-  if (!getLocalTime(&now, 0)) return icon_name;
+  if (!getLocalTime(&now, 0)) return false;
   char date[16];
   strftime(date, sizeof(date), "%Y-%m-%d", &now);
-  return is_night(sun, date, now.tm_hour * 60 + now.tm_min) ? at_night(icon_name) : icon_name;
+  return is_night(sun, date, now.tm_hour * 60 + now.tm_min);
+}
+
+String for_now(const String& icon_name, const SunTimes& sun) {
+  return night_now(sun) ? at_night(icon_name) : icon_name;
 }
 
 void follow_icon_color(lv_obj_t* label, bool forced) {

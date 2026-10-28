@@ -542,6 +542,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
     target[index].chart = chart;
     target[index].series = series;
     target[index].look = look;
+    target[index].editable_hash = 0;
   }
   // The graph's area and the look's track take the circle's color (after
   // add_round made the disc).

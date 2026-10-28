@@ -59,4 +59,25 @@ void sendChunkedResponse(WebServer& server,
                          const String& body,
                          size_t chunk_size = 512);
 
+// lwIP keeps a socket's unsent and unacknowledged data in internal RAM, up to
+// 64 KB per socket (CONFIG_LWIP_TCP_SND_BUF_DEFAULT; the Arduino libraries do
+// not move lwIP buffers to PSRAM). A large response written faster than Wi-Fi
+// sends it took the internal heap from 92 to 14 KB (V2 b598, the Web Admin's
+// /api/tiles; 183 -> 57 KB for the page in b597) and the panel flashed blue
+// for a moment. Between the chunks of a response, wait() pauses while the
+// response holds more than kInFlightBytes of internal RAM, so the network
+// drains first. A response that had to wait logs it once, in English.
+class WebSendPacer {
+ public:
+  static constexpr uint32_t kInFlightBytes = 24U * 1024U;
+  WebSendPacer();
+  ~WebSendPacer();
+  void wait();
+
+ private:
+  uint32_t start_free_;
+  uint32_t lowest_free_;
+  uint32_t waited_ms_ = 0;
+};
+
 #endif // WEB_ADMIN_UTILS_H

@@ -16,4 +16,7 @@ struct SensorTileWidgets {
   lv_chart_series_t* series = nullptr;
   // A look below the header (sensor_look_view, display modes 3 and up).
   lv_obj_t* look = nullptr;
+  // Number/Select/Date-Time: what the value label shows (refresh_editable_tile),
+  // 0 before the first refresh.
+  uint32_t editable_hash = 0;
 };

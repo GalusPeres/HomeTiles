@@ -268,7 +268,7 @@ function postProcess(source, {size, layout}) {
   replace(/^#ifdef LV_LVGL_H_INCLUDE_SIMPLE\r?\n#include "lvgl\.h"\r?\n#else\r?\n#include "lvgl\/lvgl\.h"\r?\n#endif/m,
     '#include "lvgl.h"');
   replace(new RegExp(`^#ifndef ${macro}\\r?\\n#define ${macro} 1\\r?\\n#endif`, 'm'),
-    `#include "src/devices/device_select.h"\n\n#ifndef ${macro}\n#if ${layout}\n#define ${macro} 1\n` +
+    `#include "src/devices/device_select.h"\n#include "src/fonts/glyph_cache.h"\n\n#ifndef ${macro}\n#if ${layout}\n#define ${macro} 1\n` +
     `#else\n#define ${macro} 0\n#endif\n#endif`);
   replace(new RegExp(`^#if ${macro}$`, 'm'),
     `#if ${macro}\n\n// Every icon that is not a weather layer comes from the MDI font.\nLV_FONT_DECLARE(mdi_icons_${size})`);
@@ -276,6 +276,9 @@ function postProcess(source, {size, layout}) {
   replace(/\.line_height = \d+,/, `.line_height = ${lineHeight},`);
   replace(/\.base_line = -?\d+,/, `.base_line = ${baseLine},`);
   replace(/\.fallback = NULL,/, `.fallback = &mdi_icons_${size},`);
+  // Each glyph is unpacked once, not for every draw band (src/fonts/glyph_cache.c).
+  replace(/\.get_glyph_bitmap = lv_font_get_bitmap_fmt_txt,.*$/m,
+    '.get_glyph_bitmap = glyph_cache_bitmap,    /*Unpacked once, src/fonts/glyph_cache.c*/');
   return source.replace(/\r\n/g, '\n').trimEnd() + '\n';
 }
 

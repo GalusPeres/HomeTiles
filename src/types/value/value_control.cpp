@@ -49,6 +49,21 @@ String request_id() {
 String pending_entities[8];
 uint8_t pending_count = 0;
 uint32_t value_generation = 1;
+uint32_t configuration_generation = 1;
+
+// What a value label shows: the payload in the panel language and the current
+// editable configuration (FNV-1a, never 0).
+uint32_t shown_signature(const String& payload, const char* language) {
+  uint32_t hash = 2166136261u;
+  const auto mix = [&hash](const char* text) {
+    for (; text && *text; ++text) hash = (hash ^ static_cast<uint8_t>(*text)) * 16777619u;
+    hash = (hash ^ 0xFFu) * 16777619u;
+  };
+  mix(payload.c_str());
+  mix(language);
+  hash ^= configuration_generation * 0x9E3779B1u;
+  return hash ? hash : 1u;
+}
 }
 
 bool editable_entity_matches(TileType type, const String& entity) {
@@ -169,7 +184,14 @@ void refresh_editable_tile(GridType grid, uint8_t index) {
   if (!tile || !tileTypeIsEditableValue(tile->type)) return;
   SensorTileWidgets* widgets = tile_renderer_get_sensor_widgets(grid);
   if (!widgets || !widgets[index].value_label) return;
-  const EditableValue value = parse_editable_value(haBridgeConfig.findEditableValue(tile->sensor_entity));
+  const String payload = haBridgeConfig.findEditableValue(tile->sensor_entity);
+  // A page turn re-applies every cached state (V2 b598: page 1's four
+  // editable tiles took 6-8 ms of each turn): a label that already shows this
+  // payload, in this language and configuration, keeps it.
+  const uint32_t shown = shown_signature(payload, configManager.getConfig().language);
+  if (widgets[index].editable_hash == shown) return;
+  widgets[index].editable_hash = shown;
+  const EditableValue value = parse_editable_value(payload);
   const String display = editable_display_value(value);
   // One line: a long value (a Select option) ends in dots instead of
   // wrapping into the title.
@@ -204,7 +226,12 @@ void queue_editable_value(const String& entity, const char* payload) {
 }
 
 uint32_t editable_value_generation() { return value_generation; }
-void editable_configuration_changed() { ++value_generation; pending_entities[0] = "*"; pending_count = 1; }
+void editable_configuration_changed() {
+  ++value_generation;
+  ++configuration_generation;
+  pending_entities[0] = "*";
+  pending_count = 1;
+}
 
 void process_editable_updates(uint8_t budget) {
   uint8_t processed = 0;

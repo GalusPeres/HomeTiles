@@ -30,6 +30,7 @@
 #include "src/network/bridge/entity_search.h"
 #include "src/network/secure/command_channel.h"
 #include "src/ui/screensaver/image_screensaver.h"
+#include "src/core/memory/psram_static.h"
 #include "src/ui/popups/weather/weather_popup.h"
 #include "src/ui/tabs/settings/settings_model.h"
 #include "src/ui/tabs/settings/settings_screen.h"
@@ -56,7 +57,9 @@ static ha_pair_callback_t g_ha_pair_callback = nullptr;
 
 // WiFi scan results, strongest first.
 struct WifiScanEntry { char ssid[33]; int16_t rssi; bool open; };
-static WifiScanEntry wifi_scan_results[24];
+// In PSRAM, not in internal RAM: the S3 draw band gets what internal RAM
+// leaves above its reserve (psram_static.h).
+static WifiScanEntry (&wifi_scan_results)[24] = psram_static_array<WifiScanEntry, 24>();
 static size_t wifi_scan_result_count = 0;
 // Pause scans briefly after requesting a connection/reconnection;
 // a running scan would interfere with WiFi.begin() in the main loop.
@@ -751,7 +754,9 @@ static bool g_wifi_scanning = false;
 // A wanted scan waits while the hotspot is on, the WiFi driver is off or a
 // connection was just requested, and starts once that has passed.
 static bool g_wifi_scan_wanted = false;
-static WifiNetwork g_wifi_list[25];
+// In PSRAM, not in internal RAM: the S3 draw band gets what internal RAM
+// leaves above its reserve (psram_static.h).
+static WifiNetwork (&g_wifi_list)[25] = psram_static_array<WifiNetwork, 25>();
 static uint8_t g_wifi_list_count = 0;
 static char g_connect_ssid[33] = {};
 static uint32_t g_connect_started_ms = 0;

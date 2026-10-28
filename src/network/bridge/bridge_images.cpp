@@ -2,6 +2,7 @@
 
 #include <esp_heap_caps.h>
 
+#include "src/core/memory/psram_static.h"
 #include "src/network/mqtt/mqtt_topics.h"
 #include "src/tiles/config/grid_layout.h"
 #include "src/tiles/runtime/tile_renderer.h"
@@ -17,7 +18,9 @@ namespace {
 // theirs; the oldest picture makes room. A tile keeps its decoded pixels, so
 // it needs its JPEG only until it has decoded it.
 constexpr size_t kPictures = 12;
-Picture g_pictures[kPictures];
+// In PSRAM, not in internal RAM: the S3 draw band gets what internal RAM
+// leaves above its reserve (psram_static.h).
+Picture (&g_pictures)[kPictures] = psram_static_array<Picture, kPictures>();
 uint32_t g_tick = 0;
 
 void release(Picture& picture) {

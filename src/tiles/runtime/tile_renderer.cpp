@@ -34,6 +34,7 @@
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/core/diagnostics/tile_frame_probe.h"
+#include "src/core/memory/psram_static.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_color_rules.h"
 #include "src/tiles/runtime/tile_icon_source.h"
@@ -566,7 +567,9 @@ struct SensorUpdate {
 // (35 on the 7x5 layouts); the queue must hold that without dropping.
 static constexpr uint8_t QUEUE_SIZE =
     TILES_PER_GRID + 8 > 32 ? static_cast<uint8_t>(TILES_PER_GRID + 8) : 32;
-static SensorUpdate g_update_queue[QUEUE_SIZE];
+// In PSRAM, not in internal RAM: the S3 draw band gets what internal RAM
+// leaves above its reserve (psram_static.h).
+static SensorUpdate (&g_update_queue)[QUEUE_SIZE] = psram_static_array<SensorUpdate, QUEUE_SIZE>();
 
 // Keep byte-sized queue cursors together to avoid padding before each aligned
 // queue array. Array declarations and construction order remain unchanged.
@@ -742,7 +745,10 @@ static_assert(TILES_PER_GRID <= 64,
               "Switch update masks require at most 64 tile slots");
 
 static const uint8_t SWITCH_QUEUE_SIZE = 32;
-static SwitchUpdate g_switch_queue[SWITCH_QUEUE_SIZE];
+// In PSRAM, not in internal RAM: the S3 draw band gets what internal RAM
+// leaves above its reserve (psram_static.h).
+static SwitchUpdate (&g_switch_queue)[SWITCH_QUEUE_SIZE] =
+    psram_static_array<SwitchUpdate, SWITCH_QUEUE_SIZE>();
 static uint32_t g_switch_overflow_count = 0;
 
 static void invalidate_queued_switch_slot(GridType grid_type,
@@ -2968,7 +2974,9 @@ struct MediaUpdate {
 };
 
 static const uint8_t MEDIA_QUEUE_SIZE = 24;
-static MediaUpdate g_media_queue[MEDIA_QUEUE_SIZE];
+// In PSRAM, not in internal RAM: the S3 draw band gets what internal RAM
+// leaves above its reserve (psram_static.h).
+static MediaUpdate (&g_media_queue)[MEDIA_QUEUE_SIZE] = psram_static_array<MediaUpdate, MEDIA_QUEUE_SIZE>();
 static uint32_t g_media_overflow_count = 0;
 
 static String media_first_non_empty(const String& a,

@@ -4,8 +4,9 @@
 // moved into internal RAM (.dram0.bss b480 74144 -> b605 87112 bytes, boot
 // heap 208 -> 191 KB): v0.9.5 drew in 50 rows, b605 in 31, so a full frame
 // took 16 bands instead of 10 and LVGL walked every widget again for each.
-// The large tables now come from LVGL's heap (PSRAM on the panels), made on
-// first use, and the frame probe exists in test builds only.
+// The large tables now come from LVGL's heap or PSRAM (b606, b607), and the
+// frame and text fit probes exist only when a measurement round turns them
+// on (b607: the user judges test builds by feel against the releases).
 import assert from 'node:assert/strict';
 import {readRepoFile} from '../../lib/admin-source.mjs';
 
@@ -34,10 +35,15 @@ const watch = probe.slice(probe.indexOf('void watch(lv_obj_t* card, uint8_t inde
 assert.ok(watch.indexOf('if (!g_tiles && !alloc_tables()) return;') >= 0 &&
   watch.indexOf('if (!g_tiles && !alloc_tables()) return;') < watch.indexOf('lv_display_add_event_cb(g_display, display_cb, code, nullptr);'),
   'the tables exist before any callback can use them');
-assert.ok(probe.includes('#include "src/core/firmware/firmware_version.h"') &&
-  probe.indexOf('#if defined(HOMETILES_BETA_BUILD)') < probe.indexOf('namespace {') &&
+assert.ok(probe.indexOf('#if defined(HOMETILES_FRAME_PROBE)') >= 0 &&
+  probe.indexOf('#if defined(HOMETILES_FRAME_PROBE)') < probe.indexOf('namespace {') &&
   probe.includes('#else\n\nvoid watch(lv_obj_t*, uint8_t, uint8_t) {}\n\n#endif\n\n}  // namespace tile_frame_probe'),
-  'a release build carries no probe');
+  'a build without the switch carries no probe');
+assert.ok(read('src/core/diagnostics/tile_frame_probe.h').includes('\n// #define HOMETILES_FRAME_PROBE 1\n'),
+  'the switch is off in test builds');
+const textFit = read('src/core/diagnostics/text_fit_probe.h');
+assert.ok(textFit.includes('\n// #define HOMETILES_TEXT_FIT_PROBE 1\n') && !textFit.includes('#if defined(HOMETILES_TEST_BETA)'),
+  'the text fit probe is off in test builds too');
 
 // Kept corner sets (b594, 24 x 124 bytes): made in LVGL's heap with the first set.
 const corners = read('src/ui/shared/rounded_corners.cpp');
@@ -51,5 +57,26 @@ const flow = read('src/types/energy_flow/renderer.cpp');
 assert.ok(!flow.includes('DrawProbe g_probes[') && flow.includes('DrawProbe* g_probes = nullptr;'));
 assert.ok(flow.includes('if (!g_probes) g_probes = static_cast<DrawProbe*>(lv_malloc_zeroed(sizeof(DrawProbe) * kMaxProbes));\n  if (!g_probes) return;'),
   'made with the first probe');
+
+// b607: static arrays placed in PSRAM while static objects are built
+// (psram_static.h): the tile update queues, the WiFi lists and the bridge
+// pictures; the color table and the popup timing line in the heap.
+const helper = read('src/core/memory/psram_static.h');
+assert.ok(helper.includes('heap_caps_malloc(sizeof(T) * N, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);') &&
+  helper.includes('for (size_t i = 0; i < N; ++i) new (&items[i]) T();'), 'PSRAM first, every item constructed');
+for (const [file, table] of [
+  ['src/tiles/runtime/tile_renderer.cpp', 'static SensorUpdate (&g_update_queue)[QUEUE_SIZE] = psram_static_array<SensorUpdate, QUEUE_SIZE>();'],
+  ['src/tiles/runtime/tile_renderer.cpp', 'psram_static_array<SwitchUpdate, SWITCH_QUEUE_SIZE>();'],
+  ['src/tiles/runtime/tile_renderer.cpp', 'static MediaUpdate (&g_media_queue)[MEDIA_QUEUE_SIZE] = psram_static_array<MediaUpdate, MEDIA_QUEUE_SIZE>();'],
+  ['src/ui/tabs/settings/tab_settings.cpp', 'static WifiScanEntry (&wifi_scan_results)[24] = psram_static_array<WifiScanEntry, 24>();'],
+  ['src/ui/tabs/settings/tab_settings.cpp', 'static WifiNetwork (&g_wifi_list)[25] = psram_static_array<WifiNetwork, 25>();'],
+  ['src/ui/tabs/settings/setup_screen.cpp', 'settings_model::WifiNetwork (&g_networks)[24] = psram_static_array<settings_model::WifiNetwork, 24>();'],
+  ['src/network/bridge/bridge_images.cpp', 'Picture (&g_pictures)[kPictures] = psram_static_array<Picture, kPictures>();']]) {
+  assert.ok(read(file).includes(table), `${file}: ${table}`);
+}
+assert.ok(!read('src/ui/shared/tone_color.h').includes('static float table[256];') &&
+  read('src/ui/shared/tone_color.h').includes('float* made = static_cast<float*>(malloc(256 * sizeof(float)));'));
+assert.ok(!read('src/core/diagnostics/popup_timing.h').includes('static char line[1024];') &&
+  read('src/core/diagnostics/popup_timing.h').includes('static char* const line = static_cast<char*>(malloc(kLineBytes));'));
 
 console.log('Large tables stay out of internal RAM, the S3 draw band keeps its rows');

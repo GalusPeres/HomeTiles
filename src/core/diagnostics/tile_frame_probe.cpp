@@ -6,7 +6,6 @@
 #include <string.h>
 
 #include "src/core/display/display_flush_gate.h"
-#include "src/core/firmware/firmware_version.h"
 #include "src/fonts/glyph_cache.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/types/types_registry.h"
@@ -21,9 +20,8 @@
 #endif
 
 namespace tile_frame_probe {
-// Test builds only: the timing slows every other measured frame (S3 b605:
-// Home 246 ms timed, 210-225 ms lite), so a release carries no probe.
-#if defined(HOMETILES_BETA_BUILD)
+// Measurement rounds only (tile_frame_probe.h).
+#if defined(HOMETILES_FRAME_PROBE)
 namespace {
 
 constexpr uint32_t kFrameSharePercent = 40;

@@ -223,6 +223,12 @@ ${surfaceStyleHost(root)}
 enum : int { TILE_SENSOR = 1, TILE_BINARY_SENSOR, TILE_ENERGY, TILE_SCENE, TILE_FOLDER, TILE_BACK, TILE_CAMERA, TILE_SETTINGS,
   TILE_NUMBER, TILE_SELECT, TILE_DATETIME, TILE_LOCK, TILE_ALARM, TILE_FAN, TILE_CLOCK, TILE_SWITCH, TILE_COVER, TILE_CLIMATE,
   TILE_TEXT, TILE_CALENDAR };
+// PSRAM tables (psram_static.h) come from the host's heap.
+#include <new>
+#define MALLOC_CAP_SPIRAM 0
+#define MALLOC_CAP_8BIT 0
+inline void* heap_caps_malloc(size_t bytes, int) { return malloc(bytes); }
+${strip(read('src/core/memory/psram_static.h'))}
 ${strip(read('src/tiles/config/tile_geometry.h'))}
 ${strip(read('src/tiles/config/grid_layout.h'))}
 ${strip(read('src/ui/popups/popup_layout.h'))}

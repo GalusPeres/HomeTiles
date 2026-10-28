@@ -39,6 +39,24 @@ const normalizeCases = [
 for (const [input, bar, rows, expected] of normalizeCases) {
   assert.equal(js.normalizeIconColorRecord(input, bar, rows), expected, `JS normalize ${JSON.stringify(input)}`);
 }
+// Own-entity rules of the types that do not evaluate their own state
+// (Switch, Cover, Climate, Media, ...: no bar, no rows of their own) keep
+// their "src rules self" line for the rule layer; records before b575 that
+// lost it get it back. The Sensor family keeps it implicit (issue #102).
+// [input, allowBar, allowRows, allowSelf, expected]
+const selfCases = [
+  ['v2\n\nsrc rules self\nis FFC107,door-open on\nis 9E9E9E,door off', false, false, true,
+    'v2\n\nsrc rules self\nis FFC107,door-open on\nis 9E9E9E,door off'],
+  ['v2\n\nis FFC107,door-open on\nbar steps 0 10 0:000000 1000:FFFFFF', false, false, true,
+    'v2\n\nsrc rules self\nbar steps 0 10 0:000000 1000:FFFFFF\nis FFC107,door-open on'],
+  ['v2\nFF0000', false, false, true, 'v2\nFF0000'],
+  ['v2\n\nsrc rules self\nhas F44336,trash-can 6', false, true, true, 'v2\n\nhas F44336,trash-can 6'],
+  ['v2\n\nis FFC107 on', true, true, true, 'v2\n\nis FFC107 on'],
+  ['v2\n\nis FFC107 on', false, false, false, ''],
+];
+for (const [input, bar, rows, self, expected] of selfCases) {
+  assert.equal(js.normalizeIconColorRecord(input, bar, rows, true, self), expected, `JS own rules ${JSON.stringify(input)}`);
+}
 
 // Evaluation: [record, state, display] -> color and icon.
 const battery = 'v2\n\nbar steps 0 100 0:E53935,battery-alert 200:FB8C00,battery-30 500:FDD835 800:43A047,battery';
@@ -82,6 +100,19 @@ ${normalizeCases.map(([input, bar, rows]) => `    {${escape(input)}, ${bar}, ${r
     normalize(c.in, out, sizeof(out), c.bar, c.rows);
     printf("N %s\\x1f\\n", out);
   }
+  static const struct { const char* in; bool bar; bool rows; bool self; } self_cases[] = {
+${selfCases.map(([input, bar, rows, self]) => `    {${escape(input)}, ${bar}, ${rows}, ${self}},`).join('\n')}
+  };
+  for (const auto& c : self_cases) {
+    normalize(c.in, out, sizeof(out), c.bar, c.rows, true, c.self, false);
+    printf("S %s\\x1f\\n", out);
+  }
+  // A Switch's own layer subscribes to nothing new (its own entity).
+  {
+    const char* entity = nullptr;
+    size_t length = 0;
+    printf("SUB %d\\n", source("v2\\n\\nsrc rules self\\nis FFC107,door-open on", entity, length) == SourceMode::None ? 1 : 0);
+  }
   static const struct { const char* record; const char* state; const char* display; } resolve_cases[] = {
 ${resolveCases.map(([record, state, display]) => `    {${escape(record)}, ${escape(state)}, ${display === null ? 'nullptr' : escape(display)}},`).join('\n')}
   };
@@ -115,6 +146,10 @@ if (native !== null) {
   const records = native.split('\x1f\n').filter(part => part.includes('N ')).map(part => part.slice(part.indexOf('N ') + 2));
   assert.deepEqual(records.slice(0, normalizeCases.length), normalizeCases.map(([, , , expected]) => expected),
     'Firmware and Web Admin normalize icons alike');
+  const selfRecords = native.split('\x1f\n').filter(part => part.includes('S ')).map(part => part.slice(part.indexOf('S ') + 2));
+  assert.deepEqual(selfRecords.slice(0, selfCases.length), selfCases.map(([, , , , expected]) => expected),
+    'Firmware and Web Admin keep own-entity rules of Switch and co. alike');
+  assert.ok(native.includes('SUB 1'), 'Own-entity layers subscribe to no other entity');
   assert.deepEqual(lines.filter(line => line.startsWith('R ')).map(line => line.slice(2)), previews,
     'Firmware and Web Admin resolve the same colors and icons');
   assert.ok(lines.includes('BIG ' + lines.find(line => line.startsWith('BIG ')).split(' ')[1] + ' 1'),

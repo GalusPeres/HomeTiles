@@ -929,6 +929,20 @@ inline bool append_row(const Rule& rule, char* out, size_t& n) {
   return true;
 }
 
+// Whether a v2 record has a color bar or a state line.
+inline bool has_rule_lines(const char* record) {
+  if (!is_v2(record)) return false;
+  for (const char* p = line_end(second_line(record)); *p == '\n';) {
+    const char* begin = p + 1;
+    const char* end = line_end(begin);
+    p = end;
+    if (starts_with(begin, end, "bar ")) return true;
+    Rule rule;
+    if (parse_rule(begin, end, rule) && text_op(rule.op)) return true;
+  }
+  return false;
+}
+
 // Normalizes any input record (Web Admin, import, sidecar, b39 format) into
 // the canonical v2 form: uppercase colors, one valid source entity when
 // `allow_source`, one valid bar with sorted stops when `allow_bar`, up to six
@@ -943,8 +957,19 @@ inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_b
   out[0] = '\0';
   if (!in || out_size < kMaxRecordBytes + 1) return 0;
   const bool v2 = is_v2(in);
+  // Only the Sensor family and the Binary sensor evaluate rules on their own
+  // state themselves (tile_icon_color_rules.h).
+  const bool own_rules = allow_bar || allow_rows;
   Source layer = allow_source ? source_of(in) : Source{};
   if (layer.self && !allow_self) layer = Source{};
+  // Every other type with an entity of its own (Switch, Cover, Climate,
+  // Media, ...) evaluates them in the rule layer, so they keep their "src
+  // rules self" line; records before b575 stored them without one, which no
+  // path read (user 2026-10-28, issue #102).
+  if (layer.mode == SourceMode::None && v2 && allow_source && allow_self && !own_rules && has_rule_lines(in)) {
+    layer.mode = SourceMode::Rules;
+    layer.self = true;
+  }
   if (layer.mode == SourceMode::Rules) {
     // Another entity, or a type without its own state colors, can use both
     // the bar and the state lines; the Sensor family keeps its type's choice.
@@ -956,11 +981,11 @@ inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_b
     allow_bar = false;
     allow_rows = false;
   }
-  // "src rules self" that colors the icon only is the b40 default of tiles
-  // with their own entity; it stays implicit so existing records keep their
-  // exact form.
+  // "src rules self" that colors the icon only is the b40 default of the
+  // types that evaluate their own state; it stays implicit there so existing
+  // records keep their exact form.
   const bool emit_layer = layer.mode != SourceMode::None &&
-                          !(layer.mode == SourceMode::Rules && layer.self && layer.icon &&
+                          !(own_rules && layer.mode == SourceMode::Rules && layer.self && layer.icon &&
                             layer.tile == 0 && layer.enabled);
   // Fixed color: line 2 of a v2 record, line 1 of a b39 record.
   const char* fixed_begin = v2 ? second_line(in) : in;

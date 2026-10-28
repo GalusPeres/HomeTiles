@@ -410,8 +410,10 @@ int main(){
   TileGridConfig grid;grid.tiles[2].type=type;reboot();applyIconColorsFromSd(3,grid);assert(grid.tiles[2].icon_colors=="v2\nFF8800");
  }
  // Tiles with their own state colors keep a fixed color and their rules;
- // own rules there may use the bar and the state list.
- assert(normalizeTileIconColors(TILE_SWITCH,full.c_str())=="v2\nFF8800");
+ // own rules there may use the bar and the state list, in the rule layer
+ // ("src rules self"; records that lost the line get it back, issue #102).
+ assert(normalizeTileIconColors(TILE_SWITCH,full.c_str())=="v2\nFF8800\nsrc rules self\nbar smooth 0 100 0:3B82F6 1000:EF4444\nis 4CAF50 on");
+ assert(normalizeTileIconColors(TILE_SWITCH,"v2\n\nsrc rules self\nis 4CAF50 on")=="v2\n\nsrc rules self\nis 4CAF50 on");
  assert(normalizeTileIconColors(TILE_SWITCH,"v2\nFF8800\nsrc rules self tile=30\nis 4CAF50 on")=="v2\nFF8800\nsrc rules self tile=30\nis 4CAF50 on");
  assert(normalizeTileIconColors(TILE_FOLDER,"v2\n\nsrc rules self\nis 4CAF50 on")=="");
  assert(normalizeTileIconColors(TILE_CLOCK,"v2\n\nsrc auto light.x tile=20")=="v2\n\nsrc auto light.x tile=20");

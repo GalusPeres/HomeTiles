@@ -388,14 +388,28 @@
     return { mode: 'steps', min, max: highest, minText: String(min), maxText: String(highest), stops };
   }
 
+  // has_rule_lines(): a v2 record with a color bar or a state line.
+  function iconColorHasRuleLines(text) {
+    if (!iconColorIsV2(text)) return false;
+    return text.split('\n').slice(2).some(line => line.startsWith('bar ') ||
+      ['is', 'has'].includes(iconColorParseRule(line)?.op));
+  }
+
   // normalize(): any record (editor, import, b39) in the canonical v2 form;
   // numeric types keep only the bar, text types only the state lines.
   function normalizeIconColorRecord(record, allowBar, allowRows, allowSource = false, allowSelf = false,
     allowCover = false) {
     const text = String(record ?? '');
     const v2 = iconColorIsV2(text);
+    // Only the Sensor family and the Binary sensor evaluate rules on their
+    // own state themselves; every other type with an entity of its own keeps
+    // its "src rules self" line (records before b575 lost it, issue #102).
+    const ownRules = allowBar || allowRows;
     let source = allowSource ? iconColorRecordSource(text) : null;
     if (source?.self && !allowSelf) source = null;
+    if (!source && v2 && allowSource && allowSelf && !ownRules && iconColorHasRuleLines(text)) {
+      source = { mode: 'rules', self: true, entity: '', tile: 0, icon: true, enabled: true };
+    }
     if (source?.mode === 'rules') {
       if (!source.self || (!allowBar && !allowRows)) {
         allowBar = true;
@@ -405,9 +419,10 @@
       allowBar = false;
       allowRows = false;
     }
-    // "src rules self" coloring the icon only is implicit (b40 records).
+    // "src rules self" coloring the icon only is implicit for the types that
+    // evaluate their own state (b40 records).
     const emitLayer = !!source &&
-      !(source.mode === 'rules' && source.self && source.icon && !source.tile && source.enabled);
+      !(ownRules && source.mode === 'rules' && source.self && source.icon && !source.tile && source.enabled);
     const lines = text.split('\n');
     const fixedIndex = v2 ? 1 : 0;
     const fixed = iconColorParseHex(iconColorTrim(lines[fixedIndex] ?? ''));

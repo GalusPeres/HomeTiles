@@ -20,7 +20,7 @@ for (const marker of [
   'inline bool own_state_colors_icon(const char* record) {',
   'if (layer.self && !allow_self) layer = Source{};',
   'if (!layer.self || (!allow_bar && !allow_rows)) {',
-  '!(layer.mode == SourceMode::Rules && layer.self && layer.icon &&',
+  '!(own_rules && layer.mode == SourceMode::Rules && layer.self && layer.icon &&',
   'if (!fixed_fallback) return false;',
   'inline constexpr uint8_t kTintMinimum = 10;',
   'inline constexpr uint8_t kTintMaximum = 50;',

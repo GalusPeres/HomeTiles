@@ -23,6 +23,7 @@
 #include <driver/ppa.h>
 #include <hal/lcd_types.h>
 
+#include "src/core/display/display_flush_gate.h"
 #include "src/devices/common/p4_dsi_ui_ppa.h"
 #include "src/devices/common/p4_dsi_camera_presenter.h"
 #include "src/devices/common/p4_dsi_cpu_rotate.h"
@@ -757,6 +758,31 @@ bool init_display() {
   return true;
 }
 
+// A band's PPA rotation runs on while LVGL walks the next band
+// (display_flush_gate.h). Only the landscape PPA path: the upright layout and
+// the CPU rotation of small areas stay synchronous in displayPushPixels().
+bool async_rotate_begin(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t* data) {
+  if (!data || w <= 0 || h <= 0 || g_camera_presenter.upright()) return false;
+  const int32_t logical_w = display_cfg.height;
+  const int32_t logical_h = display_cfg.width;
+  if (x < 0 || y < 0 || (x + w) > logical_w || (y + h) > logical_h) return false;
+  if (g_ui_ppa.rotateBegin(g_camera_presenter, display_cfg.width, display_cfg.height,
+                           x, y, w, h, data, g_rotation) != p4_dsi_ui_ppa::Result::Drawn) {
+    return false;
+  }
+  // As draw_landscape_area marks a drawn rotation.
+  if (g_rotation & 0x02) {
+    mark_dirty_rect(y, logical_w - x - w, h, w);
+  } else {
+    mark_dirty_rect(logical_h - y - h, x, h, w);
+  }
+  return true;
+}
+
+bool async_rotate_done() { return g_ui_ppa.rotateDone(); }
+
+void async_rotate_finish() { g_ui_ppa.rotateFinish(g_camera_presenter); }
+
 bool init_touch() {
   if (g_touch) {
     return true;
@@ -801,6 +827,8 @@ bool DeviceGuitionJC8012P4A1V2::init() {
   if (!init_display()) {
     return false;
   }
+  // The display manager puts the gate into LVGL's draw dispatch.
+  display_flush_gate::set_backend({async_rotate_begin, async_rotate_done, async_rotate_finish});
   Serial.println("[Device/Guition JC8012P4A1 V2] Display OK");
 
   if (!init_touch()) {

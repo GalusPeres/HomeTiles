@@ -3,6 +3,8 @@
 #include <lvgl_private.h>
 #include <string.h>
 
+#include "src/core/display/display_flush_gate.h"
+
 namespace rounded_corners {
 namespace {
 
@@ -219,6 +221,12 @@ int32_t (*g_next_dispatch)(lv_draw_unit_t*, lv_layer_t*) = nullptr;
 // waiting task, which it draws before returning (lv_draw_sw.c dispatch). A
 // marked task is drawn here the same way, every other one by LVGL.
 int32_t corner_dispatch(lv_draw_unit_t* unit, lv_layer_t* layer) {
+  // The last band's copy to the panel may still read the draw buffer
+  // (display_flush_gate.h); this draws marked tasks itself, so it waits too.
+  if (!display_flush_gate::ready()) {
+    lv_draw_dispatch_request();
+    return 0;
+  }
   lv_draw_task_t* task = lv_draw_get_available_task(layer, nullptr, 0);
   const CornerSet* set = task ? marked(task) : nullptr;
   if (!set) return g_next_dispatch(unit, layer);

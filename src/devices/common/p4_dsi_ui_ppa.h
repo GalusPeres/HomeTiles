@@ -25,9 +25,29 @@ class Client {
                 int32_t x, int32_t y, int32_t w, int32_t h,
                 const uint16_t* data, uint8_t rotation);
 
+  // rotate() in two halves (display_flush_gate.h): rotateBegin() submits the
+  // rotation and keeps the DMA2D lease (Drawn = started, finish follows),
+  // rotateDone() tells without waiting whether the engine finished, and
+  // rotateFinish() waits for it with rotate()'s timeouts and completes it.
+  Result rotateBegin(p4_dsi_camera_presenter::Presenter& presenter,
+                     int32_t panel_width, int32_t panel_height,
+                     int32_t x, int32_t y, int32_t w, int32_t h,
+                     const uint16_t* data, uint8_t rotation);
+  bool rotateDone() const;
+  Result rotateFinish(p4_dsi_camera_presenter::Presenter& presenter);
+
  private:
   void reset(bool initial = false);
   void scheduleReinit();
+
+  // The rotation rotateBegin() submitted and rotateFinish() completes.
+  struct Pending {
+    bool active = false;
+    int32_t x = 0, y = 0, w = 0, h = 0;
+    int32_t dst_x = 0, dst_y = 0;
+    uint8_t rotation = 0;
+  };
+  Pending pending_;
 
   const char* device_name_;
   ppa_client_handle_t handle_ = nullptr;

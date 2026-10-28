@@ -22,9 +22,10 @@ const context = vm.createContext({
   isScreensaverTileTab: tab => tab === 'screensaver',
   tileBgFollowsDefault: () => true,
 });
-vm.runInContext(['iconColorTrim', 'iconColorParseHex', 'iconColorHex', 'iconColorIsV2', 'iconColorFold',
+vm.runInContext(['iconColorTrim', 'iconColorParseHex', 'iconColorValidIcon', 'iconColorParseHexIcon',
+  'iconColorIconSuffix', 'iconColorHex', 'iconColorIsV2', 'iconColorFold',
   'iconColorParseDecimal', 'iconColorLeadingNumber', 'iconColorParseBar', 'iconColorParseStop', 'iconColorSortStops',
-  'iconColorMix', 'iconColorBarColorAt', 'iconColorBarColor',
+  'iconColorMix', 'iconColorBarColorAt', 'iconColorBarColor', 'iconColorBarIcon',
   'iconColorTextMatches', 'iconColorParseRule', 'iconColorRowsFill', 'resolveIconColorRecord', 'iconColorFillOf',
   'iconColorValidEntity', 'iconColorParseSource', 'iconColorRecordSource', 'iconColorClipValue', 'iconColorLegacyNumericValid',
   'iconColorMigrateLegacyBar', 'iconColorCoverOf', 'normalizeIconColorRecord', 'parseIconColorRecord',

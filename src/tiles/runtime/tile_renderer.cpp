@@ -2467,7 +2467,7 @@ static void update_climate_tile_state(
           tile ? climate_tile_base_icon(*tile) : String("thermostat");
       String icon = getMdiChar(climate_visual_icon(state, base_icon));
       if (!icon.length()) icon = getMdiChar("thermostat");
-      lv_label_set_text(widget.icon_label, icon.c_str());
+      tile_rule_icon::set_glyph(widget.icon_label, icon.c_str());
     }
     tile_icon_disc::set_icon_color(
         widget.icon_label, lv_color_hex(climate_visual_color(state)));
@@ -4611,7 +4611,7 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
     const Tile* tile = tile_renderer_get_tile_config(grid_type, grid_index);
     if (tile && tile->type == TILE_MEDIA) {
       const String icon = getMdiChar(media_state_icon::name(media_tile_icon_name(*tile), icon_form));
-      if (icon.length()) set_label_text_if_changed(widgets.icon_label, icon);
+      if (icon.length()) tile_rule_icon::set_glyph(widgets.icon_label, icon.c_str());
     }
   }
 

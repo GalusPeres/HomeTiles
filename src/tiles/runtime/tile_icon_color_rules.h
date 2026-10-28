@@ -2,6 +2,7 @@
 
 #include "src/tiles/config/tile_icon_colors.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
+#include "src/tiles/runtime/tile_rule_icon.h"
 #include "src/ui/shared/ui_theme.h"
 
 namespace tile_icon_color_rules {
@@ -33,9 +34,18 @@ inline bool note_fill(lv_obj_t* card, const char* record, bool known, const char
   return tile_icon_disc::set_rule_fill(card, rule_fill_of(tile_icon_colors::state_fill(record, known, state, display)));
 }
 
+// The matching own rule's icon (tile_icon_colors::state_icon), else the
+// tile's own icon again (tile_rule_icon.h). Rules of a layer (another
+// entity, switched off) leave the icon to tile_icon_source::refresh_card.
+inline void apply_icon(lv_obj_t* icon, const char* record, bool known, const char* state, const char* display) {
+  if (!icon || !record || !tile_icon_colors::own_state_colors_icon(record)) return;
+  tile_rule_icon::show(icon, tile_icon_colors::state_icon(record, known, state, display));
+}
+
 inline void apply(lv_obj_t* icon, const char* record, bool known,
                   const char* state, const char* display, lv_color_t fallback) {
   if (!icon) return;
+  apply_icon(icon, record, known, state, display);
   // Rules on another entity, switched off or not coloring the icon leave the
   // icon to the fixed color here; the rule layer forces its own color.
   const lv_color_t color = lv_color_hex(tile_icon_colors::state_icon_color(

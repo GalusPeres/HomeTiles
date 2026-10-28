@@ -27,6 +27,7 @@
 #include "src/web/server/web_admin.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_source.h"
+#include "src/tiles/runtime/tile_rule_icon.h"
 #include "src/ui/tabs/tiles/home_bar.h"
 #include "src/ui/tabs/tiles/page_preview.h"
 #include <misc/cache/instance/lv_image_cache.h>
@@ -2819,7 +2820,8 @@ static void tiles_refresh_icons_for_grid(GridType grid_type) {
       continue;
     }
 
-    lv_label_set_text(icon_lbl, iconChar.c_str());
+    // A rule's own icon stays until its rule ends (tile_rule_icon.h).
+    tile_rule_icon::set_glyph(icon_lbl, iconChar.c_str());
     tile_icon_disc::set_icon_hidden(icon_lbl, false);
     lv_obj_invalidate(icon_lbl);
   }

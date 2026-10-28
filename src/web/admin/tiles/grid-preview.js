@@ -719,8 +719,12 @@
   // (resolveIconColorRecord, same result as the firmware), else `fallback`.
   // `out`, when given, receives the matching state line's own "Fuellen"
   // (`fill`: 1, 0, or -1 when "Ausfuellen" decides).
+  // `out.icon`: the matching stop's or line's own icon ('' without one).
   function previewIconColor(typeValue, record, entity, meta, binaryState, fallback, out = null) {
-    if (out) out.fill = -1;
+    if (out) {
+      out.fill = -1;
+      out.icon = '';
+    }
     if (!record || typeof tileTypeHasIconColors !== 'function' ||
         !tileTypeHasIconColors(typeValue)) return fallback;
     const type = String(typeValue ?? '0');
@@ -995,6 +999,9 @@
                   ? binarySensorPreviewColor(binarySensorPreviewState)
                   : (previewKind === 'calendar' ? calendarPreviewIconColor(tile) : '')))), ruleFill);
         if (typeof setPreviewRuleFill === 'function') setPreviewRuleFill(el, ruleFill);
+        // A matching rule shows its own icon (tile_rule_icon.h); weather
+        // icons keep their own.
+        if (ruleFill.icon && previewKind !== 'weather' && !lockIsIcon) iconName = ruleFill.icon;
         const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
         html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '>' +
           (locked && !lockIsIcon ? PREVIEW_LOCK_MARK : '') + '</i>';

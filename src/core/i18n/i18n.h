@@ -994,9 +994,10 @@ struct LocaleProfile {
   // datetime/date/time/input_datetime, scene, script, button/input_button,
   // automation, humidifier, siren, remote, calendar.
   const char* entity_kind_labels[23];
-  // Icon picker of the tile head (tiles/tile-head.js). Order: automatic,
-  // automatic hint, no icon, no icon hint, no match ({query}).
-  const char* icon_picker_labels[5];
+  // Icon picker of the tile head and the rules (tiles/tile-head.js). Order:
+  // automatic, automatic hint, no icon, no icon hint, no match ({query}),
+  // a rule's automatic hint (the tile's own icon stays).
+  const char* icon_picker_labels[6];
 
   // The clock's long dates (clock_tile::DATE_FORMAT_D_MONTH*, user
   // 2026-10-11, issue #13): the month names as they stand in a date

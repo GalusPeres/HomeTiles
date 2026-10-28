@@ -3539,7 +3539,8 @@
   cursor:copy;
   touch-action:manipulation;
 }
-.icon-color-handles { position:relative; height:42px; margin:4px 9px 0; }
+/* The stops with their value, and each stop's own icon below it. */
+.icon-color-handles { position:relative; height:68px; margin:4px 9px 0; }
 .icon-color-stop {
   position:absolute;
   top:0;
@@ -3583,21 +3584,54 @@
 }
 .icon-color-stop-remove.hidden { display:none; }
 .icon-color-stop-picker { position:absolute; width:1px; height:1px; padding:0; border:0; opacity:0; pointer-events:none; }
+.icon-color-stop-icon {
+  position:absolute;
+  top:38px;
+  width:30px;
+  height:28px;
+  margin-left:-15px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  border:1px solid var(--line-strong);
+  border-radius:8px;
+  background:var(--well);
+  font-size:18px;
+  cursor:pointer;
+}
 .icon-color-bar-editor { position:relative; }
 .icon-color-range { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px; }
 .icon-color-range label { margin:0; font-size:12px; }
 .icon-color-range input { margin-top:4px; padding:8px 10px; font-size:13px; }
+/* A state line (mockup rule-icons, user 2026-10-28): the state, its color,
+   its own icon and remove; contains and "Fuellen" in a second line below
+   the state, so the state keeps its room. */
 .tile-icon-rule {
   display:grid;
-  grid-template-columns:minmax(0,1.6fr) auto auto 44px 38px;
-  gap:8px;
+  grid-template-columns:minmax(0,1fr) 44px 38px 38px;
+  gap:6px 8px;
   align-items:center;
-  margin-bottom:8px;
+  margin-bottom:10px;
 }
+.tile-icon-rule-options { grid-column:1; display:flex; gap:16px; flex-wrap:wrap; }
 .tile-icon-rule input { min-width:0; margin:0; }
 .tile-icon-rule input[type="text"] { padding:8px 10px; font-size:13px; }
 .tile-icon-rule input[type="color"] { width:100%; height:38px; padding:4px 7px; border-radius:10px; }
 .icon-color-contains { display:inline-flex; align-items:center; gap:6px; margin:0; font-size:12px; white-space:nowrap; }
+/* A rule's own icon: the tile head's icon button in the rule's color; the
+   tile's own icon dimmed while the rule has none. On/Off: color, icon,
+   reset. */
+.tile-rule-icon {
+  width:38px; height:38px; display:grid; place-items:center; padding:0; border:1px solid var(--line-strong);
+  border-radius:10px; background:var(--well); color:var(--text); font-size:20px; cursor:pointer;
+  transition:border-color 0.15s, box-shadow 0.15s;
+}
+.tile-rule-icon.none, .icon-color-stop-icon.none { color:#4a4a4a; }
+.tile-rule-icon:focus-visible, .tile-rule-icon.open,
+.icon-color-stop-icon:focus-visible, .icon-color-stop-icon.open {
+  outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-ring);
+}
+.tile-color-row.tile-color-row-icon { grid-template-columns:minmax(72px,1fr) 38px 38px; }
 .icon-color-contains input { width:16px; height:16px; }
 /* On/Off: the state's label left, its own "Fuellen" right. */
 .tile-color-label-row.icon-color-fill-label { grid-template-columns:minmax(0,1fr) auto; }

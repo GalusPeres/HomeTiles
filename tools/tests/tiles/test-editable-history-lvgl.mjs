@@ -8,6 +8,7 @@ import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 import {lvglHost} from '../../lib/lvgl-host.mjs';
 import deviceCatalog from '../../device-catalog.js';
 import {valueUnitSource} from '../../lib/value-unit-source.mjs';
+import {ruleIconSource} from '../../lib/rule-icon-source.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
@@ -166,6 +167,7 @@ ${fn(popup,'editable_history_fingerprint')}
 int requests=0;
 void request_history_for_context(SensorPopupContext*ctx){ctx->editable_history_id=std::to_string(++requests);ctx->history_request_fingerprint=editable_history_fingerprint(ctx->entity_id);}
 #include "src/tiles/config/tile_icon_colors.h"
+${ruleIconSource(root, {codepoint: true})}
 ${['popup_icon_state_known','apply_popup_icon_color','apply_editable_icon_color','show_header_value'].map(n=>fn(popup,n)).join('\n')}
 ${fn(popup,'apply_sensor_header')}
 ${fn(popup,'apply_sensor_header_value')}

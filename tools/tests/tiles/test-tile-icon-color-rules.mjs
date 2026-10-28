@@ -368,9 +368,12 @@ int main(){
   assert(resolve("v2\n00FF00\nis- FF0000 on","off",nullptr,rgb,true,&f)&&rgb==0x00FF00&&f==RowFill::Inherit);
   assert(resolve("v2\n\nis- FF0000 on","on",nullptr,rgb,false,&f)&&rgb==0xFF0000&&f==RowFill::Off);}
  // Worst case (source, bar and six states) fits the sidecar limit.
- std::string worst="v2\nFFFFFF\nfill 50\ncover icon tile=50\nsrc rules a."+std::string(126,'b')+" tile=50 noicon off\nbar smooth -12345678901 999999999999 1000:000000 1000:000000 1000:000000 1000:000000 1000:000000 1000:000000";
+ // Every stop and line carries the longest own icon (user 2026-10-28).
+ const std::string icon=","+std::string(kMaxIconBytes,'i');
+ std::string worst="v2\nFFFFFF\nfill 50\ncover icon tile=50\nsrc rules a."+std::string(126,'b')+" tile=50 noicon off\nbar smooth -12345678901 999999999999";
+ for(int i=0;i<6;++i)worst+=" 1000:000000"+icon;
  // The longest state line carries its own fill mark ("has+").
- for(int i=0;i<6;++i){worst+="\nhas+ FFFFFF ";worst+=std::string(64,'w');}
+ for(int i=0;i<6;++i){worst+="\nhas+ FFFFFF"+icon+" ";worst+=std::string(64,'w');}
  // The Media "cover" line counts too (allow_cover).
  {char out[kMaxRecordBytes+1];assert(normalize(worst.c_str(),out,sizeof(out),false,false,true,false,true)==kMaxRecordBytes);}
  // Icon-and-title tiles: a source entity; "rules" keeps the bar and states,

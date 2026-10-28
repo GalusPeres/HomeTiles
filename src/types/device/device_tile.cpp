@@ -13,6 +13,7 @@
 #include "src/tiles/runtime/tile_header.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_source.h"
+#include "src/tiles/runtime/tile_rule_icon.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/types/device/device_control.h"
@@ -549,7 +550,7 @@ void show(View* view) {
   if (view->icon) {
     if (!view->icon_name.length() && (!view->shown_icon || std::strcmp(view->shown_icon, v.icon) != 0)) {
       view->shown_icon = v.icon;
-      lv_label_set_text(view->icon, getMdiChar(v.icon).c_str());
+      tile_rule_icon::set_glyph(view->icon, getMdiChar(v.icon).c_str());
     }
     tile_icon_disc::set_icon_color(view->icon, lv_color_hex(v.color));
     set_icon_pulse(view->icon, v.waiting || (*target && std::strcmp(target, d.state) != 0));

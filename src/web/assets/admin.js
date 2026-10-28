@@ -3866,6 +3866,10 @@ async function saveGestureEdge(select) {
   // hidden `<tab>_tile_icon` input: empty = automatic (the entity's own
   // icon, also its state icons), "none" = no icon, else an MDI name from the
   // panel's own list (/api/mdi_icons).
+  // The same picker sets a rule's own icon (tile_icon_colors_html.cpp): a
+  // button with data-icon-input names its hidden field (data-icon-value, when
+  // set, is the icon it shows); empty keeps the tile's own icon, and a rule
+  // has no "No icon".
 
   const ICON_PICKER_STEP = 240;
   const tileHeadNativeTitle = typeof HTMLTextAreaElement === 'function'
@@ -3875,7 +3879,7 @@ async function saveGestureEdge(select) {
   let mdiIconNames = null;
   let mdiIconFetch = null;
   let iconPickerPopover = null;
-  let iconPickerOpen = null;  // {tab, query, matches, shown, active, state}
+  let iconPickerOpen = null;  // {tab, input, button, rule, query, matches, shown, active, state}
 
   function fetchMdiIconNames() {
     if (mdiIconNames) return Promise.resolve(mdiIconNames);
@@ -4005,21 +4009,22 @@ async function saveGestureEdge(select) {
   function iconPickerChoose(value) {
     const open = iconPickerOpen;
     if (!open) return;
-    const input = document.getElementById(open.tab + '_tile_icon');
+    const input = document.getElementById(open.input);
     closeIconPicker(true);
-    if (!input || input.value === value) return;
+    if (!input || iconPickerCurrent(open) === value) return;
     input.value = value;
     input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  function iconPickerCurrent(tab) {
-    const raw = String(document.getElementById(tab + '_tile_icon')?.value || '').trim();
-    return isExplicitlyDisabledValue(raw) ? 'none' : normalizeMdiIconName(raw);
+  function iconPickerCurrent(open) {
+    const shown = open.button?.dataset.iconValue;
+    const raw = String(shown ?? document.getElementById(open.input)?.value ?? '').trim();
+    return !open.rule && isExplicitlyDisabledValue(raw) ? 'none' : normalizeMdiIconName(raw);
   }
 
   function iconPickerCellsHtml(from, to) {
     const open = iconPickerOpen;
-    const current = iconPickerCurrent(open.tab);
+    const current = iconPickerCurrent(open);
     let html = '';
     for (let index = from; index < to; index++) {
       const name = open.matches[index];
@@ -4034,17 +4039,19 @@ async function saveGestureEdge(select) {
     const open = iconPickerOpen;
     const list = iconPickerPopover?.querySelector('.icon-picker-list');
     if (!open || !list) return;
-    const current = iconPickerCurrent(open.tab);
+    const current = iconPickerCurrent(open);
     const choice = (value, icon, name, hint) =>
       '<button type="button" class="icon-picker-choice' + (current === value ? ' selected' : '') + '" data-icon="' +
       value + '"><span class="entity-picker-icon"><i class="mdi mdi-' + escapeHtml(icon) + '"></i></span>' +
       '<span class="entity-picker-text"><span class="entity-picker-name">' + escapeHtml(name) + '</span>' +
       '<span class="entity-picker-context">' + escapeHtml(hint) + '</span></span></button>';
-    // Home's head always shows its circle: no "No icon" there.
-    const none = document.getElementById(open.tab + '_tile_icon')?.dataset.autoIcon
+    // Home's head always shows its circle: no "No icon" there, nor for a
+    // rule, whose Automatic keeps the tile's own icon.
+    const none = open.rule || document.getElementById(open.tab + '_tile_icon')?.dataset.autoIcon
       ? '' : choice('none', 'cancel', t('iconPickerNone'), t('iconPickerNoneHint'));
     let html = open.query ? '' : '<div class="icon-picker-choices' + (none ? '' : ' single') + '">' +
-      choice('', tileAutomaticIcon(open.tab), t('iconPickerAuto'), t('iconPickerAutoHint')) + none + '</div>';
+      choice('', tileAutomaticIcon(open.tab), t('iconPickerAuto'),
+        t(open.rule ? 'iconPickerRuleHint' : 'iconPickerAutoHint')) + none + '</div>';
     if (open.state === 'loading') {
       html += '<div class="entity-picker-loading"><div></div><div></div><div></div></div>';
     } else if (open.state === 'failed') {
@@ -4085,7 +4092,7 @@ async function saveGestureEdge(select) {
     // icon is marked.
     open.active = open.query ? 0 : -1;
     if (!open.query) {
-      const current = open.matches.indexOf(iconPickerCurrent(open.tab));
+      const current = open.matches.indexOf(iconPickerCurrent(open));
       if (current >= 0) {
         open.active = current;
         open.shown = Math.min(open.matches.length, Math.max(open.shown, current + ICON_PICKER_STEP));
@@ -4116,7 +4123,10 @@ async function saveGestureEdge(select) {
 
   function placeIconPicker() {
     const open = iconPickerOpen;
-    const row = open && document.getElementById(open.tab + '_tile_title')?.closest('.tile-head-row');
+    // The tile head's row, or a rule's section across the panel at the
+    // height of its button.
+    const row = !open ? null : open.rule ? open.button?.closest('.icon-color-section')
+      : document.getElementById(open.tab + '_tile_title')?.closest('.tile-head-row');
     if (!row || !iconPickerPopover) return;
     const pop = iconPickerPopover;
     if (window.innerWidth <= 560) {
@@ -4125,7 +4135,9 @@ async function saveGestureEdge(select) {
       return;
     }
     pop.classList.remove('sheet');
-    const rect = row.getBoundingClientRect();
+    const across = row.getBoundingClientRect();
+    const own = open.rule ? open.button.getBoundingClientRect() : across;
+    const rect = { left: across.left, width: across.width, top: own.top, bottom: own.bottom };
     const below = window.innerHeight - rect.bottom - 12;
     const above = rect.top - 12;
     const up = below < 300 && above > below;
@@ -4136,7 +4148,9 @@ async function saveGestureEdge(select) {
     pop.style.top = (up ? Math.max(8, rect.top - 6 - Math.min(height, pop.offsetHeight || height)) : rect.bottom + 6) + 'px';
   }
 
-  function openIconPicker(tab) {
+  // `button`: a rule's icon button (data-icon-input); without one the tile
+  // head's picker.
+  function openIconPicker(tab, button = null) {
     closeIconPicker(false);
     if (typeof closeEntityPicker === 'function') closeEntityPicker(false);
     if (!iconPickerPopover) {
@@ -4150,8 +4164,10 @@ async function saveGestureEdge(select) {
     const search = iconPickerPopover.querySelector('input');
     search.value = '';
     search.placeholder = t('iconPickerSearch');
-    iconPickerOpen = { tab, query: '', matches: [], shown: 0, active: 0, state: 'loading' };
-    const button = document.getElementById(tab + '_tile_icon_picker');
+    const rule = !!button;
+    if (!button) button = document.getElementById(tab + '_tile_icon_picker');
+    iconPickerOpen = { tab, input: rule ? button.dataset.iconInput : tab + '_tile_icon', button, rule,
+      query: '', matches: [], shown: 0, active: 0, state: 'loading' };
     button?.classList.add('open');
     button?.setAttribute('aria-expanded', 'true');
     iconPickerPopover.classList.add('open');
@@ -4167,7 +4183,7 @@ async function saveGestureEdge(select) {
     if (!open) return;
     iconPickerOpen = null;
     iconPickerPopover?.classList.remove('open');
-    const button = document.getElementById(open.tab + '_tile_icon_picker');
+    const button = open.button;
     button?.classList.remove('open');
     button?.setAttribute('aria-expanded', 'false');
     if (focusButton) button?.focus();
@@ -4204,8 +4220,15 @@ async function saveGestureEdge(select) {
     const button = target?.closest?.('.tile-icon-picker');
     if (button) {
       const tab = tileHeadTab(button);
-      if (iconPickerOpen?.tab === tab) closeIconPicker(true);
+      if (iconPickerOpen?.button === button) closeIconPicker(true);
       else openIconPicker(tab);
+      return;
+    }
+    const ruleButton = target?.closest?.('button[data-icon-input]');
+    if (ruleButton) {
+      const tab = ruleButton.closest('[data-tab]')?.dataset.tab || '';
+      if (iconPickerOpen?.button === ruleButton) closeIconPicker(true);
+      else if (tab) openIconPicker(tab, ruleButton);
       return;
     }
     if (!iconPickerOpen) return;
@@ -4643,6 +4666,27 @@ async function saveGestureEdge(select) {
     return match ? parseInt(match[1], 16) : null;
   }
 
+  // valid_icon(): a rule's own icon (user 2026-10-28) is an MDI name of
+  // lowercase letters, digits and dashes, at most 48 characters.
+  function iconColorValidIcon(name) {
+    return /^[a-z0-9-]{1,48}$/.test(String(name ?? ''));
+  }
+
+  // parse_color_icon(): "RRGGBB" or "RRGGBB,<icon>".
+  function iconColorParseHexIcon(text) {
+    const value = String(text);
+    const comma = value.indexOf(',');
+    const icon = comma < 0 ? '' : value.slice(comma + 1);
+    if (comma >= 0 && !iconColorValidIcon(icon)) return null;
+    const color = iconColorParseHex(comma < 0 ? value : value.slice(0, comma));
+    return color === null ? null : { color, icon };
+  }
+
+  // append_icon(): ",<icon>" after a color, nothing without one.
+  function iconColorIconSuffix(icon) {
+    return iconColorValidIcon(icon) ? ',' + icon : '';
+  }
+
   function iconColorHex(rgb) {
     return (rgb >>> 0).toString(16).toUpperCase().padStart(6, '0');
   }
@@ -4696,8 +4740,9 @@ async function saveGestureEdge(select) {
     return needle.length > 0 && haystack.includes(needle);
   }
 
-  // parse_rule(): "<op>[+|-] RRGGBB <value>"; `fill` is the state line's own
-  // "Fuellen" (1 "is+", 0 "is-", -1 a plain "is" following the "fill" line).
+  // parse_rule(): "<op>[+|-] RRGGBB[,<icon>] <value>"; `fill` is the state
+  // line's own "Fuellen" (1 "is+", 0 "is-", -1 a plain "is" following the
+  // "fill" line), `icon` its own icon ('' without one).
   function iconColorParseRule(line) {
     const text = iconColorTrim(line);
     const space = text.indexOf(' ');
@@ -4710,10 +4755,10 @@ async function saveGestureEdge(select) {
     if (!['ge', 'le', 'eq', 'is', 'has'].includes(op)) return null;
     const rest = text.slice(space + 1);
     const colorEnd = rest.indexOf(' ');
-    const color = iconColorParseHex(colorEnd < 0 ? rest : rest.slice(0, colorEnd));
-    if (color === null) return null;
+    const parsed = iconColorParseHexIcon(colorEnd < 0 ? rest : rest.slice(0, colorEnd));
+    if (!parsed) return null;
     const value = colorEnd < 0 ? '' : iconColorTrim(rest.slice(colorEnd));
-    return value ? { op, color, value, fill } : null;
+    return value ? { op, color: parsed.color, icon: parsed.icon, value, fill } : null;
   }
 
   // tile_icon_colors::rows_fill(): a state line with its own "Fuellen".
@@ -4727,13 +4772,13 @@ async function saveGestureEdge(select) {
     return stops.sort((a, b) => a.position - b.position);
   }
 
-  // parse_stop(): "P:RRGGBB", P with 1-4 digits, clamped to 0..1000.
+  // parse_stop(): "P:RRGGBB[,<icon>]", P with 1-4 digits, clamped to 0..1000.
   function iconColorParseStop(token) {
     const colon = token.indexOf(':');
     if (colon < 1 || colon > 4 || !/^[0-9]+$/.test(token.slice(0, colon))) return null;
-    const color = iconColorParseHex(token.slice(colon + 1));
-    if (color === null) return null;
-    return { position: Math.min(Number(token.slice(0, colon)), 1000), color };
+    const parsed = iconColorParseHexIcon(token.slice(colon + 1));
+    if (!parsed) return null;
+    return { position: Math.min(Number(token.slice(0, colon)), 1000), color: parsed.color, icon: parsed.icon };
   }
 
   // parse_bar(): "bar <smooth|steps> <min> <max> <P>:<RRGGBB> ...".
@@ -4831,12 +4876,27 @@ async function saveGestureEdge(select) {
     return iconColorBarColorAt(bar, (value - bar.min) / (bar.max - bar.min));
   }
 
+  // bar_icon(): the icon of the last stop at or below the value (the first
+  // stop below it), on smooth bars too: an icon cannot blend.
+  function iconColorBarIcon(bar, value) {
+    let t = (value - bar.min) / (bar.max - bar.min);
+    if (!(t > 0)) t = 0;
+    if (t > 1) t = 1;
+    let index = 0;
+    bar.stops.forEach((stop, i) => { if (stop.position / 1000 <= t) index = i; });
+    return bar.stops[index]?.icon || '';
+  }
+
   // resolve(): the icon color for a known state as "#RRGGBB", or '' for the
   // type default. Only v2 records are evaluated.
   // `out`, when given, receives the matching state line's own fill (`fill`:
-  // 1, 0 or -1 like iconColorParseRule).
+  // 1, 0 or -1 like iconColorParseRule) and the matching stop's or line's
+  // own icon (`icon`, '' without one).
   function resolveIconColorRecord(record, state, display, fixedFallback = true, out = null) {
-    if (out) out.fill = -1;
+    if (out) {
+      out.fill = -1;
+      out.icon = '';
+    }
     const text = String(record ?? '');
     if (!iconColorIsV2(text) || state === undefined || state === null) return '';
     const lines = text.split('\n');
@@ -4847,14 +4907,20 @@ async function saveGestureEdge(select) {
         if (barSeen) continue;
         barSeen = true;
         const bar = number !== null ? iconColorParseBar(line) : null;
-        if (bar) return '#' + iconColorHex(iconColorBarColor(bar, number));
+        if (bar) {
+          if (out) out.icon = iconColorBarIcon(bar, number);
+          return '#' + iconColorHex(iconColorBarColor(bar, number));
+        }
         continue;
       }
       const rule = iconColorParseRule(line);
       if (!rule || (rule.op !== 'is' && rule.op !== 'has')) continue;
       if (iconColorTextMatches(rule.op, rule.value, state) ||
           (display !== undefined && display !== null && iconColorTextMatches(rule.op, rule.value, display))) {
-        if (out) out.fill = rule.fill;
+        if (out) {
+          out.fill = rule.fill;
+          out.icon = rule.icon;
+        }
         return '#' + iconColorHex(rule.color);
       }
     }
@@ -4963,7 +5029,7 @@ async function saveGestureEdge(select) {
     }
     if (bar) {
       out += '\nbar ' + bar.mode + ' ' + bar.minText + ' ' + bar.maxText +
-        bar.stops.map(stop => ' ' + stop.position + ':' + iconColorHex(stop.color)).join('');
+        bar.stops.map(stop => ' ' + stop.position + ':' + iconColorHex(stop.color) + iconColorIconSuffix(stop.icon)).join('');
     }
     let rows = 0;
     if (allowRows) {
@@ -4987,7 +5053,7 @@ async function saveGestureEdge(select) {
         const value = iconColorClipValue(rule.value);
         if (!value) continue;
         const mark = rule.fill === 1 ? '+' : rule.fill === 0 ? '-' : '';
-        out += '\n' + rule.op + mark + ' ' + iconColorHex(rule.color) + ' ' + value;
+        out += '\n' + rule.op + mark + ' ' + iconColorHex(rule.color) + iconColorIconSuffix(rule.icon) + ' ' + value;
         rows++;
       }
     }
@@ -5030,7 +5096,10 @@ async function saveGestureEdge(select) {
     for (const line of lines.slice(2)) {
       if (line.startsWith('bar ')) { bar = iconColorParseBar(line); continue; }
       const rule = iconColorParseRule(line);
-      if (rule) rows.push({ has: rule.op === 'has', color: '#' + iconColorHex(rule.color), value: rule.value, fill: rule.fill });
+      if (rule) {
+        rows.push({ has: rule.op === 'has', color: '#' + iconColorHex(rule.color), value: rule.value, fill: rule.fill,
+          icon: rule.icon });
+      }
     }
     return { color: fixed === null ? '' : '#' + iconColorHex(fixed), bar, rows,
       fill: iconColorFillOf(lines.slice(2)), cover: iconColorCoverOf(lines.slice(2)),
@@ -5088,7 +5157,10 @@ async function saveGestureEdge(select) {
   // states of its entity (own or other); '' without a known state or result.
   // Rules never fall back to the fixed color here.
   function iconColorLayerColor(record, layer, ownEntity, meta, typeValue, out = null) {
-    if (out) out.fill = -1;
+    if (out) {
+      out.fill = -1;
+      out.icon = '';
+    }
     if (!layer || !layer.enabled) return '';
     const entity = layer.self ? String(ownEntity || '') : layer.entity;
     if (!entity) return '';
@@ -5236,7 +5308,8 @@ async function saveGestureEdge(select) {
     const input = iconColorEl(tab, '_tile_icon_bar');
     if (!input) return;
     input.value = mode === 'off' ? ''
-      : [mode].concat(stops.map(stop => stop.position + ':' + iconColorHex(stop.color))).join(' ');
+      : [mode].concat(stops.map(stop => stop.position + ':' + iconColorHex(stop.color) + iconColorIconSuffix(stop.icon)))
+        .join(' ');
   }
 
   function iconColorSelectedStop(tab) {
@@ -5301,8 +5374,9 @@ async function saveGestureEdge(select) {
     strip.style.background = iconColorGradient(bar.mode, iconColorSortStops(bar.stops.map(stop => ({ ...stop }))));
     let knobs = Array.from(handles.querySelectorAll('.icon-color-stop'));
     let labels = Array.from(handles.querySelectorAll('.icon-color-stop-label'));
-    if (knobs.length !== bar.stops.length) {
-      knobs.concat(labels).forEach(el => el.remove());
+    let icons = Array.from(handles.querySelectorAll('.icon-color-stop-icon'));
+    if (knobs.length !== bar.stops.length || icons.length !== bar.stops.length) {
+      knobs.concat(labels, icons).forEach(el => el.remove());
       knobs = bar.stops.map((stop, index) => {
         const knob = document.createElement('button');
         knob.type = 'button';
@@ -5318,6 +5392,20 @@ async function saveGestureEdge(select) {
         handles.appendChild(label);
         return label;
       });
+      // Each stop's own icon below its value: the tile head's icon picker
+      // for the selected stop (tile-head.js data-icon-input).
+      icons = bar.stops.map((stop, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'icon-color-stop-icon';
+        button.dataset.iconColor = 'stop-icon-button';
+        button.dataset.stop = String(index);
+        button.dataset.iconInput = tab + '_tile_icon_stop_icon';
+        button.setAttribute('aria-haspopup', 'listbox');
+        button.title = typeof t === 'function' ? t('iconPickerAuto') : '';
+        handles.appendChild(button);
+        return button;
+      });
     }
     const selected = iconColorSelectedStop(tab);
     const range = iconColorBarRange(tab);
@@ -5330,6 +5418,8 @@ async function saveGestureEdge(select) {
       labels[index].textContent = range
         ? iconColorFormatValue(range.min + stop.position / 1000 * (range.max - range.min), range.max - range.min)
         : '';
+      icons[index].style.left = left;
+      renderIconColorIconButton(tab, icons[index], stop.icon || '', '#' + iconColorHex(stop.color));
     });
     const remove = handles.querySelector('[data-icon-color="stop-remove"]');
     const removable = selected >= 0 && selected < bar.stops.length && bar.stops.length > 2;
@@ -5341,6 +5431,33 @@ async function saveGestureEdge(select) {
 
   function iconColorRuleRow(tab, index) {
     return iconColorEl(tab, '_tile_icon_rule_' + index);
+  }
+
+  // A rule's icon button: its own icon in the rule's color, else the tile's
+  // own icon dimmed (data-icon-value: the icon the picker marks).
+  function renderIconColorIconButton(tab, button, icon, color) {
+    if (!button) return;
+    const own = iconColorValidIcon(icon) ? icon : '';
+    const shown = own || (typeof tileAutomaticIcon === 'function' ? tileAutomaticIcon(tab) : 'shape-outline');
+    const html = '<i class="mdi mdi-' + escapeHtml(shown) + '"></i>';
+    if (button.innerHTML !== html) button.innerHTML = html;
+    button.classList.toggle('none', !own);
+    button.style.color = own ? (normalizeIconColorHex(color) || '') : '';
+    button.dataset.iconValue = own;
+  }
+
+  function renderIconColorIconButtons(tab) {
+    for (let index = 0; index < ICON_COLOR_MAX_ROWS; index++) {
+      const row = iconColorRuleRow(tab, index);
+      if (!row || row.classList.contains('hidden')) continue;
+      renderIconColorIconButton(tab, document.getElementById(row.id + '_icon_button'),
+        document.getElementById(row.id + '_icon')?.value || '', document.getElementById(row.id + '_color')?.value || '');
+    }
+    for (const state of ['on', 'off']) {
+      const input = iconColorEl(tab, '_tile_icon_' + state);
+      renderIconColorIconButton(tab, iconColorEl(tab, '_tile_icon_' + state + '_icon_button'),
+        iconColorEl(tab, '_tile_icon_' + state + '_icon')?.value || '', input?.value || '');
+    }
   }
 
   // A row's "Fuellen" box: its own mark, else (a new row, or a line from
@@ -5367,7 +5484,8 @@ async function saveGestureEdge(select) {
         value: document.getElementById(row.id + '_value')?.value || '',
         has: !!document.getElementById(row.id + '_has')?.checked,
         color: document.getElementById(row.id + '_color')?.value || ICON_COLOR_ROW_DEFAULT,
-        fill: iconColorFillOfBox(document.getElementById(row.id + '_fill'))
+        fill: iconColorFillOfBox(document.getElementById(row.id + '_fill')),
+        icon: document.getElementById(row.id + '_icon')?.value || ''
       });
     }
     return rows;
@@ -5383,23 +5501,28 @@ async function saveGestureEdge(select) {
       const has = document.getElementById(row.id + '_has');
       const color = document.getElementById(row.id + '_color');
       const fill = document.getElementById(row.id + '_fill');
+      const icon = document.getElementById(row.id + '_icon');
+      if (icon) icon.value = entry && iconColorValidIcon(entry.icon) ? entry.icon : '';
       if (value) value.value = entry ? entry.value : '';
       if (has) has.checked = !!entry?.has;
       setIconColorFillBox(tab, fill, entry ? (entry.fill ?? -1) : -1);
       if (color) color.value = entry ? (normalizeIconColorHex(entry.color) || ICON_COLOR_ROW_DEFAULT) : ICON_COLOR_ROW_DEFAULT;
     }
     iconColorEl(tab, '_tile_icon_rule_add')?.classList.toggle('hidden', rows.length >= ICON_COLOR_MAX_ROWS);
+    renderIconColorIconButtons(tab);
   }
 
   // Binary sensor On/Off pickers; unset pickers keep the type color and
   // follow "Ausfuellen" (their "Fuellen" box shows it).
-  function setIconColorBinaryInput(tab, state, color, fill = -1) {
+  function setIconColorBinaryInput(tab, state, color, fill = -1, icon = '') {
     const input = iconColorEl(tab, '_tile_icon_' + state);
     if (!input) return;
     const hex = normalizeIconColorHex(color);
     input.value = hex || input.dataset.default || ICON_COLOR_BINARY_DEFAULTS[state];
     input.dataset.unset = hex ? '0' : '1';
     setIconColorFillBox(tab, iconColorEl(tab, '_tile_icon_' + state + '_fill'), hex ? fill : -1);
+    const iconInput = iconColorEl(tab, '_tile_icon_' + state + '_icon');
+    if (iconInput) iconInput.value = hex && iconColorValidIcon(icon) ? icon : '';
   }
 
   function readIconColorBinaryRows(tab) {
@@ -5408,7 +5531,8 @@ async function saveGestureEdge(select) {
       const input = iconColorEl(tab, '_tile_icon_' + state);
       if (input && input.dataset.unset === '0') {
         rows.push({ value: state, has: false, color: input.value,
-          fill: iconColorFillOfBox(iconColorEl(tab, '_tile_icon_' + state + '_fill')) });
+          fill: iconColorFillOfBox(iconColorEl(tab, '_tile_icon_' + state + '_fill')),
+          icon: iconColorEl(tab, '_tile_icon_' + state + '_icon')?.value || '' });
       }
     }
     return rows;
@@ -5477,7 +5601,8 @@ async function saveGestureEdge(select) {
         return /^[^ \t\r]+$/.test(text) ? text : '-';
       };
       lines.push(['bar', bar.mode, number('_tile_icon_bar_min'), number('_tile_icon_bar_max')]
-        .concat(bar.stops.map(stop => stop.position + ':' + iconColorHex(stop.color))).join(' '));
+        .concat(bar.stops.map(stop => stop.position + ':' + iconColorHex(stop.color) + iconColorIconSuffix(stop.icon)))
+        .join(' '));
     }
     const binaryOwn = type === '20' && (!layer || layer.self);
     const rows = binaryOwn ? readIconColorBinaryRows(tab) : readIconColorRows(tab);
@@ -5485,7 +5610,8 @@ async function saveGestureEdge(select) {
       const color = normalizeIconColorHex(row.color) || ICON_COLOR_ROW_DEFAULT;
       const value = row.value.replace(/[\u0000-\u001f\u007f]/g, '');
       // A row's own "Fuellen" (user 2026-10-11), else it follows "Ausfuellen".
-      lines.push((row.has ? 'has' : 'is') + iconColorMarkOf(row.fill) + ' ' + color.slice(1) + ' ' + value);
+      lines.push((row.has ? 'has' : 'is') + iconColorMarkOf(row.fill) + ' ' + color.slice(1) +
+        iconColorIconSuffix(row.icon) + ' ' + value);
     }
     // A switched-off own layer at its defaults without rules is no layer.
     const idle = layer && layer.self && !layer.enabled && layer.mode === 'rules' && layer.icon && !layer.tile &&
@@ -5596,6 +5722,7 @@ async function saveGestureEdge(select) {
     iconColorEl(tab, '_tile_icon_state_section')?.classList.toggle('hidden', !showRows);
     iconColorEl(tab, '_tile_icon_binary_section')?.classList.toggle('hidden', !showBinary);
     if (showBar) renderIconColorBar(tab);
+    renderIconColorIconButtons(tab);
   }
 
   function loadIconColorFields(tab, data) {
@@ -5624,7 +5751,7 @@ async function saveGestureEdge(select) {
     if (onInput) onInput.value = on ? '1' : '0';
     for (const state of ['on', 'off']) {
       const row = parsed.rows.find(entry => !entry.has && iconColorFold(entry.value) === state);
-      setIconColorBinaryInput(tab, state, row ? row.color : '', row ? row.fill : -1);
+      setIconColorBinaryInput(tab, state, row ? row.color : '', row ? row.fill : -1, row ? row.icon : '');
     }
     syncIconColorFields(tab);
   }
@@ -5685,10 +5812,23 @@ async function saveGestureEdge(select) {
   document.addEventListener('input', event => {
     const target = event.target;
     const role = target?.dataset?.iconColor;
-    if (!['color', 'binary', 'value', 'rule-color', 'min', 'max', 'stop-color', 'rule-strength', 'fill-strength'].includes(role)) return;
+    if (!['color', 'binary', 'value', 'rule-color', 'min', 'max', 'stop-color', 'rule-strength', 'fill-strength',
+      'rule-icon', 'binary-icon', 'stop-icon'].includes(role)) return;
     const tab = iconColorEventTab(target);
     if (!tab) return;
     if (role === 'color' || role === 'binary') target.dataset.unset = '0';
+    // An On/Off icon keeps its row with the color it shows.
+    if (role === 'binary-icon') {
+      const color = document.getElementById(target.id.replace(/_icon$/, ''));
+      if (color) color.dataset.unset = '0';
+    }
+    if (role === 'stop-icon') {
+      const bar = readIconColorBar(tab);
+      const stop = bar.stops[iconColorSelectedStop(tab)];
+      if (!stop) return;
+      stop.icon = iconColorValidIcon(target.value) ? target.value : '';
+      writeIconColorBar(tab, bar.mode, bar.stops);
+    }
     if (role === 'stop-color') {
       const bar = readIconColorBar(tab);
       const stop = bar.stops[iconColorSelectedStop(tab)];
@@ -5726,6 +5866,12 @@ async function saveGestureEdge(select) {
     const tab = iconColorEventTab(button);
     if (!button || !tab) return;
     const role = button.dataset.iconColor;
+    if (role === 'stop-icon-button') {
+      // Its icon picker (tile-head.js) sets this stop's icon.
+      setIconColorSelectedStop(tab, Number(button.dataset.stop));
+      renderIconColorBar(tab);
+      return;
+    }
     if (role === 'stop') {
       // A finished drag is not a click on the stop.
       if (button.dataset.dragged === '1') {
@@ -8293,6 +8439,9 @@ async function saveGestureEdge(select) {
                 ? binarySensorPreviewColor(binarySensorPreviewState)
                 : (calendarTile ? calendarPreviewIconColor(calendarTile) : '')))), ruleFill);
       if (typeof setPreviewRuleFill === 'function') setPreviewRuleFill(tileElem, ruleFill);
+      // A matching rule shows its own icon (tile_rule_icon.h); weather icons
+      // keep their own.
+      if (ruleFill.icon && previewKind !== 'weather' && !lockIsIcon) iconName = ruleFill.icon;
       const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
       html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '>' +
         (locked && !lockIsIcon ? PREVIEW_LOCK_MARK : '') + '</i>';
@@ -10891,8 +11040,12 @@ async function saveGestureEdge(select) {
   // (resolveIconColorRecord, same result as the firmware), else `fallback`.
   // `out`, when given, receives the matching state line's own "Fuellen"
   // (`fill`: 1, 0, or -1 when "Ausfuellen" decides).
+  // `out.icon`: the matching stop's or line's own icon ('' without one).
   function previewIconColor(typeValue, record, entity, meta, binaryState, fallback, out = null) {
-    if (out) out.fill = -1;
+    if (out) {
+      out.fill = -1;
+      out.icon = '';
+    }
     if (!record || typeof tileTypeHasIconColors !== 'function' ||
         !tileTypeHasIconColors(typeValue)) return fallback;
     const type = String(typeValue ?? '0');
@@ -11167,6 +11320,9 @@ async function saveGestureEdge(select) {
                   ? binarySensorPreviewColor(binarySensorPreviewState)
                   : (previewKind === 'calendar' ? calendarPreviewIconColor(tile) : '')))), ruleFill);
         if (typeof setPreviewRuleFill === 'function') setPreviewRuleFill(el, ruleFill);
+        // A matching rule shows its own icon (tile_rule_icon.h); weather
+        // icons keep their own.
+        if (ruleFill.icon && previewKind !== 'weather' && !lockIsIcon) iconName = ruleFill.icon;
         const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
         html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '>' +
           (locked && !lockIsIcon ? PREVIEW_LOCK_MARK : '') + '</i>';

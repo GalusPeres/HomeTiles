@@ -116,7 +116,8 @@ function lastArrays(open) {
 const locales = {};
 for (const match of i18n.matchAll(/static const LocaleProfile kLocale(\w+) = \{/g)) {
   const [labels, kinds, icons] = lastArrays(match.index + match[0].length - 1);
-  assert.equal(icons.length, 5, `${match[1]} icon picker labels`);
+  // The sixth: a rule's Automatic keeps the tile's own icon (user 2026-10-28).
+  assert.equal(icons.length, 6, `${match[1]} icon picker labels`);
   assert.equal(labels.length, 11, `${match[1]} picker labels`);
   assert.equal(kinds.length, 23, `${match[1]} entity kinds`);
   for (const text of [...labels, ...kinds]) assert.ok(text.trim().length, `${match[1]} has no empty label`);

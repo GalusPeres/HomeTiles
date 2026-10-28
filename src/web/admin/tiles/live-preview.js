@@ -277,6 +277,9 @@
                 ? binarySensorPreviewColor(binarySensorPreviewState)
                 : (calendarTile ? calendarPreviewIconColor(calendarTile) : '')))), ruleFill);
       if (typeof setPreviewRuleFill === 'function') setPreviewRuleFill(tileElem, ruleFill);
+      // A matching rule shows its own icon (tile_rule_icon.h); weather icons
+      // keep their own.
+      if (ruleFill.icon && previewKind !== 'weather' && !lockIsIcon) iconName = ruleFill.icon;
       const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
       html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '>' +
         (locked && !lockIsIcon ? PREVIEW_LOCK_MARK : '') + '</i>';

@@ -27,6 +27,7 @@
 #include "src/io/hardware_io.h"
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/tiles/icons/mdi_icons.h"
+#include "src/tiles/runtime/tile_rule_icon.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/types/clock/clock_format.h"
 #include <ArduinoJson.h>
@@ -206,6 +207,7 @@ struct SensorPopupContext {
   String icon_colors;
   bool forced_icon = false;
   uint32_t forced_icon_color = 0xFFFFFF;
+  uint32_t forced_icon_glyph = 0;
   String binary_state;
   String state_history_value;
   String binary_device_class;
@@ -465,6 +467,15 @@ static void update_range_buttons(SensorPopupContext* ctx);
 static void apply_popup_icon_color(SensorPopupContext* ctx, bool known, const char* state,
                                    const char* display, lv_color_t fallback) {
   if (!ctx || !ctx->icon_label) return;
+  // The matching rule's own icon as on the tile (tile_rule_icon.h): own-state
+  // rules for this state, else the forcing rule's icon from the opening.
+  if (ctx->forced_icon) {
+    tile_rule_icon::show_codepoint(ctx->icon_label, ctx->forced_icon_glyph);
+  } else if (tile_icon_colors::own_state_colors_icon(ctx->icon_colors.c_str())) {
+    tile_rule_icon::show(ctx->icon_label, tile_icon_colors::state_icon(ctx->icon_colors.c_str(),
+                                                                       known && ctx->icon_colors.length(), state,
+                                                                       display));
+  }
   // Own-state rules as on the tile (tile_icon_colors::state_icon_color); rules
   // on another entity (or switched off) leave the fixed color, and a forced
   // tile color wins.
@@ -630,6 +641,8 @@ static void apply_sensor_header(SensorPopupContext* ctx, const SensorPopupInit& 
     hometiles_title::set(ctx->title_label, init.title.c_str());
   }
   if (ctx->icon_label) {
+    // The reused header forgets the last tile's rule icon.
+    tile_rule_icon::forget(ctx->icon_label);
     String icon_name = init.icon_name;
     icon_name.trim();
     if (!icon_name.length() || isMdiIconDisabled(icon_name)) {
@@ -649,6 +662,7 @@ static void apply_sensor_header(SensorPopupContext* ctx, const SensorPopupInit& 
   ctx->icon_colors = init.icon_colors;
   ctx->forced_icon = init.forced_icon;
   ctx->forced_icon_color = init.forced_icon_color;
+  ctx->forced_icon_glyph = init.forced_icon_glyph;
   if (ctx->icon_label) {
     lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(ui_theme::text()), 0);
   }
@@ -1784,7 +1798,8 @@ static void update_binary_icon(SensorPopupContext* ctx,
   if (!icon_name.length()) return;
   const String icon = getMdiChar(icon_name);
   if (!icon.length()) return;
-  lv_label_set_text(ctx->icon_label, icon.c_str());
+  // A rule's own icon stays while its rule applies.
+  tile_rule_icon::set_glyph(ctx->icon_label, icon.c_str());
   lv_obj_clear_flag(ctx->icon_label, LV_OBJ_FLAG_HIDDEN);
   popup_layout::alignHeader(ctx->card, ctx->title_label, ctx->icon_label);
 }
@@ -1793,7 +1808,7 @@ static void refresh_editable_popup_icon(SensorPopupContext* ctx) {
   if (!ctx || !ctx->editable || !ctx->icon_label || ctx->binary_icon_override) return;
   const String name = normalizeMdiIconName(haBridgeConfig.findEntityIcon(ctx->entity_id));
   const String glyph = name.length() ? getMdiChar(name) : String();
-  lv_label_set_text(ctx->icon_label, glyph.c_str());
+  tile_rule_icon::set_glyph(ctx->icon_label, glyph.c_str());
   if (glyph.length()) lv_obj_remove_flag(ctx->icon_label, LV_OBJ_FLAG_HIDDEN);
   else lv_obj_add_flag(ctx->icon_label, LV_OBJ_FLAG_HIDDEN);
   popup_layout::alignHeader(ctx->card, ctx->title_label, ctx->icon_label);

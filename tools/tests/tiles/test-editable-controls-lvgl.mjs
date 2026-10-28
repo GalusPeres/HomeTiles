@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 import {lvglHost} from '../../lib/lvgl-host.mjs';
 import {valueUnitSource} from '../../lib/value-unit-source.mjs';
+import {ruleIconSource} from '../../lib/rule-icon-source.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
 const control = read('src/types/value/value_control.cpp'), popup = read('src/ui/popups/sensor/sensor_popup.cpp');
@@ -145,6 +146,8 @@ ${fn(popup,'style_range_button')}
 ${fn(popup,'update_range_buttons')}
 ${fn(popup,'on_range_click')}
 ${fn(popup,'accept_editable_history_range')}
+#include "src/tiles/config/tile_icon_colors.h"
+${ruleIconSource(root, {codepoint: true})}
 ${fn(popup,'refresh_editable_popup_icon')}
 
 int explicit_layouts=0;

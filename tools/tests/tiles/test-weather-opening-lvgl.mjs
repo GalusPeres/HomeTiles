@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 import {lvglHost} from '../../lib/lvgl-host.mjs';
 import {valueUnitSource} from '../../lib/value-unit-source.mjs';
+import {ruleIconSource} from '../../lib/rule-icon-source.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
@@ -100,6 +101,7 @@ ${fn(read('src/tiles/runtime/tile_renderer_shared.h'),'place_tile_card')}
 #include "src/types/climate/layout.h"
 #include "src/tiles/runtime/tile_press.h"
 ${strip(read('src/tiles/runtime/tile_icon_disc.h'))}
+${ruleIconSource(root, {codepoint: true})}
 ${strip(read('src/tiles/runtime/compact_sensor_layout.h'))}
 PopupShellParts popup;int opens=0,completed_opens=0,sensor_opens=0;
 // Execute the production opening function with a small resident body. Forecast

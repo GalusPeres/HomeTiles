@@ -53,9 +53,10 @@ assert.match(icons, /chunk \+= mdiIconName\(i\);\s*chunk \+= '\\n';/);
 assert.match(icons, /chunk\.length\(\) >= 1400/, 'Small chunks, no list copy in RAM');
 assert.ok(JSON.parse(read('src/web/admin/bundle.json')).sources.includes('src/web/admin/tiles/tile-head.js'));
 const scripts = read('src/web/server/render/web_admin_scripts.cpp');
-const keys = ['iconPickerAuto', 'iconPickerAutoHint', 'iconPickerNone', 'iconPickerNoneHint', 'iconPickerNoMatch'];
+const keys = ['iconPickerAuto', 'iconPickerAutoHint', 'iconPickerNone', 'iconPickerNoneHint', 'iconPickerNoMatch',
+  'iconPickerRuleHint'];
 for (const key of [...keys, 'iconPickerSearch']) assert.ok(scripts.includes(`"${key}"`), key);
-assert.match(read('src/core/i18n/i18n.h'), /const char\* icon_picker_labels\[5\];/);
+assert.match(read('src/core/i18n/i18n.h'), /const char\* icon_picker_labels\[6\];/);
 
 // Every language: the icon picker labels, the array before the clock's month
 // names (the last array of each LocaleProfile table).
@@ -85,7 +86,7 @@ const labels = {};
 for (const match of i18n.matchAll(/static const LocaleProfile kLocale(\w+) = \{/g)) {
   const last = lastArray(match.index + match[0].length - 1);
   const strings = [...last.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(m => m[1]);
-  assert.equal(strings.length, 5, `${match[1]} icon picker labels`);
+  assert.equal(strings.length, 6, `${match[1]} icon picker labels`);
   assert.ok(strings.every(text => text.trim().length) && strings[4].includes('{query}'), `${match[1]} labels`);
   labels[match[1]] = strings;
 }

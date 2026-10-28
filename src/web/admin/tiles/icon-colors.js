@@ -68,6 +68,27 @@
     return match ? parseInt(match[1], 16) : null;
   }
 
+  // valid_icon(): a rule's own icon (user 2026-10-28) is an MDI name of
+  // lowercase letters, digits and dashes, at most 48 characters.
+  function iconColorValidIcon(name) {
+    return /^[a-z0-9-]{1,48}$/.test(String(name ?? ''));
+  }
+
+  // parse_color_icon(): "RRGGBB" or "RRGGBB,<icon>".
+  function iconColorParseHexIcon(text) {
+    const value = String(text);
+    const comma = value.indexOf(',');
+    const icon = comma < 0 ? '' : value.slice(comma + 1);
+    if (comma >= 0 && !iconColorValidIcon(icon)) return null;
+    const color = iconColorParseHex(comma < 0 ? value : value.slice(0, comma));
+    return color === null ? null : { color, icon };
+  }
+
+  // append_icon(): ",<icon>" after a color, nothing without one.
+  function iconColorIconSuffix(icon) {
+    return iconColorValidIcon(icon) ? ',' + icon : '';
+  }
+
   function iconColorHex(rgb) {
     return (rgb >>> 0).toString(16).toUpperCase().padStart(6, '0');
   }
@@ -121,8 +142,9 @@
     return needle.length > 0 && haystack.includes(needle);
   }
 
-  // parse_rule(): "<op>[+|-] RRGGBB <value>"; `fill` is the state line's own
-  // "Fuellen" (1 "is+", 0 "is-", -1 a plain "is" following the "fill" line).
+  // parse_rule(): "<op>[+|-] RRGGBB[,<icon>] <value>"; `fill` is the state
+  // line's own "Fuellen" (1 "is+", 0 "is-", -1 a plain "is" following the
+  // "fill" line), `icon` its own icon ('' without one).
   function iconColorParseRule(line) {
     const text = iconColorTrim(line);
     const space = text.indexOf(' ');
@@ -135,10 +157,10 @@
     if (!['ge', 'le', 'eq', 'is', 'has'].includes(op)) return null;
     const rest = text.slice(space + 1);
     const colorEnd = rest.indexOf(' ');
-    const color = iconColorParseHex(colorEnd < 0 ? rest : rest.slice(0, colorEnd));
-    if (color === null) return null;
+    const parsed = iconColorParseHexIcon(colorEnd < 0 ? rest : rest.slice(0, colorEnd));
+    if (!parsed) return null;
     const value = colorEnd < 0 ? '' : iconColorTrim(rest.slice(colorEnd));
-    return value ? { op, color, value, fill } : null;
+    return value ? { op, color: parsed.color, icon: parsed.icon, value, fill } : null;
   }
 
   // tile_icon_colors::rows_fill(): a state line with its own "Fuellen".
@@ -152,13 +174,13 @@
     return stops.sort((a, b) => a.position - b.position);
   }
 
-  // parse_stop(): "P:RRGGBB", P with 1-4 digits, clamped to 0..1000.
+  // parse_stop(): "P:RRGGBB[,<icon>]", P with 1-4 digits, clamped to 0..1000.
   function iconColorParseStop(token) {
     const colon = token.indexOf(':');
     if (colon < 1 || colon > 4 || !/^[0-9]+$/.test(token.slice(0, colon))) return null;
-    const color = iconColorParseHex(token.slice(colon + 1));
-    if (color === null) return null;
-    return { position: Math.min(Number(token.slice(0, colon)), 1000), color };
+    const parsed = iconColorParseHexIcon(token.slice(colon + 1));
+    if (!parsed) return null;
+    return { position: Math.min(Number(token.slice(0, colon)), 1000), color: parsed.color, icon: parsed.icon };
   }
 
   // parse_bar(): "bar <smooth|steps> <min> <max> <P>:<RRGGBB> ...".
@@ -256,12 +278,27 @@
     return iconColorBarColorAt(bar, (value - bar.min) / (bar.max - bar.min));
   }
 
+  // bar_icon(): the icon of the last stop at or below the value (the first
+  // stop below it), on smooth bars too: an icon cannot blend.
+  function iconColorBarIcon(bar, value) {
+    let t = (value - bar.min) / (bar.max - bar.min);
+    if (!(t > 0)) t = 0;
+    if (t > 1) t = 1;
+    let index = 0;
+    bar.stops.forEach((stop, i) => { if (stop.position / 1000 <= t) index = i; });
+    return bar.stops[index]?.icon || '';
+  }
+
   // resolve(): the icon color for a known state as "#RRGGBB", or '' for the
   // type default. Only v2 records are evaluated.
   // `out`, when given, receives the matching state line's own fill (`fill`:
-  // 1, 0 or -1 like iconColorParseRule).
+  // 1, 0 or -1 like iconColorParseRule) and the matching stop's or line's
+  // own icon (`icon`, '' without one).
   function resolveIconColorRecord(record, state, display, fixedFallback = true, out = null) {
-    if (out) out.fill = -1;
+    if (out) {
+      out.fill = -1;
+      out.icon = '';
+    }
     const text = String(record ?? '');
     if (!iconColorIsV2(text) || state === undefined || state === null) return '';
     const lines = text.split('\n');
@@ -272,14 +309,20 @@
         if (barSeen) continue;
         barSeen = true;
         const bar = number !== null ? iconColorParseBar(line) : null;
-        if (bar) return '#' + iconColorHex(iconColorBarColor(bar, number));
+        if (bar) {
+          if (out) out.icon = iconColorBarIcon(bar, number);
+          return '#' + iconColorHex(iconColorBarColor(bar, number));
+        }
         continue;
       }
       const rule = iconColorParseRule(line);
       if (!rule || (rule.op !== 'is' && rule.op !== 'has')) continue;
       if (iconColorTextMatches(rule.op, rule.value, state) ||
           (display !== undefined && display !== null && iconColorTextMatches(rule.op, rule.value, display))) {
-        if (out) out.fill = rule.fill;
+        if (out) {
+          out.fill = rule.fill;
+          out.icon = rule.icon;
+        }
         return '#' + iconColorHex(rule.color);
       }
     }
@@ -388,7 +431,7 @@
     }
     if (bar) {
       out += '\nbar ' + bar.mode + ' ' + bar.minText + ' ' + bar.maxText +
-        bar.stops.map(stop => ' ' + stop.position + ':' + iconColorHex(stop.color)).join('');
+        bar.stops.map(stop => ' ' + stop.position + ':' + iconColorHex(stop.color) + iconColorIconSuffix(stop.icon)).join('');
     }
     let rows = 0;
     if (allowRows) {
@@ -412,7 +455,7 @@
         const value = iconColorClipValue(rule.value);
         if (!value) continue;
         const mark = rule.fill === 1 ? '+' : rule.fill === 0 ? '-' : '';
-        out += '\n' + rule.op + mark + ' ' + iconColorHex(rule.color) + ' ' + value;
+        out += '\n' + rule.op + mark + ' ' + iconColorHex(rule.color) + iconColorIconSuffix(rule.icon) + ' ' + value;
         rows++;
       }
     }
@@ -455,7 +498,10 @@
     for (const line of lines.slice(2)) {
       if (line.startsWith('bar ')) { bar = iconColorParseBar(line); continue; }
       const rule = iconColorParseRule(line);
-      if (rule) rows.push({ has: rule.op === 'has', color: '#' + iconColorHex(rule.color), value: rule.value, fill: rule.fill });
+      if (rule) {
+        rows.push({ has: rule.op === 'has', color: '#' + iconColorHex(rule.color), value: rule.value, fill: rule.fill,
+          icon: rule.icon });
+      }
     }
     return { color: fixed === null ? '' : '#' + iconColorHex(fixed), bar, rows,
       fill: iconColorFillOf(lines.slice(2)), cover: iconColorCoverOf(lines.slice(2)),
@@ -513,7 +559,10 @@
   // states of its entity (own or other); '' without a known state or result.
   // Rules never fall back to the fixed color here.
   function iconColorLayerColor(record, layer, ownEntity, meta, typeValue, out = null) {
-    if (out) out.fill = -1;
+    if (out) {
+      out.fill = -1;
+      out.icon = '';
+    }
     if (!layer || !layer.enabled) return '';
     const entity = layer.self ? String(ownEntity || '') : layer.entity;
     if (!entity) return '';
@@ -661,7 +710,8 @@
     const input = iconColorEl(tab, '_tile_icon_bar');
     if (!input) return;
     input.value = mode === 'off' ? ''
-      : [mode].concat(stops.map(stop => stop.position + ':' + iconColorHex(stop.color))).join(' ');
+      : [mode].concat(stops.map(stop => stop.position + ':' + iconColorHex(stop.color) + iconColorIconSuffix(stop.icon)))
+        .join(' ');
   }
 
   function iconColorSelectedStop(tab) {
@@ -726,8 +776,9 @@
     strip.style.background = iconColorGradient(bar.mode, iconColorSortStops(bar.stops.map(stop => ({ ...stop }))));
     let knobs = Array.from(handles.querySelectorAll('.icon-color-stop'));
     let labels = Array.from(handles.querySelectorAll('.icon-color-stop-label'));
-    if (knobs.length !== bar.stops.length) {
-      knobs.concat(labels).forEach(el => el.remove());
+    let icons = Array.from(handles.querySelectorAll('.icon-color-stop-icon'));
+    if (knobs.length !== bar.stops.length || icons.length !== bar.stops.length) {
+      knobs.concat(labels, icons).forEach(el => el.remove());
       knobs = bar.stops.map((stop, index) => {
         const knob = document.createElement('button');
         knob.type = 'button';
@@ -743,6 +794,20 @@
         handles.appendChild(label);
         return label;
       });
+      // Each stop's own icon below its value: the tile head's icon picker
+      // for the selected stop (tile-head.js data-icon-input).
+      icons = bar.stops.map((stop, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'icon-color-stop-icon';
+        button.dataset.iconColor = 'stop-icon-button';
+        button.dataset.stop = String(index);
+        button.dataset.iconInput = tab + '_tile_icon_stop_icon';
+        button.setAttribute('aria-haspopup', 'listbox');
+        button.title = typeof t === 'function' ? t('iconPickerAuto') : '';
+        handles.appendChild(button);
+        return button;
+      });
     }
     const selected = iconColorSelectedStop(tab);
     const range = iconColorBarRange(tab);
@@ -755,6 +820,8 @@
       labels[index].textContent = range
         ? iconColorFormatValue(range.min + stop.position / 1000 * (range.max - range.min), range.max - range.min)
         : '';
+      icons[index].style.left = left;
+      renderIconColorIconButton(tab, icons[index], stop.icon || '', '#' + iconColorHex(stop.color));
     });
     const remove = handles.querySelector('[data-icon-color="stop-remove"]');
     const removable = selected >= 0 && selected < bar.stops.length && bar.stops.length > 2;
@@ -766,6 +833,33 @@
 
   function iconColorRuleRow(tab, index) {
     return iconColorEl(tab, '_tile_icon_rule_' + index);
+  }
+
+  // A rule's icon button: its own icon in the rule's color, else the tile's
+  // own icon dimmed (data-icon-value: the icon the picker marks).
+  function renderIconColorIconButton(tab, button, icon, color) {
+    if (!button) return;
+    const own = iconColorValidIcon(icon) ? icon : '';
+    const shown = own || (typeof tileAutomaticIcon === 'function' ? tileAutomaticIcon(tab) : 'shape-outline');
+    const html = '<i class="mdi mdi-' + escapeHtml(shown) + '"></i>';
+    if (button.innerHTML !== html) button.innerHTML = html;
+    button.classList.toggle('none', !own);
+    button.style.color = own ? (normalizeIconColorHex(color) || '') : '';
+    button.dataset.iconValue = own;
+  }
+
+  function renderIconColorIconButtons(tab) {
+    for (let index = 0; index < ICON_COLOR_MAX_ROWS; index++) {
+      const row = iconColorRuleRow(tab, index);
+      if (!row || row.classList.contains('hidden')) continue;
+      renderIconColorIconButton(tab, document.getElementById(row.id + '_icon_button'),
+        document.getElementById(row.id + '_icon')?.value || '', document.getElementById(row.id + '_color')?.value || '');
+    }
+    for (const state of ['on', 'off']) {
+      const input = iconColorEl(tab, '_tile_icon_' + state);
+      renderIconColorIconButton(tab, iconColorEl(tab, '_tile_icon_' + state + '_icon_button'),
+        iconColorEl(tab, '_tile_icon_' + state + '_icon')?.value || '', input?.value || '');
+    }
   }
 
   // A row's "Fuellen" box: its own mark, else (a new row, or a line from
@@ -792,7 +886,8 @@
         value: document.getElementById(row.id + '_value')?.value || '',
         has: !!document.getElementById(row.id + '_has')?.checked,
         color: document.getElementById(row.id + '_color')?.value || ICON_COLOR_ROW_DEFAULT,
-        fill: iconColorFillOfBox(document.getElementById(row.id + '_fill'))
+        fill: iconColorFillOfBox(document.getElementById(row.id + '_fill')),
+        icon: document.getElementById(row.id + '_icon')?.value || ''
       });
     }
     return rows;
@@ -808,23 +903,28 @@
       const has = document.getElementById(row.id + '_has');
       const color = document.getElementById(row.id + '_color');
       const fill = document.getElementById(row.id + '_fill');
+      const icon = document.getElementById(row.id + '_icon');
+      if (icon) icon.value = entry && iconColorValidIcon(entry.icon) ? entry.icon : '';
       if (value) value.value = entry ? entry.value : '';
       if (has) has.checked = !!entry?.has;
       setIconColorFillBox(tab, fill, entry ? (entry.fill ?? -1) : -1);
       if (color) color.value = entry ? (normalizeIconColorHex(entry.color) || ICON_COLOR_ROW_DEFAULT) : ICON_COLOR_ROW_DEFAULT;
     }
     iconColorEl(tab, '_tile_icon_rule_add')?.classList.toggle('hidden', rows.length >= ICON_COLOR_MAX_ROWS);
+    renderIconColorIconButtons(tab);
   }
 
   // Binary sensor On/Off pickers; unset pickers keep the type color and
   // follow "Ausfuellen" (their "Fuellen" box shows it).
-  function setIconColorBinaryInput(tab, state, color, fill = -1) {
+  function setIconColorBinaryInput(tab, state, color, fill = -1, icon = '') {
     const input = iconColorEl(tab, '_tile_icon_' + state);
     if (!input) return;
     const hex = normalizeIconColorHex(color);
     input.value = hex || input.dataset.default || ICON_COLOR_BINARY_DEFAULTS[state];
     input.dataset.unset = hex ? '0' : '1';
     setIconColorFillBox(tab, iconColorEl(tab, '_tile_icon_' + state + '_fill'), hex ? fill : -1);
+    const iconInput = iconColorEl(tab, '_tile_icon_' + state + '_icon');
+    if (iconInput) iconInput.value = hex && iconColorValidIcon(icon) ? icon : '';
   }
 
   function readIconColorBinaryRows(tab) {
@@ -833,7 +933,8 @@
       const input = iconColorEl(tab, '_tile_icon_' + state);
       if (input && input.dataset.unset === '0') {
         rows.push({ value: state, has: false, color: input.value,
-          fill: iconColorFillOfBox(iconColorEl(tab, '_tile_icon_' + state + '_fill')) });
+          fill: iconColorFillOfBox(iconColorEl(tab, '_tile_icon_' + state + '_fill')),
+          icon: iconColorEl(tab, '_tile_icon_' + state + '_icon')?.value || '' });
       }
     }
     return rows;
@@ -902,7 +1003,8 @@
         return /^[^ \t\r]+$/.test(text) ? text : '-';
       };
       lines.push(['bar', bar.mode, number('_tile_icon_bar_min'), number('_tile_icon_bar_max')]
-        .concat(bar.stops.map(stop => stop.position + ':' + iconColorHex(stop.color))).join(' '));
+        .concat(bar.stops.map(stop => stop.position + ':' + iconColorHex(stop.color) + iconColorIconSuffix(stop.icon)))
+        .join(' '));
     }
     const binaryOwn = type === '20' && (!layer || layer.self);
     const rows = binaryOwn ? readIconColorBinaryRows(tab) : readIconColorRows(tab);
@@ -910,7 +1012,8 @@
       const color = normalizeIconColorHex(row.color) || ICON_COLOR_ROW_DEFAULT;
       const value = row.value.replace(/[\u0000-\u001f\u007f]/g, '');
       // A row's own "Fuellen" (user 2026-10-11), else it follows "Ausfuellen".
-      lines.push((row.has ? 'has' : 'is') + iconColorMarkOf(row.fill) + ' ' + color.slice(1) + ' ' + value);
+      lines.push((row.has ? 'has' : 'is') + iconColorMarkOf(row.fill) + ' ' + color.slice(1) +
+        iconColorIconSuffix(row.icon) + ' ' + value);
     }
     // A switched-off own layer at its defaults without rules is no layer.
     const idle = layer && layer.self && !layer.enabled && layer.mode === 'rules' && layer.icon && !layer.tile &&
@@ -1021,6 +1124,7 @@
     iconColorEl(tab, '_tile_icon_state_section')?.classList.toggle('hidden', !showRows);
     iconColorEl(tab, '_tile_icon_binary_section')?.classList.toggle('hidden', !showBinary);
     if (showBar) renderIconColorBar(tab);
+    renderIconColorIconButtons(tab);
   }
 
   function loadIconColorFields(tab, data) {
@@ -1049,7 +1153,7 @@
     if (onInput) onInput.value = on ? '1' : '0';
     for (const state of ['on', 'off']) {
       const row = parsed.rows.find(entry => !entry.has && iconColorFold(entry.value) === state);
-      setIconColorBinaryInput(tab, state, row ? row.color : '', row ? row.fill : -1);
+      setIconColorBinaryInput(tab, state, row ? row.color : '', row ? row.fill : -1, row ? row.icon : '');
     }
     syncIconColorFields(tab);
   }
@@ -1110,10 +1214,23 @@
   document.addEventListener('input', event => {
     const target = event.target;
     const role = target?.dataset?.iconColor;
-    if (!['color', 'binary', 'value', 'rule-color', 'min', 'max', 'stop-color', 'rule-strength', 'fill-strength'].includes(role)) return;
+    if (!['color', 'binary', 'value', 'rule-color', 'min', 'max', 'stop-color', 'rule-strength', 'fill-strength',
+      'rule-icon', 'binary-icon', 'stop-icon'].includes(role)) return;
     const tab = iconColorEventTab(target);
     if (!tab) return;
     if (role === 'color' || role === 'binary') target.dataset.unset = '0';
+    // An On/Off icon keeps its row with the color it shows.
+    if (role === 'binary-icon') {
+      const color = document.getElementById(target.id.replace(/_icon$/, ''));
+      if (color) color.dataset.unset = '0';
+    }
+    if (role === 'stop-icon') {
+      const bar = readIconColorBar(tab);
+      const stop = bar.stops[iconColorSelectedStop(tab)];
+      if (!stop) return;
+      stop.icon = iconColorValidIcon(target.value) ? target.value : '';
+      writeIconColorBar(tab, bar.mode, bar.stops);
+    }
     if (role === 'stop-color') {
       const bar = readIconColorBar(tab);
       const stop = bar.stops[iconColorSelectedStop(tab)];
@@ -1151,6 +1268,12 @@
     const tab = iconColorEventTab(button);
     if (!button || !tab) return;
     const role = button.dataset.iconColor;
+    if (role === 'stop-icon-button') {
+      // Its icon picker (tile-head.js) sets this stop's icon.
+      setIconColorSelectedStop(tab, Number(button.dataset.stop));
+      renderIconColorBar(tab);
+      return;
+    }
     if (role === 'stop') {
       // A finished drag is not a click on the stop.
       if (button.dataset.dragged === '1') {

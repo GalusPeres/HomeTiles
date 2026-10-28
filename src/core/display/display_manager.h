@@ -42,12 +42,6 @@ public:
   // internal DMA heap.
   bool setSinglePsramBufferLines(size_t lines);
   bool restoreDrawBufferAfterSinglePsram();
-  // One full-height LVGL band in PSRAM for the tiles (test b576, user
-  // 2026-10-28: after a page turn Home showed band by band, after the
-  // full-screen camera, which draws with such a band, at once). False when
-  // PSRAM is too scarce or the camera's band is active; the caller then keeps
-  // the normal band.
-  bool setLargePsramBufferLines(size_t lines);
   // Legacy restore for targets that still reduce the draw buffer during OTA.
   // P4 builds retain the original fast buffer instead of reallocating it.
   bool restoreBufferLinesAfterOta(size_t lines);

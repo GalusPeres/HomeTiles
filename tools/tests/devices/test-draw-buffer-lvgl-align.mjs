@@ -26,8 +26,7 @@ assert.match(manager,
 // width * lines * bytes per pixel product reaches lv_display_set_buffers or
 // the band allocations any more.
 const setBuffers = [...manager.matchAll(/lv_display_set_buffers\(disp, [^,]+, [^,]+,\s*(\w+)/g)].map(m => m[1]);
-// The last: the tiles' full-height PSRAM band (setLargePsramBufferLines).
-assert.deepEqual(setBuffers, ['buf_bytes', 'bytes', 'restored_bytes', 'bytes', 'bytes']);
+assert.deepEqual(setBuffers, ['buf_bytes', 'bytes', 'restored_bytes', 'bytes']);
 for (const [name, source] of [
   ['allocDrawBuffers SRAM band', 'heap_caps_aligned_alloc(64, draw_buffer_bytes(sram_lines),'],
   ['allocDrawBuffers PSRAM bands', 'const size_t bytes = draw_buffer_bytes(requested_lines);'],

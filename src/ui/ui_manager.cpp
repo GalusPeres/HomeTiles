@@ -435,16 +435,7 @@ void UIManager::switchToTab(uint8_t index) {
   if (index == 3) {
     displayManager.setBufferLines(kSettingsBufferLines);
   } else {
-#if defined(DEVICE_ESP32_S3_RGB_480)
     displayManager.setBufferLines(kTilesBufferLines);
-#else
-    // Test b576 (user 2026-10-28): the tiles draw in one full-height PSRAM
-    // band like the full-screen camera does, after which Home showed at
-    // once; a page turn with the small band showed it band by band.
-    if (!displayManager.setLargePsramBufferLines(static_cast<size_t>(grid_layout::screen_h()))) {
-      displayManager.setBufferLines(kTilesBufferLines);
-    }
-#endif
   }
 
   // Deactivate the previous tab, if present.

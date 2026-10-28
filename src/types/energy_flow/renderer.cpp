@@ -378,6 +378,12 @@ struct HiddenBy {
 };
 HiddenBy g_hidden_by = {};
 
+HiddenBy hidden_info(lv_obj_t* card, lv_obj_t* hider) {
+  uint8_t depth = 0;
+  for (lv_obj_t* o = card; o && o != hider; o = lv_obj_get_parent(o)) ++depth;
+  return {hider == lv_obj_get_screen(card) && hider != card, depth, lv_obj_get_width(hider), lv_obj_get_height(hider)};
+}
+
 bool any_flow() {
   for (const FlowTileState* st : g_tiles) {
     if (st && any_live(*st)) return true;
@@ -416,10 +422,7 @@ uint32_t step_dots(bool& waiting, const char*& still) {
       // that shows it again may leave no frame that steps the dots, and they
       // stood until the next state arrived (user 2026-10-28: ~5 s after every
       // page turn, b608 log "last frame: hidden").
-      uint8_t depth = 0;
-      for (lv_obj_t* o = st->card; o && o != hider; o = lv_obj_get_parent(o)) ++depth;
-      g_hidden_by = {hider == lv_obj_get_screen(st->card) && hider != st->card, depth, lv_obj_get_width(hider),
-                     lv_obj_get_height(hider)};
+      g_hidden_by = hidden_info(st->card, hider);
       still = kStillHidden;
       waiting = true;
       continue;
@@ -647,6 +650,87 @@ void log_still(uint32_t now_ms) {
                 g_woken_by_state ? "a state" : "a frame");
 }
 
+// The frames after a page with a flow came up (energy_flow_shown; user
+// 2026-10-28, b609: after a page turn the dot still stood about a second and
+// no log said why): when each frame came, counted from the showing, and what
+// it found; one line once the dots made kShownMoves steps, after
+// kShownFrames frames or kShownTraceMs. m moved, w waiting for its pixel or
+// under a ring, r not visible, h hidden, p behind a popup, n no flow,
+// s asleep or under the screensaver.
+constexpr uint8_t kShownFrames = 20;
+constexpr uint8_t kShownMoves = 4;
+constexpr uint32_t kShownTraceMs = 3000;
+struct ShownTrace {
+  uint32_t shown_ms = 0;  // 0: no trace
+  bool hidden_at_show = false;
+  HiddenBy at_show = {};
+  bool hidden_later = false;
+  HiddenBy later = {};  // the last frame that found a flow hidden
+  uint8_t count = 0;
+  uint8_t moves = 0;
+  uint16_t at_ms[kShownFrames] = {};
+  char what[kShownFrames] = {};
+};
+ShownTrace g_shown_trace;
+
+char still_code(const char* still) {
+  if (still == kStillWaiting) return 'w';
+  if (still == kStillRefused) return 'r';
+  if (still == kStillHidden) return 'h';
+  if (still == kStillPopup) return 'p';
+  if (still == kStillNoFlow) return 'n';
+  return 's';
+}
+
+void describe_hidden(char* out, size_t size, bool hidden, const HiddenBy& by) {
+  if (!hidden) {
+    snprintf(out, size, "shown");
+    return;
+  }
+  snprintf(out, size, "hidden by %s %ldx%ld, %u levels up", by.screen ? "another screen" : "an object",
+           static_cast<long>(by.width), static_cast<long>(by.height), static_cast<unsigned>(by.depth));
+}
+
+void log_shown() {
+  ShownTrace& t = g_shown_trace;
+  char frames[kShownFrames * 7 + 1];
+  size_t used = 0;
+  int first_move = -1;
+  frames[0] = '\0';
+  for (uint8_t i = 0; i < t.count && used < sizeof(frames) - 1; ++i) {
+    if (first_move < 0 && t.what[i] == 'm') first_move = t.at_ms[i];
+    used += snprintf(frames + used, sizeof(frames) - used, " %u%c", static_cast<unsigned>(t.at_ms[i]), t.what[i]);
+  }
+  char first[12];
+  if (first_move < 0) snprintf(first, sizeof(first), "none");
+  else snprintf(first, sizeof(first), "%d ms", first_move);
+  char at_show[64];
+  char later[64];
+  describe_hidden(at_show, sizeof(at_show), t.hidden_at_show, t.at_show);
+  describe_hidden(later, sizeof(later), t.hidden_later, t.later);
+  Serial.printf("[EnergyFlow] Shown: first move %s; at the showing %s, last hidden frame %s; frames (ms):%s\n",
+                first, at_show, t.hidden_later ? later : "none", frames);
+  t.shown_ms = 0;
+}
+
+void trace_frame(uint32_t moved, const char* still, uint32_t now_ms) {
+  ShownTrace& t = g_shown_trace;
+  if (!t.shown_ms) return;
+  const uint32_t at = now_ms - t.shown_ms;
+  if (t.count < kShownFrames) {
+    t.at_ms[t.count] = static_cast<uint16_t>(at < 65535u ? at : 65535u);
+    t.what[t.count] = moved ? 'm' : still_code(still);
+    ++t.count;
+  }
+  if (moved) {
+    ++t.moves;
+  } else if (still == kStillHidden) {
+    t.hidden_later = true;
+    t.later = g_hidden_by;
+  }
+  if (t.moves >= kShownMoves || t.count >= kShownFrames || at >= kShownTraceMs) log_shown();
+}
+
 // The display's refresh: one step at its start (its areas are drawn in this
 // same refresh), the next frame asked for while a dot is shown; nothing
 // shown, nothing asked: LVGL rests its refresh until the UI changes again.
@@ -660,6 +744,7 @@ void motion_display_cb(lv_event_t* e) {
     const char* still = nullptr;
     const uint32_t moved = step_dots(waiting, still);
     const uint32_t now_ms = millis();
+    trace_frame(moved, still, now_ms);
     if (!moved) {
       note_still(still, now_ms);
       if (waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));
@@ -1423,5 +1508,23 @@ void process_energy_flow_updates() {
   g_any_dirty = false;
   for (FlowTileState* st : g_tiles) {
     if (st && st->dirty) refresh(*st);
+  }
+}
+
+void energy_flow_shown(lv_obj_t* shown) {
+  if (!shown || !g_motion_display) return;
+  for (FlowTileState* st : g_tiles) {
+    if (!st || !st->card || !any_live(*st)) continue;
+    lv_obj_t* o = st->card;
+    while (o && o != shown) o = lv_obj_get_parent(o);
+    if (!o) continue;
+    g_shown_trace = ShownTrace{};
+    g_shown_trace.shown_ms = millis() | 1;
+    if (lv_obj_t* hider = hidden_by(st->card)) {
+      g_shown_trace.hidden_at_show = true;
+      g_shown_trace.at_show = hidden_info(st->card, hider);
+    }
+    lv_timer_resume(lv_display_get_refr_timer(g_motion_display));
+    return;
   }
 }

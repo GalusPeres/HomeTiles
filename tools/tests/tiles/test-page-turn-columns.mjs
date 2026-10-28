@@ -10,8 +10,9 @@ import {readRepoFile} from '../../lib/admin-source.mjs';
 
 const tiles = readRepoFile('src/ui/tabs/tiles/tab_tiles_unified.cpp').replace(/\r\n?/g, '\n');
 
-// The cached turn times its steps in between (switch_step, diagnostics only).
-assert.equal((tiles.match(/lv_obj_clear_flag\(target->grid, LV_OBJ_FLAG_HIDDEN\);\s*(?:switch_step\("\w+"\);\s*)?home_bar::shown\(target->grid, folder_id, previous \? previous->folder_id : kInvalidFolderId\);\s*(?:switch_step\("\w+"\);\s*)?(?:\/\/[^\n]*\n\s*)*lv_obj_invalidate\(target->grid\);/g) || []).length, 2,
+// The cached turn times its steps in between (switch_step, diagnostics only);
+// a flow on the page hears it is shown (energy_flow_shown, b610).
+assert.equal((tiles.match(/lv_obj_clear_flag\(target->grid, LV_OBJ_FLAG_HIDDEN\);\s*(?:energy_flow_shown\(target->grid\);\s*)?(?:switch_step\("\w+"\);\s*)?home_bar::shown\(target->grid, folder_id, previous \? previous->folder_id : kInvalidFolderId\);\s*(?:switch_step\("\w+"\);\s*)?(?:\/\/[^\n]*\n\s*)*lv_obj_invalidate\(target->grid\);/g) || []).length, 2,
   'cached and built page turns mark the whole grid');
 assert.doesNotMatch(tiles, /show_page_grid|by_columns|lv_inv_area\(/, 'no column areas on a page turn');
 console.log('Page turn: whole grid in full-width bands (columns rejected, b587)');

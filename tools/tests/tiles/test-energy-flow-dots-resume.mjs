@@ -71,4 +71,26 @@ assert.ok(frame.includes('note_still(still, now_ms);') &&
 assert.ok(frame.indexOf('log_still(now_ms);') > frame.indexOf('if (!moved) {'), 'logged when the dots move again');
 assert.ok(between('void wake_motion(', 'void count_piece(').includes('g_woken_by_state = true;'));
 
+// b610: b609 still stood about a second after a page turn and the log had no
+// clock for it. Every place that shows a page, folder grid or the tiles' tab
+// tells the flow at once; its first frames are traced (when they came, what
+// they found) and logged once per showing, outside the frame callback.
+assert.ok(frame.includes('trace_frame(moved, still, now_ms);') &&
+  frame.indexOf('trace_frame(moved, still, now_ms);') < frame.indexOf('if (!moved) {'), 'every frame is traced');
+assert.ok(!frame.includes('Serial'), 'no log inside the frame callback');
+const trace = between('void trace_frame(uint32_t moved, const char* still, uint32_t now_ms) {', '// The display\'s refresh:');
+assert.ok(trace.includes('if (t.moves >= kShownMoves || t.count >= kShownFrames || at >= kShownTraceMs) log_shown();'),
+  'one line per showing, bounded');
+const shownFn = renderer.slice(renderer.indexOf('void energy_flow_shown(lv_obj_t* shown) {'));
+assert.ok(shownFn.includes('if (lv_obj_t* hider = hidden_by(st->card)) {') &&
+  shownFn.includes('lv_timer_resume(lv_display_get_refr_timer(g_motion_display));'),
+  'records what hid the tile at the showing and asks for the next frame');
+const tiles = readRepoFile('src/ui/tabs/tiles/tab_tiles_unified.cpp').replace(/\r\n?/g, '\n');
+const shows = tiles.split('lv_obj_clear_flag(target->grid, LV_OBJ_FLAG_HIDDEN);\n').slice(1);
+assert.equal(shows.length, 2, 'the cached and the built folder switch');
+for (const after of shows) assert.ok(after.trimStart().startsWith('energy_flow_shown(target->grid);'), 'right after the grid is shown');
+const ui = readRepoFile('src/ui/ui_manager.cpp').replace(/\r\n?/g, '\n');
+assert.ok(ui.includes('lv_obj_clear_flag(tab_panels[index], LV_OBJ_FLAG_HIDDEN);\n    if (index == 0) energy_flow_shown(tab_panels[index]);'),
+  'and the tiles\' tab coming back from Settings');
+
 console.log('Power flow dots keep asking for frames while hidden and resume with the first frame that shows them');

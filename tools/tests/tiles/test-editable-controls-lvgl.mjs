@@ -49,7 +49,7 @@ ${popupSurfaceHost(root)}
 #include "src/ui/popups/popup_first_frame.h"
 PopupFirstFrame g_sensor_first_frame;
 void hide_popup_shell(lv_obj_t*){} void cancel_popup_open(lv_obj_t*){}
-struct PendingSensorInit{};using SensorPopupInit=PendingSensorInit;SensorPopupInit g_pending_sensor_init;bool g_sensor_open_pending=false;
+struct PendingSensorInit{};using SensorPopupInit=PendingSensorInit;SensorPopupInit g_pending_sensor_init;bool g_sensor_open_pending=false;bool g_sensor_early_history=false;
 #include <lvgl_private.h>
 #include <algorithm>
 #include <cassert>

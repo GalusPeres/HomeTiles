@@ -122,7 +122,7 @@ ${popup.match(/struct HistoryRangeConfig \{[\s\S]*?\n};/)[0]}
 ${popup.match(/struct SensorPopupContext \{[\s\S]*?\n};/)[0]}
 ${read('src/ui/popups/sensor/sensor_popup.h').match(/struct SensorPopupInit \{[\s\S]*?\n};/)[0]}
 SensorPopupContext* g_sensor_popup_ctx=nullptr;PopupFirstFrame g_sensor_first_frame;SensorPopupInit g_pending_sensor_init;bool g_sensor_open_pending=false;bool g_sensor_early_history=false;
-struct Pending{bool valid=false;}g_pending_history,g_pending_binary_state;
+struct Pending{bool valid=false;String entity_id;std::string payload;}g_pending_history,g_pending_binary_state;
 // clear_chart() and clear_binary_history() drop a kept readout.
 static void clear_sensor_readout(SensorPopupContext*);static void refresh_sensor_readout(SensorPopupContext*);
 struct EditableValue{String kind,state="32",unit="%";bool available=true,valid=true,has_state=true;};

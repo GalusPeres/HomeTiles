@@ -3920,6 +3920,15 @@ static void finish_sensor_popup_open() {
                             g_sensor_popup_ctx->state_history_mode);
   g_sensor_popup_ctx->state_history_refresh_pending = false;
   g_sensor_popup_ctx->readout_refresh_pending = reuse_history;
+  // The early request's answer, when it is already here, goes into the
+  // controls' frame: applied in the pass after it, the graph came one frame
+  // later than the popup (user 2026-10-28, b609).
+  if (g_sensor_early_history && g_pending_history.valid &&
+      (!g_pending_history.entity_id.length() ||
+       g_sensor_popup_ctx->entity_id.equalsIgnoreCase(g_pending_history.entity_id))) {
+    apply_history_payload(g_sensor_popup_ctx, g_pending_history.payload.c_str());
+    g_pending_history.valid = false;
+  }
   // Present the controls before applying a returned history in another pass.
   g_sensor_first_frame.begin();
   if (!fresh_history && !g_sensor_early_history) request_history_for_context(g_sensor_popup_ctx);

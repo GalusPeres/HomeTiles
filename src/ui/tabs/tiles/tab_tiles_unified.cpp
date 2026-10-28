@@ -23,6 +23,7 @@
 #include "src/types/binary_sensor/renderer.h"
 #include "src/types/energy/energy_data.h"
 #include "src/types/energy_flow/flow_updates.h"
+#include "src/types/energy_flow/renderer.h"
 #include "src/types/media/artwork_payload.h"
 #include "src/web/server/web_admin.h"
 #include "src/tiles/icons/mdi_icons.h"
@@ -2521,6 +2522,7 @@ void tiles_process_reload_requests() {
           lv_obj_add_flag(previous->grid, LV_OBJ_FLAG_HIDDEN);
         }
         lv_obj_clear_flag(target->grid, LV_OBJ_FLAG_HIDDEN);
+        energy_flow_shown(target->grid);
         switch_step("show");
         home_bar::shown(target->grid, folder_id, previous ? previous->folder_id : kInvalidFolderId);
         switch_step("bar");
@@ -2575,6 +2577,7 @@ void tiles_process_reload_requests() {
           lv_obj_add_flag(previous->grid, LV_OBJ_FLAG_HIDDEN);
         }
         lv_obj_clear_flag(target->grid, LV_OBJ_FLAG_HIDDEN);
+        energy_flow_shown(target->grid);
         home_bar::shown(target->grid, folder_id, previous ? previous->folder_id : kInvalidFolderId);
         lv_obj_invalidate(target->grid);
         target->last_used_ms = millis();

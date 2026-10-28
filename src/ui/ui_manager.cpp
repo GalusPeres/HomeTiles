@@ -37,6 +37,7 @@
 #include "src/ui/popups/popup_surface.h"
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/tile_press.h"
+#include "src/types/energy_flow/renderer.h"
 #include "src/core/config/tile_radius.h"
 
 #include <time.h>
@@ -461,6 +462,7 @@ void UIManager::switchToTab(uint8_t index) {
   if (index == 3) settings_prepare_show();
   if (tab_panels[index]) {
     lv_obj_clear_flag(tab_panels[index], LV_OBJ_FLAG_HIDDEN);
+    if (index == 0) energy_flow_shown(tab_panels[index]);
   }
   if (tab_buttons[index]) {
     lv_obj_set_style_bg_opa(tab_buttons[index], LV_OPA_COVER, 0);

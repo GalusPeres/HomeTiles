@@ -31,6 +31,13 @@ assert.ok(show.indexOf('set_sensor_popup_visible(ctx, true);') < show.indexOf('r
 const finish = fn('finish_sensor_popup_open');
 assert.ok(finish.includes('if (!fresh_history && !g_sensor_early_history) request_history_for_context(g_sensor_popup_ctx);') &&
   finish.includes('g_sensor_early_history = false;'), 'the first frame pass does not ask again');
+// b610: an answer that is already here is applied with the controls, so the
+// graph is in their frame instead of the next one (user: still later than
+// the popup); the popup's own first frame stays as it is.
+const applyAt = finish.indexOf('apply_history_payload(g_sensor_popup_ctx, g_pending_history.payload.c_str());');
+assert.ok(applyAt >= 0 && applyAt < finish.indexOf('g_sensor_first_frame.begin();') &&
+  finish.slice(0, applyAt).includes('if (g_sensor_early_history && g_pending_history.valid &&'),
+  'the early answer goes into the controls\' frame');
 
 const queue = fn('queue_sensor_popup_history');
 assert.ok(queue.includes('if (g_sensor_open_pending && !g_sensor_early_history) return;'),

@@ -11,7 +11,7 @@
 
   function isSensorLookMode(mode) {
     const m = Number(mode);
-    return m >= 3 && m <= 12;
+    return m >= 3 && m <= 14;
   }
 
   function sensorLookValueInside(mode) {
@@ -98,8 +98,8 @@
     mode = Number(mode);
     if (mode === 7 || mode === 8) return sensorLookAutoArc(box, m.stroke);
     if (mode === 9 || mode === 10) return sensorLookAutoArc(box, m.band);
-    if (mode === 11 || mode === 12) {
-      const sw = mode === 11 ? m.stroke : m.band;
+    if (mode >= 11 && mode <= 14) {
+      const sw = mode === 11 || mode === 13 ? m.stroke : m.band;
       const r = (Math.min(box.w, box.h) - sw) / 2;
       return r > sw / 2 ? {cx: box.w / 2, cy: box.h / 2, r, half: Math.PI, sw} : null;
     }
@@ -290,8 +290,9 @@
     if (mode === 3 || mode === 4) body = sensorLookLevel(box, end, fraction, mode === 4, colorOf);
     else if (mode === 5 || mode === 6) body = sensorLookStripes(box, m, fraction, mode === 6, colorOf);
     const arc = sensorLookArc(mode, box, m);
-    if (arc && (mode === 7 || mode === 8 || mode === 11)) body = sensorLookArcBody(arc, fraction, mode === 11, !!(bar && tones), colorOf);
-    if (arc && (mode === 9 || mode === 10 || mode === 12)) body = sensorLookTicks(arc, m, fraction, mode === 12, colorOf);
+    const closed = mode >= 11;
+    if (arc && [7, 8, 11, 13].includes(mode)) body = sensorLookArcBody(arc, fraction, closed, !!(bar && tones), colorOf);
+    if (arc && [9, 10, 12, 14].includes(mode)) body = sensorLookTicks(arc, m, fraction, closed, colorOf);
     if (!svg) {
       el.insertAdjacentHTML('afterbegin', '<svg class="sensor-look-svg" aria-hidden="true"></svg>');
       svg = el.querySelector(':scope > .sensor-look-svg');

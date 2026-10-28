@@ -59,10 +59,14 @@
     const halfHeight = tileSpan('span_h') === 0.5;
     for (const id of ['_binary_sensor_value_font', '_energy_value_font'])
       syncCompactValueFontOptions(document.getElementById(prefix + id), halfHeight);
-    // A Sensor graph tile shows its value in the header row beside the disc
-    // like a half-height tile (types/sensor/renderer.cpp).
-    const sensorGraph = type === '1' && document.getElementById(prefix + '_sensor_display_mode')?.value === '2';
+    // A Sensor graph tile, and a look with its value in the head, shows its
+    // value in the header row beside the disc like a half-height tile
+    // (types/sensor/renderer.cpp).
+    const sensorMode = document.getElementById(prefix + '_sensor_display_mode')?.value || '0';
+    const sensorGraph = type === '1' && (sensorMode === '2' ||
+      (typeof isSensorLookMode === 'function' && isSensorLookMode(sensorMode) && !sensorLookValueInside(sensorMode)));
     syncCompactValueFontOptions(document.getElementById(prefix + '_sensor_value_font'), halfHeight || sensorGraph);
+    if (type === '1') syncSwitchChoices(tab);
     for (const kind of ['number', 'select', 'datetime'])
       syncEditableValueFontOptions(document.getElementById(prefix + '_' + kind + '_value_font'), halfHeight);
     if (type === '5') {

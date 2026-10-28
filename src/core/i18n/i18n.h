@@ -102,17 +102,20 @@ struct Strings {
   const char* sensor_display_none;
   const char* sensor_display_gauge;
   const char* sensor_display_graph;
-  // The Sensor looks (types/sensor/sensor_look.h), display modes 3-12.
-  const char* sensor_display_level_side;
-  const char* sensor_display_level_up;
-  const char* sensor_display_stripes;
-  const char* sensor_display_stripes_up;
-  const char* sensor_display_arc;
-  const char* sensor_display_arc_value;
-  const char* sensor_display_tick_arc;
-  const char* sensor_display_tick_arc_value;
-  const char* sensor_display_ring;
-  const char* sensor_display_tick_ring;
+  // The Sensor menu (types/sensor/web_html.cpp): layouts, forms, an open or
+  // closed ring, the value's place and the range (display modes 3-14).
+  const char* sensor_layout_value;
+  const char* sensor_layout_bar;
+  const char* sensor_layout_ring;
+  const char* sensor_form;
+  const char* sensor_form_level;
+  const char* sensor_form_line;
+  const char* sensor_form_stripes;
+  const char* sensor_ring_open;
+  const char* sensor_ring_closed;
+  const char* sensor_value_top;
+  const char* sensor_value_inside;
+  const char* sensor_gauge_range;
   const char* sensor_gauge_min;
   const char* sensor_gauge_max;
   const char* sensor_arc_degree;

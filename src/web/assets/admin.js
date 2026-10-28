@@ -7699,6 +7699,10 @@ async function saveGestureEdge(select) {
     bindLive(valueFontSelect, 'change', 'sensorValueFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(sensorPopupModeSelect, 'change', 'sensorPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(displayModeSelect, 'change', 'sensorDisplayMode', () => { syncGaugeUi(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    // The Sensor menu's choices set the display mode (admin-editor.js).
+    for (const field of ['sensor_layout', 'sensor_form', 'sensor_orientation', 'sensor_ring', 'sensor_place']) {
+      bindLive(document.getElementById(prefix + '_' + field), 'change', 'sensorChoice_' + field, () => applySensorLayoutChoices(tab));
+    }
     bindLive(gaugeMinInput, 'input', 'sensorGaugeMin', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(gaugeMaxInput, 'input', 'sensorGaugeMax', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(gaugeArcInput, 'input', 'sensorGaugeArc', () => { updateDraft(tab); scheduleAutoSave(tab); });
@@ -8064,10 +8068,14 @@ async function saveGestureEdge(select) {
     const halfHeight = tileSpan('span_h') === 0.5;
     for (const id of ['_binary_sensor_value_font', '_energy_value_font'])
       syncCompactValueFontOptions(document.getElementById(prefix + id), halfHeight);
-    // A Sensor graph tile shows its value in the header row beside the disc
-    // like a half-height tile (types/sensor/renderer.cpp).
-    const sensorGraph = type === '1' && document.getElementById(prefix + '_sensor_display_mode')?.value === '2';
+    // A Sensor graph tile, and a look with its value in the head, shows its
+    // value in the header row beside the disc like a half-height tile
+    // (types/sensor/renderer.cpp).
+    const sensorMode = document.getElementById(prefix + '_sensor_display_mode')?.value || '0';
+    const sensorGraph = type === '1' && (sensorMode === '2' ||
+      (typeof isSensorLookMode === 'function' && isSensorLookMode(sensorMode) && !sensorLookValueInside(sensorMode)));
     syncCompactValueFontOptions(document.getElementById(prefix + '_sensor_value_font'), halfHeight || sensorGraph);
+    if (type === '1') syncSwitchChoices(tab);
     for (const kind of ['number', 'select', 'datetime'])
       syncEditableValueFontOptions(document.getElementById(prefix + '_' + kind + '_value_font'), halfHeight);
     if (type === '5') {
@@ -16236,7 +16244,7 @@ function maybeFillTitleFromSensor(tab) {
 
   function isSensorLookMode(mode) {
     const m = Number(mode);
-    return m >= 3 && m <= 12;
+    return m >= 3 && m <= 14;
   }
 
   function sensorLookValueInside(mode) {
@@ -16323,8 +16331,8 @@ function maybeFillTitleFromSensor(tab) {
     mode = Number(mode);
     if (mode === 7 || mode === 8) return sensorLookAutoArc(box, m.stroke);
     if (mode === 9 || mode === 10) return sensorLookAutoArc(box, m.band);
-    if (mode === 11 || mode === 12) {
-      const sw = mode === 11 ? m.stroke : m.band;
+    if (mode >= 11 && mode <= 14) {
+      const sw = mode === 11 || mode === 13 ? m.stroke : m.band;
       const r = (Math.min(box.w, box.h) - sw) / 2;
       return r > sw / 2 ? {cx: box.w / 2, cy: box.h / 2, r, half: Math.PI, sw} : null;
     }
@@ -16515,8 +16523,9 @@ function maybeFillTitleFromSensor(tab) {
     if (mode === 3 || mode === 4) body = sensorLookLevel(box, end, fraction, mode === 4, colorOf);
     else if (mode === 5 || mode === 6) body = sensorLookStripes(box, m, fraction, mode === 6, colorOf);
     const arc = sensorLookArc(mode, box, m);
-    if (arc && (mode === 7 || mode === 8 || mode === 11)) body = sensorLookArcBody(arc, fraction, mode === 11, !!(bar && tones), colorOf);
-    if (arc && (mode === 9 || mode === 10 || mode === 12)) body = sensorLookTicks(arc, m, fraction, mode === 12, colorOf);
+    const closed = mode >= 11;
+    if (arc && [7, 8, 11, 13].includes(mode)) body = sensorLookArcBody(arc, fraction, closed, !!(bar && tones), colorOf);
+    if (arc && [9, 10, 12, 14].includes(mode)) body = sensorLookTicks(arc, m, fraction, closed, colorOf);
     if (!svg) {
       el.insertAdjacentHTML('afterbegin', '<svg class="sensor-look-svg" aria-hidden="true"></svg>');
       svg = el.querySelector(':scope > .sensor-look-svg');
@@ -16709,29 +16718,111 @@ function maybeFillTitleFromSensor(tab) {
     el.classList.add(getSensorValueFontClass(value));
   }
 
+  // The Sensor menu's choices (web_html.cpp, mockup sensor-menu) and the
+  // stored Tile::sensor_display_mode (sensor_look.h). Layout 0 value,
+  // 1 graph, 2 bar, 3 ring, 4 the old gauge; Form 0 fill or line, 1 stripes;
+  // Orientation 0 horizontal, 1 upright; Ring 0 open, 1 closed; Value 0 in
+  // the head, 1 inside the ring.
+  const SENSOR_LAYOUT_FIELDS = ['sensor_layout', 'sensor_form', 'sensor_orientation', 'sensor_ring', 'sensor_place'];
+
+  function sensorModeFromChoices(c) {
+    if (c.layout === 1) return 2;
+    if (c.layout === 4) return 1;
+    if (c.layout === 2) return 3 + (c.form ? 2 : 0) + (c.orientation ? 1 : 0);
+    if (c.layout === 3) {
+      if (c.ring) return (c.place ? 11 : 13) + (c.form ? 1 : 0);
+      return 7 + (c.form ? 2 : 0) + (c.place ? 1 : 0);
+    }
+    return 0;
+  }
+
+  function sensorChoicesFromMode(mode) {
+    mode = Number(mode) || 0;
+    const c = {layout: 0, form: 0, orientation: 0, ring: 0, place: 1};
+    if (mode === 1) c.layout = 4;
+    else if (mode === 2) c.layout = 1;
+    else if (mode >= 3 && mode <= 6) Object.assign(c, {layout: 2, form: mode >= 5 ? 1 : 0, orientation: (mode - 3) % 2});
+    else if (mode >= 7 && mode <= 10) Object.assign(c, {layout: 3, form: mode >= 9 ? 1 : 0, place: (mode - 7) % 2});
+    else if (mode === 11 || mode === 12) Object.assign(c, {layout: 3, ring: 1, form: mode - 11, place: 1});
+    else if (mode === 13 || mode === 14) Object.assign(c, {layout: 3, ring: 1, form: mode - 13, place: 0});
+    return c;
+  }
+
+  // Shows a stored mode in the choices; the old gauge's button only on a
+  // tile that has it (`gauge`).
+  function setSensorLayoutChoices(tab, mode, gauge) {
+    const c = sensorChoicesFromMode(mode);
+    const values = {sensor_layout: c.layout, sensor_form: c.form, sensor_orientation: c.orientation,
+      sensor_ring: c.ring, sensor_place: c.place};
+    for (const field of SENSOR_LAYOUT_FIELDS) {
+      const select = document.getElementById(tab + '_' + field);
+      if (select) select.value = String(values[field]);
+    }
+    const layout = document.getElementById(tab + '_sensor_layout');
+    if (layout?.dataset) layout.dataset.gauge = gauge ? '1' : '0';
+  }
+
+  // A choice changed: the stored mode follows and its change event runs the
+  // preview, draft and autosave.
+  function applySensorLayoutChoices(tab) {
+    const read = field => Number(document.getElementById(tab + '_' + field)?.value || 0);
+    const mode = String(sensorModeFromChoices({layout: read('sensor_layout'), form: read('sensor_form'),
+      orientation: read('sensor_orientation'), ring: read('sensor_ring'), place: read('sensor_place')}));
+    const select = document.getElementById(tab + '_sensor_display_mode');
+    if (select && String(select.value) !== mode) {
+      select.value = mode;
+      if (typeof select.dispatchEvent === 'function') select.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+    syncGaugeUi(tab);
+  }
+
   function syncGaugeUi(tab) {
     const prefix = tab;
     const typeValue = document.getElementById(prefix + '_tile_type')?.value || '0';
     const gaugeWrap = document.getElementById(prefix + '_sensor_gauge_fields');
     const graphWrap = document.getElementById(prefix + '_sensor_graph_fields');
+    // The graph fills its box; its old height field stays hidden.
+    if (graphWrap) graphWrap.classList.add('hidden');
     if (typeValue !== '1') {
       if (gaugeWrap) gaugeWrap.classList.add('hidden');
-      if (graphWrap) graphWrap.classList.add('hidden');
       return;
     }
     const displayMode = document.getElementById(prefix + '_sensor_display_mode')?.value || '0';
-    // The range belongs to the gauge and every look (display modes 3 and
-    // up, sensor_look.h); the arc, size and offset to the gauge alone.
-    if (gaugeWrap) {
-      if (displayMode === '1' || isSensorLookMode(displayMode)) gaugeWrap.classList.remove('hidden');
-      else gaugeWrap.classList.add('hidden');
-    }
+    const c = sensorChoicesFromMode(displayMode);
+    const row = (field, shown) => {
+      const label = typeof document.querySelector === 'function'
+        ? document.querySelector('label[for="' + prefix + '_' + field + '"]') : null;
+      if (label) label.classList.toggle('hidden', !shown);
+      document.getElementById(prefix + '_' + field + '_choices')?.classList.toggle('hidden', !shown);
+    };
+    const bar = c.layout === 2, ring = c.layout === 3, gauge = c.layout === 4;
+    row('sensor_form', bar || ring);
+    row('sensor_orientation', bar);
+    row('sensor_ring', ring);
+    row('sensor_place', ring);
+    // A bar's first form is its fill, a ring's its line.
+    const form = document.getElementById(prefix + '_sensor_form');
+    const first = form?.options?.[0];
+    const firstName = bar ? form?.dataset?.level : form?.dataset?.line;
+    if (first && firstName) first.textContent = firstName;
+    // The old gauge stays offered on a tile that has it.
+    const layout = document.getElementById(prefix + '_sensor_layout');
+    const gaugeOption = layout?.options ? Array.from(layout.options).find(o => o.value === '4') : null;
+    if (gaugeOption) gaugeOption.hidden = layout.dataset?.gauge !== '1' && !gauge;
+    // The range belongs to the gauge and every look; the arc, size and
+    // offset to the gauge alone.
+    if (gaugeWrap) gaugeWrap.classList.toggle('hidden', !(bar || ring || gauge));
     const shapeWrap = document.getElementById(prefix + '_sensor_gauge_shape_fields');
-    if (shapeWrap) shapeWrap.classList.toggle('hidden', displayMode !== '1');
-    if (graphWrap) {
-      if (displayMode === '2') graphWrap.classList.remove('hidden');
-      else graphWrap.classList.add('hidden');
-    }
+    if (shapeWrap) shapeWrap.classList.toggle('hidden', !gauge);
+    // The value size where the value has one (in the head or alone); a
+    // value inside a ring has the look's own size.
+    row('sensor_value_font', !(ring && c.place === 1));
+    const offsetShown = c.layout === 0 || gauge;
+    const offsetLabel = typeof document.querySelector === 'function'
+      ? document.querySelector('label[for="' + prefix + '_sensor_value_y_offset"]') : null;
+    if (offsetLabel) offsetLabel.classList.toggle('hidden', !offsetShown);
+    document.getElementById(prefix + '_sensor_value_y_offset')?.classList.toggle('hidden', !offsetShown);
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
 
   function loadSensorFields(tab, data) {
@@ -16749,6 +16840,7 @@ function maybeFillTitleFromSensor(tab) {
     if (popupModeEl) popupModeEl.value = (data.popup_open_mode !== undefined) ? String(data.popup_open_mode) : '1';
     const displayModeEl = document.getElementById(prefix + '_sensor_display_mode');
     if (displayModeEl) displayModeEl.value = (data.sensor_display_mode !== undefined) ? String(data.sensor_display_mode) : '0';
+    setSensorLayoutChoices(tab, displayModeEl?.value || 0, Number(data.sensor_display_mode) === 1);
     const gaugeMinEl = document.getElementById(prefix + '_sensor_gauge_min');
     if (gaugeMinEl) gaugeMinEl.value = (data.sensor_gauge_min !== undefined && data.sensor_gauge_min !== null) ? String(data.sensor_gauge_min) : '';
     const gaugeMaxEl = document.getElementById(prefix + '_sensor_gauge_max');
@@ -16802,6 +16894,7 @@ function maybeFillTitleFromSensor(tab) {
     if (popupModeEl) popupModeEl.value = '1';
     const displayModeEl = document.getElementById(prefix + '_sensor_display_mode');
     if (displayModeEl) displayModeEl.value = '0';
+    setSensorLayoutChoices(tab, 0, false);
     const gaugeMinEl = document.getElementById(prefix + '_sensor_gauge_min');
     if (gaugeMinEl) gaugeMinEl.value = '';
     const gaugeMaxEl = document.getElementById(prefix + '_sensor_gauge_max');
@@ -18170,7 +18263,8 @@ function maybeFillTitleFromSwitch(tab) {
   // segmented choice.
   const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode', 'climate_view', 'media_layout',
     'cover_value_font', 'lock_value_font', 'alarm_value_font', 'fan_value_font', 'camera_display', 'camera_fit',
-    'camera_head', 'camera_tap', 'switch_orientation', 'fan_orientation'];
+    'camera_head', 'camera_tap', 'switch_orientation', 'fan_orientation', 'sensor_layout', 'sensor_form',
+    'sensor_orientation', 'sensor_ring', 'sensor_place', 'sensor_value_font', 'sensor_popup_open_mode'];
 
   function syncSwitchChoices(tab) {
     for (const field of SWITCH_CHOICE_FIELDS) {

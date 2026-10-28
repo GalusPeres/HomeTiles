@@ -115,7 +115,7 @@ for (const word of ['"Ausrichtung",', '"Senkrecht",', '"Orientation",', '"Vertic
 }
 const switchAdmin = readRepoFile('src/types/switch/admin.js');
 assert.ok(switchAdmin.includes("bar.style.setProperty('--switch-handle-h', (upright ? Math.floor(width * 46 / 160) : geometry.handleHeight) + 'px');") &&
-  switchAdmin.includes("'camera_tap', 'switch_orientation', 'fan_orientation'];") &&
+  switchAdmin.includes("'camera_tap', 'switch_orientation', 'fan_orientation', 'sensor_layout',") &&
   switchAdmin.includes("const hide = switchLayoutValue(style.value) === 0;") &&
   switchAdmin.includes("tileElem.classList.toggle('switch-upright', bar && !!upright);") &&
   switchAdmin.includes("if (orientationEl) orientationEl.value = Number(data.bar_orientation) === 1 ? '1' : '0';") &&

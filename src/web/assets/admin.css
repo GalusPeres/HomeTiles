@@ -1659,6 +1659,16 @@
     }
     .gauge-fields > label, .graph-fields > label,
     .gauge-fields > input, .graph-fields > input { margin:0; }
+    /* Sensor: Min and Max in one row (web_html.cpp), the old gauge's own
+       fields below over both columns in the same grid. */
+    .gauge-fields > .sensor-range { display:grid; grid-template-columns:1fr 1fr; gap:6px; min-width:0; }
+    .gauge-fields > .sensor-range > input { margin:0; min-width:0; }
+    .gauge-fields > .gauge-shape-fields {
+      grid-column:1 / -1; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);
+      gap:9px 10px; align-items:center;
+    }
+    .gauge-fields > .gauge-shape-fields.hidden { display:none; }
+    .gauge-shape-fields > label, .gauge-shape-fields > input { margin:0; }
     .tile-color-label-row,
     .tile-color-row { display:grid; grid-template-columns:minmax(72px,1fr) 38px; gap:8px; align-items:center; }
     /* The tile Color field has no reset button: the Global choice replaces it. */
@@ -3503,6 +3513,9 @@
   box-sizing:border-box;
 }
 .switch-choices button { padding:6px 8px; white-space:nowrap; }
+/* A row the layout does not use (Switch orientation, the Sensor menu): its
+   grid rule above outweighs .tile-settings .hidden. */
+.type-fields.show > .switch-choices.hidden { display:none; }
 /* Value sizes the tile size does not offer (syncSwitchChoices). */
 .switch-choices button.hidden { display:none; }
 .icon-color-presets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }

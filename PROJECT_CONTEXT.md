@@ -93,7 +93,7 @@ Last reviewed: 2026-10-26
 - Lock/Alarm/Fan (24-26, `src/types/device/`): sealed commands need pairing + Web Admin password; HW ok 2026-10-02.
 - Calendar 27 (PR #127, `docs-dev/calendar.md`): Bridge v0.9.6b1 `events` (`entity_search` 5); V2 HW pending.
 - Sensor graph (#131, mockup sensor-graph-3): pictures (`area_graph.h`), no LVGL lines; popup area circle color, fades in lower half; 1 px 8 % lines max/min/zero/time + zero label; tile only 24 h; popup 7D/24H/6H (6H numeric). Tile corners in the masks, no clip_corner (b570). HW pending.
-- Sensor looks (`build/analysis/2026-10-28-analyse.md`): modes 3-12 (`sensor_look.h`, `look_view.cpp`, `admin-look.js`), A8 masks per color rebuilt on value change; b570 HW pending.
+- Sensor looks (`build/analysis/2026-10-28-analyse.md`): modes 3-14 (`sensor_look.h`, `look_view.cpp`, `admin-look.js`), A8 masks rebuilt on value change; Switch-like menu; b570 HW pending.
 - Switch layouts `sensor_decimals` 0-3, 4-6 upright bar (`bar_orientation.h`; Fan upright = 1; sim ok, HW pending); `command_pacer.h` pacing: reporter test pending (#11).
 - Scene tile is "Button": picker searches scenes/scripts/buttons (`entity_search` 4), entity in `sensor_entity`.
 - Direct link: TCP 8140, Bridge = broker, frames sealed with pairing keys (`docs-dev/bridge-link.md`). The panel declares every entity it uses; without a password only released entities and the Energy Dashboard categories reach it. Picker lists Recent/Favorites/All (b369): V2 HW pending.

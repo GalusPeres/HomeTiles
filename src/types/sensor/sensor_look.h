@@ -31,8 +31,10 @@ enum Mode : uint8_t {
   kTickArcValue = 10,  // lab BS/SM: arc of stripes, value in the arc
   kRing = 11,          // lab G: closed ring, value in it
   kTickRing = 12,      // lab GS: closed ring of stripes, value in it
+  kRingHead = 13,      // closed ring, value in the head (user 2026-10-28)
+  kTickRingHead = 14,  // closed ring of stripes, value in the head
 };
-inline constexpr uint8_t kLastMode = kTickRing;
+inline constexpr uint8_t kLastMode = kTickRingHead;
 
 inline bool is_look(uint8_t mode) { return mode >= kLevelSide && mode <= kLastMode; }
 // The value sits in the arc or ring; the head shows the title alone,
@@ -44,7 +46,9 @@ inline bool is_level(uint8_t mode) { return mode == kLevelSide || mode == kLevel
 inline bool is_stripes(uint8_t mode) { return mode == kStripes || mode == kStripesUp; }
 inline bool is_arc(uint8_t mode) { return mode == kArc || mode == kArcValue; }
 inline bool is_tick_arc(uint8_t mode) { return mode == kTickArc || mode == kTickArcValue; }
-inline bool is_ring(uint8_t mode) { return mode == kRing || mode == kTickRing; }
+inline bool is_ring(uint8_t mode) {
+  return mode == kRing || mode == kTickRing || mode == kRingHead || mode == kTickRingHead;
+}
 // Looks whose places can take a rule's color each (stripes, arcs, rings);
 // a level takes the current value's color as a whole.
 inline bool colors_places(uint8_t mode) { return is_look(mode) && !is_level(mode); }
@@ -350,8 +354,8 @@ struct Spec {
 inline Arc look_arc(uint8_t mode, const Box& box, const Metrics& m) {
   if (is_arc(mode)) return auto_arc(box, m.stroke);
   if (is_tick_arc(mode)) return auto_arc(box, m.band);
-  if (mode == kRing) return ring(box, m.stroke);
-  if (mode == kTickRing) return ring(box, m.band);
+  if (mode == kRing || mode == kRingHead) return ring(box, m.stroke);
+  if (mode == kTickRing || mode == kTickRingHead) return ring(box, m.band);
   return {};
 }
 
@@ -579,10 +583,12 @@ inline void emit_look(const Spec& spec, Emit&& emit) {
     case kStripesUp: emit_stripes(spec, true, emit); break;
     case kArc:
     case kArcValue: emit_arc(spec, false, emit); break;
-    case kRing: emit_arc(spec, true, emit); break;
+    case kRing:
+    case kRingHead: emit_arc(spec, true, emit); break;
     case kTickArc:
     case kTickArcValue: emit_ticks(spec, false, emit); break;
-    case kTickRing: emit_ticks(spec, true, emit); break;
+    case kTickRing:
+    case kTickRingHead: emit_ticks(spec, true, emit); break;
     default: break;
   }
 }

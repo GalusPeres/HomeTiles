@@ -2,7 +2,7 @@
 // (build/design-mockups/gauge-media/lab.html, user 2026-10-28;
 // build/analysis/2026-10-28-analyse.md): levels like the Switch bar, stripes
 // standing and lying, arcs and rings plain and of stripes. Display modes are
-// appended (3-12) so stored tiles keep their meaning; the Web Admin offers
+// appended (3-14) so stored tiles keep their meaning; the Web Admin offers
 // them in every language; the panel draws them from A8 masks computed again
 // only on a change; the preview computes the same arc fit as the panel.
 // Renders the real geometry (sensor_look.h) on the host: every shape stays
@@ -24,48 +24,62 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 // Stable ids: 0-2 as before, the looks appended, the clamp follows them.
 const look = read('src/types/sensor/sensor_look.h');
 const ids = {kNone: 0, kGauge: 1, kGraph: 2, kLevelSide: 3, kLevelUp: 4, kStripes: 5, kStripesUp: 6, kArc: 7,
-  kArcValue: 8, kTickArc: 9, kTickArcValue: 10, kRing: 11, kTickRing: 12};
+  kArcValue: 8, kTickArc: 9, kTickArcValue: 10, kRing: 11, kTickRing: 12, kRingHead: 13, kTickRingHead: 14};
 for (const [name, id] of Object.entries(ids)) {
   assert.match(look, new RegExp(`\\b${name} = ${id},`), `display mode ${name} = ${id}`);
 }
-assert.ok(look.includes('inline constexpr uint8_t kLastMode = kTickRing;'), 'the last look');
+assert.ok(look.includes('inline constexpr uint8_t kLastMode = kTickRingHead;'), 'the last look');
 const config = read('src/tiles/config/tile_config.cpp');
 assert.equal((config.match(/<= sensor_look::kLastMode\) \? in\./g) || []).length, 3, 'pack and unpack keep every look');
 assert.ok(read('src/types/sensor/web_handler.cpp').includes('if (mode >= 0 && mode <= sensor_look::kLastMode) tile.sensor_display_mode'),
   'the request handler takes every look');
 
-// Every language names every look; the Web Admin offers them after Graph.
+// The menu like the Switch's (mockup build/design-mockups/sensor-menu, user
+// 2026-10-28): segmented choices instead of one long list, their words in
+// every language, the choices mapped onto the stored display mode.
 const i18nH = read('src/core/i18n/i18n.h');
-const fields = ['sensor_display_level_side', 'sensor_display_level_up', 'sensor_display_stripes', 'sensor_display_stripes_up',
-  'sensor_display_arc', 'sensor_display_arc_value', 'sensor_display_tick_arc', 'sensor_display_tick_arc_value',
-  'sensor_display_ring', 'sensor_display_tick_ring'];
-assert.ok(i18nH.includes('  const char* sensor_display_graph;\n  // The Sensor looks') ||
-  i18nH.includes('  const char* sensor_display_graph;\r\n  // The Sensor looks'), 'the labels follow Graph');
+const fields = ['sensor_layout_value', 'sensor_layout_bar', 'sensor_layout_ring', 'sensor_form', 'sensor_form_level',
+  'sensor_form_line', 'sensor_form_stripes', 'sensor_ring_open', 'sensor_ring_closed', 'sensor_value_top',
+  'sensor_value_inside', 'sensor_gauge_range'];
 for (const field of fields) assert.ok(i18nH.includes(`  const char* ${field};`), field);
+assert.ok(!i18nH.includes('sensor_display_level_side'), 'the long list is gone');
 const i18n = read('src/core/i18n/i18n.cpp');
 const labels = {
-  de: ['"Graph",', '"Füllstand seitwärts",', '"Strichring",'],
-  en: ['"Graph",', '"Level sideways",', '"Ring of stripes",'],
-  fr: ['"Graphique",', '"Niveau horizontal",', '"Anneau de traits",'],
-  pl: ['"Wykres",', '"Poziom w bok",', '"Pierścień z kresek",'],
-  cs: ['"Graf",', '"Úroveň do strany",', '"Prstenec z čárek",'],
-  es: ['"Gráfico",', '"Nivel horizontal",', '"Anillo de rayas",'],
-  sk: ['"Graf",', '"Úroveň do strany",', '"Prstenec z čiarok",'],
+  de: ['"Graph",', '"Wert",', '"Min / Max",'], en: ['"Graph",', '"Value",', '"Min / Max",'],
+  fr: ['"Graphique",', '"Valeur",', '"Min / Max",'], pl: ['"Wykres",', '"Wartość",', '"Min / Maks",'],
+  cs: ['"Graf",', '"Hodnota",', '"Min / Max",'], es: ['"Gráfico",', '"Valor",', '"Mín / Máx",'],
+  sk: ['"Graf",', '"Hodnota",', '"Min / Max",'],
 };
 for (const [language, [graph, first, last]] of Object.entries(labels)) {
   const table = i18n.slice(i18n.indexOf(`kStrings${language[0].toUpperCase()}${language[1]} = {`));
   const lines = table.split(/\r?\n/).map(line => line.trim());
-  const at = lines.indexOf(first);
-  assert.ok(at > 0 && lines[at - 1] === graph && lines[at + 9] === last, `${language}: ten looks right after Graph`);
+  const at = lines.indexOf(graph);
+  assert.ok(at > 0 && lines[at + 1] === first && lines[at + 12] === last, `${language}: the twelve menu words right after Graph`);
 }
 const html = read('src/types/sensor/web_html.cpp');
-assert.ok(html.includes('html += String(static_cast<int>(sensor_look::kLevelSide + i));') &&
-  html.includes('tr.sensor_display_tick_ring}') && html.includes('_sensor_gauge_shape_fields'),
-  'the Web Admin offers the looks; the gauge shape has its own block');
+for (const field of ['sensor_layout', 'sensor_form', 'sensor_orientation', 'sensor_ring', 'sensor_place', 'sensor_value_font',
+  'sensor_popup_open_mode']) {
+  assert.ok(html.includes(`append_switch_choice(html, tab_id, "${field}",`), `${field}: a segmented choice`);
+}
+assert.ok(html.includes('_sensor_display_mode">)html";') && html.includes('for (int mode = 0; mode <= sensor_look::kLastMode; ++mode)') &&
+  html.includes('<div class="sensor-range">') && html.includes('_sensor_gauge_shape_fields'),
+  'the stored mode in a hidden select, Min and Max in one row, the gauge shape in its own block');
 const editor = read('src/types/sensor/admin-editor.js');
-assert.ok(editor.includes("if (displayMode === '1' || isSensorLookMode(displayMode)) gaugeWrap.classList.remove('hidden');") &&
-  editor.includes("if (shapeWrap) shapeWrap.classList.toggle('hidden', displayMode !== '1');"),
-  'the range shows for the gauge and every look, the arc settings for the gauge alone');
+assert.ok(editor.includes("row('sensor_orientation', bar);") && editor.includes("row('sensor_ring', ring);") &&
+  editor.includes("if (gaugeOption) gaugeOption.hidden = layout.dataset?.gauge !== '1' && !gauge;") &&
+  editor.includes("if (shapeWrap) shapeWrap.classList.toggle('hidden', !gauge);"),
+  'only the rows the layout uses; the old gauge only on a tile that has it');
+assert.ok(read('src/types/switch/admin.js').includes("'sensor_layout', 'sensor_form',") &&
+  read('src/web/admin/tiles/editor.js').includes("bindLive(document.getElementById(prefix + '_' + field), 'change', 'sensorChoice_' + field, () => applySensorLayoutChoices(tab));") &&
+  read('src/web/assets/admin.css').includes('.type-fields.show > .switch-choices.hidden { display:none; }'),
+  'the choices are synced, bound and hidden like the Switch rows');
+// Every display mode survives the choices and back.
+const ctx = {Number, Object, String, Array};
+vm.createContext(ctx);
+vm.runInContext(editor.slice(editor.indexOf('  function sensorModeFromChoices'), editor.indexOf('  // Shows a stored mode in the choices')) +
+  '\nthis.toMode = sensorModeFromChoices; this.toChoices = sensorChoicesFromMode;', ctx);
+for (let mode = 0; mode <= 14; ++mode) assert.equal(ctx.toMode(ctx.toChoices(mode)), mode, `mode ${mode} round trip`);
+assert.equal(ctx.toMode({layout: 3, form: 0, orientation: 0, ring: 1, place: 0}), 13, 'a closed ring with the value in the head');
 assert.ok(read('src/web/admin/bundle.json').includes('"src/types/sensor/admin-look.js"'), 'the preview script is bundled');
 const editorJs = read('src/web/admin/tiles/editor.js');
 assert.ok(editorJs.includes("bindLive(gaugeMinInput, 'input', 'sensorGaugeMin', () => { updateTilePreview(tab);") &&
@@ -283,5 +297,5 @@ for (const fit of fits) {
 }
 assert.ok([8, 10, 11, 12].every(m => context.inside(m)) && ![3, 4, 5, 6, 7, 9].some(m => context.inside(m)),
   'preview: the value inside for B, BS/SM, G and GS');
-assert.ok(context.isLook(3) && context.isLook(12) && !context.isLook(2) && !context.isLook(13), 'preview: the look modes');
-console.log(`sensor looks: modes 3-12 stored, offered in 7 languages; stripes, levels, arcs and rings inside the box; ${fits.length} arc fits equal in the preview`);
+assert.ok(context.isLook(3) && context.isLook(14) && !context.isLook(2) && !context.isLook(15), 'preview: the look modes');
+console.log(`sensor looks: modes 3-14 stored, chosen like the Switch in 7 languages; stripes, levels, arcs and rings inside the box; ${fits.length} arc fits equal in the preview`);

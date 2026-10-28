@@ -15,7 +15,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const renderer = fs.readFileSync(path.join(root, 'src/types/energy_flow/renderer.cpp'), 'utf8');
 const fn = cppFunctionDefinitions(renderer).find(f => f.name === 'clip_to_rings');
 assert.ok(fn, 'clip_to_rings');
-assert.match(renderer, /if \(!clip_to_rings\(st, area\)\) return;\s*lv_obj_invalidate_area\(st\.canvas, &area\);/,
+// The visibility check in between keeps a refused area apart
+// (test-energy-flow-dots-resume.mjs).
+assert.match(renderer, /if \(!clip_to_rings\(st, area\)\) return;[\s\S]{0,320}?lv_obj_invalidate_area\(st\.canvas, &area\);/,
              'every dot area goes through the ring clip before it is invalidated');
 const compiler = [process.env.CXX, 'clang++', 'g++'].filter(Boolean)
   .find(c => spawnSync(c, ['--version']).status === 0);

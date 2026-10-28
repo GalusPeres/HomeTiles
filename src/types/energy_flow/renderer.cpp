@@ -66,6 +66,9 @@ constexpr uint32_t kIdleLightScreen = 0xCDD0D5;
 
 // The dots' cost in the log: one line per this many ms while they move.
 constexpr uint32_t kMotionLogMs = 10000;
+// Dots that stood still at least this long log why when they move again:
+// what the last frame without a move saw and whether a state woke them.
+constexpr uint32_t kStillLogMs = 500;
 constexpr size_t kMaxFlowTiles = 32;
 
 struct NodeWidgets {
@@ -308,11 +311,25 @@ bool clip_to_rings(const FlowTileState& st, lv_area_t& area) {
   return true;
 }
 
-// Redraws a dot's old and new place; false when the rings cover both.
-bool invalidate_dot(const FlowTileState& st, const lv_area_t& canvas, lv_point_t a, lv_point_t b) {
+// What redrawing a dot's step did: drawn, covered by the rings at both
+// ends, or refused by LVGL (the area not visible yet, e.g. in the frame that
+// shows a page again). lv_obj_invalidate_area drops a refused area without a
+// word; counted as drawn, it ended the dot frames until the next state
+// arrived (user 2026-10-28: after a page turn the dots stood ~5 s).
+enum class DotRedraw : uint8_t { kDrawn, kCovered, kRefused };
+
+// Redraws a dot's old and new place.
+DotRedraw invalidate_dot(const FlowTileState& st, const lv_area_t& canvas, lv_point_t a, lv_point_t b) {
   bool any = false;
+  bool refused = false;
+  lv_display_t* display = lv_obj_get_display(st.canvas);
   auto invalidate = [&](lv_area_t area) {
     if (!clip_to_rings(st, area)) return;
+    lv_area_t visible = area;
+    if (!display || !lv_display_is_invalidation_enabled(display) || !lv_obj_area_is_visible(st.canvas, &visible)) {
+      refused = true;
+      return;
+    }
     lv_obj_invalidate_area(st.canvas, &area);
     any = true;
   };
@@ -322,11 +339,12 @@ bool invalidate_dot(const FlowTileState& st, const lv_area_t& canvas, lv_point_t
   const int32_t size = dot_picture_size(st.dot_radius);
   if (abs(from.x1 - to.x1) <= size && abs(from.y1 - to.y1) <= size) {
     invalidate({LV_MIN(from.x1, to.x1), LV_MIN(from.y1, to.y1), LV_MAX(from.x2, to.x2), LV_MAX(from.y2, to.y2)});
-    return any;
+  } else {
+    invalidate(from);
+    invalidate(to);
   }
-  invalidate(from);
-  invalidate(to);
-  return any;
+  if (refused) return DotRedraw::kRefused;
+  return any ? DotRedraw::kDrawn : DotRedraw::kCovered;
 }
 
 bool any_live(const FlowTileState& st) {
@@ -337,16 +355,34 @@ bool any_live(const FlowTileState& st) {
 }
 
 // One step of every shown dot; the number of dots that moved. `waiting`:
-// a dot is shown that did not change its pixel this frame.
-uint32_t step_dots(bool& waiting) {
+// a dot is shown that did not change its pixel this frame. `still`: why
+// nothing moved (for the log).
+uint32_t step_dots(bool& waiting, const char*& still) {
   waiting = false;
+  still = "no flow";
   // Nothing moves where nobody sees it: behind a popup, asleep, or under the
   // screensaver (b539 log: there the dots ran on at ~47 frames a second and
   // redrew the screensaver above them in every area).
-  if (popup_shell_active() || powerManager.isInSleep() || image_screensaver_covers_ui()) return 0;
+  if (popup_shell_active()) {
+    still = "popup";
+    return 0;
+  }
+  if (powerManager.isInSleep()) {
+    still = "sleep";
+    return 0;
+  }
+  if (image_screensaver_covers_ui()) {
+    still = "screensaver";
+    return 0;
+  }
   uint32_t moved = 0;
   for (FlowTileState* st : g_tiles) {
-    if (!st || !any_live(*st) || !shown_on_screen(st->card)) continue;
+    if (!st || !any_live(*st)) continue;
+    if (!shown_on_screen(st->card)) {
+      still = "hidden";
+      continue;
+    }
+    still = "waiting";
     lv_area_t canvas;
     lv_obj_get_coords(st->canvas, &canvas);
     for (uint8_t line = 0; line < kLineCount; ++line) {
@@ -359,10 +395,17 @@ uint32_t step_dots(bool& waiting) {
         waiting = true;
         continue;
       }
-      const bool redrawn = invalidate_dot(*st, canvas, st->dot[line], next);
+      const DotRedraw redraw = invalidate_dot(*st, canvas, st->dot[line], next);
+      // Not visible yet: the dot stays where it is drawn and the next frame
+      // tries again.
+      if (redraw == DotRedraw::kRefused) {
+        still = "not visible";
+        waiting = true;
+        continue;
+      }
       st->dot[line] = next;
       // Under a ring: the next frame still comes.
-      if (!redrawn) {
+      if (redraw == DotRedraw::kCovered) {
         waiting = true;
         continue;
       }
@@ -532,6 +575,21 @@ void log_motion(uint32_t now_ms) {
   m.window_ms = now_ms;
 }
 
+// Why the dots last stood still and since when, and whether a state (a
+// refresh) woke them since.
+const char* g_still_reason = nullptr;
+uint32_t g_still_since_ms = 0;
+bool g_woken_by_state = false;
+
+// Once per stop that lasted kStillLogMs: what the last frame without a move
+// saw and what woke the dots.
+void log_still(uint32_t now_ms) {
+  if (!g_still_since_ms || now_ms - g_still_since_ms < kStillLogMs) return;
+  Serial.printf("[EnergyFlow] Dots move again after %lu ms (last frame: %s, woken by %s)\n",
+                static_cast<unsigned long>(now_ms - g_still_since_ms), g_still_reason ? g_still_reason : "none",
+                g_woken_by_state ? "a state" : "a frame");
+}
+
 // The display's refresh: one step at its start (its areas are drawn in this
 // same refresh), the next frame asked for while a dot is shown; nothing
 // shown, nothing asked: LVGL rests its refresh until the UI changes again.
@@ -542,11 +600,21 @@ void motion_display_cb(lv_event_t* e) {
     m.frame_areas = 0;
     const uint32_t started = micros();
     bool waiting = false;
-    const uint32_t moved = step_dots(waiting);
+    const char* still = nullptr;
+    const uint32_t moved = step_dots(waiting, still);
+    const uint32_t now_ms = millis();
     if (!moved) {
+      // The time counts from the frame whose reason changed (a page turn
+      // shows the tile again), not from leaving the page.
+      if (!g_still_since_ms || still != g_still_reason) g_still_since_ms = now_ms | 1;
+      g_still_reason = still;
       if (waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));
       return;
     }
+    log_still(now_ms);
+    g_still_since_ms = 0;
+    g_still_reason = nullptr;
+    g_woken_by_state = false;
     const uint32_t now = micros();
     const uint32_t step = now - started;
     ++m.frames;
@@ -600,6 +668,7 @@ void wake_motion(lv_obj_t* card) {
     }
     add_probes(card);
   }
+  g_woken_by_state = true;
   lv_timer_resume(lv_display_get_refr_timer(g_motion_display));
 }
 

@@ -6541,10 +6541,14 @@ async function saveGestureEdge(select) {
   // named the 1280x800 sizes, so a graph tile's "28 (Default)" was its 20 px
   // title size (user 2026-10-27). A choice the shape lacks moves to the one
   // that looks the same, else to the nearest size.
-  function syncCompactValueFontOptions(select, compact) {
+  // `inside`: a value inside a Sensor look's arc or ring (1 one row high,
+  // 2 taller), whose Default is the 20 or 24 of the full sizes; every other
+  // size stays offered (types/sensor/renderer.cpp).
+  function syncCompactValueFontOptions(select, compact, inside = 0) {
     if (!select?.options) return;
-    const allowed = compact ? ['0', '2', '5'] : ['0', '1', '2', '3', '4'];
-    const sizes = String(select.dataset?.[compact ? 'compactSizes' : 'sizes'] || '').split(',').map(Number);
+    const allowed = inside ? ['0', '1', '2', '5', '3', '4'] : compact ? ['0', '2', '5'] : ['0', '1', '2', '3', '4'];
+    const sizes = String(select.dataset?.[compact && !inside ? 'compactSizes' : 'sizes'] || '').split(',').map(Number);
+    if (inside && sizes.length > 5) sizes[0] = sizes[inside === 2 ? 2 : 1];
     const known = sizes.length > 5 && sizes.every(size => size > 0);
     const defaultLabel = select.dataset?.defaultLabel || '';
     const options = Array.from(select.options);
@@ -6636,7 +6640,10 @@ async function saveGestureEdge(select) {
     const lookInside = sensorLook && sensorLookValueInside(mode);
     el.classList.toggle('sensor-look-head', sensorLook && !lookInside);
     el.classList.toggle('sensor-look-inside', lookInside);
-    if (el.dataset) el.dataset.lookTall = Number(layout?.span_h) > 1 ? '1' : '0';
+    if (el.dataset) {
+      el.dataset.lookTall = Number(layout?.span_h) > 1 ? '1' : '0';
+      el.dataset.lookFont = String(Number(valueFont) || 0);
+    }
     if (typeof setSensorLookData === 'function') setSensorLookData(el, sensorLook ? mode : 0, layout);
     const valueSize = (compact && !compactIconTitle) || (switchHeader && !switchTall) || sensorGraph ||
       (sensorLook && !lookInside) ? compactValueSize(valueFont) : 20;
@@ -8074,7 +8081,12 @@ async function saveGestureEdge(select) {
     const sensorMode = document.getElementById(prefix + '_sensor_display_mode')?.value || '0';
     const sensorGraph = type === '1' && (sensorMode === '2' ||
       (typeof isSensorLookMode === 'function' && isSensorLookMode(sensorMode) && !sensorLookValueInside(sensorMode)));
-    syncCompactValueFontOptions(document.getElementById(prefix + '_sensor_value_font'), halfHeight || sensorGraph);
+    // A value inside a look's arc or ring offers every size, its Default the
+    // 20 or 24 the panel draws there.
+    const sensorInside = type === '1' && !halfHeight && typeof isSensorLookMode === 'function' &&
+      isSensorLookMode(sensorMode) && sensorLookValueInside(sensorMode);
+    syncCompactValueFontOptions(document.getElementById(prefix + '_sensor_value_font'), halfHeight || sensorGraph,
+                                sensorInside ? (tileSpan('span_h') > 1 ? 2 : 1) : 0);
     if (type === '1') syncSwitchChoices(tab);
     for (const kind of ['number', 'select', 'datetime'])
       syncEditableValueFontOptions(document.getElementById(prefix + '_' + kind + '_value_font'), halfHeight);
@@ -16532,12 +16544,14 @@ function maybeFillTitleFromSensor(tab) {
     }
     svg.setAttribute('viewBox', `0 0 ${sensorLookNum(W)} ${sensorLookNum(H)}`);
     svg.innerHTML = `<g transform="translate(${sensorLookNum(box.x)} ${sensorLookNum(box.y)})">${body}</g>`;
-    // The value inside the arc or ring: 20 on one-row tiles, 24 on taller
-    // ones, its em box's top where the panel puts it.
+    // The value inside the arc or ring: Default 20 on one-row tiles, 24 on
+    // taller ones, or the chosen value size (tile_layout::value_font_for_choice);
+    // its em box's top where the panel puts it.
     const valueEl = el.querySelector(':scope > .tile-value');
     if (valueEl && sensorLookValueInside(mode) && arc) {
       const taller = Number(el.dataset.lookTall) === 1;
-      const fontPx = sensorLookRootValue(taller ? '--fs24' : '--fs20', (taller ? 24 : 20) * scale);
+      const chosen = {1: 20, 2: 24, 3: 32, 4: 40, 5: 28}[Number(el.dataset.lookFont)] || (taller ? 24 : 20);
+      const fontPx = sensorLookRootValue('--fs' + chosen, chosen * scale);
       const size = fontPx / scale;
       valueEl.style.top = sensorLookNum((box.y + sensorLookValueTop(mode, arc, size)) * scale - 3) + 'px';
       valueEl.style.fontSize = sensorLookNum(fontPx) + 'px';
@@ -16814,9 +16828,9 @@ function maybeFillTitleFromSensor(tab) {
     if (gaugeWrap) gaugeWrap.classList.toggle('hidden', !(bar || ring || gauge));
     const shapeWrap = document.getElementById(prefix + '_sensor_gauge_shape_fields');
     if (shapeWrap) shapeWrap.classList.toggle('hidden', !gauge);
-    // The value size where the value has one (in the head or alone); a
-    // value inside a ring has the look's own size.
-    row('sensor_value_font', !(ring && c.place === 1));
+    // The value size everywhere: alone, in the head, inside an arc or ring
+    // (its Default there the look's 20 or 24).
+    row('sensor_value_font', true);
     const offsetShown = c.layout === 0 || gauge;
     const offsetLabel = typeof document.querySelector === 'function'
       ? document.querySelector('label[for="' + prefix + '_sensor_value_y_offset"]') : null;

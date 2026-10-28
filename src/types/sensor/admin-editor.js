@@ -152,9 +152,9 @@
     if (gaugeWrap) gaugeWrap.classList.toggle('hidden', !(bar || ring || gauge));
     const shapeWrap = document.getElementById(prefix + '_sensor_gauge_shape_fields');
     if (shapeWrap) shapeWrap.classList.toggle('hidden', !gauge);
-    // The value size where the value has one (in the head or alone); a
-    // value inside a ring has the look's own size.
-    row('sensor_value_font', !(ring && c.place === 1));
+    // The value size everywhere: alone, in the head, inside an arc or ring
+    // (its Default there the look's 20 or 24).
+    row('sensor_value_font', true);
     const offsetShown = c.layout === 0 || gauge;
     const offsetLabel = typeof document.querySelector === 'function'
       ? document.querySelector('label[for="' + prefix + '_sensor_value_y_offset"]') : null;

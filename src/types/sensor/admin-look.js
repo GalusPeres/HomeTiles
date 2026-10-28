@@ -299,12 +299,14 @@
     }
     svg.setAttribute('viewBox', `0 0 ${sensorLookNum(W)} ${sensorLookNum(H)}`);
     svg.innerHTML = `<g transform="translate(${sensorLookNum(box.x)} ${sensorLookNum(box.y)})">${body}</g>`;
-    // The value inside the arc or ring: 20 on one-row tiles, 24 on taller
-    // ones, its em box's top where the panel puts it.
+    // The value inside the arc or ring: Default 20 on one-row tiles, 24 on
+    // taller ones, or the chosen value size (tile_layout::value_font_for_choice);
+    // its em box's top where the panel puts it.
     const valueEl = el.querySelector(':scope > .tile-value');
     if (valueEl && sensorLookValueInside(mode) && arc) {
       const taller = Number(el.dataset.lookTall) === 1;
-      const fontPx = sensorLookRootValue(taller ? '--fs24' : '--fs20', (taller ? 24 : 20) * scale);
+      const chosen = {1: 20, 2: 24, 3: 32, 4: 40, 5: 28}[Number(el.dataset.lookFont)] || (taller ? 24 : 20);
+      const fontPx = sensorLookRootValue('--fs' + chosen, chosen * scale);
       const size = fontPx / scale;
       valueEl.style.top = sensorLookNum((box.y + sensorLookValueTop(mode, arc, size)) * scale - 3) + 'px';
       valueEl.style.fontSize = sensorLookNum(fontPx) + 'px';

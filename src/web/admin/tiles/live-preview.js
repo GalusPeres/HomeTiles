@@ -65,7 +65,12 @@
     const sensorMode = document.getElementById(prefix + '_sensor_display_mode')?.value || '0';
     const sensorGraph = type === '1' && (sensorMode === '2' ||
       (typeof isSensorLookMode === 'function' && isSensorLookMode(sensorMode) && !sensorLookValueInside(sensorMode)));
-    syncCompactValueFontOptions(document.getElementById(prefix + '_sensor_value_font'), halfHeight || sensorGraph);
+    // A value inside a look's arc or ring offers every size, its Default the
+    // 20 or 24 the panel draws there.
+    const sensorInside = type === '1' && !halfHeight && typeof isSensorLookMode === 'function' &&
+      isSensorLookMode(sensorMode) && sensorLookValueInside(sensorMode);
+    syncCompactValueFontOptions(document.getElementById(prefix + '_sensor_value_font'), halfHeight || sensorGraph,
+                                sensorInside ? (tileSpan('span_h') > 1 ? 2 : 1) : 0);
     if (type === '1') syncSwitchChoices(tab);
     for (const kind of ['number', 'select', 'datetime'])
       syncEditableValueFontOptions(document.getElementById(prefix + '_' + kind + '_value_font'), halfHeight);

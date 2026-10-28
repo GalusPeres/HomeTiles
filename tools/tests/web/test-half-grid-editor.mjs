@@ -148,4 +148,7 @@ for(const [file,font] of [['src/types/sensor/web_html.cpp','FONT_VALUE'],['src/t
   ['src/types/cover/web_html.cpp','FONT_VALUE'],['src/types/device/web.cpp','FONT_VALUE']])
   assert(readRepoFile(file).includes('append_value_size_attrs(')&&readRepoFile(file).includes(font+', tr.sensor_value_size_default);'),file);
 assert(!readRepoFile('src/types/sensor/web_html.cpp').includes('28 (Default)'),'no fixed 28 Default');
-assert(readRepoFile('src/web/admin/tiles/live-preview.js').includes("syncCompactValueFontOptions(document.getElementById(prefix + '_sensor_value_font'), halfHeight || sensorGraph);"));
+// A value inside a Sensor look's arc or ring offers every size (its Default
+// the look's 20 or 24).
+assert(readRepoFile('src/web/admin/tiles/live-preview.js').includes("syncCompactValueFontOptions(document.getElementById(prefix + '_sensor_value_font'), halfHeight || sensorGraph,") &&
+  readRepoFile('src/web/admin/tiles/live-preview.js').includes("sensorInside ? (tileSpan('span_h') > 1 ? 2 : 1) : 0);"));

@@ -94,6 +94,14 @@ assert.ok(renderer.includes('look = sensor_look_view::create(card, tile, icon_lb
   renderer.includes('title_label = create_title_head(card, tile);') &&
   renderer.includes('tile.span_h > 1 ? tile_layout::content_font_24() : tile_layout::content_font_20()') &&
   renderer.includes('target[index].look = look;'), 'renderer: the look, its head and its value');
+// A value inside an arc or ring takes the chosen value size; its Default is
+// the look's 20 or 24, and the editor offers every other size (user
+// 2026-10-28: the ring's value size could not be changed).
+assert.ok(renderer.includes('const lv_font_t* font = tile_layout::value_font_for_choice(tile.sensor_value_font, standard);') &&
+  read('src/web/admin/tiles/layout.js').includes('if (inside && sizes.length > 5) sizes[0] = sizes[inside === 2 ? 2 : 1];') &&
+  read('src/types/sensor/admin-editor.js').includes("row('sensor_value_font', true);") &&
+  read('src/types/sensor/admin-look.js').includes("const chosen = {1: 20, 2: 24, 3: 32, 4: 40, 5: 28}[Number(el.dataset.lookFont)] || (taller ? 24 : 20);"),
+  'the value inside a ring has a size choice on the panel, in the editor and the preview');
 const tileRenderer = read('src/tiles/runtime/tile_renderer.cpp');
 assert.ok(tileRenderer.includes('sensor_look_view::set_value(look, numeric);') &&
   tileRenderer.includes('if (target[grid_index].look) sensor_look_view::sync_color(target[grid_index].look);') &&

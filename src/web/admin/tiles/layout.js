@@ -64,10 +64,14 @@
   // named the 1280x800 sizes, so a graph tile's "28 (Default)" was its 20 px
   // title size (user 2026-10-27). A choice the shape lacks moves to the one
   // that looks the same, else to the nearest size.
-  function syncCompactValueFontOptions(select, compact) {
+  // `inside`: a value inside a Sensor look's arc or ring (1 one row high,
+  // 2 taller), whose Default is the 20 or 24 of the full sizes; every other
+  // size stays offered (types/sensor/renderer.cpp).
+  function syncCompactValueFontOptions(select, compact, inside = 0) {
     if (!select?.options) return;
-    const allowed = compact ? ['0', '2', '5'] : ['0', '1', '2', '3', '4'];
-    const sizes = String(select.dataset?.[compact ? 'compactSizes' : 'sizes'] || '').split(',').map(Number);
+    const allowed = inside ? ['0', '1', '2', '5', '3', '4'] : compact ? ['0', '2', '5'] : ['0', '1', '2', '3', '4'];
+    const sizes = String(select.dataset?.[compact && !inside ? 'compactSizes' : 'sizes'] || '').split(',').map(Number);
+    if (inside && sizes.length > 5) sizes[0] = sizes[inside === 2 ? 2 : 1];
     const known = sizes.length > 5 && sizes.every(size => size > 0);
     const defaultLabel = select.dataset?.defaultLabel || '';
     const options = Array.from(select.options);
@@ -159,7 +163,10 @@
     const lookInside = sensorLook && sensorLookValueInside(mode);
     el.classList.toggle('sensor-look-head', sensorLook && !lookInside);
     el.classList.toggle('sensor-look-inside', lookInside);
-    if (el.dataset) el.dataset.lookTall = Number(layout?.span_h) > 1 ? '1' : '0';
+    if (el.dataset) {
+      el.dataset.lookTall = Number(layout?.span_h) > 1 ? '1' : '0';
+      el.dataset.lookFont = String(Number(valueFont) || 0);
+    }
     if (typeof setSensorLookData === 'function') setSensorLookData(el, sensorLook ? mode : 0, layout);
     const valueSize = (compact && !compactIconTitle) || (switchHeader && !switchTall) || sensorGraph ||
       (sensorLook && !lookInside) ? compactValueSize(valueFont) : 20;

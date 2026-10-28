@@ -456,15 +456,17 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
 
   // The looks (sensor_look.h, gauge lab 2026-10-28) in the graph's box: the
   // Switch header with the value beside the disc, or the title alone with
-  // the value inside the arc or ring (20 on one-row tiles, 24 on taller
-  // ones, its top at the middle of the arc's inside).
+  // the value inside the arc or ring (Default: 20 on one-row tiles, 24 on
+  // taller ones, or the chosen value size; its top at the middle of the
+  // arc's inside).
   lv_obj_t* look = nullptr;
   if (look_enabled) {
     const lv_area_t box = sensor_graph_box(tile);
     look = sensor_look_view::create(card, tile, icon_lbl, box, gauge_min, gauge_max);
     if (sensor_look::value_inside(display_mode)) {
       title_label = create_title_head(card, tile);
-      const lv_font_t* font = tile.span_h > 1 ? tile_layout::content_font_24() : tile_layout::content_font_20();
+      const lv_font_t* standard = tile.span_h > 1 ? tile_layout::content_font_24() : tile_layout::content_font_20();
+      const lv_font_t* font = tile_layout::value_font_for_choice(tile.sensor_value_font, standard);
       v = lv_label_create(card);
       if (v) {
         const int card_w = tile_geometry::extent(tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP);

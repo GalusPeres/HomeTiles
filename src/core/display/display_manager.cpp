@@ -55,6 +55,8 @@ static volatile uint32_t g_fullscreen_flush_seq = 0;
 static size_t g_requested_buffer_lines = 0;
 static bool g_fast_internal_draw_buffer = false;
 static bool g_single_psram_draw_buffer = false;
+// The tiles' full-height PSRAM band (setLargePsramBufferLines).
+static bool g_large_psram_draw_buffer = false;
 static lv_color_t* g_preserved_buf1 = nullptr;
 static lv_color_t* g_preserved_buf2 = nullptr;
 static size_t g_preserved_buffer_lines = 0;
@@ -63,6 +65,7 @@ static lv_display_render_mode_t g_preserved_render_mode =
     LV_DISPLAY_RENDER_MODE_PARTIAL;
 static bool g_preserved_fast_internal_draw_buffer = false;
 static bool g_preserved_single_psram_draw_buffer = false;
+static bool g_preserved_large_psram_draw_buffer = false;
 static bool g_preserved_draw_buffer_active = false;
 
 #if HOMETILES_GUITION_S3_DIAGNOSTICS_ACTIVE
@@ -379,6 +382,7 @@ bool DisplayManager::allocDrawBuffers(size_t requested_lines, lv_display_render_
   g_render_mode = mode;
   g_fast_internal_draw_buffer = single;
   g_single_psram_draw_buffer = false;
+  g_large_psram_draw_buffer = false;
 
   Serial.printf("[Display] Draw buffer: %s %s, %u lines, %u bytes/buffer | int free=%u KB | dma free=%u KB | dma largest=%u KB\n",
                 single ? "1x" : "2x",
@@ -459,6 +463,7 @@ bool DisplayManager::setSinglePsramBufferLines(size_t lines) {
   g_preserved_render_mode = g_render_mode;
   g_preserved_fast_internal_draw_buffer = g_fast_internal_draw_buffer;
   g_preserved_single_psram_draw_buffer = g_single_psram_draw_buffer;
+  g_preserved_large_psram_draw_buffer = g_large_psram_draw_buffer;
   g_preserved_draw_buffer_active = true;
 
   lv_display_set_buffers(disp, next, nullptr, bytes,
@@ -471,6 +476,7 @@ bool DisplayManager::setSinglePsramBufferLines(size_t lines) {
   g_render_mode = LV_DISPLAY_RENDER_MODE_PARTIAL;
   g_fast_internal_draw_buffer = false;
   g_single_psram_draw_buffer = true;
+  g_large_psram_draw_buffer = false;
 
   Serial.printf(
       "[Display] Camera draw buffer: 1x PSRAM, %u lines, %u KB | "
@@ -505,6 +511,7 @@ bool DisplayManager::restoreDrawBufferAfterSinglePsram() {
   g_render_mode = g_preserved_render_mode;
   g_fast_internal_draw_buffer = g_preserved_fast_internal_draw_buffer;
   g_single_psram_draw_buffer = g_preserved_single_psram_draw_buffer;
+  g_large_psram_draw_buffer = g_preserved_large_psram_draw_buffer;
 
   g_preserved_buf1 = nullptr;
   g_preserved_buf2 = nullptr;
@@ -513,6 +520,7 @@ bool DisplayManager::restoreDrawBufferAfterSinglePsram() {
   g_preserved_render_mode = LV_DISPLAY_RENDER_MODE_PARTIAL;
   g_preserved_fast_internal_draw_buffer = false;
   g_preserved_single_psram_draw_buffer = false;
+  g_preserved_large_psram_draw_buffer = false;
   g_preserved_draw_buffer_active = false;
 
   if (temporary_buf1 && temporary_buf1 != buf1) {
@@ -528,6 +536,49 @@ bool DisplayManager::restoreDrawBufferAfterSinglePsram() {
       g_fast_internal_draw_buffer ? "SRAM(fast)" : "PSRAM",
       static_cast<unsigned>(g_buffer_lines),
       static_cast<unsigned>(restored_bytes));
+  return true;
+}
+
+bool DisplayManager::setLargePsramBufferLines(size_t lines) {
+  if (!disp || lines == 0 || lines > static_cast<size_t>(grid_layout::screen_h())) return false;
+  // The camera's temporary band keeps the UI's band for later.
+  if (g_preserved_draw_buffer_active) return false;
+  if (g_large_psram_draw_buffer && g_buffer_lines == lines && buf1 && !buf2) return true;
+  if (g_bytes_per_pixel == 0) {
+    g_bytes_per_pixel = lv_color_format_get_size(lv_display_get_color_format(disp));
+    if (g_bytes_per_pixel == 0) g_bytes_per_pixel = 2;
+  }
+  const size_t bytes = draw_buffer_bytes(lines);
+  // Byte-addressable PSRAM like the camera's band (setSinglePsramBufferLines):
+  // the flush writes the cache back before the PPA reads it.
+  const uint32_t psram_caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT;
+  if (heap_caps_get_largest_free_block(psram_caps) < bytes) {
+    Serial.printf("[Display] Large tile draw buffer rejected: required=%u KB largest=%u KB\n",
+                  static_cast<unsigned>(bytes / 1024U),
+                  static_cast<unsigned>(heap_caps_get_largest_free_block(psram_caps) / 1024U));
+    return false;
+  }
+  // Everything still drawing into the old band finishes first.
+  lv_refr_now(disp);
+  lv_color_t* next = static_cast<lv_color_t*>(heap_caps_aligned_alloc(64, bytes, psram_caps));
+  if (!next) {
+    Serial.println("[Display] Unable to allocate the large tile draw buffer");
+    return false;
+  }
+  lv_display_set_buffers(disp, next, nullptr, bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
+  if (buf1) heap_caps_free(buf1);
+  if (buf2) heap_caps_free(buf2);
+  buf1 = next;
+  buf2 = nullptr;
+  g_buffer_lines = lines;
+  g_requested_buffer_lines = lines;
+  g_render_mode = LV_DISPLAY_RENDER_MODE_PARTIAL;
+  g_fast_internal_draw_buffer = false;
+  g_single_psram_draw_buffer = false;
+  g_large_psram_draw_buffer = true;
+  Serial.printf("[Display] Draw buffer: 1x PSRAM(large), %u lines, %u KB | PSRAM free=%u KB\n",
+                static_cast<unsigned>(lines), static_cast<unsigned>(bytes / 1024U),
+                static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024U));
   return true;
 }
 

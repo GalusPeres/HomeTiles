@@ -324,6 +324,12 @@ int main(){
  // Opening reads the newest bar.
  assert(ctx->shown_slots==24&&ctx->plot_w>0&&ctx->readout_slot==23&&ctx->readout_latest&&shown(ctx->readout_time_label)&&shown(ctx->readout_value_label));
  assert(strcmp(ctx->readout_time_text,"23:00 \xE2\x80\x93 00:00")==0&&strcmp(ctx->readout_value_text,"5.75")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0);
+ // The cursor dot keeps room below the readout value: on 480x480 it touched
+ // the value's descenders (a comma, user 2026-10-29 on the S3), the 600 and
+ // 720 px layouts kept 12-15 px. The plot's bottom stays where it was.
+ {lv_area_t value,chart;lv_obj_get_coords(ctx->readout_value_label,&value);lv_obj_get_coords(ctx->chart,&chart);
+  const int dot_top=chart.y1-kReadoutDotLift-kReadoutDotSize/2;
+  assert(dot_top-value.y2>=popup_layout::scale(16)&&"Room between the readout value and the dot");}
  // Year, Month, Week, Today from left to right; the day button names today.
  {lv_area_t area[kPeriodCount];for(uint8_t p=0;p<kPeriodCount;++p)lv_obj_get_coords(ctx->period_btns[p],&area[p]);
   assert(area[3].x2<area[2].x1&&area[2].x2<area[1].x1&&area[1].x2<area[0].x1&&"Year, Month, Week, Today");

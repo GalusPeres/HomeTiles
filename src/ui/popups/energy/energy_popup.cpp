@@ -41,7 +41,19 @@ namespace {
 
 constexpr int kCardWidth = popup_layout::kCardWidth;
 constexpr int kCardPad = popup_layout::kCardPad;
-constexpr int kChartHeight = popup_layout::contentScale(325);
+// Room between the readout value and the cursor dot above the plot. On the
+// 480 px layout the dot touched the value's descenders (a comma, user
+// 2026-10-29 on the S3); the 600 and 720 px high layouts kept 12-15 px, the
+// 800 px ones 39. The plot gives up that room at its top; its bottom, the
+// time axis and the buttons stay where they were (build_chart_view).
+#if defined(DEVICE_LAYOUT_480X480)
+constexpr int kChartTopTrim = 12;
+#elif defined(DEVICE_LAYOUT_1024X600)
+constexpr int kChartTopTrim = 4;
+#else
+constexpr int kChartTopTrim = popup_layout::kCompactHeightLift ? 4 : 0;
+#endif
+constexpr int kChartHeight = popup_layout::contentScale(325) - kChartTopTrim;
 #if defined(DEVICE_LAYOUT_480X480)
 constexpr int kTimeAxisHeight = 20;  // full native UI14 line plus breathing room
 #else
@@ -1390,7 +1402,8 @@ void build_chart_view(EnergyPopupContext* ctx, lv_obj_t* body_box, EnergyPeriod 
   ctx->chart_wrap = chart_wrap;
   lv_obj_remove_style_all(chart_wrap);
   lv_obj_set_size(chart_wrap, LV_PCT(100), kLabelOverhang + kChartHeight + kTimeAxisGap + time_axis_height());
-  lv_obj_center(chart_wrap);
+  // Centered as before the trim, then down by half of it: the bottom stays.
+  lv_obj_align(chart_wrap, LV_ALIGN_CENTER, 0, kChartTopTrim / 2);
   lv_obj_set_style_bg_opa(chart_wrap, LV_OPA_TRANSP, 0);
   lv_obj_remove_flag(chart_wrap, LV_OBJ_FLAG_SCROLLABLE);
 

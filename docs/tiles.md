@@ -49,8 +49,23 @@ Shows a numeric or text-valued `sensor.*` entity. Configure the unit, decimals, 
 </figure>
 </div>
 <figure class="ht-screenshot ht-popup">
-<img style="width:420px" src="../images/v09-popup-sensor.png" alt="Sensor history over 24 hours with a read value" width="800" height="800" loading="lazy">
+<img style="width:420px" src="../images/v09-popup-sensor.png" alt="Solar power over 24 hours with a read value" width="800" height="800" loading="lazy">
 <figcaption>Popup, 24 hours</figcaption>
+</figure>
+</div>
+
+<div class="ht-type-shots" markdown>
+<figure class="ht-screenshot">
+<img style="width:232px" src="../images/tile-sensor-graph.png" alt="Sensor tile with the solar power of the day as a graph" width="299" height="152" loading="lazy">
+<figcaption>Graph</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:232px" src="../images/tile-sensor-stripes.png" alt="Sensor tile with a striped bar" width="299" height="152" loading="lazy">
+<figcaption>Stripes</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:232px" src="../images/tile-sensor-arc.png" alt="Battery tile with a striped arc and the value inside" width="299" height="152" loading="lazy">
+<figcaption>Striped arc</figcaption>
 </figure>
 </div>
 
@@ -155,6 +170,10 @@ Shows Home Assistant **Energy Dashboard** statistics for electricity, gas, water
 <img style="width:101px" src="../images/tile-energy-yield-half.png" alt="Half-height energy tile with today's solar yield" width="168" height="64" loading="lazy">
 <figcaption>Half height</figcaption>
 </figure>
+<figure class="ht-screenshot">
+<img style="width:232px" src="../images/tile-energy-graph.png" alt="Energy tile with today's solar yield as hourly bars" width="299" height="152" loading="lazy">
+<figcaption>Graph</figcaption>
+</figure>
 </div>
 
 <div class="ht-type-shots" markdown>
@@ -173,6 +192,13 @@ Shows Home Assistant **Energy Dashboard** statistics for electricity, gas, water
 ### Power Flow
 
 Shows the power of the solar panels, the grid, a battery, and the home as nodes, with dots that move along the lines in the direction the power flows and faster when more power flows. Choose a power sensor for each node; a node without a sensor stays hidden. **Invert sign** turns around a grid or battery sensor that counts the other way, and a battery charge sensor adds its level to the battery node. **Show title and icon** adds the tile header, and **Show card** draws the tile's card behind the nodes.
+
+<div class="ht-type-shots" markdown>
+<figure class="ht-screenshot">
+<img style="width:312px" src="../images/tile-power-flow.png" alt="Power flow tile: the battery supplies the home with 4.1 kW" width="404" height="320" loading="lazy">
+<figcaption>Battery to home</figcaption>
+</figure>
+</div>
 
 Tap a node to open its sensor's popup.
 

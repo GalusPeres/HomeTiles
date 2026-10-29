@@ -50,6 +50,8 @@ function maybeFillTitleFromEnergy(tab) {
     if (popupModeEl) popupModeEl.value = (data.popup_open_mode !== undefined) ? String(data.popup_open_mode) : '1';
     const valueYOffsetEl = document.getElementById(prefix + '_energy_value_y_offset');
     if (valueYOffsetEl) valueYOffsetEl.value = (data.sensor_value_y_offset !== undefined && data.sensor_value_y_offset !== null) ? String(data.sensor_value_y_offset) : '';
+    // The segmented choices show the loaded values (types/switch/admin.js).
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromEnergy(tab);
   }
 

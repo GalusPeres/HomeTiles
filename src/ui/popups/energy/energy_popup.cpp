@@ -491,8 +491,8 @@ bool slot_date(const EnergyEntryData& entry, int offset, struct tm& out) {
 
 // Today: lines and hours every six hours. Week: each weekday, lines between
 // the days. Month: a line and the day's number at each week's first day
-// (Settings > Localization), like the Sensor graph's 30D. Year: each month's
-// short name, lines between the months.
+// (Settings > Localization), like the Sensor graph's 30D. Year: every second
+// month's short name, a line before each pair.
 void collect_axis_marks(const EnergyEntryData& entry, uint8_t slot_count, AxisMarks& marks) {
   marks.labels = marks.lines = 0;
   auto add_label = [&](uint8_t slot, const String& text) {
@@ -531,8 +531,14 @@ void collect_axis_marks(const EnergyEntryData& entry, uint8_t slot_count, AxisMa
   int year = 0, month = 1, day = 0, hour = 0;
   if (!parse_iso_start(entry.start, year, month, day, hour)) month = 1;
   const char* language = configManager.getConfig().language;
-  for (uint8_t i = 0; i < slot_count; ++i) add_label(i, i18n::weather_month_short(language, (month - 1 + i) % 12 + 1));
-  for (uint8_t i = 1; i < slot_count; ++i) add_line(i);
+  // Every second month on every panel (user 2026-10-29: twelve names and
+  // eleven lines looked crowded on the large panels): a line before Mar, May,
+  // Jul, Sep and Nov, each pair's first month named under its bar, like the
+  // month view's weeks.
+  for (uint8_t i = 0; i < slot_count; i += 2) {
+    if (i > 0) add_line(i);
+    add_label(i, i18n::weather_month_short(language, (month - 1 + i) % 12 + 1));
+  }
 }
 
 int slot_x(int slot, uint8_t slot_count, int plot_left, int plot_w) {
@@ -1093,12 +1099,19 @@ void apply_entry_to_chart(EnergyPopupContext* ctx, const EnergyEntryData& entry,
     if (i >= slot_count || i >= entry.value_count || !entry.value_valid[i]) continue;
 
     const float value = entry.values[i];
-    if (!isfinite(value) || fabsf(value) < 0.0001f) continue;
+    if (!isfinite(value)) continue;
+    // A measured 0: only its edge on the zero line (below it where the zero
+    // line is the plot's top), so it does not read as a missing hour (user
+    // 2026-10-29); a missing hour shows nothing.
+    const bool zero = fabsf(value) < 0.0001f;
 
     const int value_y = value_to_y(value);
     int bar_y = zero_y;
     int bar_h = 0;
-    if (value >= 0.0f) {
+    if (zero) {
+      bar_h = kBarEdgeWidth;
+      bar_y = zero_y - bar_h >= chart_top ? zero_y - bar_h : zero_y;
+    } else if (value >= 0.0f) {
       bar_y = value_y;
       bar_h = zero_y - value_y;
       if (bar_h < kMinBarHeight) {
@@ -1395,7 +1408,8 @@ PeriodCapacity period_capacity(EnergyPeriod period) {
     case EnergyPeriod::Week: return {kWeekSlotCount, kWeekSlotCount, kWeekSlotCount - 1};
     // At most five first weekdays in a month, a line at each but the 1st.
     case EnergyPeriod::Month: return {31, 5, 5};
-    case EnergyPeriod::Year: return {kYearSlotCount, kYearSlotCount, kYearSlotCount - 1};
+    // Every second month named, a line before each pair but the first.
+    case EnergyPeriod::Year: return {kYearSlotCount, kYearSlotCount / 2, kYearSlotCount / 2 - 1};
     default: return {kDaySlotCount, 5, 5};
   }
 }

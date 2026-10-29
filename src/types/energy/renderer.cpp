@@ -85,9 +85,11 @@ void energy_bars_draw_cb(lv_event_t* e) {
     if (bars->values[i] > max_v) max_v = bars->values[i];
     if (bars->values[i] < min_v) min_v = bars->values[i];
   }
+  if (newest < 0) return;
   const float span = max_v - min_v;
-  if (newest < 0 || span <= 0.0001f) return;
-  const int32_t zero_y = top + static_cast<int32_t>(lroundf(max_v / span * static_cast<float>(height)));
+  // A day of zeros: the zero line at the bottom.
+  const int32_t zero_y =
+      span > 0.0001f ? top + static_cast<int32_t>(lroundf(max_v / span * static_cast<float>(height))) : top + height;
   const int32_t bar_w = std::max<int32_t>(2, static_cast<int32_t>(floorf(width / float(kEnergyBarHours) * 0.62f)));
   const int32_t edge = std::max<int32_t>(1, tile_layout::scale(2));
   const int32_t min_h = std::max<int32_t>(2, edge);
@@ -107,10 +109,19 @@ void energy_bars_draw_cb(lv_event_t* e) {
 
   for (int i = 0; i < kEnergyBarHours; ++i) {
     const float value = bars->values[i];
-    if (!bars->valid[i] || fabsf(value) < 0.0001f) continue;
-    const int32_t h = std::max(min_h, static_cast<int32_t>(lroundf(fabsf(value) / span * static_cast<float>(height))));
+    if (!bars->valid[i]) continue;
     // The first hour flush at the left room, the last at the right one.
     const int32_t x = left + static_cast<int32_t>(lroundf(i * float(width - bar_w) / float(kEnergyBarHours - 1)));
+    if (fabsf(value) < 0.0001f) {
+      // A measured 0: its edge on the zero line (below it at the top), so
+      // the night does not read as missing data; an hour without data shows
+      // nothing.
+      const int32_t y1 = zero_y - edge >= top ? zero_y - edge : zero_y;
+      const lv_area_t cap = {x, y1, x + bar_w - 1, y1 + edge - 1};
+      lv_draw_rect(layer, &mark, &cap);
+      continue;
+    }
+    const int32_t h = std::max(min_h, static_cast<int32_t>(lroundf(fabsf(value) / span * static_cast<float>(height))));
     lv_area_t bar = {x, value > 0 ? zero_y - h : zero_y, x + bar_w - 1, value > 0 ? zero_y - 1 : zero_y + h - 1};
     if (i == newest) {
       lv_draw_rect(layer, &mark, &bar);

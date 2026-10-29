@@ -8260,7 +8260,7 @@ async function saveGestureEdge(select) {
       isSensorLookMode(sensorMode) && sensorLookValueInside(sensorMode);
     syncCompactValueFontOptions(document.getElementById(prefix + '_sensor_value_font'), halfHeight || sensorGraph,
                                 sensorInside ? (tileSpan('span_h') > 1 ? 2 : 1) : 0);
-    if (type === '1') syncSwitchChoices(tab);
+    if (type === '1' || isEnergyType) syncSwitchChoices(tab);
     for (const kind of ['number', 'select', 'datetime'])
       syncEditableValueFontOptions(document.getElementById(prefix + '_' + kind + '_value_font'), halfHeight);
     if (type === '5') {
@@ -17210,6 +17210,8 @@ function maybeFillTitleFromEnergy(tab) {
     if (popupModeEl) popupModeEl.value = (data.popup_open_mode !== undefined) ? String(data.popup_open_mode) : '1';
     const valueYOffsetEl = document.getElementById(prefix + '_energy_value_y_offset');
     if (valueYOffsetEl) valueYOffsetEl.value = (data.sensor_value_y_offset !== undefined && data.sensor_value_y_offset !== null) ? String(data.sensor_value_y_offset) : '';
+    // The segmented choices show the loaded values (types/switch/admin.js).
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromEnergy(tab);
   }
 
@@ -18477,7 +18479,8 @@ function maybeFillTitleFromSwitch(tab) {
   const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode', 'climate_view', 'media_layout',
     'cover_value_font', 'lock_value_font', 'alarm_value_font', 'fan_value_font', 'camera_display', 'camera_fit',
     'camera_head', 'camera_tap', 'switch_orientation', 'fan_orientation', 'sensor_layout', 'sensor_form',
-    'sensor_orientation', 'sensor_ring', 'sensor_place', 'sensor_value_font', 'sensor_popup_open_mode'];
+    'sensor_orientation', 'sensor_ring', 'sensor_place', 'sensor_value_font', 'sensor_popup_open_mode',
+    'energy_value_font', 'energy_display_mode', 'energy_popup_open_mode'];
 
   function syncSwitchChoices(tab) {
     for (const field of SWITCH_CHOICE_FIELDS) {

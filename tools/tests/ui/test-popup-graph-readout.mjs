@@ -440,7 +440,8 @@ int main(){
  // This year by the month: twelve months on the axis, bars up to October.
  lv_obj_send_event(ctx->period_btns[3],LV_EVENT_CLICKED,nullptr);settle(display);
  assert(ctx->shown_period==EnergyPeriod::Year&&ctx->shown_slots==12&&ctx->readout_slot==9&&strcmp(ctx->readout_time_text,"October")==0);
- {const auto texts=axis_texts(ctx);assert(texts.size()>=6&&texts[0]=="Jan"&&"Year: the month names, every second one where twelve do not fit");}
+ {const auto texts=axis_texts(ctx);assert((texts==std::vector<std::string>{"Jan","Mar","May","Jul","Sep","Nov"})&&"Year: every second month on every panel");
+  int lines=0;for(auto* line:ctx->x_lines)if(line&&shown(line))++lines;assert(lines==5&&"a line before each pair");}
  touch_at(bar_x(2,12),y);lv_refr_now(display);assert(strcmp(ctx->readout_time_text,"March")==0&&strcmp(ctx->readout_value_text,"120.00")==0);touch_release();
  lv_obj_send_event(ctx->period_btns[0],LV_EVENT_CLICKED,nullptr);settle(display);
  assert(ctx->shown_period==EnergyPeriod::Day&&ctx->readout_slot==23&&ctx->readout_latest&&strcmp(ctx->readout_value_text,"9.00")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0);
@@ -452,6 +453,16 @@ int main(){
  assert(lv_obj_get_style_border_side(ctx->bars[3],LV_PART_MAIN)==LV_BORDER_SIDE_BOTTOM&&"A negative bar's edge is at its bottom");
  assert(white_at(wrap.x1+ctx->readout_x,wrap.y1+ctx->readout_line_bottom-3)&&white_at(wrap.x1+ctx->readout_x,chart.y1-kReadoutDotLift)&&"Line and dot above a negative bar");
  cache[0].values[3]=0.75f;queue_energy_popup_refresh("day");process_energy_popup_queue();
+ // A measured 0 shows its edge on the zero line, so it does not look like a
+ // missing hour (user 2026-10-29); a missing hour shows nothing.
+ cache[0].values[4]=0.0f;queue_energy_popup_refresh("day");process_energy_popup_queue();
+ assert(shown(ctx->bars[4])&&lv_obj_get_style_height(ctx->bars[4],LV_PART_MAIN)==kBarEdgeWidth&&
+        lv_obj_get_style_y(ctx->bars[4],LV_PART_MAIN)+kBarEdgeWidth==ctx->zero_y&&"a zero hour: its edge on the zero line");
+ assert(!shown(ctx->bars[5])&&"a missing hour: nothing");
+ touch_at(bar_x(4,24),y);touch_release();lv_refr_now(display);
+ assert(ctx->readout_slot==4&&strcmp(ctx->readout_value_text,"0.00")==0&&ctx->readout_line_bottom==lv_obj_get_style_y(ctx->bars[4],LV_PART_MAIN)&&
+        read_bar(ctx,4)&&"the line ends on the zero hour's edge");
+ cache[0].values[4]=1.0f;queue_energy_popup_refresh("day");process_energy_popup_queue();
  // Hiding while touching ends the readout and restores the bars.
  touch_at(bar_x(4,24),y);lv_refr_now(display);
  hide_energy_popup();assert(!ctx->readout.active()&&ctx->readout_slot<0&&bars_restored(ctx)&&lv_display_get_event_count(display)==display_events);

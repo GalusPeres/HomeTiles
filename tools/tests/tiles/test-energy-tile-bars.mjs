@@ -48,9 +48,17 @@ assert.ok(fn(renderer, 'energy_bars_delete_cb').includes('if (live.frame == fram
 const handler = read('src/types/energy/web_handler.cpp');
 assert.ok(handler.includes('server.hasArg("sensor_display_mode") && server.arg("sensor_display_mode").toInt() == 2 ? 2 : 0;'));
 const html = read('src/types/energy/web_html.cpp');
-assert.ok(html.indexOf('_energy_display_mode') > html.indexOf('if (tab_id != "screensaver") {'), 'no choice on the screensaver');
-assert.ok(html.includes('html += tr.sensor_display_mode;') && html.includes('html += tr.sensor_layout_value;') &&
-  html.includes('html += tr.sensor_display_graph;'), 'the Sensor tile\'s translated words');
+assert.ok(html.indexOf('"energy_display_mode"') > html.indexOf('if (tab_id != "screensaver") {'), 'no choice on the screensaver');
+// The editor like the Sensor's (user 2026-10-29): segmented choices in its order.
+assert.ok(html.includes('const SwitchChoice displays[] = {{"0", tr.sensor_layout_value}, {"2", tr.sensor_display_graph}};') &&
+  html.includes('append_switch_choice(html, tab_id, "energy_display_mode", tr.switch_display, displays, 2);'), 'the Sensor tile\'s choice and words');
+assert.ok(html.includes('append_switch_choice(html, tab_id, "energy_value_font", tr.sensor_value_size, sizes, 6, size_attrs);') &&
+  html.includes('append_switch_choice(html, tab_id, "energy_popup_open_mode", tr.popup_open, presses, 2);'), 'value size and press as choices');
+assert.ok(html.indexOf('"energy_value_font"') < html.indexOf('_energy_unit') &&
+  html.indexOf('"energy_display_mode"') < html.indexOf('_energy_value_y_offset') &&
+  html.indexOf('_energy_value_y_offset') < html.indexOf('"energy_popup_open_mode"'), 'the Sensor editor\'s order');
+assert.ok(read('src/types/switch/admin.js').includes("'energy_value_font', 'energy_display_mode', 'energy_popup_open_mode'"),
+  'the choices follow their selects');
 const admin = read('src/types/energy/admin.js');
 assert.ok(admin.includes("if (displayEl) displayEl.value = Number(data.sensor_display_mode) === 2 ? '2' : '0';") &&
   admin.includes("formData.append('sensor_display_mode', document.getElementById(prefix + '_energy_display_mode')?.value || '0');") &&
@@ -186,6 +194,20 @@ int main() {
   for (int y = box.y1; y <= box.y2; ++y) if (at(first_x, y) != kCard) { deep_top = std::min(deep_top, y); deep_bottom = y; }
   assert(deep_bottom == box.y2 - room && at(first_x, deep_bottom) == kIcon && at(first_x, deep_top) == kCircle &&
          "a feed-in bar hangs from the zero line with its edge at the bottom");
+  // A measured 0 shows its edge on the zero line, so the night does not look
+  // like missing data (user 2026-10-29); hours without data show nothing.
+  const int edge = 2;  // tile_layout::scale(2) here
+  draw({0.f, 0.f, 0.f, 0.5f, 1.0f});
+  auto column = [&](int x) { std::vector<int> ys; for (int y = box.y1; y <= box.y2; ++y) if (at(x, y) != kCard) ys.push_back(y); return ys; };
+  const std::vector<int> zero_hour = column(box.x1 + room + 1);
+  assert(zero_hour.size() == size_t(edge) && zero_hour.back() == box.y2 - room && at(box.x1 + room + 1, zero_hour.back()) == kIcon &&
+         "a zero hour: its edge on the zero line");
+  assert(column(box.x2 - room - 1).empty() && "an hour without data: nothing");
+  // A whole day of zeros: every hour its edge on the bottom room.
+  draw(std::vector<float>(24, 0.f));
+  e = bars_extent();
+  assert(e.left == box.x1 + room && e.right == box.x2 - room && e.top == box.y2 - room - edge + 1 && e.bottom == box.y2 - room &&
+         "zeros all day: a row of edges");
   // Nothing at all before the first answer.
   draw({});
   e = bars_extent();

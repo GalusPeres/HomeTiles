@@ -76,7 +76,7 @@
       isSensorLookMode(sensorMode) && sensorLookValueInside(sensorMode);
     syncCompactValueFontOptions(document.getElementById(prefix + '_sensor_value_font'), halfHeight || sensorGraph,
                                 sensorInside ? (tileSpan('span_h') > 1 ? 2 : 1) : 0);
-    if (type === '1') syncSwitchChoices(tab);
+    if (type === '1' || isEnergyType) syncSwitchChoices(tab);
     for (const kind of ['number', 'select', 'datetime'])
       syncEditableValueFontOptions(document.getElementById(prefix + '_' + kind + '_value_font'), halfHeight);
     if (type === '5') {

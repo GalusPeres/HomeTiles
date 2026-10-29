@@ -479,12 +479,18 @@ Arduino IDE:
 Used for:
 - `src/devices/golden_security_gs_t3e_v2` (board description; it runs the
   `src/devices/guition_esp32_4848s040` driver)
-- build profile `golden_security_gs_t3e_v2`
+- build profile `golden_security_gs_t3e_v2` (PCB v2.3)
+- `src/devices/golden_security_gs_t3e_v24` (board description; it runs the
+  `src/devices/guition_esp32_4848s040` driver)
+- build profile `t3e_v24` (PCB v2.4)
 
 Important:
 - Community profile for PCB v2.3; hardware validation is pending in
   [issue #93](https://github.com/GalusPeres/HomeTiles/issues/93). The
   discontinued v1.23 board uses different wiring.
+- PCB v2.4 (ZIGBEE_4CP_WNB_V2.4, 2024.09.09) removes the Micro-USB port;
+  flash exclusively via the UART header J1. Build with `-DT3E_REV_V24=1`
+  to select the v2.4 relay mapping (GPIO45/46/2 instead of GPIO45/46/44).
 - ESP32-S3-WROOM-1 N16R8 with `16MB` flash and `8MB` octal PSRAM.
 - The panel is a `480x480` ST7701S RGB display: 3-wire SPI init on CS 4,
   SCK 15, MOSI 48 (SCK/MOSI are also RGB B0/B1), RGB bus DE 40, VSYNC 39,
@@ -495,9 +501,22 @@ Important:
 - No microSD interface is documented. Runtime files use LittleFS.
 - The serial log is on UART0 (TX 43 / RX 44), as in the Guition profile.
 - Use the repository's `partitions.csv`; HomeTiles needs two 6.5MB OTA slots.
-- Sources and open points: [device README](src/devices/golden_security_gs_t3e_v2/README.md).
+- Sources and open points: [device README v2.3](src/devices/golden_security_gs_t3e_v2/README.md),
+  [device README v2.4](src/devices/golden_security_gs_t3e_v24/README.md).
 
-Arduino IDE (the `sketch.yaml` profile):
+Arduino IDE (the `sketch.yaml` profile for PCB v2.3):
+- Board: `ESP32S3 Dev Module`
+- USB CDC On Boot: `Default`
+- CPU Frequency: `240MHz (WiFi)`
+- Core Debug Level: `None`
+- Flash Mode: `QIO 80MHz`
+- Flash Size: `16MB (128Mb)`
+- Partition Scheme: `Custom`
+- PSRAM: `OPI PSRAM`
+- Upload Speed: `921600`
+- USB Mode: `Hardware CDC and JTAG`
+
+Arduino IDE (the `sketch.yaml` profile `t3e_v24` for PCB v2.4):
 - Board: `ESP32S3 Dev Module`
 - USB CDC On Boot: `Disabled`
 - CPU Frequency: `240MHz (WiFi)`
@@ -508,6 +527,7 @@ Arduino IDE (the `sketch.yaml` profile):
 - PSRAM: `OPI PSRAM`
 - Upload Speed: `921600`
 - USB Mode: `Hardware CDC and JTAG`
+- Extra build flags: `-DT3E_REV_V24=1`
 
 ## Waveshare ESP32-S3-Touch-LCD-4 Rev 4.0
 

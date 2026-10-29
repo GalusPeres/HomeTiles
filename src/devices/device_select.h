@@ -54,7 +54,8 @@
      defined(DEVICE_GUITION_JC1060P470C_V2) + \
      defined(DEVICE_GUITION_JC4880P443_PORTRAIT) + \
      defined(DEVICE_GUITION_ESP32_4848S040) + \
-     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)) > 1
+     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) + \
+     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V24)) > 1
 #error "Select only one device target."
 #endif
 
@@ -77,6 +78,7 @@
     !defined(DEVICE_GUITION_JC4880P443_PORTRAIT) && \
     !defined(DEVICE_GUITION_ESP32_4848S040) && \
     !defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) && \
+    !defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V24) && \
     defined(HOMETILES_CI_TARGET)
 #error "HOMETILES_CI_TARGET requires one DEVICE_* build flag."
 #endif
@@ -100,6 +102,7 @@
     !defined(DEVICE_GUITION_JC4880P443_PORTRAIT) && \
     !defined(DEVICE_GUITION_ESP32_4848S040) && \
     !defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) && \
+    !defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V24) && \
     !defined(HOMETILES_CI_TARGET)
 #define DEVICE_WAVESHARE_4B
 #endif

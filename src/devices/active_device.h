@@ -26,6 +26,9 @@ namespace DeviceImpl = DeviceGuitionESP324848S040;
 #elif defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)
 #include "src/devices/golden_security_gs_t3e_v2/device_golden_security_gs_t3e_v2.h"
 namespace DeviceImpl = DeviceGoldenSecurityGST3EV2;
+#elif defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V24)
+#include "src/devices/golden_security_gs_t3e_v24/device_golden_security_gs_t3e_v24.h"
+namespace DeviceImpl = DeviceGoldenSecurityGST3EV24;
 #elif defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4)
 #include "src/devices/waveshare_s3_touch_lcd_4/device_waveshare_s3_touch_lcd_4.h"
 namespace DeviceImpl = DeviceWaveshareS3TouchLCD4;

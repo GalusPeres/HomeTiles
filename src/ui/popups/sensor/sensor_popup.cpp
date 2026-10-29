@@ -88,6 +88,14 @@ constexpr uint16_t kHistoryPoints24h = 288;
 constexpr uint16_t kHistoryHours7d = 168;
 constexpr uint16_t kHistoryPeriodMinutes7d = 60;
 constexpr uint16_t kHistoryPoints7d = 168;
+// Five ranges (user 2026-10-29): 1H by the minute, 30D in three-hour steps,
+// eight a day for its swing and fewer points than any graph has columns.
+constexpr uint16_t kHistoryHours1h = 1;
+constexpr uint16_t kHistoryPeriodMinutes1h = 1;
+constexpr uint16_t kHistoryPoints1h = 60;
+constexpr uint16_t kHistoryHours30d = 720;
+constexpr uint16_t kHistoryPeriodMinutes30d = 180;
+constexpr uint16_t kHistoryPoints30d = 240;
 constexpr int kRangeButtonWidth = popup_layout::scale(92);
 constexpr int kRangeButtonHeight = popup_layout::kNavHeight;
 constexpr int kRangeButtonGap = popup_layout::scale(10);
@@ -147,6 +155,8 @@ enum class SensorHistoryRange : uint8_t {
   Day24,
   Day7,
   Hours6,  // numeric graphs only: the Bridge's state histories know 24 h and 7 d
+  Hour1,   // numeric graphs only
+  Day30,   // numeric graphs only
 };
 
 struct HistoryRangeConfig {
@@ -188,6 +198,8 @@ struct SensorPopupContext {
   lv_obj_t* range_day_btn = nullptr;
   lv_obj_t* range_week_btn = nullptr;
   lv_obj_t* range_hours_btn = nullptr;
+  lv_obj_t* range_hour_btn = nullptr;
+  lv_obj_t* range_month_btn = nullptr;
   lv_obj_t* chart = nullptr;
   int chart_height = kChartHeight;
   lv_chart_series_t* series = nullptr;
@@ -364,6 +376,10 @@ static HistoryRangeConfig get_history_range_config(SensorHistoryRange range) {
       return {kHistoryHours7d, kHistoryPeriodMinutes7d, kHistoryPoints7d};
     case SensorHistoryRange::Hours6:
       return {kHistoryHours6h, kHistoryPeriodMinutes6h, kHistoryPoints6h};
+    case SensorHistoryRange::Hour1:
+      return {kHistoryHours1h, kHistoryPeriodMinutes1h, kHistoryPoints1h};
+    case SensorHistoryRange::Day30:
+      return {kHistoryHours30d, kHistoryPeriodMinutes30d, kHistoryPoints30d};
     case SensorHistoryRange::Day24:
     default:
       return {kHistoryHours24h, kHistoryPeriodMinutes24h, kHistoryPoints24h};
@@ -572,6 +588,8 @@ static void update_range_buttons(SensorPopupContext* ctx) {
   style_range_button(ctx, ctx->range_day_btn, selected == SensorHistoryRange::Day24);
   style_range_button(ctx, ctx->range_week_btn, selected == SensorHistoryRange::Day7);
   style_range_button(ctx, ctx->range_hours_btn, selected == SensorHistoryRange::Hours6);
+  style_range_button(ctx, ctx->range_hour_btn, selected == SensorHistoryRange::Hour1);
+  style_range_button(ctx, ctx->range_month_btn, selected == SensorHistoryRange::Day30);
 }
 
 }  // namespace
@@ -599,17 +617,17 @@ static void set_range_buttons_visible(SensorPopupContext* ctx, bool visible) {
   }
 }
 
-// Numeric graphs offer 6H right of 24H (issue #131); binary, state and
-// editable histories keep 24H and 7D, the two ranges the Bridge answers for
-// them. The row stays centred on its buttons.
+// Numeric graphs offer 30D 7D 24H 6H 1H (issue #131, user 2026-10-29: five
+// ranges); binary, state and editable histories keep 24H and 7D, the two
+// ranges the Bridge answers for them. The row stays centred on its buttons.
 static void show_hours_button(SensorPopupContext* ctx, bool shown) {
   if (!ctx || !ctx->range_row || !ctx->range_hours_btn) return;
-  const int buttons = shown ? 3 : 2;
+  const int buttons = shown ? 5 : 2;
   lv_obj_set_width(ctx->range_row, kRangeButtonWidth * buttons + kRangeButtonGap * (buttons - 1));
-  if (shown) {
-    lv_obj_remove_flag(ctx->range_hours_btn, LV_OBJ_FLAG_HIDDEN);
-  } else {
-    lv_obj_add_flag(ctx->range_hours_btn, LV_OBJ_FLAG_HIDDEN);
+  for (lv_obj_t* btn : {ctx->range_month_btn, ctx->range_hours_btn, ctx->range_hour_btn}) {
+    if (!btn) continue;
+    if (shown) lv_obj_remove_flag(btn, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(btn, LV_OBJ_FLAG_HIDDEN);
   }
 }
 
@@ -949,6 +967,67 @@ static int calc_day7_boundary_axis(float out_frac[], int max_markers) {
   return count;
 }
 
+static bool readout_twelve_hour();
+
+// 1H: a line every quarter hour with its clock time under it.
+static int calc_quarter_axis(String out_labels[], float out_frac[], int max_markers) {
+  struct tm now_tm;
+  if (!get_valid_local_time(now_tm)) return 0;
+  const time_t now_local = mktime(&now_tm);
+  if (now_local <= 0) return 0;
+  constexpr time_t kQuarter = 15 * 60;
+  const time_t range_start = now_local - static_cast<time_t>(kHistoryHours1h) * 60 * 60;
+  const float span = static_cast<float>(now_local - range_start);
+  int count = 0;
+  for (time_t mark = (range_start / kQuarter + 1) * kQuarter; mark < now_local && count < max_markers;
+       mark += kQuarter) {
+    struct tm mark_tm;
+#ifdef _WIN32
+    localtime_s(&mark_tm, &mark);
+#else
+    localtime_r(&mark, &mark_tm);
+#endif
+    char text[16] = "";
+    popup_graph_readout::append_clock(text, sizeof(text), 0, mark_tm, readout_twelve_hour(), nullptr);
+    out_labels[count] = text;
+    out_frac[count] = static_cast<float>(mark - range_start) / span;
+    ++count;
+  }
+  return count;
+}
+
+// The short date of a day in the configured language ("26. Okt.").
+static String short_date_label(const struct tm& day) {
+  const char* language = configManager.getConfig().language;
+  return i18n::format_short_date(language, day.tm_mday, i18n::weather_month_short(language, day.tm_mon + 1));
+}
+
+// 30D: a line at every Monday 0:00 with its date under it, four or five
+// like 24H's labels; a line per day would be thirty.
+static int calc_day30_axis(String out_labels[], float out_frac[], int max_markers) {
+  struct tm now_tm;
+  if (!get_valid_local_time(now_tm)) return 0;
+  const time_t now_local = mktime(&now_tm);
+  if (now_local <= 0) return 0;
+  const time_t range_start = now_local - static_cast<time_t>(kHistoryHours30d) * 60 * 60;
+  const float span = static_cast<float>(now_local - range_start);
+  int count = 0;
+  for (time_t day = next_local_midnight_after(range_start); day < now_local && count < max_markers;
+       day = next_local_midnight_after(day)) {
+    struct tm day_tm;
+#ifdef _WIN32
+    localtime_s(&day_tm, &day);
+#else
+    localtime_r(&day, &day_tm);
+#endif
+    if (day_tm.tm_wday != 1) continue;
+    out_labels[count] = short_date_label(day_tm);
+    out_frac[count] = static_cast<float>(day - range_start) / span;
+    ++count;
+  }
+  return count;
+}
+
 // Calculate time axis marker positions and labels.
 static int calc_time_axis(const SensorPopupContext* ctx, String out_labels[], float out_frac[], int max_markers) {
   if (!ctx || max_markers < 1) return 0;
@@ -959,6 +1038,8 @@ static int calc_time_axis(const SensorPopupContext* ctx, String out_labels[], fl
   if (ctx->history_range == SensorHistoryRange::Hours6) {
     return calc_hours_axis(kHistoryHours6h, 2, out_labels, out_frac, max_markers);
   }
+  if (ctx->history_range == SensorHistoryRange::Hour1) return calc_quarter_axis(out_labels, out_frac, max_markers);
+  if (ctx->history_range == SensorHistoryRange::Day30) return calc_day30_axis(out_labels, out_frac, max_markers);
 
   return calc_hours_axis(kHistoryHours24h, 6, out_labels, out_frac, max_markers);
 }
@@ -1903,9 +1984,10 @@ static char readout_decimal_separator() {
   return i18n::locale(configManager.getConfig().language).decimal_separator[0];
 }
 
-// Local time as in the Activity list, with the weekday for seven-day ranges.
+// Local time as in the Activity list, with the weekday for seven-day ranges
+// and the date for 30D.
 static size_t append_readout_time(char* out, size_t size, size_t used,
-                                  uint64_t epoch, bool with_day) {
+                                  uint64_t epoch, bool with_day, bool with_date = false) {
   if (epoch < kReadoutMinEpoch) return used;
   const time_t timestamp = static_cast<time_t>(epoch);
   struct tm timeinfo;
@@ -1914,10 +1996,25 @@ static size_t append_readout_time(char* out, size_t size, size_t used,
 #else
   localtime_r(&timestamp, &timeinfo);
 #endif
+  // Formatted again only for another day or language: the cursor moves
+  // within a day.
+  static String date;
+  static int date_key = -1;
+  static char date_language[8] = "";
+  if (with_date) {
+    const char* language = configManager.getConfig().language;
+    const int key = timeinfo.tm_year * 400 + timeinfo.tm_yday;
+    if (key != date_key || strncmp(language, date_language, sizeof(date_language)) != 0) {
+      date = short_date_label(timeinfo);
+      date_key = key;
+      strncpy(date_language, language, sizeof(date_language) - 1);
+    }
+  }
   return popup_graph_readout::append_clock(
       out, size, used, timeinfo, readout_twelve_hour(),
-      with_day ? get_weekday_abbrev(static_cast<uint8_t>(timeinfo.tm_wday))
-               : nullptr);
+      with_date  ? date.c_str()
+      : with_day ? get_weekday_abbrev(static_cast<uint8_t>(timeinfo.tm_wday))
+                 : nullptr);
 }
 
 // Constant state identifiers, so reading another segment allocates nothing.
@@ -2122,7 +2219,8 @@ static void apply_chart_readout(SensorPopupContext* ctx, const lv_point_t& point
         ? ctx->chart_range_start + span * static_cast<uint64_t>(found) / (count - 1)
         : ctx->chart_range_end;
     append_readout_time(ctx->readout_time_text, sizeof(ctx->readout_time_text), 0, time,
-                        ctx->history_range == SensorHistoryRange::Day7);
+                        ctx->history_range == SensorHistoryRange::Day7,
+                        ctx->history_range == SensorHistoryRange::Day30);
   }
   const float value =
       ctx->history_values && static_cast<size_t>(found) < ctx->history_values_count &&
@@ -3494,6 +3592,8 @@ static void on_range_click(lv_event_t* e) {
 
   const SensorHistoryRange next_range = target == ctx->range_week_btn    ? SensorHistoryRange::Day7
                                         : target == ctx->range_hours_btn ? SensorHistoryRange::Hours6
+                                        : target == ctx->range_hour_btn  ? SensorHistoryRange::Hour1
+                                        : target == ctx->range_month_btn ? SensorHistoryRange::Day30
                                                                          : SensorHistoryRange::Day24;
   if (!ctx->editable && ctx->history_range == next_range) return;
   // A new range starts at its newest point.
@@ -3655,6 +3755,11 @@ static void on_chart_area_draw(lv_event_t* event) {
     image.base.layer = layer;
     image.src = picture;
     lv_draw_image(layer, &image, &coords);
+    // The picture is the whole graph. lv_chart's own pass only walked the
+    // points (line width 0), and with more points than columns its crowded
+    // mode writes three points past its buffer (lv_chart.c: w + 1 columns
+    // into w * 3 points); 720 points broke the heap (emulator 2026-10-29).
+    lv_event_stop_processing(event);
   }
 }
 
@@ -3685,7 +3790,7 @@ static void build_popup_body(SensorPopupContext* ctx) {
   lv_obj_t* range_row = lv_obj_create(card);
   ctx->range_row = range_row;
   lv_obj_remove_style_all(range_row);
-  lv_obj_set_size(range_row, (kRangeButtonWidth * 3) + kRangeButtonGap * 2, popup_layout::kNavHeight);
+  lv_obj_set_size(range_row, (kRangeButtonWidth * 5) + kRangeButtonGap * 4, popup_layout::kNavHeight);
   lv_obj_align(range_row, LV_ALIGN_BOTTOM_MID, 0, -popup_layout::kNavBottomInset);
   lv_obj_set_style_bg_opa(range_row, LV_OPA_TRANSP, 0);
   lv_obj_set_layout(range_row, LV_LAYOUT_FLEX);
@@ -3720,12 +3825,15 @@ static void build_popup_body(SensorPopupContext* ctx) {
 
   // 7D sits left of 24H and 6H right of it: the longer range reaches further
   // into the past.
+  ctx->range_month_btn = make_range_button("30D");
   ctx->range_week_btn = make_range_button("7D");
   ctx->range_day_btn = make_range_button("24H");
   ctx->range_hours_btn = make_range_button("6H");
-  lv_obj_add_event_cb(ctx->range_day_btn, on_range_click, LV_EVENT_CLICKED, ctx);
-  lv_obj_add_event_cb(ctx->range_week_btn, on_range_click, LV_EVENT_CLICKED, ctx);
-  lv_obj_add_event_cb(ctx->range_hours_btn, on_range_click, LV_EVENT_CLICKED, ctx);
+  ctx->range_hour_btn = make_range_button("1H");
+  for (lv_obj_t* btn : {ctx->range_month_btn, ctx->range_week_btn, ctx->range_day_btn, ctx->range_hours_btn,
+                        ctx->range_hour_btn}) {
+    lv_obj_add_event_cb(btn, on_range_click, LV_EVENT_CLICKED, ctx);
+  }
   update_range_buttons(ctx);
   set_range_buttons_visible(ctx, false);
 

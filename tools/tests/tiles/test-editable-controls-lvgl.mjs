@@ -119,11 +119,11 @@ constexpr int kContentLiftY=0,kBinaryTimelineHeight=24,kBinaryActivityRowHeight=
 #else
 constexpr int kContentLiftY=0,kBinaryTimelineHeight=30,kBinaryActivityRowHeight=50,kTimeAxisHeight=20;
 #endif
-enum class SensorHistoryRange {Day24,Day7,Hours6};
+enum class SensorHistoryRange {Day24,Day7,Hours6,Hour1,Day30};
 constexpr int kBinaryVisibleActivityRows = SCREEN_HEIGHT <= 600 ? 4 : 5;
 struct SensorPopupContext {
  bool editable=true,state_history_mode=true,binary_icon_override=false;String editable_kind,entity_id,editable_history_id;SensorHistoryRange editable_requested_range=SensorHistoryRange::Day24;
- lv_obj_t *overlay=nullptr,*card=nullptr,*title_label=nullptr,*icon_label=nullptr,*control_row=nullptr,*range_day_btn=nullptr,*range_week_btn=nullptr,*range_hours_btn=nullptr;int chart_height=kChartHeight;SensorHistoryRange history_range=SensorHistoryRange::Day24;
+ lv_obj_t *overlay=nullptr,*card=nullptr,*title_label=nullptr,*icon_label=nullptr,*control_row=nullptr,*range_day_btn=nullptr,*range_week_btn=nullptr,*range_hours_btn=nullptr,*range_hour_btn=nullptr,*range_month_btn=nullptr;int chart_height=kChartHeight;SensorHistoryRange history_range=SensorHistoryRange::Day24;
  lv_obj_t *body_box,*chart_wrap,*chart,*binary_body,*binary_activity_title,*binary_activity_date,*binary_activity_viewport,*binary_activity_status,*binary_history_title,*binary_timeline,*binary_history_status,*y_min_label,*y_max_label,*y_zero_label,*y_min_line,*y_max_line;
  lv_obj_t *binary_time_labels[8],*time_lines[8],*time_labels[8];lv_chart_series_t* series;float time_fracs[8]={};uint8_t time_count=0;
  // The graph readout is covered by test-editable-history-lvgl.mjs.

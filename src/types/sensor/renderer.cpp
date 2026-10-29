@@ -168,6 +168,10 @@ static void sensor_graph_area_cb(lv_event_t* e) {
   const lv_area_t line_at = {coords.x1, coords.y1 + area->rows.line_top, coords.x2,
                              coords.y1 + area->rows.line_top + area->rows.line_rows - 1};
   lv_draw_image(layer, &image, &line_at);
+  // The pictures are the whole graph: lv_chart's own pass only walked the
+  // points, and with more points than columns it writes past its buffer
+  // (sensor_popup.cpp on_chart_area_draw).
+  lv_event_stop_processing(e);
 }
 
 static void sensor_graph_delete_cb(lv_event_t* e) {

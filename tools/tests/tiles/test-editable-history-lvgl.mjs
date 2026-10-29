@@ -137,6 +137,7 @@ bool readout_12h=false;
 bool readout_twelve_hour(){return readout_12h;}
 char readout_decimal_separator(){return '.';}
 const char* get_weekday_abbrev(uint8_t day){static const char* names[]={"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};return names[day%7];}
+String short_date_label(const struct tm&){return String("1. Jan");}
 void editable_control_close(EditableControl*){}void editable_control_open(EditableControl*,const String&){}void editable_control_follow_colors(EditableControl*){}
 bool isMdiIconDisabled(const String&){return false;}String getMdiChar(const String&){return "";}
 
@@ -394,7 +395,7 @@ int main(int argc,char**argv){
  const auto* sensor_graph=ctx.chart;const int sensor_layouts=history_layout_calls;
  for(int i=0;i<20;++i){hide_sensor_popup();open();assert(ctx.chart==sensor_graph&&shown(ctx.value_box)&&shown(ctx.chart_wrap));assert(lv_chart_get_y_array(ctx.chart,ctx.series)[0]==123&&"Warm Sensor opens must not clear the cached graph");assert(history_layout_calls==sensor_layouts);}
  init.entity_id="sensor.other";open();assert(lv_chart_get_y_array(ctx.chart,ctx.series)[0]==LV_CHART_POINT_NONE&&"A different entity must not inherit the previous graph");
- assert(shown(ctx.range_hours_btn)&&lv_obj_get_width(ctx.range_row)==kRangeButtonWidth*3+kRangeButtonGap*2&&"Numeric graphs offer 6H right of 24H");
+ assert(shown(ctx.range_hours_btn)&&shown(ctx.range_hour_btn)&&shown(ctx.range_month_btn)&&lv_obj_get_width(ctx.range_row)==kRangeButtonWidth*5+kRangeButtonGap*4&&"Numeric graphs offer 30D 7D 24H 6H 1H");
  {
   // Numeric Sensors read exact history values in the old value row. Large
   // spans are stored as rounded integers in the chart itself.

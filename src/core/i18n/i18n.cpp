@@ -2254,7 +2254,8 @@ static const LocaleProfile kLocaleDe = {
     "{d}. {M}",
     "{d}. {M} {Y}",
     1,  // QWERTZ
-    "äöüß"};
+    "äöüß",
+    {"Jahr", "Monat", "Woche"}};
 
 static const LocaleProfile kLocaleEn = {
     "en",
@@ -2384,7 +2385,8 @@ static const LocaleProfile kLocaleEn = {
     "{d} {M}",
     "{d} {M} {Y}",
     0,  // QWERTY
-    ""};
+    "",
+    {"Year", "Month", "Week"}};
 
 static const LocaleProfile kLocaleFr = {
     "fr",
@@ -2519,7 +2521,8 @@ static const LocaleProfile kLocaleFr = {
     "{d} {M}",
     "{d} {M} {Y}",
     2,  // AZERTY
-    "àâæéèêëîïôçœùûüÿ«»’€"};
+    "àâæéèêëîïôçœùûüÿ«»’€",
+    {"Année", "Mois", "Semaine"}};
 
 // Codes and groups match LocaleProfile::timezone_labels and
 // timezone_group_labels (see i18n.h).
@@ -5315,7 +5318,8 @@ static const LocaleProfile kLocalePl = {
     "{d} {M}",
     "{d} {M} {Y}",
     0,  // QWERTY
-    "ąćęłńóśźż"};
+    "ąćęłńóśźż",
+    {"Rok", "Miesiąc", "Tydzień"}};
 
 static const LocaleProfile kLocaleCs = {
     "cs",
@@ -5379,7 +5383,8 @@ static const LocaleProfile kLocaleCs = {
     "{d}. {M}",
     "{d}. {M} {Y}",
     1,  // QWERTZ
-    "áčďéěíňóřšťúůýž"};
+    "áčďéěíňóřšťúůýž",
+    {"Rok", "Měsíc", "Týden"}};
 
 static const LocaleProfile kLocaleEs = {
     "es",
@@ -5509,7 +5514,8 @@ static const LocaleProfile kLocaleEs = {
     "{d} de {M}",
     "{d} de {M} de {Y}",
     0,  // QWERTY
-    "ñáéíóúü¿¡"};
+    "ñáéíóúü¿¡",
+    {"Año", "Mes", "Semana"}};
 
 const TimezoneOptionInfo& timezone_option(size_t index) {
   if (index >= kTimezoneOptionCount) index = 0;
@@ -5649,7 +5655,8 @@ static const LocaleProfile kLocaleSk = {
     "{d}. {M}",
     "{d}. {M} {Y}",
     1,  // QWERTZ
-    "áäčďéíĺľňóôŕšťúýž"};
+    "áäčďéíĺľňóôŕšťúýž",
+    {"Rok", "Mesiac", "Týždeň"}};
 
 static const LanguageEntry kLanguages[] = {
     {&kStringsEn, &kLocaleEn},
@@ -5853,6 +5860,11 @@ const char* weather_sensor_label(const char* language_code, uint8_t index) {
 const char* power_flow_label(const char* language_code, PowerFlowLabel label) {
   const uint8_t index = static_cast<uint8_t>(label);
   return locale(language_code).power_flow_labels[index < static_cast<uint8_t>(PowerFlowLabel::Count) ? index : 0];
+}
+
+const char* energy_period_label(const char* language_code, EnergyPeriodLabel label) {
+  const uint8_t index = static_cast<uint8_t>(label);
+  return locale(language_code).energy_period_labels[index < static_cast<uint8_t>(EnergyPeriodLabel::Count) ? index : 0];
 }
 
 const char* climate_tile_type_label(const char* language_code) {

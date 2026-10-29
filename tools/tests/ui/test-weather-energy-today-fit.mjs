@@ -3,7 +3,8 @@
 //     the unit font and lengthens into a pill to the left; 7D and the date
 //     pills move over by the same width.
 //   - The Energy Today button shrank "Aujourd'hui" to 20 px although there
-//     was room: it keeps the 24 px font of 7D and lengthens instead.
+//     was room: it keeps the 24 px font and lengthens instead, like Year,
+//     Month and Week ("Semaine") next to it.
 //   - The 7D column header wrapped "Aujourd'hui" inside the word: it stays on
 //     one line and steps its font down only when the column is too narrow.
 //   - The popup said "sunny" above a tile saying "partly cloudy": every
@@ -35,8 +36,8 @@ assert.match(buttons, /set_footer_pill_width\(ctx->detail_title_pill, ctx->detai
 assert.match(buttons, /lv_obj_set_width\(ctx->header_today_btn, today_w\);/);
 assert.match(buttons, /const int week_x = today_day >= 0 \? kFooterOuterActionX - today_extra : kFooterInnerActionX;/);
 
-// Energy Today pill keeps 24 px.
-const fit = body(energy, 'fit_today_button');
+// Energy period pills keep 24 px.
+const fit = body(energy, 'fit_period_buttons');
 assert.doesNotMatch(fit, /font20/, 'Energy Today never shrinks its text');
 assert.match(fit, /const int width = text_width\(text, popup_layout::font24\(\)\) \+ kRangeButtonHeight \/ 2;/);
 assert.match(fit, /const int button_w = width > kRangeButtonWidth \? width : kRangeButtonWidth;/);
@@ -77,7 +78,8 @@ assert.match(body(weatherRaw, 'weather_today_button_text'), /i18n::weather_today
 assert.match(weatherRaw, /String title = is_today \? String\(weather_today_text\(\)\)/, 'the date pill keeps the word');
 assert.match(weatherRaw, /text = weather_today_text\(\);[\s\S]{0,260}if \(full\.x > col_w\) text = weather_today_button_text\(\);/,
   'a 7D column shows the word where it fits, else the short form');
-assert.match(body(energy, 'fit_today_button'), /const char\* text = today_button_label\(\);/);
+assert.match(body(energy, 'fit_period_buttons'), /const char\* text = period_button_label\(static_cast<EnergyPeriod>\(p\)\);/);
+assert.match(body(energy, 'period_button_label'), /default: return today_button_label\(\);/);
 
 // Why the order matters: the scanner returns the first "condition" in the text.
 const payload = '{"forecast":[{"datetime":"2026-10-03","condition":"sunny"}],"state":"partlycloudy","icon":"partlycloudy"}';

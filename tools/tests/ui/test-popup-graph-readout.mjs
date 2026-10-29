@@ -160,7 +160,7 @@ for (const marker of ['ctx->readout.attach(chart_wrap);', 'lv_obj_remove_flag(x_
   assert.ok(energyUi.includes(marker), `Energy readout: ${marker}`);
 for (const name of ['apply_energy_readout', 'show_energy_slot', 'on_energy_cursor_draw', 'invalidate_energy_cursor'])
   assert.doesNotMatch(code(fn(energy, name)), /lv_label_set_text\(|lv_obj_set_(?:pos|size|x|y)\(|lv_chart_|String\(|lv_obj_update_layout\(/,
-    `Dragging over Energy bars changes only bar opacity, the cursor line and static labels (${name})`);
+    `Dragging over Energy bars changes only bar colors, the cursor line and static labels (${name})`);
 assert.ok(energyUi.includes('lv_obj_add_event_cb(chart_wrap, on_energy_cursor_draw, LV_EVENT_DRAW_MAIN, ctx);'));
 assert.match(code(fn(energy, 'on_energy_readout_end')),
   /if \(keep && ctx->readout_slot >= 0\) \{\s*ctx->readout_pin_slot = ctx->readout_slot;\s*ctx->readout_latest = ctx->readout_slot == latest_energy_slot\(ctx\);/);
@@ -177,7 +177,7 @@ for (const name of ['on_close_click', 'on_overlay_delete', 'on_period_click', 'h
   'show_energy_popup', 'apply_entry_to_chart'])
   assert.ok(code(fn(energy, name)).includes('readout.cancel();'), `Energy ${name} ends the readout`);
 assert.match(code(fn(energy, 'process_energy_popup_queue')),
-  /if \(!g_pending_refresh\.day && !g_pending_refresh\.week\) return;\s*if \(g_energy_popup_ctx->readout\.active\(\)\) return;/,
+  /if \(!g_pending_refresh\.any\(\)\) return;\s*if \(g_energy_popup_ctx->readout\.active\(\)\) return;/,
   'Energy data waits while a finger reads a bar');
 
 // ---- Real LVGL: Energy popup ------------------------------------------------
@@ -246,7 +246,14 @@ const char* weather_today_button_label(const char*){return "Today";}
 struct Strings{const char* loading="Loading";};const Strings& strings(const char*){static Strings s;return s;}
 String format_number(const char* language,float value,uint8_t decimals,bool=false){if(!std::isfinite(value))return "--";char text[48];snprintf(text,sizeof(text),"%.*f",decimals>6?6:decimals,value);String result=text;if(locale(language).decimal_separator[0]==',')std::replace(result.begin(),result.end(),'.',',');return result;}
 String weather_weekday_short(const char*,const String& iso){return iso.substr(5);}
+enum class EnergyPeriodLabel:uint8_t{Year,Month,Week,Count};
+const char* energy_period_label(const char*,EnergyPeriodLabel label){static const char* text[]={"Year","Month","Week"};return text[static_cast<int>(label)];}
+const char* weather_month_short(const char*,int month){static const char* names[]={"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};return month>=1&&month<=12?names[month-1]:"";}
+const char* month_name(const char*,int month){static const char* names[]={"January","February","March","April","May","June","July","August","September","October","November","December"};return month>=1&&month<=12?names[month-1]:"";}
+String format_short_date(const char*,int day,const char* month){return String(month)+" "+std::to_string(day);}
 }
+// The panel's first weekday (tm_wday), Settings > Localization.
+namespace week_start {int first=1;inline uint8_t panel(){return static_cast<uint8_t>(first);}}
 namespace clock_tile {
 enum : uint8_t {TIME_FORMAT_AUTO=0,TIME_FORMAT_24H=1,TIME_FORMAT_12H=2};
 inline uint8_t resolve_time_format(int preferred,int global,const char*){return preferred?preferred:(global?global:TIME_FORMAT_24H);}
@@ -257,6 +264,7 @@ ${energyData.match(/struct EnergyEntryData \{[\s\S]*?\n\};/)[0]}
 std::vector<EnergyEntryData> cache;int period_requests=0;
 bool energy_find_entry(const String& id,const char* period,EnergyEntryData& out){for(const auto& entry:cache)if(entry.id==id&&entry.period==period){out=entry;return true;}return false;}
 bool energy_request_period(const char*,bool){++period_requests;return true;}
+bool energy_request_waiting(){return false;}bool energy_period_fresh(const char*){return true;}
 void set_label_style(lv_obj_t*obj,lv_color_t color,const lv_font_t*font){lv_obj_set_style_text_color(obj,color,0);lv_obj_set_style_text_font(obj,font,0);}
 ${fn(read('src/tiles/runtime/tile_renderer_shared.h'), 'disable_pressed_button_animation')}
 void hide_pin_popup(){}void hide_camera_popup(){}void hide_climate_popup(){}void hide_cover_popup(){}void hide_light_popup(){}void hide_sensor_popup(){}void hide_weather_popup(){}void hide_media_popup(){}void hide_device_popup(){}void hide_calendar_popup(){}
@@ -279,7 +287,16 @@ void touch_at(int x,int y){touch_point={x,y};touch_down=true;lv_indev_read(touch
 void touch_release(){touch_down=false;lv_indev_read(touch);}
 EnergyEntryData day_entry(){EnergyEntryData e;e.id="sensor.energy";e.name="Energy";e.unit="kWh";e.period="day";e.start="2026-09-25T00:00:00";e.total=12.34f;e.value_count=24;for(int i=0;i<24;++i){e.values[i]=i*0.25f+(i==0?0.1f:0.0f);e.value_valid[i]=true;}e.value_valid[5]=false;return e;}
 EnergyEntryData week_entry(){EnergyEntryData e=day_entry();e.period="week";e.start="2026-09-21";e.total=28;e.value_count=7;for(int i=0;i<7;++i)e.values[i]=i+1.0f;return e;}
-bool bars_restored(EnergyPopupContext* ctx){for(auto* bar:ctx->bars)if(lv_obj_get_style_bg_opa(bar,LV_PART_MAIN)!=LV_OPA_COVER)return false;return true;}
+// The bars' colors: the circle tone with the value's edge, the read bar all
+// icon color.
+uint32_t rgb(lv_color_t color){return lv_color_to_u32(color)&0xFFFFFF;}
+bool read_bar(EnergyPopupContext* ctx,int i){return rgb(lv_obj_get_style_bg_color(ctx->bars[i],LV_PART_MAIN))==ctx->bar_edge&&lv_obj_get_style_border_width(ctx->bars[i],LV_PART_MAIN)==0;}
+bool normal_bar(EnergyPopupContext* ctx,int i){return rgb(lv_obj_get_style_bg_color(ctx->bars[i],LV_PART_MAIN))==ctx->bar_body&&lv_obj_get_style_border_width(ctx->bars[i],LV_PART_MAIN)==kBarEdgeWidth&&
+ rgb(lv_obj_get_style_border_color(ctx->bars[i],LV_PART_MAIN))==ctx->bar_edge;}
+bool bars_restored(EnergyPopupContext* ctx){for(int i=0;i<ENERGY_VALUES_MAX;++i)if(ctx->bars[i]&&!normal_bar(ctx,i))return false;return true;}
+EnergyEntryData month_entry(){EnergyEntryData e=day_entry();e.period="month";e.start="2026-09-01";e.total=90;e.value_count=29;for(int i=0;i<29;++i){e.values[i]=1.0f+i%5;e.value_valid[i]=true;}return e;}
+EnergyEntryData year_entry(){EnergyEntryData e=day_entry();e.period="year";e.start="2026-01-01";e.total=1200;e.value_count=10;for(int i=0;i<10;++i){e.values[i]=100.0f+i*10;e.value_valid[i]=true;}return e;}
+std::vector<std::string> axis_texts(EnergyPopupContext* ctx){std::vector<std::string> out;for(auto* label:ctx->x_labels)if(label&&!lv_obj_has_flag(label,LV_OBJ_FLAG_HIDDEN))out.push_back(lv_label_get_text(label));return out;}
 bool shown(lv_obj_t* obj){return !lv_obj_has_flag(obj,LV_OBJ_FLAG_HIDDEN);}
 void settle(lv_display_t* display){lv_refr_now(display);process_popup_open();sync_popup_shell();lv_refr_now(display);}
 // Rendered frame, to check the cursor line.
@@ -292,9 +309,9 @@ int main(){
  lv_theme_default_init(display,lv_color_hex(0x26A69A),lv_color_hex(0xC14444),false,&ui_font_20);
  touch=lv_indev_create();lv_indev_set_type(touch,LV_INDEV_TYPE_POINTER);
  lv_indev_set_read_cb(touch,[](lv_indev_t*,lv_indev_data_t* data){data->point=touch_point;data->state=touch_down?LV_INDEV_STATE_PRESSED:LV_INDEV_STATE_RELEASED;});
- cache={day_entry(),week_entry()};
+ cache={day_entry(),week_entry(),month_entry(),year_entry()};
  preload_energy_popup();
- EnergyPopupInit init;init.entity_id="sensor.energy";init.title="Energy today";init.icon_name="flash";init.unit="kWh";init.decimals=2;init.bg_color=0x335577;
+ EnergyPopupInit init;init.entity_id="sensor.energy";init.title="Energy today";init.icon_name="flash";init.unit="kWh";init.decimals=2;init.bg_color=0x335577;init.icon_color=0xFF9800;
  show_energy_popup(init);auto* ctx=g_energy_popup_ctx;
  // The first frame already shows the current value in the shared header.
  assert(lv_obj_has_flag(ctx->value_label,LV_OBJ_FLAG_HIDDEN)&&strcmp(lv_label_get_text(ctx->value_label),"12.34")==0&&strcmp(value_unit::unit_text(ctx->value_label),"kWh")==0);
@@ -302,22 +319,29 @@ int main(){
  // settle() with a queue pass between the content and the next frame: the
  // hidden 7D chart waits until the content frame is drawn.
  lv_refr_now(display);process_popup_open();sync_popup_shell();
- process_energy_popup_queue();assert(ctx->spare.shown_slots==0&&g_pending_refresh.week&&"7D waits for the content frame");
+ process_energy_popup_queue();assert(hidden_view(ctx,EnergyPeriod::Week)->shown_slots==0&&g_pending_refresh.period[1]&&"The hidden charts wait for the content frame");
  lv_refr_now(display);
  // Opening reads the newest bar.
  assert(ctx->shown_slots==24&&ctx->plot_w>0&&ctx->readout_slot==23&&ctx->readout_latest&&shown(ctx->readout_time_label)&&shown(ctx->readout_value_label));
  assert(strcmp(ctx->readout_time_text,"23:00 \xE2\x80\x93 00:00")==0&&strcmp(ctx->readout_value_text,"5.75")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0);
- // 7D sits left of the day button, which names today instead of 24H.
- {lv_area_t week,day;lv_obj_get_coords(ctx->week_btn,&week);lv_obj_get_coords(ctx->day_btn,&day);
-  assert(week.x2<day.x1&&strcmp(lv_label_get_text(ctx->day_label),"Today")==0&&"7D sits left of Today");}
+ // Year, Month, Week, Today from left to right; the day button names today.
+ {lv_area_t area[kPeriodCount];for(uint8_t p=0;p<kPeriodCount;++p)lv_obj_get_coords(ctx->period_btns[p],&area[p]);
+  assert(area[3].x2<area[2].x1&&area[2].x2<area[1].x1&&area[1].x2<area[0].x1&&"Year, Month, Week, Today");
+  assert(strcmp(lv_label_get_text(ctx->period_labels[0]),"Today")==0&&strcmp(lv_label_get_text(ctx->period_labels[3]),"Year")==0&&
+         strcmp(lv_label_get_text(ctx->period_labels[2]),"Month")==0&&strcmp(lv_label_get_text(ctx->period_labels[1]),"Week")==0);
+  lv_area_t row;lv_obj_get_coords(ctx->range_row,&row);lv_area_t card;lv_obj_get_coords(ctx->card,&card);
+  assert(row.x1>=card.x1&&row.x2<=card.x2&&"The four buttons fit the card");}
+ // The bars: circle tone with the icon-colored edge, the read bar icon color.
+ assert(ctx->bar_edge==0xFF9800&&ctx->bar_body!=ctx->bar_edge&&read_bar(ctx,23)&&normal_bar(ctx,22)&&
+        lv_obj_get_style_border_side(ctx->bars[22],LV_PART_MAIN)==LV_BORDER_SIDE_TOP);
  // A response that repeats the shown data keeps the chart as it is.
  lv_obj_add_flag(ctx->bars[0],LV_OBJ_FLAG_HIDDEN);queue_energy_popup_refresh("day");process_energy_popup_queue();
- assert(!g_pending_refresh.day&&!shown(ctx->bars[0])&&"Identical data is not redrawn");
+ assert(!g_pending_refresh.period[0]&&!shown(ctx->bars[0])&&"Identical data is not redrawn");
  lv_obj_remove_flag(ctx->bars[0],LV_OBJ_FLAG_HIDDEN);
  lv_area_t wrap,chart,axis,nav;lv_obj_get_coords(ctx->chart_wrap,&wrap);lv_obj_get_coords(ctx->chart,&chart);lv_obj_get_coords(ctx->x_axis,&axis);lv_obj_get_coords(ctx->range_row,&nav);
  // Hour labels keep their full line inside the axis and above the buttons.
  int axis_labels=0;
- for(auto* label:ctx->x_labels){if(!shown(label))continue;++axis_labels;lv_area_t area;lv_obj_get_coords(label,&area);
+ for(auto* label:ctx->x_labels){if(!label||!shown(label))continue;++axis_labels;lv_area_t area;lv_obj_get_coords(label,&area);
   assert(area.y1>=axis.y1&&area.y2<=axis.y2&&area.y2<=wrap.y2&&lv_area_get_height(&area)>=lv_font_get_line_height(popup_layout::font20())&&"Time axis labels are never clipped");}
  assert(axis_labels==5&&wrap.y2<nav.y1&&"The axis stays above the period buttons");
  auto bar_x=[&](int slot,int slots){return wrap.x1+ctx->plot_left+static_cast<int>((slot+0.5f)*ctx->plot_w/slots);};
@@ -327,7 +351,7 @@ int main(){
  assert(ctx->readout.active()&&ctx->readout_slot==23&&"A press is applied with the next display refresh; the kept bar stays until then");
  lv_refr_now(display);
  assert(ctx->readout_slot==11&&strcmp(ctx->readout_time_text,"11:00 \xE2\x80\x93 12:00")==0&&strcmp(ctx->readout_value_text,"2.75")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0);
- for(int i=0;i<ENERGY_VALUES_MAX;++i)assert(lv_obj_get_style_bg_opa(ctx->bars[i],LV_PART_MAIN)==(i==11?LV_OPA_COVER:kReadoutDimmedBarOpa));
+ for(int i=0;i<ENERGY_VALUES_MAX;++i)if(ctx->bars[i])assert(i==11?read_bar(ctx,i):normal_bar(ctx,i));
  assert(shown(ctx->readout_time_label)&&shown(ctx->readout_value_label)&&lv_obj_get_y(value_box)==band_y);
  assert(lv_obj_get_style_text_font(ctx->readout_time_label,LV_PART_MAIN)==popup_layout::font20()&&lv_obj_get_style_text_font(ctx->readout_value_label,LV_PART_MAIN)==value_font());
  lv_area_t time_area,value_area,band_area;lv_obj_get_coords(ctx->readout_time_label,&time_area);lv_obj_get_coords(ctx->readout_value_label,&value_area);lv_obj_get_coords(value_box,&band_area);
@@ -346,7 +370,7 @@ int main(){
  touch_at(bar_x(23,24),y);touch_at(bar_x(20,24),y);assert(ctx->readout_slot==11);
  lv_refr_now(display);
  assert(ctx->readout_slot==20&&strcmp(ctx->readout_time_text,"20:00 \xE2\x80\x93 21:00")==0);
- assert(lv_obj_get_style_bg_opa(ctx->bars[11],LV_PART_MAIN)==kReadoutDimmedBarOpa&&lv_obj_get_style_bg_opa(ctx->bars[20],LV_PART_MAIN)==LV_OPA_COVER);
+ assert(normal_bar(ctx,11)&&read_bar(ctx,20));
  assert(!white_at(bar_x(11,24),chart.y1+2)&&white_at(wrap.x1+ctx->readout_x,chart.y1+2)&&"The line moves with the finger");
  touch_at(bar_x(5,24),y);lv_refr_now(display);assert(strcmp(ctx->readout_value_text,"--")==0&&!value_unit::unit_text(ctx->readout_value_label)[0]&&"A missing bar value is not zero");
  touch_at(bar_x(23,24),y);lv_refr_now(display);assert(strcmp(ctx->readout_time_text,"23:00 \xE2\x80\x93 00:00")==0);
@@ -360,13 +384,13 @@ int main(){
  touch_at(SCREEN_WIDTH-1,SCREEN_HEIGHT-1);lv_refr_now(display);assert(ctx->readout.active()&&ctx->readout_slot==23);
  // New chart data waits for the release.
  cache[0].values[23]=9.0f;queue_energy_popup_refresh("day");process_energy_popup_queue();
- assert(g_pending_refresh.day&&ctx->shown_entry.values[23]!=9.0f&&"Bars stay unchanged while touched");
+ assert(g_pending_refresh.period[0]&&ctx->shown_entry.values[23]!=9.0f&&"Bars stay unchanged while touched");
  touch_release();
  assert(!ctx->readout.active()&&ctx->readout_slot==23&&ctx->readout_latest&&shown(ctx->readout_time_label)&&shown(ctx->readout_value_label)&&"Release keeps the read bar");
  assert(lv_display_get_event_count(display)==display_events&&"The refresh hook exists only while a finger is down");
- process_energy_popup_queue();assert(!g_pending_refresh.day&&ctx->shown_entry.values[23]==9.0f);
+ process_energy_popup_queue();assert(!g_pending_refresh.period[0]&&ctx->shown_entry.values[23]==9.0f);
  assert(ctx->readout_slot==23&&strcmp(ctx->readout_value_text,"9.00")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0&&"The newest bar follows new data");
- lv_refr_now(display);assert(white_at(wrap.x1+ctx->readout_x,chart.y1+2)&&"New bars keep the line");
+ lv_refr_now(display);assert(white_at(wrap.x1+ctx->readout_x,chart.y1-kReadoutDotLift)&&"New bars keep the marker (the read bar now reaches the top)");
  // Axis labels belong to the chart surface. A bar the finger left stays.
  touch_at(bar_x(6,24),(axis.y1+axis.y2)/2);lv_refr_now(display);assert(ctx->readout_slot==6);touch_release();
  assert(ctx->readout_slot==6&&!ctx->readout_latest);
@@ -376,22 +400,41 @@ int main(){
  touch_at(bar_x(3,24),y);touch_release();assert(ctx->readout_slot==3&&shown(ctx->readout_value_label)&&strcmp(ctx->readout_time_text,"03:00 \xE2\x80\x93 04:00")==0);
  lv_refr_now(display);
  // A period change starts at its newest bar; the header keeps today's value.
- // The hidden 7D chart is filled from the cache; the switch only swaps charts.
- process_energy_popup_queue();assert(ctx->spare.week&&ctx->spare.shown_slots==7&&!g_pending_refresh.week&&"7D is prepared");
- lv_obj_send_event(ctx->week_btn,LV_EVENT_CLICKED,nullptr);settle(display);assert(ctx->period=="week"&&ctx->shown_slots==7);
- assert(ctx->week&&shown(ctx->chart_wrap)&&!shown(ctx->spare.chart_wrap)&&ctx->spare.shown_slots==24&&"The 24H chart waits hidden");
+ // The hidden charts are filled from the cache, one per pass; a switch only
+ // swaps charts.
+ for(int pass=0;pass<4;++pass)process_energy_popup_queue();
+ assert(!g_pending_refresh.any()&&hidden_view(ctx,EnergyPeriod::Week)->shown_slots==7&&hidden_view(ctx,EnergyPeriod::Month)->shown_slots==30&&
+        hidden_view(ctx,EnergyPeriod::Year)->shown_slots==12&&"Week, Month (September: 30 days) and Year are prepared");
+ lv_obj_send_event(ctx->period_btns[1],LV_EVENT_CLICKED,nullptr);settle(display);
+ assert(ctx->shown_period==EnergyPeriod::Week&&ctx->period==EnergyPeriod::Week&&ctx->shown_slots==7);
+ assert(shown(ctx->chart_wrap)&&!shown(hidden_view(ctx,EnergyPeriod::Day)->chart_wrap)&&hidden_view(ctx,EnergyPeriod::Day)->shown_slots==24&&"Today's chart waits hidden");
  assert(ctx->readout_slot==6&&ctx->readout_latest&&strcmp(ctx->readout_time_text,"Sunday")==0);
  touch_at(bar_x(2,7),y);lv_refr_now(display);
  assert(strcmp(ctx->readout_time_text,"Wednesday")==0&&strcmp(ctx->readout_value_text,"3.00")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0);
  sync_popup_shell();assert(strcmp(hometiles_title::text(shell.value),"12.34")==0&&strcmp(value_unit::unit_text(shell.value),"kWh")==0&&"The header keeps today's value");
  touch_release();
- lv_obj_send_event(ctx->day_btn,LV_EVENT_CLICKED,nullptr);settle(display);
- assert(ctx->period=="day"&&ctx->readout_slot==23&&ctx->readout_latest&&strcmp(ctx->readout_value_text,"9.00")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0);
+ // This month by the day: the whole month on the axis, a line and the day's
+ // number at each first weekday (Monday: September 7, 14, 21, 28), the date
+ // in the readout.
+ lv_obj_send_event(ctx->period_btns[2],LV_EVENT_CLICKED,nullptr);settle(display);
+ assert(ctx->shown_period==EnergyPeriod::Month&&ctx->shown_slots==30&&ctx->readout_slot==28&&strcmp(ctx->readout_time_text,"Sep 29")==0);
+ assert((axis_texts(ctx)==std::vector<std::string>{"7","14","21","28"})&&"Month: the first weekdays");
+ {int lines=0;for(auto* line:ctx->x_lines)if(line&&shown(line))++lines;assert(lines==4);}
+ {int bars=0;for(auto* bar:ctx->bars)if(bar&&shown(bar))++bars;assert(bars==29&&"Bars up to today, the rest of the month empty");}
+ touch_at(bar_x(0,30),y);lv_refr_now(display);assert(strcmp(ctx->readout_time_text,"Sep 1")==0&&read_bar(ctx,0));touch_release();
+ // This year by the month: twelve months on the axis, bars up to October.
+ lv_obj_send_event(ctx->period_btns[3],LV_EVENT_CLICKED,nullptr);settle(display);
+ assert(ctx->shown_period==EnergyPeriod::Year&&ctx->shown_slots==12&&ctx->readout_slot==9&&strcmp(ctx->readout_time_text,"October")==0);
+ {const auto texts=axis_texts(ctx);assert(texts.size()>=6&&texts[0]=="Jan"&&"Year: the month names, every second one where twelve do not fit");}
+ touch_at(bar_x(2,12),y);lv_refr_now(display);assert(strcmp(ctx->readout_time_text,"March")==0&&strcmp(ctx->readout_value_text,"120.00")==0);touch_release();
+ lv_obj_send_event(ctx->period_btns[0],LV_EVENT_CLICKED,nullptr);settle(display);
+ assert(ctx->shown_period==EnergyPeriod::Day&&ctx->readout_slot==23&&ctx->readout_latest&&strcmp(ctx->readout_value_text,"9.00")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0);
  // A negative bar hangs below the zero line; the line starts at the zero line.
  cache[0].values[3]=-2.0f;queue_energy_popup_refresh("day");process_energy_popup_queue();
  touch_at(bar_x(3,24),y);touch_release();lv_refr_now(display);
  assert(ctx->readout_slot==3&&shown(ctx->y_zero_line)&&ctx->readout_line_bottom==lv_obj_get_y(ctx->y_zero_line)&&
         ctx->readout_line_bottom==lv_obj_get_y(ctx->bars[3])&&"Negative bars: the line starts at the zero line");
+ assert(lv_obj_get_style_border_side(ctx->bars[3],LV_PART_MAIN)==LV_BORDER_SIDE_BOTTOM&&"A negative bar's edge is at its bottom");
  assert(white_at(wrap.x1+ctx->readout_x,wrap.y1+ctx->readout_line_bottom-3)&&white_at(wrap.x1+ctx->readout_x,chart.y1-kReadoutDotLift)&&"Line and dot above a negative bar");
  cache[0].values[3]=0.75f;queue_energy_popup_refresh("day");process_energy_popup_queue();
  // Hiding while touching ends the readout and restores the bars.

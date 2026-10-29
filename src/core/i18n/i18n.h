@@ -1018,8 +1018,15 @@ struct LocaleProfile {
   uint8_t keyboard_layout;
   const char* keyboard_letters;
 
+  // The Energy popup's period buttons left of Today (EnergyPeriodLabel):
+  // this year by the month, this month and this week by the day.
+  const char* energy_period_labels[3];
+
 };
 
+// Index into LocaleProfile::energy_period_labels.
+enum class EnergyPeriodLabel : uint8_t { Year, Month, Week, Count };
+static_assert(static_cast<int>(EnergyPeriodLabel::Count) == 3, "LocaleProfile::energy_period_labels size");
 // Index into LocaleProfile::power_flow_labels.
 enum class PowerFlowLabel : uint8_t {
   Type,
@@ -1149,6 +1156,8 @@ const char* weather_tomorrow_label(const char* language_code);
 // entity's value" option.
 const char* weather_sensor_label(const char* language_code, uint8_t index);
 const char* power_flow_label(const char* language_code, PowerFlowLabel label);
+// The Energy popup's period buttons (EnergyPeriodLabel).
+const char* energy_period_label(const char* language_code, EnergyPeriodLabel label);
 const char* climate_tile_type_label(const char* language_code);
 const char* climate_entity_label(const char* language_code);
 const char* climate_target_temperature_label(const char* language_code);

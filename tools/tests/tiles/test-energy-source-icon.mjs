@@ -84,7 +84,7 @@ class String : public std::string {
   }
 };
 struct EnergyEntryData { String id, unit, category, name; };
-std::vector<EnergyEntryData> g_day_entries, g_week_entries, g_month_entries;
+std::vector<EnergyEntryData> g_day_entries, g_week_entries, g_month_entries, g_year_entries;
 struct FakeBridgeConfig {
   std::map<std::string, String> icons, names;
   String findEntityIcon(const String& id) const { auto it = icons.find(id); return it == icons.end() ? String() : it->second; }

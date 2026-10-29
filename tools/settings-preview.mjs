@@ -140,12 +140,12 @@ const Code = language[0].toUpperCase() + language.slice(1);
 if (!codes.includes(Code)) throw new Error(`unknown language ${language}`);
 const enTable = codes.map(code => table(`kStrings${code}`)).join('\n');
 // A language's name and keyboard from its LocaleProfile: the second entry
-// and the last two (keyboard_layout, keyboard_letters).
+// and keyboard_layout, keyboard_letters (before the Energy period labels).
 const localeOf = code => {
   const start = i18nSource.indexOf(`static const LocaleProfile kLocale${code} = {`);
   const body = i18nSource.slice(start, i18nSource.indexOf('static const ', start + 10));
   const name = /=\s*\{\s*"[^"]*",\s*("[^"]*")/.exec(body)[1];
-  const tail = /\s(\d+),(?:\s*\/\/[^\n]*)?\s*("(?:[^"\\]|\\.)*")\s*,?\s*\};/.exec(body);
+  const tail = /\s(\d+),(?:\s*\/\/[^\n]*)?\s*("(?:[^"\\]|\\.)*")\s*,?\s*(?:\{[^{}]*\}\s*)?\};/.exec(body);
   return {name, layout: Number(tail[1]), letters: tail[2]};
 };
 const locales = codes.map(localeOf);

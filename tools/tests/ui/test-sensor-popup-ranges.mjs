@@ -45,8 +45,9 @@ assert.ok(axis.includes('SensorHistoryRange::Hour1) return calc_quarter_axis(') 
   axis.includes('SensorHistoryRange::Day30) return calc_day30_axis('));
 assert.ok(fn('calc_quarter_axis').includes('constexpr time_t kQuarter = 15 * 60;'));
 const month = fn('calc_day30_axis');
-assert.ok(month.includes('if (day_tm.tm_wday != 1) continue;') && month.includes('out_labels[count] = short_date_label(day_tm);'),
-  'a line and the date at every Monday');
+assert.ok(month.includes('const int first_weekday = week_start::panel();') &&
+  month.includes('if (day_tm.tm_wday != first_weekday) continue;') && month.includes('out_labels[count] = short_date_label(day_tm);'),
+  'a line and the date at every first weekday (Settings > Localization, user 2026-10-29)');
 assert.ok(fn('short_date_label').includes('i18n::format_short_date(language, day.tm_mday, i18n::weather_month_short(language, day.tm_mon + 1))'),
   'the date in the configured language');
 const readout = fn('append_readout_time');

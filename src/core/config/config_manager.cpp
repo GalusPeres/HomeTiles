@@ -4,6 +4,7 @@
 #include "src/core/text/title_text.h"
 #include "src/core/config/batched_nvs_write.h"
 #include "src/core/i18n/i18n.h"
+#include "src/types/calendar/calendar_model.h"
 #include "src/types/clock/clock_format.h"
 #include <Preferences.h>
 #include <stddef.h>
@@ -51,6 +52,7 @@ static bool persisted_config_equal(const DeviceConfig& a,
          strcmp(a.timezone, b.timezone) == 0 &&
          a.global_time_format == b.global_time_format &&
          a.global_date_format == b.global_date_format &&
+         a.week_start == b.week_start &&
          a.keyboard_layout == b.keyboard_layout &&
          a.configured == b.configured &&
          a.display_brightness == b.display_brightness &&
@@ -231,6 +233,7 @@ ConfigManager::ConfigManager() {
   set_timezone_code(config.timezone, sizeof(config.timezone), "berlin");
   config.global_time_format = clock_tile::TIME_FORMAT_AUTO;
   config.global_date_format = clock_tile::DATE_FORMAT_AUTO;
+  config.week_start = calendar_model::kWeekStartAuto;
   config.keyboard_layout = 0;  // Auto (follows the language).
 
   // Display & Power Defaults
@@ -369,6 +372,8 @@ bool ConfigManager::load() {
       normalize_global_time_format(prefs.getUChar("time_fmt", clock_tile::TIME_FORMAT_AUTO));
   config.global_date_format =
       normalize_global_date_format(prefs.getUChar("date_fmt", clock_tile::DATE_FORMAT_AUTO));
+  config.week_start =
+      calendar_model::normalize_week_start(prefs.getUChar("week_start", calendar_model::kWeekStartAuto));
   config.keyboard_layout = prefs.getUChar("kb_layout", 0);
   if (config.keyboard_layout > 3) config.keyboard_layout = 0;
 
@@ -603,6 +608,7 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
       normalize_global_time_format(normalized.global_time_format);
   normalized.global_date_format =
       normalize_global_date_format(normalized.global_date_format);
+  normalized.week_start = calendar_model::normalize_week_start(normalized.week_start);
   if (normalized.keyboard_layout > 3) normalized.keyboard_layout = 0;
   if (normalized.theme > 2) normalized.theme = 0;
   if (normalized.theme_auto_last > 1) normalized.theme_auto_last = 0;
@@ -704,6 +710,7 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
   prefs.putString("tz", normalized.timezone);
   prefs.putUChar("time_fmt", normalized.global_time_format);
   prefs.putUChar("date_fmt", normalized.global_date_format);
+  prefs.putUChar("week_start", normalized.week_start);
   prefs.putUChar("kb_layout", normalized.keyboard_layout);
 
   // Save display and power settings.
@@ -1168,6 +1175,7 @@ void ConfigManager::clear() {
   set_timezone_code(config.timezone, sizeof(config.timezone), "berlin");
   config.global_time_format = clock_tile::TIME_FORMAT_AUTO;
   config.global_date_format = clock_tile::DATE_FORMAT_AUTO;
+  config.week_start = calendar_model::kWeekStartAuto;
   config.display_brightness = 200;
   config.screensaver_brightness_pct = kScreensaverBrightnessPctDefault;
   config.tile_borders = true;

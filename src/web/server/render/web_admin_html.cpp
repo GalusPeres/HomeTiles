@@ -26,6 +26,7 @@
 #include "src/core/firmware/firmware_version.h"
 #include "src/core/i18n/i18n.h"
 #include "src/devices/device.h"
+#include "src/types/calendar/calendar_model.h"
 #include "src/types/clock/clock_format.h"
 #include "src/types/clock/web_html.h"
 #include "src/types/binary_sensor/renderer.h"
@@ -109,6 +110,34 @@ static String buildGlobalDateFormatOptionsHtml(uint8_t selected_format, const i1
   html += "<option value=\"3\"";
   if (selected_format == clock_tile::DATE_FORMAT_YMD) html += " selected";
   html += ">YYYY/MM/DD</option>";
+  return html;
+}
+
+// The first day of the week, the Calendar tile's choices (types/calendar
+// web.cpp): Automatic names the language's day, then Monday, Sunday and
+// Saturday (tm_wday values; Automatic is calendar_model::kWeekStartAuto).
+static String buildWeekStartOptionsHtml(uint8_t selected, const char* language) {
+  selected = calendar_model::normalize_week_start(selected);
+  const i18n::LocaleProfile& loc = i18n::locale(language);
+  String html;
+  html.reserve(256);
+  auto append = [&](uint8_t value, const char* label) {
+    html += "<option value=\"";
+    html += String(value);
+    html += "\"";
+    if (value == selected) html += " selected";
+    html += ">";
+    appendHtmlEscaped(html, label);
+    html += "</option>";
+  };
+  String automatic = i18n::calendar_label(language, i18n::CalendarLabel::Automatic);
+  automatic += " (";
+  automatic += loc.weekday_names[loc.first_weekday <= 6 ? loc.first_weekday : 1];
+  automatic += ")";
+  append(calendar_model::kWeekStartAuto, automatic.c_str());
+  append(1, loc.weekday_names[1]);
+  append(0, loc.weekday_names[0]);
+  append(6, loc.weekday_names[6]);
   return html;
 }
 
@@ -1933,6 +1962,14 @@ data-dhcp-note=")html";
   html += R"html(</label>
 <select id="locale_date_format" name="locale_date_format">)html";
   html += buildGlobalDateFormatOptionsHtml(cfg.global_date_format, tr);
+  html += R"html(</select>
+</div>
+<div>
+<label for="locale_week_start">)html";
+  appendHtmlEscaped(html, i18n::calendar_label(cfg.language, i18n::CalendarLabel::WeekStart));
+  html += R"html(</label>
+<select id="locale_week_start" name="locale_week_start">)html";
+  html += buildWeekStartOptionsHtml(cfg.week_start, cfg.language);
   html += R"html(</select>
 </div>
 </div>

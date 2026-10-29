@@ -26,8 +26,17 @@ struct EnergyEntryData {
 
 void queue_energy_response(const char* payload, size_t len);
 void process_energy_response_queue();
+// period: "day" (today by the hour), "week" (this week by the day, from the
+// panel's first weekday), "month" (this month by the day) or "year" (this
+// year by the month).
 bool energy_request_period(const char* period, bool force = false);
 bool energy_request_day_for_tiles(bool force = false);
+// Whether a request of any period waits for its response: the Energy popup
+// loads its other periods one after another, the Bridge takes one request
+// at a time and queues two (request_limits.py).
+bool energy_request_waiting();
+// Whether a period's last response came within the last minute.
+bool energy_period_fresh(const char* period);
 void energy_service_periodic();
 bool energy_find_entry(const String& id, const char* period, EnergyEntryData& out);
 // Get the unit from any previously received Energy period. Aggregate Energy

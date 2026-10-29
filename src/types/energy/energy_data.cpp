@@ -24,13 +24,17 @@ struct PendingEnergyResponse {
 };
 
 // Responses for different periods must not overwrite each other, for example
-// when the periodic 24-hour response arrives just after a manual 7-day request.
+// when the periodic day response arrives just after a manual week request.
+// The Energy popup's periods: today by the hour, this week and this month by
+// the day, this year by the month.
 PendingEnergyResponse g_pending_day;
 PendingEnergyResponse g_pending_week;
 PendingEnergyResponse g_pending_month;
+PendingEnergyResponse g_pending_year;
 std::vector<EnergyEntryData> g_day_entries;
 std::vector<EnergyEntryData> g_week_entries;
 std::vector<EnergyEntryData> g_month_entries;
+std::vector<EnergyEntryData> g_year_entries;
 
 struct EnergyRequestState {
   uint32_t last_attempt_ms = 0;  // loop-task only
@@ -45,6 +49,7 @@ struct EnergyRequestState {
 EnergyRequestState g_day_request;
 EnergyRequestState g_week_request;
 EnergyRequestState g_month_request;
+EnergyRequestState g_year_request;
 uint32_t g_last_periodic_ms = 0;
 
 constexpr uint32_t kEnergyRequestThrottleMs = 10000UL;
@@ -65,6 +70,7 @@ const char* normalize_period(const char* period) {
   if (!period || !*period) return "day";
   if (strcmp(period, "week") == 0) return "week";
   if (strcmp(period, "month") == 0) return "month";
+  if (strcmp(period, "year") == 0) return "year";
   return "day";
 }
 
@@ -72,6 +78,7 @@ PendingEnergyResponse& pending_for_period(const char* period) {
   const char* p = normalize_period(period);
   if (strcmp(p, "week") == 0) return g_pending_week;
   if (strcmp(p, "month") == 0) return g_pending_month;
+  if (strcmp(p, "year") == 0) return g_pending_year;
   return g_pending_day;
 }
 
@@ -91,6 +98,7 @@ const char* response_period(const char* payload) {
   const size_t len = static_cast<size_t>(end - begin);
   if (len == 4 && strncmp(begin, "week", len) == 0) return "week";
   if (len == 5 && strncmp(begin, "month", len) == 0) return "month";
+  if (len == 4 && strncmp(begin, "year", len) == 0) return "year";
   return "day";
 }
 
@@ -98,6 +106,7 @@ EnergyRequestState& request_state_for_period(const char* period) {
   const char* p = normalize_period(period);
   if (strcmp(p, "week") == 0) return g_week_request;
   if (strcmp(p, "month") == 0) return g_month_request;
+  if (strcmp(p, "year") == 0) return g_year_request;
   return g_day_request;
 }
 
@@ -142,13 +151,14 @@ std::vector<EnergyEntryData>& cache_for_period(const char* period) {
   const char* p = normalize_period(period);
   if (strcmp(p, "week") == 0) return g_week_entries;
   if (strcmp(p, "month") == 0) return g_month_entries;
+  if (strcmp(p, "year") == 0) return g_year_entries;
   return g_day_entries;
 }
 
 String cached_unit_for_entry(const String& id) {
   if (!id.length()) return String();
   const std::vector<EnergyEntryData>* caches[] = {
-      &g_day_entries, &g_week_entries, &g_month_entries};
+      &g_day_entries, &g_week_entries, &g_month_entries, &g_year_entries};
   for (const auto* cache : caches) {
     for (const auto& entry : *cache) {
       if (entry.id.equalsIgnoreCase(id) && entry.unit.length()) {
@@ -324,13 +334,15 @@ void queue_energy_response(const char* payload, size_t len) {
 }
 
 void process_energy_response_queue() {
-  // Weekly and monthly data usually follow a direct user action; process them
-  // before the periodic daily refresh.
+  // Week, month and year data usually follow a direct user action; process
+  // them before the periodic daily refresh.
   PendingEnergyResponse* pending = nullptr;
   if (g_pending_week.valid) {
     pending = &g_pending_week;
   } else if (g_pending_month.valid) {
     pending = &g_pending_month;
+  } else if (g_pending_year.valid) {
+    pending = &g_pending_year;
   } else if (g_pending_day.valid) {
     pending = &g_pending_day;
   }
@@ -380,12 +392,23 @@ bool energy_request_day_for_tiles(bool force) {
   return energy_request_period("day", force);
 }
 
+bool energy_request_waiting() {
+  return g_day_request.awaiting_response || g_week_request.awaiting_response ||
+         g_month_request.awaiting_response || g_year_request.awaiting_response;
+}
+
+bool energy_period_fresh(const char* period) {
+  const EnergyRequestState& request = request_state_for_period(period);
+  return request.last_response_ms != 0 && (uint32_t)(millis() - request.last_response_ms) < kEnergyFreshMs;
+}
+
 void energy_service_periodic() {
   if (!networkManager.isMqttConnected()) return;
   const uint32_t now = millis();
   service_energy_retry("day", g_day_request, now);
   service_energy_retry("week", g_week_request, now);
   service_energy_retry("month", g_month_request, now);
+  service_energy_retry("year", g_year_request, now);
   // Without an energy section the Bridge has nothing to answer; Energy tiles
   // and the popup still ask on their own when they are shown.
   if (!haBridgeConfig.hasEnergyEntries()) return;
@@ -419,7 +442,7 @@ namespace {
 const EnergyEntryData* cached_entry(const String& id) {
   if (!id.length()) return nullptr;
   const std::vector<EnergyEntryData>* caches[] = {
-      &g_day_entries, &g_week_entries, &g_month_entries};
+      &g_day_entries, &g_week_entries, &g_month_entries, &g_year_entries};
   for (const auto* cache : caches) {
     for (const auto& entry : *cache) {
       if (entry.id.equalsIgnoreCase(id)) return &entry;
@@ -468,7 +491,7 @@ void energy_append_tile_entity_ids(std::vector<String>& ids) {
 
 void energy_append_cached_entity_ids(std::vector<String>& ids) {
   const std::vector<EnergyEntryData>* caches[] = {
-      &g_day_entries, &g_week_entries, &g_month_entries};
+      &g_day_entries, &g_week_entries, &g_month_entries, &g_year_entries};
   for (const auto* cache : caches) {
     for (const auto& entry : *cache) append_unique(ids, entry.id.c_str());
   }

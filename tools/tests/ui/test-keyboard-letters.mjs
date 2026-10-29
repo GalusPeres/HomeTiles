@@ -12,14 +12,15 @@ import {compileAndRun} from '../../lib/cpp-host.mjs';
 
 const i18n = readRepoFile('src/core/i18n/i18n.cpp').replace(/\r\n?/g, '\n');
 
-// keyboard_layout and keyboard_letters close every LocaleProfile table.
+// keyboard_layout and keyboard_letters close every LocaleProfile table, only
+// the Energy period labels follow them.
 const codes = [...i18n.matchAll(/\{&kStrings(\w+), &kLocale\w+\}/g)].map(match => match[1]);
 assert.ok(codes.length >= 7, 'every built-in language is registered');
 const languages = codes.map(code => {
   const start = i18n.indexOf(`static const LocaleProfile kLocale${code} = {`);
   assert.ok(start >= 0, code);
   const body = i18n.slice(start, i18n.indexOf('static const ', start + 10));
-  const tail = /\s(\d+),(?:\s*\/\/[^\n]*)?\s*("(?:[^"\\]|\\.)*")\s*,?\s*\};/.exec(body);
+  const tail = /\s(\d+),(?:\s*\/\/[^\n]*)?\s*("(?:[^"\\]|\\.)*")\s*,?\s*(?:\{[^{}]*\}\s*)?\};/.exec(body);
   assert.ok(tail, `${code}: keyboard_layout and keyboard_letters close the table`);
   return {code, layout: Number(tail[1]), literal: tail[2], letters: JSON.parse(tail[2])};
 });

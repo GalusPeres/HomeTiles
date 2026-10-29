@@ -90,7 +90,8 @@ for (const key of ['entityPickerChoose', 'entityPickerSearch', 'entityPickerNoMa
 assert.match(scripts, /const ENTITY_KIND_LABELS = \[/);
 
 // The three arrays before the clock's month names (the last array) of every
-// LocaleProfile table: picker labels, kinds, icon picker labels.
+// LocaleProfile table: picker labels, kinds, icon picker labels (before the
+// clock's month names and the Energy period labels).
 const i18n = read('src/core/i18n/i18n.cpp');
 function lastArrays(open) {
   const groups = [];
@@ -111,7 +112,7 @@ function lastArrays(open) {
     }
   }
   const strings = group => [...group.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(m => m[1]);
-  return groups.slice(-4, -1).map(strings);
+  return groups.slice(-5, -2).map(strings);
 }
 const locales = {};
 for (const match of i18n.matchAll(/static const LocaleProfile kLocale(\w+) = \{/g)) {

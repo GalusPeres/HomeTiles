@@ -22,6 +22,7 @@
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/core/config/config_manager.h"
+#include "src/core/config/week_start.h"
 #include "src/core/display/display_manager.h"
 #include "src/core/i18n/i18n.h"
 #include "src/network/bridge/device_entities.h"
@@ -3138,7 +3139,7 @@ void mqttPublishWeatherRequest(const char* entity_id) {
 
 bool mqttPublishEnergyRequest(const char* period) {
   const char* p = (period && *period) ? period : "day";
-  if (strcmp(p, "week") != 0 && strcmp(p, "month") != 0) {
+  if (strcmp(p, "week") != 0 && strcmp(p, "month") != 0 && strcmp(p, "year") != 0) {
     p = "day";
   }
 
@@ -3155,7 +3156,14 @@ bool mqttPublishEnergyRequest(const char* period) {
 
   String payload = "{\"period\":\"";
   payload += p;
-  payload += "\"}";
+  payload += "\"";
+  // The week runs from the panel's first weekday (tm_wday); a Bridge before
+  // v0.9.6b3 ignores it and answers the last seven days.
+  if (strcmp(p, "week") == 0) {
+    payload += ",\"week_start\":";
+    payload += String(week_start::panel());
+  }
+  payload += "}";
 
   // Changing the selected range is interactive like a history request.
   // Queue it ahead of a long subscribe burst without touching the client

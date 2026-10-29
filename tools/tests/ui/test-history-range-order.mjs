@@ -1,8 +1,9 @@
 // Every history popup put 24H (Today) left of 7D. The longer range reaches
 // further into the past, so 7D now sits left: Sensor (also Binary Sensor,
 // Number, Select and Date/Time history and Activity), Weather and Energy.
-// Energy's day button names today instead of 24H, since it counts from
-// midnight. Numeric Sensor graphs add 6H right of 24H (issue #131).
+// Energy has fixed periods Year, Month, Week, Today (user 2026-10-29); its
+// day button names today instead of 24H, since it counts from midnight.
+// Numeric Sensor graphs add 6H right of 24H (issue #131).
 import assert from 'node:assert/strict';
 
 import {readRepoFile} from '../../lib/admin-source.mjs';
@@ -12,11 +13,11 @@ assert.match(sensor, /ctx->range_week_btn = make_range_button\("7D"\);\s*ctx->ra
   'Sensor history: 7D is created first, so the flex row puts it left; 6H right of 24H');
 
 const energy = readRepoFile('src/ui/popups/energy/energy_popup.cpp');
-assert.match(energy, /ctx->week_btn = make_button_label\(period_row, "7D", &ctx->week_label\);\s*ctx->day_btn = make_button_label\(period_row, today_button_label\(\), &ctx->day_label\);/,
-  'Energy: 7D left of Today');
-assert.doesNotMatch(energy, /"24H"/, 'Energy shows no 24H label');
-assert.match(energy, /void update_period_buttons\([\s\S]*?fit_today_button\(ctx\);\s*\}/,
-  'Each opening sets Today in the current display language');
+assert.ok(energy.includes('for (const EnergyPeriod period : {EnergyPeriod::Year, EnergyPeriod::Month, EnergyPeriod::Week, EnergyPeriod::Day}) {'),
+  'Energy: Year, Month, Week, Today from left to right');
+assert.doesNotMatch(energy, /"24H"|"7D"/, 'Energy shows no 24H or 7D label');
+assert.match(energy, /void update_period_buttons\([\s\S]*?fit_period_buttons\(ctx\);\s*\}/,
+  'Each opening sets the period words in the current display language');
 
 const weather = readRepoFile('src/ui/popups/weather/weather_popup.cpp');
 assert.match(weather, /header_week_btn = make_header_action_button\("7D", kFooterOuterActionX, FONT_UNIT\);/,

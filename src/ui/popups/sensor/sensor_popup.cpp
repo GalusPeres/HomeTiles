@@ -20,6 +20,7 @@
 #include "src/ui/popups/popup_first_frame.h"
 #include "src/ui/popups/popup_graph_readout.h"
 #include "src/core/config/config_manager.h"
+#include "src/core/config/week_start.h"
 #include "src/core/display/display_manager.h"
 #include "src/core/memory/psram_allocator.h"
 #include "src/core/i18n/i18n.h"
@@ -1002,8 +1003,9 @@ static String short_date_label(const struct tm& day) {
   return i18n::format_short_date(language, day.tm_mday, i18n::weather_month_short(language, day.tm_mon + 1));
 }
 
-// 30D: a line at every Monday 0:00 with its date under it, four or five
-// like 24H's labels; a line per day would be thirty.
+// 30D: a line at every first weekday 0:00 (Monday unless Settings >
+// Localization says otherwise) with its date under it, four or five like
+// 24H's labels; a line per day would be thirty.
 static int calc_day30_axis(String out_labels[], float out_frac[], int max_markers) {
   struct tm now_tm;
   if (!get_valid_local_time(now_tm)) return 0;
@@ -1011,6 +1013,8 @@ static int calc_day30_axis(String out_labels[], float out_frac[], int max_marker
   if (now_local <= 0) return 0;
   const time_t range_start = now_local - static_cast<time_t>(kHistoryHours30d) * 60 * 60;
   const float span = static_cast<float>(now_local - range_start);
+  // A line at each week's first day: the panel's (Settings > Localization).
+  const int first_weekday = week_start::panel();
   int count = 0;
   for (time_t day = next_local_midnight_after(range_start); day < now_local && count < max_markers;
        day = next_local_midnight_after(day)) {
@@ -1020,7 +1024,7 @@ static int calc_day30_axis(String out_labels[], float out_frac[], int max_marker
 #else
     localtime_r(&day, &day_tm);
 #endif
-    if (day_tm.tm_wday != 1) continue;
+    if (day_tm.tm_wday != first_weekday) continue;
     out_labels[count] = short_date_label(day_tm);
     out_frac[count] = static_cast<float>(day - range_start) / span;
     ++count;

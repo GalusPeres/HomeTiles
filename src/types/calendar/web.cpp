@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 
 #include "src/core/config/config_manager.h"
+#include "src/core/config/week_start.h"
 #include "src/core/i18n/i18n.h"
 #include "src/types/calendar/calendar_model.h"
 #include "src/web/server/web_admin_utils.h"
@@ -78,10 +79,11 @@ void append_calendar_fields_html(String& html, const String& tab_id) {
   html += "</label><select id=\"";
   html += tab_id;
   html += "_calendar_week_start\">";
-  // Automatic follows the panel language (LocaleProfile::first_weekday).
+  // Automatic follows the panel's first weekday (Settings > Localization,
+  // under Automatic the language's).
   String automatic = text(i18n::CalendarLabel::Automatic);
   automatic += " (";
-  automatic += loc.weekday_names[loc.first_weekday <= 6 ? loc.first_weekday : 1];
+  automatic += loc.weekday_names[week_start::panel()];
   automatic += ")";
   append_option(html, "255", automatic.c_str());
   append_option(html, "1", loc.weekday_names[1]);
@@ -178,7 +180,8 @@ void append_calendar_scripts(String& html) {
   doc["today"] = i18n::weather_today_label(lang);
   doc["tomorrow"] = i18n::weather_tomorrow_label(lang);
   doc["shortDate"] = loc.short_date_pattern;
-  doc["firstWeekday"] = loc.first_weekday;
+  // The preview's Automatic week: the panel's (Settings > Localization).
+  doc["firstWeekday"] = week_start::panel();
   doc["monthView"] =
 #if defined(DEVICE_LAYOUT_480X480)
       false;

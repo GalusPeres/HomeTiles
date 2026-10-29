@@ -4,6 +4,7 @@
 #include <time.h>
 
 #include "src/core/config/config_manager.h"
+#include "src/core/config/week_start.h"
 #include "src/core/i18n/i18n.h"
 #include "src/types/calendar/calendar_model.h"
 #include "src/types/clock/clock_format.h"
@@ -58,9 +59,10 @@ inline String printf_label(CalendarLabel which, unsigned a, unsigned b = 0) {
   return String(text);
 }
 
-// The first day of the week of a tile (Tile::sensor_decimals).
+// The first day of the week of a tile (Tile::sensor_decimals); Automatic
+// follows the panel's (Settings > Localization, week_start.h).
 inline uint8_t week_start(uint8_t stored) {
-  return calendar_model::resolve_week_start(stored, i18n::locale(language()).first_weekday);
+  return calendar_model::resolve_week_start(stored, ::week_start::panel());
 }
 
 inline const char* weekday_short(int32_t day) {

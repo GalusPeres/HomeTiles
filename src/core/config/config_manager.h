@@ -82,6 +82,11 @@ struct DeviceConfig {
   char timezone[CONFIG_TIMEZONE_MAX];
   uint8_t global_time_format;
   uint8_t global_date_format;
+  // The first day of the week (tm_wday: 0 Sunday, 1 Monday, 6 Saturday), or
+  // calendar_model::kWeekStartAuto for the language's (Web Admin Settings >
+  // Localization): the Energy popup's week, the Calendar tile under
+  // Automatic and the Sensor graph's 30D lines.
+  uint8_t week_start;
   uint8_t keyboard_layout;  // 0=Auto (language), 1=German QWERTZ, 2=English QWERTY, 3=French AZERTY
   bool configured;  // Whether a configuration is stored.
 

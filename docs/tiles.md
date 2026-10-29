@@ -35,7 +35,7 @@ These types show or control a Home Assistant entity.
 
 ### Sensor
 
-Shows a numeric or text-valued `sensor.*` entity. Configure the unit, decimals, value size, and an optional gauge with a minimum and maximum.
+Shows a numeric or text-valued `sensor.*` entity. Configure the unit, decimals, and value size. **Display mode** adds a gauge, a graph of the last 24 hours, a bar, an arc, or a ring below the header with a minimum and maximum: filled, as a line, or striped, with the value in the header or inside the arc or ring.
 
 <div class="ht-type-shots ht-type-pair" markdown>
 <div class="ht-type-stack" markdown>
@@ -54,7 +54,7 @@ Shows a numeric or text-valued `sensor.*` entity. Configure the unit, decimals, 
 </figure>
 </div>
 
-**Popup:** the current value in the header and a **7D** or **24H** history: a graph for numbers, or a timeline and Activity list for text states. Touch the graph and move your finger to read an earlier value; the time and value appear above the graph, and the marker stays where you let go.
+**Popup:** the current value in the header and its history: a graph for numbers with **30D**, **7D**, **24H**, **6H**, and **1H**, or a timeline and Activity list for text states with **7D** or **24H**. The **30D** and **1H** ranges need HomeTiles Bridge v0.9.6 or newer. Touch the graph and move your finger to read an earlier value; the time and value appear above the graph, and the marker stays where you let go.
 
 A local [DS18B20 input](hardware-io.md) can also supply the value without Home Assistant; local inputs have no Home Assistant history popup.
 
@@ -144,7 +144,7 @@ Slider edits are sent on release; step and time edits are grouped after a short 
 
 ### Energy
 
-Shows Home Assistant **Energy Dashboard** statistics for electricity, gas, water, or cost. Enable the matching [Bridge energy category](bridge.md#energy-dashboard). Configure the energy entity, unit, decimals, and value size.
+Shows Home Assistant **Energy Dashboard** statistics for electricity, gas, water, or cost. Enable the matching [Bridge energy category](bridge.md#energy-dashboard). Configure the energy entity, unit, decimals, and value size. **Display mode: Graph** shows today's hours as bars below the header.
 
 <div class="ht-type-shots" markdown>
 <figure class="ht-screenshot">
@@ -168,7 +168,13 @@ Shows Home Assistant **Energy Dashboard** statistics for electricity, gas, water
 </figure>
 </div>
 
-**Popup:** hourly bars for the day and daily bars for the week. Tap a bar to read its time and value; a dot marks the bar you read.
+**Popup:** **Year** (a bar per month), **Month** and **Week** (a bar per day), and **Today** (a bar per hour), each from its start up to now. The week starts on the day chosen under **Web Admin → Localization → First day of the week**. Tap a bar to read its time and value; a dot marks the bar you read. **Year** and **Week** need HomeTiles Bridge v0.9.6 or newer.
+
+### Power Flow
+
+Shows the power of the solar panels, the grid, a battery, and the home as nodes, with dots that move along the lines in the direction the power flows and faster when more power flows. Choose a power sensor for each node; a node without a sensor stays hidden. **Invert sign** turns around a grid or battery sensor that counts the other way, and a battery charge sensor adds its level to the battery node. **Show title and icon** adds the tile header, and **Show card** draws the tile's card behind the nodes.
+
+Tap a node to open its sensor's popup.
 
 ### Switch
 
@@ -180,6 +186,8 @@ Toggles a compatible entity and reflects its state. Choose the entity, **Layout*
 | **Dimmer** | A brightness bar across the tile: press or drag to set the level, like the popup's brightness slider. Lights without dimming get the switch bar. |
 | **Switch** | An on/off bar with a thumb, like the popup's switch. |
 | **Icon button** | No bar: tap the tile to toggle. |
+
+**Orientation:** **Horizontal** lays the bar across the tile; **Upright** stands it up next to the header, the dimmer filling from the bottom and the switch on at the top.
 
 The tile shows the state (`On`, `Off`, or the brightness) under its title. Half-height tiles show the state only; tap toggles, and the other gesture opens the popup. Commands while dragging are paced like Home Assistant, and the last level is always sent. A light fills its tile in its own color.
 
@@ -387,7 +395,7 @@ Configure mini-tiles for temperatures, humidity, targets, and mode, or choose **
 
 Controls a `fan` entity.
 
-The tile shows the state and speed. Its bar sets the speed: stepless like the Switch dimmer, in segments for fans with only a few speeds, or as an on/off switch for fans without speed control. Tap or long press, whichever does not open the popup, switches the fan on or off.
+The tile shows the state and speed. Its bar sets the speed: stepless like the Switch dimmer, in segments for fans with only a few speeds, or as an on/off switch for fans without speed control. **Orientation: Upright** stands the bar up like the Switch tile's, the speeds stacking from the bottom. Tap or long press, whichever does not open the popup, switches the fan on or off.
 
 <div class="ht-type-shots ht-type-pair" markdown>
 <div class="ht-type-stack" markdown>
@@ -523,7 +531,7 @@ What the tile shows depends on its size and **View**:
 - **Week:** a dot per calendar with events and today's column tinted. One row high, the strip shows the seven days from today; taller, the week from its first day.
 - **Month:** the month grid with today and a dot per calendar. Only on displays larger than 480×480 and on tiles of at least 2×2; elsewhere the tile shows the agenda.
 
-**Week starts on:** **Automatic** follows the display language (Sunday in English, Monday otherwise), or choose Monday, Sunday, or Saturday. The tile and its popup use it.
+**Week starts on:** **Automatic** follows **Web Admin → Localization → First day of the week**, whose own **Automatic** follows the display language (Sunday in English, Monday otherwise); or choose Monday, Sunday, or Saturday for this tile. The tile and its popup use it.
 
 **Popup:** with two or more calendars, their names and colors on top; then the month with a dot per calendar; tap a day to see its events below. **List** shows the coming four weeks instead. The arrows move by month (or week in the list) as far as the Bridge sent events, and **Today** jumps back.
 

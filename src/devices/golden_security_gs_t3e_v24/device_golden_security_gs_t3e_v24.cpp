@@ -1396,3 +1396,4 @@ void DeviceGoldenSecurityGST3EV24::migrateStorageFromSD() {
     Serial.println("[Storage] No SD card, starting fresh");
   }
 }
+#endif  // DEVICE_GOLDEN_SECURITY_GS_T3E_V24

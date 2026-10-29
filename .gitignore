@@ -44,3 +44,6 @@ docs/videos/IMG_4807.MOV
 
 # Local SD card content, including animations
 sd-card/
+
+# pio test build
+.pio/

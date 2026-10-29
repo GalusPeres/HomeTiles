@@ -91,10 +91,10 @@ for (const gone of ['time_lines', 'y_max_line', 'y_min_line', 'image.tile', 'lv_
 }
 assert.ok(popup.includes('constexpr int kGraphInset = popup_layout::kHeaderIconX;') &&
   popup.includes('int chart_left = kGraphInset + axis_w;') && popup.includes('const int chart_right = kAvailW - kGraphInset;') &&
-  popup.includes('lv_obj_set_style_text_align(y_max, LV_TEXT_ALIGN_LEFT, 0);'),
-  'popup: labels left, graph between the header circle insets');
+  popup.includes('lv_obj_set_style_text_align(y_max, LV_TEXT_ALIGN_RIGHT, 0);'),
+  'popup: labels from the left inset, graph between the header circle insets');
 // The unit's room (the label's right padding) counts once: twice left a gap
-// of the unit's width between the left-aligned labels and the graph.
+// of the unit's width between the labels and the graph.
 const measure = popup.slice(popup.indexOf('static lv_coord_t measure_label_text_width'),
   popup.indexOf('static bool get_valid_local_time'));
 assert.equal((measure.match(/lv_obj_get_style_pad_right\(label, LV_PART_MAIN\)/g) || []).length, 1,

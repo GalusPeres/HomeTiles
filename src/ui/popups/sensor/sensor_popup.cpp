@@ -1073,8 +1073,12 @@ static int32_t graph_zero_row(const SensorPopupContext* ctx, int32_t top, int32_
   return area_graph::zero_row(ctx->chart, top, bottom, lv_font_get_line_height(popup_layout::font20()));
 }
 
-// The zero line's label, left like the maximum's and the minimum's and
-// centered on its row; hidden without the line.
+static String zero_label_text(const SensorPopupContext* ctx) {
+  return i18n::format_number(configManager.getConfig().language, 0.0f, popup_digits(ctx, 0.0f));
+}
+
+// The zero line's label, right-aligned in the width of the maximum's and the
+// minimum's and centered on its row; hidden without the line.
 static void place_zero_label(SensorPopupContext* ctx) {
   if (!ctx || !ctx->y_zero_label || !ctx->chart) return;
   const int32_t row = graph_zero_row(ctx, 0, lv_obj_get_content_height(ctx->chart));
@@ -1082,8 +1086,7 @@ static void place_zero_label(SensorPopupContext* ctx) {
     lv_obj_add_flag(ctx->y_zero_label, LV_OBJ_FLAG_HIDDEN);
     return;
   }
-  value_unit::show(ctx->y_zero_label,
-                   i18n::format_number(configManager.getConfig().language, 0.0f, popup_digits(ctx, 0.0f)), ctx->unit);
+  value_unit::show(ctx->y_zero_label, zero_label_text(ctx), ctx->unit);
   lv_obj_set_pos(ctx->y_zero_label, kGraphInset, row);
   value_unit::place(ctx->y_zero_label);
   lv_obj_remove_flag(ctx->y_zero_label, LV_OBJ_FLAG_HIDDEN);
@@ -1100,24 +1103,29 @@ static void update_y_axis_layout(SensorPopupContext* ctx) {
   // Measure actual rendered text widths
   lv_coord_t max_w = measure_label_text_width(ctx->y_max_label);
   lv_coord_t min_w = measure_label_text_width(ctx->y_min_label);
+  // The zero line's label (place_zero_label) counts for the common width too.
+  lv_coord_t zero_w = 0;
+  if (ctx->y_zero_label && graph_zero_row(ctx, 0, lv_obj_get_content_height(ctx->chart)) >= 0) {
+    lv_obj_set_width(ctx->y_zero_label, LV_SIZE_CONTENT);
+    value_unit::show(ctx->y_zero_label, zero_label_text(ctx), ctx->unit);
+    zero_w = measure_label_text_width(ctx->y_zero_label);
+  }
 
-  lv_coord_t text_w = LV_MAX(max_w, min_w);
+  lv_coord_t text_w = LV_MAX(LV_MAX(max_w, min_w), zero_w);
   if (text_w < kMinAxisW) text_w = kMinAxisW;
   int label_w = text_w + 2;  // text width + small safety margin
   int axis_w = label_w + kLabelGap;  // label + visible gap before lines
 
   // The labels and the graph keep the header circle's distance from the
   // card's sides (mockup sensor-graph-2): kGraphInset on the left and right.
-  // Reposition labels; their width must fit the full text.
-  if (ctx->y_max_label) {
-    lv_obj_set_width(ctx->y_max_label, label_w);
-    lv_obj_set_x(ctx->y_max_label, kGraphInset);
-    value_unit::place(ctx->y_max_label);
-  }
-  if (ctx->y_min_label) {
-    lv_obj_set_width(ctx->y_min_label, label_w);
-    lv_obj_set_x(ctx->y_min_label, kGraphInset);
-    value_unit::place(ctx->y_min_label);
+  // The labels share one width and stand right-aligned in it, so their units
+  // form one column at the graph and the widest starts at the inset (user
+  // 2026-10-29: "0 W" stood left under "13231 W").
+  for (lv_obj_t* label : {ctx->y_max_label, ctx->y_min_label, ctx->y_zero_label}) {
+    if (!label) continue;
+    lv_obj_set_width(label, label_w);
+    lv_obj_set_x(label, kGraphInset);
+    value_unit::place(label);
   }
 
   // Chart drawing starts directly after label area
@@ -3891,8 +3899,10 @@ static void build_popup_body(SensorPopupContext* ctx) {
   lv_obj_t* y_max = lv_label_create(chart_wrap);
   ctx->y_max_label = y_max;
   set_label_style(y_max, lv_color_hex(ui_theme::text()), y_font);
-  // At the card's content edge like the header circle (mockup sensor-graph-2).
-  lv_obj_set_style_text_align(y_max, LV_TEXT_ALIGN_LEFT, 0);
+  // Right-aligned in the labels' common width (update_y_axis_layout): the
+  // widest at the card's content edge like the header circle (mockup
+  // sensor-graph-2), the units in one column at the graph.
+  lv_obj_set_style_text_align(y_max, LV_TEXT_ALIGN_RIGHT, 0);
   lv_obj_set_width(y_max, kYAxisWidth - 10);
   lv_label_set_text(y_max, "");
   lv_obj_set_pos(y_max, kGraphInset, 0);  // font center ~kLabelOverhang = on top guide line
@@ -3901,7 +3911,7 @@ static void build_popup_body(SensorPopupContext* ctx) {
   lv_obj_t* y_min = lv_label_create(chart_wrap);
   ctx->y_min_label = y_min;
   set_label_style(y_min, lv_color_hex(ui_theme::text()), y_font);
-  lv_obj_set_style_text_align(y_min, LV_TEXT_ALIGN_LEFT, 0);
+  lv_obj_set_style_text_align(y_min, LV_TEXT_ALIGN_RIGHT, 0);
   lv_obj_set_width(y_min, kYAxisWidth - 10);
   lv_label_set_text(y_min, "");
   lv_obj_set_pos(y_min, kGraphInset, kChartHeight);  // font center ~kChartHeight+kLabelOverhang = on bottom guide line
@@ -3910,7 +3920,7 @@ static void build_popup_body(SensorPopupContext* ctx) {
   lv_obj_t* y_zero = lv_label_create(chart_wrap);
   ctx->y_zero_label = y_zero;
   set_label_style(y_zero, lv_color_hex(ui_theme::text()), y_font);
-  lv_obj_set_style_text_align(y_zero, LV_TEXT_ALIGN_LEFT, 0);
+  lv_obj_set_style_text_align(y_zero, LV_TEXT_ALIGN_RIGHT, 0);
   lv_label_set_text(y_zero, "");
   lv_obj_add_flag(y_zero, LV_OBJ_FLAG_HIDDEN);
 

@@ -70,7 +70,7 @@ has('src/ui/popups/sensor/sensor_popup.cpp', 'static uint8_t popup_digits(const 
   'value_unit::show(ctx->y_max_label, i18n::format_number(language, max_v, popup_digits(ctx, max_v)), ctx->unit);',
   // The unit's room (the label's right padding) counts once.
   '  return size.x + lv_obj_get_style_pad_left(label, LV_PART_MAIN) +\n         lv_obj_get_style_pad_right(label, LV_PART_MAIN);',
-  'value_unit::place(ctx->y_max_label);');
+  'for (lv_obj_t* label : {ctx->y_max_label, ctx->y_min_label, ctx->y_zero_label}) {', 'value_unit::place(label);');
 assert.ok(!read('src/ui/popups/sensor/sensor_popup.cpp').includes('g_sensor_popup_ctx->decimals = g_pending_value.decimals;'),
   'a live value of another tile does not change the decimals');
 assert.doesNotMatch(read('src/ui/popups/sensor/sensor_popup.cpp'), /lv_label_set_text\(\s*ctx->value_label,\s*i18n/,

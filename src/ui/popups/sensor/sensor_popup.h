@@ -37,6 +37,12 @@ bool sensor_popup_should_use_state_history(const String& value,
                                            const String& unit);
 
 void show_sensor_popup(const SensorPopupInit& init);
+// A finger came down on a tile whose popup shows this numeric sensor's graph
+// (the Bridge's answer took ~125 ms, the popup ~110 ms to show, user
+// 2026-10-29: the graph still came after the popup): its 24 h history is
+// asked now, and the popup opened by the tap finds the answer, or the request
+// on its way, instead of asking only then.
+void sensor_popup_prefetch_history(const String& entity_id);
 void preload_sensor_popup();
 void hide_sensor_popup();
 void sensor_popup_follow_tile_color(uint32_t color);

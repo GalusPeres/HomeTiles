@@ -226,6 +226,99 @@ struct SensorEventData {
   String icon_colors;
 };
 
+static bool is_disabled_token(const String& value);
+
+// The unit the popup shows: the tile's own (kept as set), none when the tile
+// switched it off, else Home Assistant's.
+static String popup_unit(const SensorEventData& data) {
+  String unit = data.unit;
+  if (is_disabled_token(unit)) return String();
+  if (!unit.length()) return haBridgeConfig.findSensorUnit(data.entity_id);
+  unit.trim();
+  return unit;
+}
+
+// Whether the popup shows the state history instead of the numeric graph.
+static bool popup_state_history(const String& entity_id, const String& value, const String& unit) {
+  String state_kind = haBridgeConfig.findSensorStateKind(entity_id);
+  state_kind.trim();
+  state_kind.toLowerCase();
+  if (state_kind == "state") return true;
+  if (state_kind == "number") return false;
+  // Backward compatibility with older Bridge metadata.
+  return sensor_popup_should_use_state_history(value, unit);
+}
+
+static void sensor_popup_click_cb(lv_event_t* e) {
+  lv_event_code_t code = lv_event_get_code(e);
+  if (code != LV_EVENT_SHORT_CLICKED && code != LV_EVENT_LONG_PRESSED) return;
+  SensorEventData* data = static_cast<SensorEventData*>(lv_event_get_user_data(e));
+  if (!data || !data->entity_id.length()) return;
+  SensorPopupInit init;
+  init.entity_id = data->entity_id;
+  init.title = data->title;
+  if (!init.title.length()) {
+    init.title = haBridgeConfig.findSensorName(data->entity_id);
+  }
+  if (!init.title.length()) {
+    init.title = data->entity_id;
+  }
+  String icon_name = data->icon_name;
+  if (!data->icon_override) {
+    String resolved = normalizeMdiIconName(haBridgeConfig.findEntityIcon(data->entity_id));
+    if (resolved.length()) {
+      icon_name = resolved;
+    }
+  }
+  init.icon_name = icon_name;
+  init.binary_icon_override = data->icon_override;
+  init.unit = popup_unit(*data);
+  init.lock_unit = data->unit.length() > 0;
+  init.decimals = data->decimals;
+  // The popup inherits the tile background, including a rules tint.
+  init.bg_color = tile_icon_source::popup_background(static_cast<lv_obj_t*>(lv_event_get_current_target(e)), data->bg_color);
+  init.value = haBridgeConfig.findSensorInitialValue(data->entity_id);
+  init.state_history_mode = popup_state_history(data->entity_id, init.value, init.unit);
+  init.editable = data->editable;
+  init.icon_colors = data->icon_colors;
+  if (init.editable) {
+    const EditableValue value = parse_editable_value(haBridgeConfig.findEditableValue(data->entity_id));
+    init.value = value.state; init.unit = value.unit;
+    init.state_history_mode = value.kind != "number";
+  }
+  // Rules that force the tile icon color also color the header icon,
+  // and show their own icon there.
+  lv_color_t forced;
+  lv_obj_t* tile_icon = tile_icon_source::card_icon(static_cast<lv_obj_t*>(lv_event_get_current_target(e)));
+  if (tile_icon_disc::forced_color(tile_icon, forced)) {
+    init.forced_icon = true;
+    init.forced_icon_color = lv_color_to_u32(forced) & 0xFFFFFF;
+    tile_rule_icon::shown(tile_icon, init.forced_icon_glyph);
+  }
+  finish_press_before_popup(e);
+  show_sensor_popup(init);
+}
+
+void sensor_tile_touch_down(lv_obj_t* pressed) {
+  for (lv_obj_t* obj = pressed; obj; obj = lv_obj_get_parent(obj)) {
+    const uint32_t count = lv_obj_get_event_count(obj);
+    for (uint32_t i = 0; i < count; ++i) {
+      lv_event_dsc_t* dsc = lv_obj_get_event_dsc(obj, i);
+      if (!dsc || lv_event_dsc_get_cb(dsc) != sensor_popup_click_cb) continue;
+      const SensorEventData* data = static_cast<const SensorEventData*>(lv_event_dsc_get_user_data(dsc));
+      // Only a numeric graph: editable values and state histories keep
+      // asking when their popup opens (sensor_popup.cpp request_history_early).
+      if (!data || !data->entity_id.length() || data->editable ||
+          popup_state_history(data->entity_id, haBridgeConfig.findSensorInitialValue(data->entity_id),
+                              popup_unit(*data))) {
+        return;
+      }
+      sensor_popup_prefetch_history(data->entity_id);
+      return;
+    }
+  }
+}
+
 static bool is_disabled_token(const String& value) {
   if (!value.length()) return false;
   String t = value;
@@ -574,80 +667,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
             ? LV_EVENT_SHORT_CLICKED
             : LV_EVENT_LONG_PRESSED;
 
-    lv_obj_add_event_cb(
-        card,
-        [](lv_event_t* e) {
-          lv_event_code_t code = lv_event_get_code(e);
-          if (code != LV_EVENT_SHORT_CLICKED && code != LV_EVENT_LONG_PRESSED) return;
-          SensorEventData* data = static_cast<SensorEventData*>(lv_event_get_user_data(e));
-          if (!data || !data->entity_id.length()) return;
-          SensorPopupInit init;
-          init.entity_id = data->entity_id;
-          init.title = data->title;
-          if (!init.title.length()) {
-            init.title = haBridgeConfig.findSensorName(data->entity_id);
-          }
-          if (!init.title.length()) {
-            init.title = data->entity_id;
-          }
-          String icon_name = data->icon_name;
-          if (!data->icon_override) {
-            String resolved = normalizeMdiIconName(haBridgeConfig.findEntityIcon(data->entity_id));
-            if (resolved.length()) {
-              icon_name = resolved;
-            }
-          }
-          init.icon_name = icon_name;
-          init.binary_icon_override = data->icon_override;
-          String unit = data->unit;
-          const bool lock_unit = unit.length() > 0;
-          if (is_disabled_token(unit)) {
-            unit = "";
-          } else if (!unit.length()) {
-            unit = haBridgeConfig.findSensorUnit(data->entity_id);
-          } else {
-            unit.trim();
-          }
-          init.unit = unit;
-          init.lock_unit = lock_unit;
-          init.decimals = data->decimals;
-          // The popup inherits the tile background, including a rules tint.
-          init.bg_color = tile_icon_source::popup_background(static_cast<lv_obj_t*>(lv_event_get_current_target(e)), data->bg_color);
-          init.value = haBridgeConfig.findSensorInitialValue(data->entity_id);
-          String state_kind =
-              haBridgeConfig.findSensorStateKind(data->entity_id);
-          state_kind.trim();
-          state_kind.toLowerCase();
-          if (state_kind == "state") {
-            init.state_history_mode = true;
-          } else if (state_kind == "number") {
-            init.state_history_mode = false;
-          } else {
-            // Backward compatibility with older Bridge metadata.
-            init.state_history_mode =
-                sensor_popup_should_use_state_history(init.value, init.unit);
-          }
-          init.editable = data->editable;
-          init.icon_colors = data->icon_colors;
-          if (init.editable) {
-            const EditableValue value = parse_editable_value(haBridgeConfig.findEditableValue(data->entity_id));
-            init.value = value.state; init.unit = value.unit;
-            init.state_history_mode = value.kind != "number";
-          }
-          // Rules that force the tile icon color also color the header icon,
-          // and show their own icon there.
-          lv_color_t forced;
-          lv_obj_t* tile_icon = tile_icon_source::card_icon(static_cast<lv_obj_t*>(lv_event_get_current_target(e)));
-          if (tile_icon_disc::forced_color(tile_icon, forced)) {
-            init.forced_icon = true;
-            init.forced_icon_color = lv_color_to_u32(forced) & 0xFFFFFF;
-            tile_rule_icon::shown(tile_icon, init.forced_icon_glyph);
-          }
-          finish_press_before_popup(e);
-          show_sensor_popup(init);
-        },
-        popup_event,
-        data);
+    lv_obj_add_event_cb(card, sensor_popup_click_cb, popup_event, data);
 
     lv_obj_add_event_cb(
         card,

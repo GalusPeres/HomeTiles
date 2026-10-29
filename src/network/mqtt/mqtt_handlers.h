@@ -83,6 +83,13 @@ void mqttPublishHistoryRequest(const char* entity_id,
                                uint16_t hours = 24,
                                uint16_t period_minutes = 5,
                                uint16_t points = 288);
+// A history a popup is about to show (a finger came down on its tile): sent
+// unless a fresh answer is stored or the same request is on its way; the
+// popup's own request then replays the answer or waits for it.
+void mqttPrefetchHistoryRequest(const char* entity_id,
+                                uint16_t hours,
+                                uint16_t period_minutes,
+                                uint16_t points);
 void mqttPublishBinaryHistoryRequest(const char* entity_id,
                                      uint16_t hours = 24,
                                      uint16_t max_transitions = 48);

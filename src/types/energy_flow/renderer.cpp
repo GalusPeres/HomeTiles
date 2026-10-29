@@ -1130,6 +1130,17 @@ void refresh(FlowTileState& st) {
   if (any_live(st)) wake_motion(st.card);
 }
 
+// Whether a node's popup shows the state history instead of the graph.
+bool node_state_history(const String& entity) {
+  String kind = haBridgeConfig.findSensorStateKind(entity);
+  kind.trim();
+  kind.toLowerCase();
+  return kind == "state" ? true
+         : kind == "number" ? false
+                            : sensor_popup_should_use_state_history(haBridgeConfig.findSensorInitialValue(entity),
+                                                                    haBridgeConfig.findSensorUnit(entity));
+}
+
 void open_node_popup(lv_event_t* e, FlowTileState& st, uint8_t role, uint8_t node) {
   const String& entity = st.entities[role];
   if (!entity.length()) return;
@@ -1151,12 +1162,7 @@ void open_node_popup(lv_event_t* e, FlowTileState& st, uint8_t role, uint8_t nod
   if (unit != "kw" && unit != "mw" && unit != "gw") init.decimals = 0;
   init.bg_color = st.card_color;
   init.value = haBridgeConfig.findSensorInitialValue(entity);
-  String kind = haBridgeConfig.findSensorStateKind(entity);
-  kind.trim();
-  kind.toLowerCase();
-  init.state_history_mode = kind == "state" ? true
-                            : kind == "number" ? false
-                                               : sensor_popup_should_use_state_history(init.value, init.unit);
+  init.state_history_mode = node_state_history(entity);
   // The header icon in the node's color.
   init.forced_icon = true;
   init.forced_icon_color = st.node[node].color & 0xFFFFFF;
@@ -1507,6 +1513,25 @@ void process_energy_flow_updates() {
   g_any_dirty = false;
   for (FlowTileState* st : g_tiles) {
     if (st && st->dirty) refresh(*st);
+  }
+}
+
+void energy_flow_touch_down(lv_obj_t* pressed) {
+  for (lv_obj_t* obj = pressed; obj; obj = lv_obj_get_parent(obj)) {
+    const uint32_t count = lv_obj_get_event_count(obj);
+    for (uint32_t i = 0; i < count; ++i) {
+      lv_event_dsc_t* dsc = lv_obj_get_event_dsc(obj, i);
+      if (!dsc || lv_event_dsc_get_cb(dsc) != node_click_cb) continue;
+      const FlowTileState* st = static_cast<const FlowTileState*>(lv_event_dsc_get_user_data(dsc));
+      const uintptr_t tag = reinterpret_cast<uintptr_t>(lv_obj_get_user_data(obj));
+      const uint8_t role = static_cast<uint8_t>(tag / 8);
+      if (!st || role >= energy_flow::kRoleCount || !st->entities[role].length() ||
+          node_state_history(st->entities[role])) {
+        return;
+      }
+      sensor_popup_prefetch_history(st->entities[role]);
+      return;
+    }
   }
 }
 

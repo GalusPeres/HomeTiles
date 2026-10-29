@@ -23,7 +23,7 @@ assert.ok(
 );
 assert.match(
   renderer,
-  /findSensorStateKind\(data->entity_id\)[\s\S]*state_kind == "state"[\s\S]*state_kind == "number"[\s\S]*sensor_popup_should_use_state_history/,
+  /findSensorStateKind\((?:data->)?entity_id\)[\s\S]*state_kind == "state"[\s\S]*state_kind == "number"[\s\S]*sensor_popup_should_use_state_history/,
   'Bridge metadata must be authoritative with a backward-compatible strict-value fallback',
 );
 for (const marker of [

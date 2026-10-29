@@ -3578,6 +3578,7 @@ static const lv_image_dsc_t* graph_picture(SensorPopupContext* ctx, int32_t widt
   area_graph::column_tops(ctx->area_points, points, ctx->area_tops, width);
   area_graph::render_fade(ctx->area_pixels, stride_px, width, height, ctx->area_tops, (fade_top + fade_bottom) / 2,
                           fade_bottom, area, card, LV_OPA_COVER);
+  const uint32_t area_us = micros();
   constexpr int32_t kGridHalf = kGridLineWidth / 2;
   if (lines) {
     for (const int32_t row : {fade_top, fade_bottom, zero}) {
@@ -3590,8 +3591,10 @@ static const lv_image_dsc_t* graph_picture(SensorPopupContext* ctx, int32_t widt
     area_graph::blend_rect(ctx->area_pixels, stride_px, width, height, time_x[i] - kGridHalf, fade_top,
                            time_x[i] - kGridHalf + kGridLineWidth - 1, fade_bottom, grid, kGridLineOpa);
   }
+  const uint32_t grid_us = micros();
   area_graph::draw_line(ctx->area_pixels, stride_px, width, height, ctx->area_points, points,
                         static_cast<float>(kChartLineWidth), color);
+  const uint32_t line_us = micros();
   ctx->area_image.header.magic = LV_IMAGE_HEADER_MAGIC;
   ctx->area_image.header.cf = LV_COLOR_FORMAT_RGB565;
   ctx->area_image.header.w = width;
@@ -3602,8 +3605,10 @@ static const lv_image_dsc_t* graph_picture(SensorPopupContext* ctx, int32_t widt
   ctx->area_key = key;
   // Computed once per new line, size or color, inside the first frame that
   // draws it.
-  Serial.printf("[SensorPopup] Graph picture %ldx%ld, %ld points in %lu us\n", static_cast<long>(width),
-                static_cast<long>(height), static_cast<long>(points), static_cast<unsigned long>(micros() - started_us));
+  Serial.printf("[SensorPopup] Graph picture %ldx%ld, %ld points in %lu us (area %lu, grid %lu, line %lu)\n",
+                static_cast<long>(width), static_cast<long>(height), static_cast<long>(points),
+                static_cast<unsigned long>(line_us - started_us), static_cast<unsigned long>(area_us - started_us),
+                static_cast<unsigned long>(grid_us - area_us), static_cast<unsigned long>(line_us - grid_us));
   return &ctx->area_image;
 }
 
@@ -3847,6 +3852,12 @@ static void build_popup_body(SensorPopupContext* ctx) {
 }
 
 }  // namespace
+
+void sensor_popup_prefetch_history(const String& entity_id) {
+  if (!should_request_history(entity_id)) return;
+  const HistoryRangeConfig cfg = get_history_range_config(SensorHistoryRange::Day24);
+  mqttPrefetchHistoryRequest(entity_id.c_str(), cfg.hours, cfg.period_minutes, cfg.points);
+}
 
 bool sensor_popup_should_use_state_history(const String& value,
                                            const String& unit) {

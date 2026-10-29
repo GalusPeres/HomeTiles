@@ -222,32 +222,71 @@ template <typename Plot>
 inline void trace_line(const Point* points, int32_t count, int32_t width, int32_t height, float width_px, Plot&& plot) {
   const float half = width_px * 0.5f;
   const int32_t reach = static_cast<int32_t>(std::ceil(half + 1.0f));
+  // A segment reaches only the rows its part within `cull` columns of this
+  // one runs through, `cull` above and below: a pixel farther away gets no
+  // coverage (half + 0.5), half a pixel spare. Every row measured every
+  // segment near the column, and a jumpy line spans many rows: the house
+  // load's popup graph took 77 ms on the S3, a temperature's 38 (b611).
+  const float cull = half + 1.0f;
+  constexpr int kNear = 32;
+  int32_t near_index[kNear], near_top[kNear], near_bottom[kNear];
   int32_t first = 1;
   for (int32_t x = 0; x < width; ++x) {
     // Segments reaching this column: they run left to right.
     while (first < count && std::max(points[first - 1].x, points[first].x) < x - reach) ++first;
     int32_t top = INT32_MAX, bottom = INT32_MIN;
     int32_t last = first;
+    int near = 0;
+    bool crowded = false;  // more than kNear: every segment is measured
     for (int32_t i = first; i < count && std::min(points[i - 1].x, points[i].x) <= x + reach; ++i) {
       last = i + 1;
-      if (points[i - 1].y == kGap || points[i].y == kGap) continue;
-      top = std::min<int32_t>(top, std::min(points[i - 1].y, points[i].y) - reach);
-      bottom = std::max<int32_t>(bottom, std::max(points[i - 1].y, points[i].y) + reach);
+      const Point a = points[i - 1], b = points[i];
+      if (a.y == kGap || b.y == kGap) continue;
+      float y1 = static_cast<float>(std::min(a.y, b.y)), y2 = static_cast<float>(std::max(a.y, b.y));
+      if (a.x != b.x) {
+        const float dx = static_cast<float>(b.x - a.x);
+        float t0 = (x - cull - a.x) / dx, t1 = (x + cull - a.x) / dx;
+        if (t0 > t1) std::swap(t0, t1);
+        t0 = std::min(1.0f, std::max(0.0f, t0));
+        t1 = std::min(1.0f, std::max(0.0f, t1));
+        y1 = a.y + (b.y - a.y) * t0;
+        y2 = a.y + (b.y - a.y) * t1;
+        if (y1 > y2) std::swap(y1, y2);
+      }
+      const int32_t from = std::max<int32_t>(0, static_cast<int32_t>(std::floor(y1 - cull)));
+      const int32_t to = std::min<int32_t>(height - 1, static_cast<int32_t>(std::ceil(y2 + cull)));
+      if (from > to) continue;
+      if (near < kNear) {
+        near_index[near] = i;
+        near_top[near] = from;
+        near_bottom[near] = to;
+        ++near;
+      } else {
+        crowded = true;
+      }
+      top = std::min(top, from);
+      bottom = std::max(bottom, to);
     }
     if (top > bottom) continue;
-    top = std::max<int32_t>(0, top);
-    bottom = std::min<int32_t>(height - 1, bottom);
     for (int32_t y = top; y <= bottom; ++y) {
       float nearest = 1e9f;
-      for (int32_t i = first; i < last; ++i) {
+      auto measure = [&](int32_t i) {
         const Point a = points[i - 1], b = points[i];
-        if (a.y == kGap || b.y == kGap) continue;
         const float dx = static_cast<float>(b.x - a.x), dy = static_cast<float>(b.y - a.y);
         const float px = static_cast<float>(x - a.x), py = static_cast<float>(y - a.y);
         const float length = dx * dx + dy * dy;
         const float t = length > 0 ? std::min(1.0f, std::max(0.0f, (px * dx + py * dy) / length)) : 0.0f;
         const float ex = px - t * dx, ey = py - t * dy;
         nearest = std::min(nearest, ex * ex + ey * ey);
+      };
+      if (crowded) {
+        for (int32_t i = first; i < last; ++i) {
+          if (points[i - 1].y != kGap && points[i].y != kGap) measure(i);
+        }
+      } else {
+        for (int n = 0; n < near; ++n) {
+          if (y >= near_top[n] && y <= near_bottom[n]) measure(near_index[n]);
+        }
       }
       const float coverage = half + 0.5f - std::sqrt(nearest);
       if (coverage <= 0.0f) continue;

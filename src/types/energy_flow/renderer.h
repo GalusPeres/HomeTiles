@@ -16,3 +16,7 @@ lv_obj_t* render_energy_flow_tile(lv_obj_t* parent,
 // ui_manager): a flow on it moves with the next frame, and its first frames
 // are logged once (when they came and what they found).
 void energy_flow_shown(lv_obj_t* shown);
+// A finger came down on `pressed` (ui_manager): on a node or value that
+// opens a numeric sensor's popup, its history is asked now
+// (sensor_popup_prefetch_history).
+void energy_flow_touch_down(lv_obj_t* pressed);

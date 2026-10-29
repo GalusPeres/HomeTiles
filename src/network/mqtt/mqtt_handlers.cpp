@@ -469,23 +469,39 @@ static void store_history_replay(const PendingHistoryRequest& request,
   slot->length = length;
 }
 
-static bool replay_history_response(const char* entity_id, uint16_t hours,
-                                    uint16_t period_minutes, uint16_t points) {
+// The stored answer for the entity and range while it is fresh, else null.
+static const HistoryReplayEntry* fresh_history_replay(const char* entity_id, uint16_t hours,
+                                                      uint16_t period_minutes, uint16_t points) {
   const uint32_t now = millis();
-  for (auto& entry : g_history_replay) {
+  for (const auto& entry : g_history_replay) {
     if (!entry.payload || !entry.entity_id.equalsIgnoreCase(entity_id) ||
         entry.hours != hours || entry.period_minutes != period_minutes ||
         entry.points != points) {
       continue;
     }
-    if (now - entry.stored_ms >= history_replay_max_age_ms(entry.period_minutes)) return false;
-    Serial.printf("[History] Reusing answer for %s (%lu s old)\n", entity_id,
-                  static_cast<unsigned long>((now - entry.stored_ms) / 1000));
-    queue_sensor_popup_history(nullptr, entry.payload, entry.length);
-    queue_tile_graph_history(nullptr, entry.payload, entry.length);
-    return true;
+    return now - entry.stored_ms < history_replay_max_age_ms(entry.period_minutes) ? &entry : nullptr;
   }
-  return false;
+  return nullptr;
+}
+
+static bool replay_history_response(const char* entity_id, uint16_t hours,
+                                    uint16_t period_minutes, uint16_t points) {
+  const HistoryReplayEntry* entry = fresh_history_replay(entity_id, hours, period_minutes, points);
+  if (!entry) return false;
+  Serial.printf("[History] Reusing answer for %s (%lu s old)\n", entity_id,
+                static_cast<unsigned long>((millis() - entry->stored_ms) / 1000));
+  queue_sensor_popup_history(nullptr, entry->payload, entry->length);
+  queue_tile_graph_history(nullptr, entry->payload, entry->length);
+  return true;
+}
+
+// The same range for the entity was asked and has no answer yet (a pending
+// entry ends with its answer or after kHistoryHaResponseTimeoutMs).
+static bool history_request_on_its_way(const char* entity_id, uint16_t hours,
+                                       uint16_t period_minutes, uint16_t points) {
+  const PendingHistoryRequest* request = find_pending_history_request(entity_id);
+  return request && request->hours == hours && request->period_minutes == period_minutes &&
+         request->points == points;
 }
 
 static void clear_pending_history_request(const char* entity_id) {
@@ -2930,6 +2946,40 @@ void mqttPublishLightCommand(const char* entity_id,
   Serial.printf("Light command -> '%s' (%s)\n", topic, queued ? "queued" : "queue-full");
 }
 
+static void normalize_history_range(uint16_t& hours, uint16_t& period_minutes, uint16_t& points) {
+  if (hours == 0) hours = 24;
+  if (period_minutes == 0) period_minutes = 5;
+  if (points == 0) {
+    points = static_cast<uint16_t>((static_cast<uint32_t>(hours) * 60U) / period_minutes);
+  }
+  if (points == 0) points = 1;
+}
+
+// Sends a numeric history request ahead of the queued commands and marks it
+// pending; false when the queue is full.
+static bool send_history_request(const char* history_topic, const char* entity_id, uint16_t hours,
+                                 uint16_t period_minutes, uint16_t points) {
+  String payload = "{\"entity_id\":\"";
+  payload += entity_id;
+  payload += "\",\"hours\":";
+  payload += String(hours);
+  payload += ",\"period_minutes\":";
+  payload += String(period_minutes);
+  payload += ",\"points\":";
+  payload += String(points);
+  payload += ",\"stat\":\"mean\"}";
+  // The user is waiting for this graph. A route reload can leave many
+  // safely paced subscribe commands ahead of the history request. Appending
+  // it behind that burst would let the 2-second fallback empty the graph
+  // before the request was even sent.
+  bool ok = networkManager.mqttEnqueuePublishWithLargeBuffer(
+      history_topic, payload.c_str(), false, 20000, true);
+  Serial.printf("History request -> '%s' (%s, priority)\n",
+                history_topic, ok ? "queued" : "queue-full");
+  if (ok) mark_pending_history_request(entity_id, millis(), hours, period_minutes, points);
+  return ok;
+}
+
 void mqttPublishHistoryRequest(const char* entity_id,
                                uint16_t hours,
                                uint16_t period_minutes,
@@ -2939,12 +2989,7 @@ void mqttPublishHistoryRequest(const char* entity_id,
   // Do not start unnecessary HA history requests for panel I/O.
   if (hardwareIo.isLocalEntityId(entity_id)) return;
 
-  if (hours == 0) hours = 24;
-  if (period_minutes == 0) period_minutes = 5;
-  if (points == 0) {
-    points = static_cast<uint16_t>((static_cast<uint32_t>(hours) * 60U) / period_minutes);
-  }
-  if (points == 0) points = 1;
+  normalize_history_range(hours, period_minutes, points);
 
   const bool mqtt_online = networkManager.isMqttConnected();
   const char* history_topic = networkManager.getHistoryRequestTopic();
@@ -2956,6 +3001,15 @@ void mqttPublishHistoryRequest(const char* entity_id,
     return;
   }
 
+  // Already asked (the finger on the tile asked first,
+  // mqttPrefetchHistoryRequest): its answer comes to the popup and the tile
+  // graphs like this one's would; asked again, a second answer came and was
+  // applied once more.
+  if (can_request_ha && history_request_on_its_way(entity_id, hours, period_minutes, points)) {
+    Serial.printf("[History] Request for %s already on its way\n", entity_id);
+    return;
+  }
+
   // Discard previous pending entries for the same entity.
   clear_pending_history_request(entity_id);
 
@@ -2964,28 +3018,7 @@ void mqttPublishHistoryRequest(const char* entity_id,
     if (!time_valid && is_internal_tab5_entity(entity_id)) {
       Serial.printf("[History] Local time invalid, requesting HA history for %s\n", entity_id);
     }
-
-    String payload = "{\"entity_id\":\"";
-    payload += entity_id;
-    payload += "\",\"hours\":";
-    payload += String(hours);
-    payload += ",\"period_minutes\":";
-    payload += String(period_minutes);
-    payload += ",\"points\":";
-    payload += String(points);
-    payload += ",\"stat\":\"mean\"}";
-    // The user is waiting for this graph. A route reload can leave many
-    // safely paced subscribe commands ahead of the history request. Appending
-    // it behind that burst would let the 2-second fallback empty the graph
-    // before the request was even sent.
-    bool ok = networkManager.mqttEnqueuePublishWithLargeBuffer(
-        history_topic, payload.c_str(), false, 20000, true);
-    Serial.printf("History request -> '%s' (%s, priority)\n",
-                  history_topic, ok ? "queued" : "queue-full");
-    if (ok) {
-      mark_pending_history_request(entity_id, millis(), hours, period_minutes, points);
-      return;
-    }
+    if (send_history_request(history_topic, entity_id, hours, period_minutes, points)) return;
     queue_history_fallback_for_entity(entity_id, time_valid, "HA publish failed",
                                       hours, period_minutes, points);
     return;
@@ -3001,6 +3034,24 @@ void mqttPublishHistoryRequest(const char* entity_id,
   } else if (!history_topic || !*history_topic) {
     Serial.printf("History request skipped (no topic): %s\n", entity_id);
   }
+}
+
+void mqttPrefetchHistoryRequest(const char* entity_id,
+                                uint16_t hours,
+                                uint16_t period_minutes,
+                                uint16_t points) {
+  if (!entity_id || !*entity_id || hardwareIo.isLocalEntityId(entity_id)) return;
+  normalize_history_range(hours, period_minutes, points);
+  const char* history_topic = networkManager.getHistoryRequestTopic();
+  if (!networkManager.isMqttConnected() || !history_topic || !*history_topic) return;
+  // A fresh answer is replayed by the popup's own request; nothing here
+  // reaches a popup or a tile graph.
+  if (fresh_history_replay(entity_id, hours, period_minutes, points) ||
+      history_request_on_its_way(entity_id, hours, period_minutes, points)) {
+    return;
+  }
+  clear_pending_history_request(entity_id);
+  send_history_request(history_topic, entity_id, hours, period_minutes, points);
 }
 
 static void mqttPublishDiscreteHistoryRequest(const char* entity_id,

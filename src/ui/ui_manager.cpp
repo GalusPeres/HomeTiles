@@ -38,6 +38,7 @@
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/tile_press.h"
 #include "src/types/energy_flow/renderer.h"
+#include "src/types/sensor/renderer.h"
 #include "src/core/config/tile_radius.h"
 
 #include <time.h>
@@ -1157,6 +1158,10 @@ void UIManager::settings_gesture_indev_event_cb(lv_event_t* event) {
       lv_indev_stop_processing(input);
       self->touch_press_obj = pressed_object;
       self->touch_press_ms = lv_tick_get();
+      // A sensor graph's history goes out with the finger, 43-138 ms before
+      // the tap (b611 log); a swipe's request is answered and kept for 5 min.
+      sensor_tile_touch_down(pressed_object);
+      energy_flow_touch_down(pressed_object);
     }
     if (edge == swipe_gestures::kEdgeOff && !page_swipe) {
       if (!self->touch_watched) return;

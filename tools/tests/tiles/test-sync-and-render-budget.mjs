@@ -128,7 +128,7 @@ function preloadAfter() { return fn(read('src/ui/tabs/tiles/tab_tiles_unified.cp
 // perf2: popups switching ranges reuse answers younger than a minute.
 assert.match(fn(energy, 'energy_request_period'), /force && !request\.retry_requested && request\.last_response_ms != 0 &&\s*\(uint32_t\)\(now - request\.last_response_ms\) < kEnergyFreshMs/);
 assert.match(fn(mqtt, 'mqttPublishHistoryRequest'), /replay_history_response\(entity_id, hours, period_minutes, points\)/);
-assert.match(fn(mqtt, 'replay_history_response'), /now - entry\.stored_ms >= history_replay_max_age_ms\(entry\.period_minutes\)/);
+assert.match(fn(mqtt, 'fresh_history_replay'), /now - entry\.stored_ms < history_replay_max_age_ms\(entry\.period_minutes\)/);
 // As long as its own steps, at least a minute (user 2026-10-14: 7 days was
 // slow again after a minute): a week in hour steps for an hour.
 assert.match(mqtt, /static constexpr uint8_t kHistoryReplaySlots = 8;\s*static constexpr uint32_t kHistoryReplayMinAgeMs = 60UL \* 1000UL;\s*static uint32_t history_replay_max_age_ms\(uint16_t period_minutes\) \{\s*const uint32_t step = static_cast<uint32_t>\(period_minutes\) \* 60UL \* 1000UL;\s*return step > kHistoryReplayMinAgeMs \? step : kHistoryReplayMinAgeMs;/);

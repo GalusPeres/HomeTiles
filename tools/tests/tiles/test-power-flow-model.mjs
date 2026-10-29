@@ -1,9 +1,9 @@
-// Energy flow tile numbers and geometry (types/energy_flow/flow_model.h,
+// Power flow tile numbers and geometry (types/power_flow/flow_model.h,
 // flow_geometry.h) compiled on the host: the V2's 2x2 tile is exactly the
 // decided mockup (build/design-mockups/ideen-1023/energie-stand.html,
 // picture 65), the six flows split like Home Assistant's energy
 // distribution card, idle noise stays grey, power units become watts, and
-// the Web Admin preview (types/energy_flow/admin.js) computes the same
+// the Web Admin preview (types/power_flow/admin.js) computes the same
 // layout and flows as the device for every tile size.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -15,7 +15,7 @@ import {fileURLToPath} from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const compiler = [process.env.CXX, 'clang++', 'g++'].filter(Boolean)
   .find(c => spawnSync(c, ['--version']).status === 0);
-if (!compiler) { console.log('SKIP: Energy flow model needs a native C++ compiler'); process.exit(0); }
+if (!compiler) { console.log('SKIP: Power flow model needs a native C++ compiler'); process.exit(0); }
 
 // width, height, ring, disc, inset x, inset y, spacing, header room (the
 // last two: with the header on, user 2026-10-26).
@@ -35,8 +35,8 @@ const cases = [
 ];
 const cpp = `
 #include <cstdio>
-#include "src/types/energy_flow/flow_geometry.h"
-using namespace energy_flow;
+#include "src/types/power_flow/flow_geometry.h"
+using namespace power_flow;
 int main() {
   const float sizes[][8] = {${sizes.map(s => '{' + s.join(',') + '}').join(',')}};
   printf("{\\"layouts\\":[");
@@ -81,7 +81,7 @@ int main() {
   for (int i = 0; i < 8; ++i) printf("%s%.4f", i ? "," : "", dot_speed(speeds[i][0], speeds[i][1]));
   printf("]}\\n");
 }`;
-const out = path.join(root, 'build/tests/energy-flow-model');
+const out = path.join(root, 'build/tests/power-flow-model');
 fs.mkdirSync(out, {recursive: true});
 const cppPath = path.join(out, 'test.cpp');
 const binary = path.join(out, process.platform === 'win32' ? 'test.exe' : 'test');
@@ -165,14 +165,14 @@ assert.deepEqual(device.units, [[true, 1], [true, 1000], [true, 1000], [true, 1e
   [false, 1], [false, 1], [true, 1000]]);
 
 // The Web Admin preview runs the same numbers (admin.js, line for line).
-const admin = fs.readFileSync(path.join(root, 'src/types/energy_flow/admin.js'), 'utf8');
+const admin = fs.readFileSync(path.join(root, 'src/types/power_flow/admin.js'), 'utf8');
 const context = vm.createContext({Math, Number, String, Object, Array});
-vm.runInContext(admin + '\nthis.api = {energyFlowLayout, energyFlowCompute, energyFlowPointAt, energyFlowUnitFactor, ' +
-  'energyFlowRecordFromInputs, energyFlowOptionBits};', context);
-const {energyFlowLayout, energyFlowCompute, energyFlowPointAt} = context.api;
+vm.runInContext(admin + '\nthis.api = {powerFlowLayout, powerFlowCompute, powerFlowPointAt, powerFlowUnitFactor, ' +
+  'powerFlowRecordFromInputs, powerFlowOptionBits};', context);
+const {powerFlowLayout, powerFlowCompute, powerFlowPointAt} = context.api;
 const order = ['gridHome', 'pvBattery', 'pvHome', 'pvGrid', 'batHome', 'batGrid'];
 sizes.forEach((s, i) => {
-  const l = energyFlowLayout(s[0], s[1], {ring: s[2], disc: s[3], insetX: s[4], insetY: s[5], spacing: s[6]}, s[7]);
+  const l = powerFlowLayout(s[0], s[1], {ring: s[2], disc: s[3], insetX: s[4], insetY: s[5], spacing: s[6]}, s[7]);
   // With the header the flow fills the tile below its room: solar right
   // under it, grid and home in the middle of what is left, the battery at
   // the bottom as before.
@@ -191,11 +191,11 @@ sizes.forEach((s, i) => {
       bend[0] ? [1, bend[1], bend[2], bend[3], bend[6], bend[7]] : [0], `${s} ${name} bend`);
   });
   const line = l.lines.pvHome;
-  const mid = energyFlowPointAt(line, line.along[line.along.length - 1] / 2);
+  const mid = powerFlowPointAt(line, line.along[line.along.length - 1] / 2);
   near(mid[0], device.layouts[i].mid[0], 'mid x', 0.05); near(mid[1], device.layouts[i].mid[1], 'mid y', 0.05);
 });
 cases.forEach((c, i) => {
-  const f = energyFlowCompute({pv: c[0], grid: c[1], battery: c[2], home: c[3], hasPv: !!c[4], hasGrid: !!c[5],
+  const f = powerFlowCompute({pv: c[0], grid: c[1], battery: c[2], home: c[3], hasPv: !!c[4], hasGrid: !!c[5],
     hasBattery: !!c[6], hasHome: !!c[7]});
   order.forEach((name, n) => near(f.watts[name], device.flows[i].watts[n], `case ${i} ${name}`));
   assert.equal(f.gridToBattery, device.flows[i].gridToBattery, `case ${i} direction`);
@@ -203,4 +203,4 @@ cases.forEach((c, i) => {
   assert.equal(f.homeKnown, device.flows[i].homeKnown, `case ${i} home known`);
   assert.equal(f.homeSource, ({0: 'pv', 1: 'grid', 3: 'battery', 4: ''})[device.flows[i].homeSource], `case ${i} home source`);
 });
-console.log('Energy flow: the V2 2x2 tile is the mockup, Home Assistant flow split, idle noise, units, and the preview matches the device');
+console.log('Power flow: the V2 2x2 tile is the mockup, Home Assistant flow split, idle noise, units, and the preview matches the device');

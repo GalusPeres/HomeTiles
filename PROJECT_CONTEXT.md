@@ -21,7 +21,7 @@ Last reviewed: 2026-10-26
 
 ## Active work
 
-- Power flow tile 28 ("Leistungsfluss", `src/types/energy_flow/`, picture 65): nodes in `/_tile_flow_entities`, options in key_code, node tap = Sensor popup; V2 HW ok b542; smooth lines/dots b568.
+- Power flow tile 28 ("Leistungsfluss", `src/types/power_flow/`, picture 65): nodes in `/_tile_flow_entities`, options in key_code, node tap = Sensor popup; V2 HW ok b542; smooth lines/dots b568.
 - Media popup: layouts `sensor_display_mode` 0 cover left, 1 centre; controls only with their HA feature bit; menu box: speakers, source, library; tile/head icon state form (`state_icon.h`).
 - #116 (JC4880 camera popup ended after 18-60 min): Bridge waits 45 s for a chunk ACK (v0.9.4b5); FW logs gaps >= 1 s. Reporter pending.
 - Issue #119 (Guition V1): own Helix (b501, `src/audio/helix_mp3`): the core's overran on MPEG-2.5; TLS in PSRAM. Speaker audio from the Bridge (`docs-dev/audio-stream.md`): FFmpeg -> mono PCM over the camera tcp-ack listener (`HTAUD/1`); panels announce `"stream":"tcp-ack-v1"`. HW ok. Camera sound: lip-synced live track (b507 HW ok, b508 even gaps HW pending).

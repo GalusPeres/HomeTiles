@@ -37,7 +37,7 @@
 #include "src/ui/popups/popup_surface.h"
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/tile_press.h"
-#include "src/types/energy_flow/renderer.h"
+#include "src/types/power_flow/renderer.h"
 #include "src/types/sensor/renderer.h"
 #include "src/core/config/tile_radius.h"
 
@@ -463,7 +463,7 @@ void UIManager::switchToTab(uint8_t index) {
   if (index == 3) settings_prepare_show();
   if (tab_panels[index]) {
     lv_obj_clear_flag(tab_panels[index], LV_OBJ_FLAG_HIDDEN);
-    if (index == 0) energy_flow_shown(tab_panels[index]);
+    if (index == 0) power_flow_shown(tab_panels[index]);
   }
   if (tab_buttons[index]) {
     lv_obj_set_style_bg_opa(tab_buttons[index], LV_OPA_COVER, 0);
@@ -1161,7 +1161,7 @@ void UIManager::settings_gesture_indev_event_cb(lv_event_t* event) {
       // A sensor graph's history goes out with the finger, 43-138 ms before
       // the tap (b611 log); a swipe's request is answered and kept for 5 min.
       sensor_tile_touch_down(pressed_object);
-      energy_flow_touch_down(pressed_object);
+      power_flow_touch_down(pressed_object);
     }
     if (edge == swipe_gestures::kEdgeOff && !page_swipe) {
       if (!self->touch_watched) return;

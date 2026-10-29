@@ -3,10 +3,10 @@
 #include <math.h>
 #include <stdint.h>
 
-#include "src/types/energy_flow/flow_model.h"
+#include "src/types/power_flow/flow_model.h"
 
-// Where the Energy flow tile draws (no LVGL; host tests:
-// test-energy-flow-geometry.mjs). The decided design is the mockup
+// Where the Power flow tile draws (no LVGL; host tests:
+// test-power-flow-geometry.mjs). The decided design is the mockup
 // build/design-mockups/ideen-1023/energie-stand.html (picture 65, user
 // 2026-10-24) on the V2's 2x2 tile, 404 x 320: solar at (202, 54), grid at
 // (58, 160), home at (346, 160), battery at (202, 266), every node a disc
@@ -22,7 +22,7 @@
 // draws it as one: a true circle on whole pixels between straight pieces
 // (b532 drew ten short lines on whole pixels: the user saw them wavy), the
 // whole line as one smoothed stroke (render_stroke).
-namespace energy_flow {
+namespace power_flow {
 
 struct Point {
   float x;
@@ -276,4 +276,4 @@ inline void render_dot(uint8_t* mask, int radius, int fx, int fy) {
 // The whole pixel under a position in quarter pixels (rounded down).
 inline int dot_pixel(int quarter) { return quarter >= 0 ? quarter / kDotSteps : -((kDotSteps - 1 - quarter) / kDotSteps); }
 
-}  // namespace energy_flow
+}  // namespace power_flow

@@ -1,4 +1,4 @@
-// Energy flow node entities (Tile::flow_entities) live in the
+// Power flow node entities (Tile::flow_entities) live in the
 // /_tile_flow_entities sidecar like the Weather sensors (PackedTileV7 holds
 // one entity). Compiles the real tile_config.cpp sidecar functions and
 // tile_config.h helpers on the host: normalize (empty nodes kept, later
@@ -32,20 +32,20 @@ assert(defs.some(f => f.name === 'TileConfig::deleteFolder' && f.source.includes
 assert(fn('gridSidecarsMatchStored').includes('readFlowEntitiesSd(folder_id, index, stored_flow)'));
 const slots = fn('TileConfig::loadFolderGridEntitiesOnly');
 assert(slots.includes('out[i].extra_entities = flow.flow_entities;'));
-assert(slots.includes('full.tiles[i].type == TILE_ENERGY_FLOW ? full.tiles[i].flow_entities : sensors'));
+assert(slots.includes('full.tiles[i].type == TILE_POWER_FLOW ? full.tiles[i].flow_entities : sensors'));
 assert(fn('sidecarTextsFor').includes('g_flow_entity_sidecar_texts'));
 assert(fn('ensureSidecarIndexBuilt').includes('scanSidecarDir(kFlowEntityPathDir, g_flow_entity_sidecar_keys);'));
 assert(fnIn(header, 'tileContentEquals').includes('a.flow_entities == b.flow_entities'));
-assert(fnIn(header, 'tileTransparent').includes('energyFlowOption(tile, kFlowNoCardBit)'));
+assert(fnIn(header, 'tileTransparent').includes('powerFlowOption(tile, kFlowNoCardBit)'));
 const handler = fs.readFileSync(path.join(root, 'src/web/server/handlers/web_admin_tiles.cpp'), 'utf8');
 assert(handler.includes('normalizeFlowEntities(tile);'), 'the save handler normalizes the record');
 assert(handler.includes('out += ",\\"flow_entities\\":\\"";'), 'GET /api/tiles returns the record');
-assert(handler.includes('if (tile.type == TILE_ENERGY_FLOW && tile.flow_entities.length()) entity += "|" + tile.flow_entities;'),
+assert(handler.includes('if (tile.type == TILE_POWER_FLOW && tile.flow_entities.length()) entity += "|" + tile.flow_entities;'),
   'a changed node reloads the routes');
 
 const compiler = [process.env.CXX, 'clang++', 'g++'].filter(Boolean)
   .find(c => spawnSync(c, ['--version']).status === 0);
-if (!compiler) { console.log('SKIP: Energy flow persistence needs a native C++ compiler'); process.exit(0); }
+if (!compiler) { console.log('SKIP: Power flow persistence needs a native C++ compiler'); process.exit(0); }
 
 const cpp = String.raw`
 #include <map>
@@ -78,7 +78,7 @@ struct FS {bool exists(const String&p){return files.count(p)||directories.count(
  return {p,{},0,files.count(p)>0,false};
  }} filesystem;
 FS& storageFS(){return filesystem;}bool storageReady(){return ready;}
-constexpr size_t TILES_PER_GRID=4;enum TileType{TILE_EMPTY=0,TILE_SENSOR=1,TILE_WEATHER=12,TILE_ENERGY_FLOW=28};
+constexpr size_t TILES_PER_GRID=4;enum TileType{TILE_EMPTY=0,TILE_SENSOR=1,TILE_WEATHER=12,TILE_POWER_FLOW=28};
 const char*kTitlePathDir="/_tile_titles",*kImagePathDir="/_tile_images",*kEntityPathDir="/_tile_entities",*kIconColorPathDir="/_tile_icon_colors",*kWeatherSensorPathDir="/_tile_weather_sensors",*kFlowEntityPathDir="/_tile_flow_entities";
 bool g_sidecar_index_built=false;std::vector<uint32_t> g_title_sidecar_keys,g_image_sidecar_keys,g_entity_sidecar_keys,g_icon_color_sidecar_keys,g_weather_sensor_sidecar_keys,g_flow_entity_sidecar_keys;
 using PsString=std::string;struct SidecarText{uint32_t key;PsString text;};using SidecarTexts=std::vector<SidecarText>;
@@ -91,13 +91,13 @@ static constexpr size_t kWeatherSensorEntityMax = 128;
   '\nstatic constexpr size_t kFlowEntityLinesMax = 12;\n' +
   ['normalizeFlowEntities', 'flowEntityAt'].map(name => fnIn(header, name)).join('\n') +
   '\nstatic constexpr uint8_t kFlowHeaderBit = 0x01;\nstatic constexpr uint8_t kFlowNoCardBit = 0x02;\n' +
-  fnIn(header, 'energyFlowOption') +
+  fnIn(header, 'powerFlowOption') +
   '\nstatic constexpr size_t kFlowEntityRecordMax = kFlowEntityLinesMax * kWeatherSensorEntityMax;\n' +
 ['sidecarKey', 'sidecarKeyPresent', 'sidecarKeyAdd', 'sidecarTextCached', 'sidecarTextStore', 'sidecarTextForget', 'sidecarTextsFor',
  'sidecarKeyRemove', 'scanSidecarDir', 'ensureSidecarIndexBuilt', 'tmpPathFor', 'backupPathFor', 'replaceFileWithPreparedTmp',
  'flowEntityPathFile', 'readFlowEntitiesSd', 'writeFlowEntitiesSd', 'applyFlowEntitiesFromSd'].map(fn).join('\n') + String.raw`
 void reboot(){g_sidecar_index_built=false;g_flow_entity_sidecar_keys.clear();g_flow_entity_sidecar_texts.clear();}
-Tile flow(const char* record){Tile tile;tile.type=TILE_ENERGY_FLOW;tile.flow_entities=record;return tile;}
+Tile flow(const char* record){Tile tile;tile.type=TILE_POWER_FLOW;tile.flow_entities=record;return tile;}
 int main(){
  // Normalization: trimmed ids per line, empty nodes kept in place, trailing
  // empty lines dropped, junk ids emptied, other types cleared.
@@ -112,18 +112,18 @@ int main(){
  std::string many;for(int i=0;i<20;++i){many+="sensor.n"+std::to_string(i)+"\n";}
  t=flow(many.c_str());normalizeFlowEntities(t);assert(flowEntityAt(t.flow_entities,11)=="sensor.n11"&&flowEntityAt(t.flow_entities,12).empty());
  t=flow("sensor.pv");t.type=TILE_SENSOR;normalizeFlowEntities(t);assert(t.flow_entities.empty());
- // Options: only Energy flow tiles read their key_code bits.
- t=flow("");t.key_code=kFlowNoCardBit;assert(energyFlowOption(t,kFlowNoCardBit)&&!energyFlowOption(t,kFlowHeaderBit));
- t.type=TILE_SENSOR;assert(!energyFlowOption(t,kFlowNoCardBit));
+ // Options: only Power flow tiles read their key_code bits.
+ t=flow("");t.key_code=kFlowNoCardBit;assert(powerFlowOption(t,kFlowNoCardBit)&&!powerFlowOption(t,kFlowHeaderBit));
+ t.type=TILE_SENSOR;assert(!powerFlowOption(t,kFlowNoCardBit));
 
  // Save, reboot and load; unchanged saves write nothing; a changed node writes.
  Tile all=flow("sensor.pv\nsensor.grid\nsensor.bat\nsensor.soc\nsensor.home");
  assert(writeFlowEntitiesSd(3,1,all.flow_entities));
- TileGridConfig grid;grid.tiles[1].type=TILE_ENERGY_FLOW;reboot();applyFlowEntitiesFromSd(3,grid);
+ TileGridConfig grid;grid.tiles[1].type=TILE_POWER_FLOW;reboot();applyFlowEntitiesFromSd(3,grid);
  assert(grid.tiles[1].flow_entities==all.flow_entities);
  int before=writes;assert(writeFlowEntitiesSd(3,1,all.flow_entities));assert(writes==before);
  assert(writeFlowEntitiesSd(3,1,"sensor.pv2\nsensor.grid"));
- grid=TileGridConfig{};grid.tiles[1].type=TILE_ENERGY_FLOW;reboot();applyFlowEntitiesFromSd(3,grid);
+ grid=TileGridConfig{};grid.tiles[1].type=TILE_POWER_FLOW;reboot();applyFlowEntitiesFromSd(3,grid);
  assert(grid.tiles[1].flow_entities=="sensor.pv2\nsensor.grid");
 
  // A tile of another type in the slot ignores a stale file.
@@ -140,7 +140,7 @@ int main(){
  files.erase(tmpPathFor(path));files[backupPathFor(path)]="sensor.pv\nsensor.grid";reboot();
  assert(readFlowEntitiesSd(5,0,record)&&record=="sensor.pv\nsensor.grid");
  files.erase(backupPathFor(path));files[path]="bad id\nsensor.ok\n";reboot();
- grid=TileGridConfig{};grid.tiles[0].type=TILE_ENERGY_FLOW;applyFlowEntitiesFromSd(5,grid);
+ grid=TileGridConfig{};grid.tiles[0].type=TILE_POWER_FLOW;applyFlowEntitiesFromSd(5,grid);
  assert(grid.tiles[0].flow_entities=="\nsensor.ok");
 
  // A failed write keeps the previous record; oversized records are refused.
@@ -148,10 +148,10 @@ int main(){
  assert(!writeFlowEntitiesSd(6,2,"sensor.pv2\nsensor.grid"));fail_write=false;
  assert(readFlowEntitiesSd(6,2,record)&&record=="sensor.pv\nsensor.grid");
  assert(!writeFlowEntitiesSd(6,2,String(2000,'x')));ready=false;assert(!writeFlowEntitiesSd(6,2,"sensor.a\n"));
- std::cout<<"Energy flow sidecar: normalize, options, save/reboot, no-op, clear, other types, recovery and failed writes passed\n";
+ std::cout<<"Power flow sidecar: normalize, options, save/reboot, no-op, clear, other types, recovery and failed writes passed\n";
 }
 `;
-const out = path.join(root, 'build/tests/energy-flow-persistence');
+const out = path.join(root, 'build/tests/power-flow-persistence');
 fs.mkdirSync(out, {recursive: true});
 const cppPath = path.join(out, 'test.cpp');
 const binary = path.join(out, process.platform === 'win32' ? 'test.exe' : 'test');

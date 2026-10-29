@@ -9,12 +9,12 @@
 //   next frame: its whole grid was marked, and lv_inv_area drops the dot's
 //   area inside it without a refresh request (b610 trace "22m 8293m"). The
 //   frame callback now asks for the next frame after a move itself
-//   (test-energy-flow-next-frame-lvgl.mjs shows it with real LVGL). b609's
+//   (test-power-flow-next-frame-lvgl.mjs shows it with real LVGL). b609's
 //   frames while hidden or behind a popup are gone again.
 import assert from 'node:assert/strict';
 import {readRepoFile} from '../../lib/admin-source.mjs';
 
-const renderer = readRepoFile('src/types/energy_flow/renderer.cpp').replace(/\r\n?/g, '\n');
+const renderer = readRepoFile('src/types/power_flow/renderer.cpp').replace(/\r\n?/g, '\n');
 const between = (from, to) => {
   const a = renderer.indexOf(from);
   const b = renderer.indexOf(to, a + 1);
@@ -61,12 +61,12 @@ for (const reason of ['kStillNoFlow = "no flow"', 'kStillPopup = "popup"', 'kSti
 assert.ok(renderer.includes('constexpr uint32_t kStillLogMs = 500;'));
 const note = between('void note_still(const char* still, uint32_t now_ms) {', 'void log_still(');
 assert.ok(note.includes('if (still != g_still_reason && still == kStillHidden) {') &&
-  note.includes('"[EnergyFlow] Dots wait: tile hidden by %s %ldx%ld, %u levels up\\n"'), 'what hides it, once');
+  note.includes('"[PowerFlow] Dots wait: tile hidden by %s %ldx%ld, %u levels up\\n"'), 'what hides it, once');
 assert.ok(note.includes('const bool stalled = still == kStillWaiting || still == kStillRefused;') &&
   note.includes('if (!stalled) g_still_since_ms = 0;'), 'time on another page is no stall');
 const log = between('void log_still(uint32_t now_ms) {', 'void motion_display_cb(');
 assert.ok(log.includes('if (!g_still_since_ms || now_ms - g_still_since_ms < kStillLogMs) return;') &&
-  log.includes('"[EnergyFlow] Dots move again after %lu ms (last frame: %s, woken by %s)\\n"'));
+  log.includes('"[PowerFlow] Dots move again after %lu ms (last frame: %s, woken by %s)\\n"'));
 const frame = between('void motion_display_cb(', 'void wake_motion(');
 const resumeAt = frame.indexOf('if (moved || waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));');
 assert.ok(resumeAt >= 0 && resumeAt < frame.indexOf('if (!moved) {'),
@@ -85,16 +85,16 @@ assert.ok(!frame.includes('Serial'), 'no log inside the frame callback');
 const trace = between('void trace_frame(uint32_t moved, const char* still, uint32_t now_ms) {', '// The display\'s refresh:');
 assert.ok(trace.includes('if (t.moves >= kShownMoves || t.count >= kShownFrames || at >= kShownTraceMs) log_shown();'),
   'one line per showing, bounded');
-const shownFn = renderer.slice(renderer.indexOf('void energy_flow_shown(lv_obj_t* shown) {'));
+const shownFn = renderer.slice(renderer.indexOf('void power_flow_shown(lv_obj_t* shown) {'));
 assert.ok(shownFn.includes('if (lv_obj_t* hider = hidden_by(st->card)) {') &&
   shownFn.includes('lv_timer_resume(lv_display_get_refr_timer(g_motion_display));'),
   'records what hid the tile at the showing and asks for the next frame');
 const tiles = readRepoFile('src/ui/tabs/tiles/tab_tiles_unified.cpp').replace(/\r\n?/g, '\n');
 const shows = tiles.split('lv_obj_clear_flag(target->grid, LV_OBJ_FLAG_HIDDEN);\n').slice(1);
 assert.equal(shows.length, 2, 'the cached and the built folder switch');
-for (const after of shows) assert.ok(after.trimStart().startsWith('energy_flow_shown(target->grid);'), 'right after the grid is shown');
+for (const after of shows) assert.ok(after.trimStart().startsWith('power_flow_shown(target->grid);'), 'right after the grid is shown');
 const ui = readRepoFile('src/ui/ui_manager.cpp').replace(/\r\n?/g, '\n');
-assert.ok(ui.includes('lv_obj_clear_flag(tab_panels[index], LV_OBJ_FLAG_HIDDEN);\n    if (index == 0) energy_flow_shown(tab_panels[index]);'),
+assert.ok(ui.includes('lv_obj_clear_flag(tab_panels[index], LV_OBJ_FLAG_HIDDEN);\n    if (index == 0) power_flow_shown(tab_panels[index]);'),
   'and the tiles\' tab coming back from Settings');
 
 console.log('Power flow dots keep asking for frames while hidden and resume with the first frame that shows them');

@@ -1,11 +1,11 @@
-#include "src/types/energy_flow/web_handler.h"
+#include "src/types/power_flow/web_handler.h"
 
-#include "src/types/energy_flow/flow_model.h"
+#include "src/types/power_flow/flow_model.h"
 
 namespace {
 
-// The node pickers, each one line of Tile::flow_entities (energy_flow::Role).
-const char* const kNodeFields[energy_flow::kRoleCount] = {
+// The node pickers, each one line of Tile::flow_entities (power_flow::Role).
+const char* const kNodeFields[power_flow::kRoleCount] = {
     "flow_pv_entity", "flow_grid_entity", "flow_battery_entity", "flow_battery_charge_entity", "flow_home_entity"};
 
 struct OptionField {
@@ -26,8 +26,8 @@ bool arg_on(WebServer& server, const char* name) {
 
 // A partial request keeps what it does not name: the whole record
 // (flow_entities, copy/paste and import), single node pickers, options.
-void apply_energy_flow_fields_from_request(WebServer& server, Tile& tile) {
-  // A tile turned into an Energy flow drops what the former type kept.
+void apply_power_flow_fields_from_request(WebServer& server, Tile& tile) {
+  // A tile turned into an Power flow drops what the former type kept.
   if (tile.sensor_entity.length()) tile.sensor_entity = "";
   tile.sensor_unit = "";
   tile.sensor_display_mode = 0;
@@ -42,7 +42,7 @@ void apply_energy_flow_fields_from_request(WebServer& server, Tile& tile) {
     String record;
     for (size_t role = 0; role < kFlowEntityLinesMax; ++role) {
       if (role) record += '\n';
-      record += role < energy_flow::kRoleCount && server.hasArg(kNodeFields[role])
+      record += role < power_flow::kRoleCount && server.hasArg(kNodeFields[role])
                     ? server.arg(kNodeFields[role])
                     : flowEntityAt(before, role);
     }

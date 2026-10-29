@@ -100,7 +100,7 @@ int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SC
  auto a=make(),b=make();wire(a);wire(b);
  // Resident popups wait on the top layer, which LVGL draws in every redrawn
  // area. A holder never shown stays out of that (b538: visible holders cost
- // every Energy flow dot step on the V2).
+ // every Power flow dot step on the V2).
  int holder_draws=0;for(lv_obj_t*owner:{a.owner,b.owner})lv_obj_add_event_cb(owner,[](lv_event_t*e){++*static_cast<int*>(lv_event_get_user_data(e));},LV_EVENT_DRAW_MAIN_BEGIN,&holder_draws);
  lv_refr_now(d);holder_draws=0;lv_obj_invalidate(outside);lv_refr_now(d);assert(holder_draws==0&&"A resident popup's holder is not drawn");
  show(a,"Number\nLiving room");auto*frame=shell.frame;auto*header=shell.header;auto*button=shell.close;

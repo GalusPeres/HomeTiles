@@ -979,8 +979,8 @@ struct LocaleProfile {
   // The first day of the week the Calendar tile uses unless the tile sets
   // one (tm_wday: 0 Sunday, 1 Monday).
   uint8_t first_weekday;
-  // The Energy flow tile (types/energy_flow), EnergyFlowLabel order.
-  const char* energy_flow_labels[9];
+  // The Power flow tile (types/power_flow), PowerFlowLabel order.
+  const char* power_flow_labels[9];
 
   // Shared Web Admin entity picker (tiles/entity-picker.js). Order: choose,
   // search, no match ({query}), load failed, try again, clear, none available,
@@ -1020,8 +1020,8 @@ struct LocaleProfile {
 
 };
 
-// Index into LocaleProfile::energy_flow_labels.
-enum class EnergyFlowLabel : uint8_t {
+// Index into LocaleProfile::power_flow_labels.
+enum class PowerFlowLabel : uint8_t {
   Type,
   SolarPower,
   GridPower,
@@ -1148,7 +1148,7 @@ const char* weather_tomorrow_label(const char* language_code);
 // 0 temperature sensor, 1 humidity sensor, 2 the empty "use the weather
 // entity's value" option.
 const char* weather_sensor_label(const char* language_code, uint8_t index);
-const char* energy_flow_label(const char* language_code, EnergyFlowLabel label);
+const char* power_flow_label(const char* language_code, PowerFlowLabel label);
 const char* climate_tile_type_label(const char* language_code);
 const char* climate_entity_label(const char* language_code);
 const char* climate_target_temperature_label(const char* language_code);

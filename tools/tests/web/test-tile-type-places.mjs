@@ -1,5 +1,5 @@
 // Tile Settings: type options marked data-tile-place move to their place
-// (user 2026-10-26, Energy flow): "head" under Title and Icon, "top" at the
+// (user 2026-10-26, Power flow): "head" under Title and Icon, "top" at the
 // start of the settings, "color" into Color; they return to their type
 // fields when another type is shown, the Advanced caption then sees no
 // option, and the shown type names the Auto title and icon of a tile without

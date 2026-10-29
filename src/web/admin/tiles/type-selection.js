@@ -155,7 +155,7 @@
     syncTileAdvancedCaption(tab);
   }
 
-  // Type options marked data-tile-place (Energy flow, user 2026-10-26) move
+  // Type options marked data-tile-place (Power flow, user 2026-10-26) move
   // to their place in the settings: "head" under Title and Icon, "top" at the
   // start of the settings, "color" into Color. They return to their type
   // fields when another type is shown. The shown type may also name the Auto

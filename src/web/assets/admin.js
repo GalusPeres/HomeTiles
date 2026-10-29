@@ -4556,9 +4556,9 @@ async function saveGestureEdge(select) {
     if ([8,9,10].includes(Number(tile.type)) && snapshot?.tile_border !== undefined) {
       tile.sensor_display_mode = ['0','false'].includes(String(snapshot.tile_border)) ? 1 : 0;
     }
-    // The Energy flow options in their stored field (types/energy_flow/admin.js).
+    // The Power flow options in their stored field (types/power_flow/admin.js).
     if (Number(tile.type) === 28 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'flow_header')) {
-      tile.key_code = energyFlowOptionBits(snapshot);
+      tile.key_code = powerFlowOptionBits(snapshot);
     }
     if (Number(tile.type) === 12 && snapshot?.weather_colored_icons !== undefined) {
       tile.sensor_display_mode = ['0','false'].includes(String(snapshot.weather_colored_icons)) ? 1 : 0;
@@ -7029,7 +7029,7 @@ async function saveGestureEdge(select) {
   // Smallest size a type accepts (Media needs 2x2, half-size types 1x0.5).
   function minimumTileSize(type) {
     if (Number(type) === MEDIA_TILE_TYPE) return [Math.min(MEDIA_TILE_MIN_SPAN, placeCols()), Math.min(MEDIA_TILE_MIN_SPAN, placeRows())];
-    // The Energy flow needs room for its four nodes (types/energy_flow).
+    // The Power flow needs room for its four nodes (types/power_flow).
     if (Number(type) === 28) return [Math.min(2, placeCols()), Math.min(2, placeRows())];
     return [1, supportsHalfSize(type) ? 0.5 : 1];
   }
@@ -7956,11 +7956,11 @@ async function saveGestureEdge(select) {
         scheduleAutoSave(tab);
       });
     }
-    // Energy flow: the node sensors and the options (types/energy_flow).
+    // Power flow: the node sensors and the options (types/power_flow).
     for (const field of ['flow_pv_entity', 'flow_grid_entity', 'flow_battery_entity', 'flow_battery_charge_entity',
                          'flow_home_entity', 'flow_header', 'flow_card', 'flow_grid_invert', 'flow_battery_invert']) {
       bindLive(document.getElementById(prefix + '_' + field), 'change', field, () => {
-        if (field === 'flow_header') energyFlowHeaderTitle(prefix);
+        if (field === 'flow_header') powerFlowHeaderTitle(prefix);
         updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
       });
     }
@@ -8591,17 +8591,17 @@ async function saveGestureEdge(select) {
         span_h: tileSpan('span_h')
       }, iconName, mediaEntity ? (sensorMetaCache.names?.[mediaEntity] || '') : '');
     }
-    if (previewKind === 'energy_flow' && typeof applyEnergyFlowPreview === 'function') {
-      applyEnergyFlowPreview(tileElem, {
-        flow_entities: energyFlowRecordFromInputs(prefix),
-        key_code: energyFlowOptionsFromInputs(prefix),
+    if (previewKind === 'power_flow' && typeof applyPowerFlowPreview === 'function') {
+      applyPowerFlowPreview(tileElem, {
+        flow_entities: powerFlowRecordFromInputs(prefix),
+        key_code: powerFlowOptionsFromInputs(prefix),
         span_w: tileSpan('span_w'),
         span_h: tileSpan('span_h'),
         title,
         icon_name: iconInput?.value || ''
       }, sensorMetaCache);
     } else {
-      tileElem.classList.remove('energy-flow-tile', 'energy-flow-no-card');
+      tileElem.classList.remove('power-flow-tile', 'power-flow-no-card');
     }
     if (typeof applyTileRulesTint === 'function' && typeof collectIconColorRecord === 'function' &&
         typeof iconColorOwnEntity === 'function') {
@@ -8821,7 +8821,7 @@ async function saveGestureEdge(select) {
     syncTileAdvancedCaption(tab);
   }
 
-  // Type options marked data-tile-place (Energy flow, user 2026-10-26) move
+  // Type options marked data-tile-place (Power flow, user 2026-10-26) move
   // to their place in the settings: "head" under Title and Icon, "top" at the
   // start of the settings, "color" into Color. They return to their type
   // fields when another type is shown. The shown type may also name the Auto
@@ -10265,7 +10265,7 @@ async function saveGestureEdge(select) {
     } else if (safeType === 28) {
       fd.append('flow_entities', tile.flow_entities || '');
       const bits = Number(tile.key_code) || 0;
-      for (const [name, bit] of ENERGY_FLOW_OPTIONS) fd.append(name, (bits & bit) ? '1' : '0');
+      for (const [name, bit] of POWER_FLOW_OPTIONS) fd.append(name, (bits & bit) ? '1' : '0');
     } else if (safeType === MEDIA_TILE_TYPE) {
       fd.append('media_entity', tile.sensor_entity || tile.media_entity || '');
       fd.append('media_layout', Number(tile.sensor_display_mode) === 1 ? '1' : '0');
@@ -11443,10 +11443,10 @@ async function saveGestureEdge(select) {
           tile.sensor_entity ? (sensorMeta?.mediaValues?.[tile.sensor_entity] ?? '') : ''),
           tile, iconName, tile.sensor_entity ? (metaNames[tile.sensor_entity] || '') : '');
       }
-      if (previewKind === 'energy_flow' && typeof applyEnergyFlowPreview === 'function') {
-        applyEnergyFlowPreview(el, tile, sensorMeta);
+      if (previewKind === 'power_flow' && typeof applyPowerFlowPreview === 'function') {
+        applyPowerFlowPreview(el, tile, sensorMeta);
       } else {
-        el.classList.remove('energy-flow-tile', 'energy-flow-no-card');
+        el.classList.remove('power-flow-tile', 'power-flow-no-card');
       }
       if (typeof applyTileRulesTint === 'function') {
         applyTileRulesTint(el, typeValue, tile.icon_colors, tile.sensor_entity || '', sensorMeta);
@@ -17231,32 +17231,32 @@ function maybeFillTitleFromEnergy(tab) {
     const valueYOffsetEl = document.getElementById(prefix + '_energy_value_y_offset');
     if (valueYOffsetEl) valueYOffsetEl.value = '';
   }
-  // Energy flow tile (types/energy_flow): the node sensors, the options and
+  // Power flow tile (types/power_flow): the node sensors, the options and
   // the previews. The record (Tile::flow_entities) holds one entity per line
   // in Home Assistant's order; lines after the five pickers are kept.
-  const ENERGY_FLOW_TILE_TYPE = 28;
-  const ENERGY_FLOW_FIELDS = Object.freeze(['flow_pv_entity', 'flow_grid_entity', 'flow_battery_entity',
+  const POWER_FLOW_TILE_TYPE = 28;
+  const POWER_FLOW_FIELDS = Object.freeze(['flow_pv_entity', 'flow_grid_entity', 'flow_battery_entity',
     'flow_battery_charge_entity', 'flow_home_entity']);
   // key_code bits (tile_config.h kFlow*Bit); the card checkbox is the
   // inverse of the stored "no card" bit.
-  const ENERGY_FLOW_OPTIONS = Object.freeze([['flow_header', 1], ['flow_no_card', 2], ['flow_grid_invert', 4],
+  const POWER_FLOW_OPTIONS = Object.freeze([['flow_header', 1], ['flow_no_card', 2], ['flow_grid_invert', 4],
     ['flow_battery_invert', 8]]);
 
-  function energyFlowLines(record) {
+  function powerFlowLines(record) {
     return String(record || '').split('\n');
   }
 
-  function energyFlowRecordFromInputs(tab) {
-    const container = document.getElementById(tab + '_energy_flow_fields');
-    const lines = energyFlowLines(container?.dataset.flowRecord || '');
-    ENERGY_FLOW_FIELDS.forEach((field, i) => {
+  function powerFlowRecordFromInputs(tab) {
+    const container = document.getElementById(tab + '_power_flow_fields');
+    const lines = powerFlowLines(container?.dataset.flowRecord || '');
+    POWER_FLOW_FIELDS.forEach((field, i) => {
       lines[i] = String(document.getElementById(tab + '_' + field)?.value || '').trim();
     });
     while (lines.length && !lines[lines.length - 1]) lines.pop();
     return lines.join('\n');
   }
 
-  function energyFlowOptionsFromInputs(tab) {
+  function powerFlowOptionsFromInputs(tab) {
     let bits = 0;
     if (document.getElementById(tab + '_flow_header')?.checked) bits |= 1;
     if (document.getElementById(tab + '_flow_card')?.checked === false) bits |= 2;
@@ -17265,7 +17265,7 @@ function maybeFillTitleFromEnergy(tab) {
     return bits;
   }
 
-  function energyFlowSetOptions(tab, bits) {
+  function powerFlowSetOptions(tab, bits) {
     const set = (field, on) => { const box = document.getElementById(tab + '_' + field); if (box) box.checked = on; };
     set('flow_header', (bits & 1) !== 0);
     set('flow_card', (bits & 2) === 0);
@@ -17273,40 +17273,40 @@ function maybeFillTitleFromEnergy(tab) {
     set('flow_battery_invert', (bits & 8) !== 0);
   }
 
-  function loadEnergyFlowFields(tab, data) {
+  function loadPowerFlowFields(tab, data) {
     const record = String(data?.flow_entities || '');
-    const container = document.getElementById(tab + '_energy_flow_fields');
+    const container = document.getElementById(tab + '_power_flow_fields');
     if (container) container.dataset.flowRecord = record;
-    const lines = energyFlowLines(record);
-    ENERGY_FLOW_FIELDS.forEach((field, i) => {
+    const lines = powerFlowLines(record);
+    POWER_FLOW_FIELDS.forEach((field, i) => {
       const input = document.getElementById(tab + '_' + field);
       if (input) input.value = lines[i] || '';
     });
     // Stored tiles carry key_code, copied form data (clipboard.js) the
     // option fields.
-    energyFlowSetOptions(tab, data && Object.prototype.hasOwnProperty.call(data, 'flow_header')
-      ? energyFlowOptionBits(data) : (Number(data?.key_code) || 0));
+    powerFlowSetOptions(tab, data && Object.prototype.hasOwnProperty.call(data, 'flow_header')
+      ? powerFlowOptionBits(data) : (Number(data?.key_code) || 0));
   }
 
-  function saveEnergyFlowFields(tab, formData) {
-    formData.append('flow_entities', energyFlowRecordFromInputs(tab));
-    const bits = energyFlowOptionsFromInputs(tab);
-    for (const [name, bit] of ENERGY_FLOW_OPTIONS) formData.append(name, (bits & bit) ? '1' : '0');
+  function savePowerFlowFields(tab, formData) {
+    formData.append('flow_entities', powerFlowRecordFromInputs(tab));
+    const bits = powerFlowOptionsFromInputs(tab);
+    for (const [name, bit] of POWER_FLOW_OPTIONS) formData.append(name, (bits & bit) ? '1' : '0');
   }
 
-  function resetEnergyFlowFields(tab) {
-    const container = document.getElementById(tab + '_energy_flow_fields');
+  function resetPowerFlowFields(tab) {
+    const container = document.getElementById(tab + '_power_flow_fields');
     if (container) delete container.dataset.flowRecord;
-    for (const field of ENERGY_FLOW_FIELDS) {
+    for (const field of POWER_FLOW_FIELDS) {
       const input = document.getElementById(tab + '_' + field);
       if (input) input.value = '';
     }
-    energyFlowSetOptions(tab, 0);
+    powerFlowSetOptions(tab, 0);
   }
 
   // "Show title and icon" with an empty title puts the type's name in, like
   // Auto (type-selection.js placeTileTypeParts names it).
-  function energyFlowHeaderTitle(tab) {
+  function powerFlowHeaderTitle(tab) {
     if (!document.getElementById(tab + '_flow_header')?.checked) return;
     const title = document.getElementById(tab + '_tile_title');
     const name = document.getElementById(tab + '_tile_title_auto')?.dataset.autoTitle || '';
@@ -17316,90 +17316,90 @@ function maybeFillTitleFromEnergy(tab) {
   }
 
   // The stored key_code of a snapshot's options (snapshots.js, import).
-  function energyFlowOptionBits(source) {
+  function powerFlowOptionBits(source) {
     let bits = 0;
-    for (const [name, bit] of ENERGY_FLOW_OPTIONS) {
+    for (const [name, bit] of POWER_FLOW_OPTIONS) {
       if (['1', 'true', 'on'].includes(String(source?.[name] ?? '0'))) bits |= bit;
     }
     return bits;
   }
 
   // ----- Geometry: flow_geometry.h line for line --------------------------
-  const ENERGY_FLOW_BEND_SEGMENTS = 16;
+  const POWER_FLOW_BEND_SEGMENTS = 16;
 
-  function energyFlowPolyline() {
+  function powerFlowPolyline() {
     return { p: [], along: [], bend: null, bendFirst: 0, bendLast: 0 };
   }
 
-  function energyFlowAdd(line, x, y) {
+  function powerFlowAdd(line, x, y) {
     const n = line.p.length;
     line.along.push(n ? line.along[n - 1] + Math.hypot(x - line.p[n - 1][0], y - line.p[n - 1][1]) : 0);
     line.p.push([x, y]);
   }
 
-  function energyFlowCircleOffset(radius, d) {
+  function powerFlowCircleOffset(radius, d) {
     const q = radius * radius - d * d;
     return q > 0 ? Math.sqrt(q) : 0;
   }
 
   // C's lroundf: halves away from zero.
-  function energyFlowRound(value) {
+  function powerFlowRound(value) {
     return value < 0 ? -Math.round(-value) : Math.round(value);
   }
 
   // Down (or up) from the source's disc, a quarter circle on whole pixels,
   // along the lane to the target's disc.
-  function energyFlowLeg(l, from, dir, to, laneY, spacing) {
-    const line = energyFlowPolyline();
+  function powerFlowLeg(l, from, dir, to, laneY, spacing) {
+    const line = powerFlowPolyline();
     const down = from === 'pv';
-    const x = energyFlowRound(l.node.pv[0] + dir * spacing);
-    const lane = energyFlowRound(laneY);
-    const y0 = l.node[from][1] + (down ? 1 : -1) * energyFlowCircleOffset(l.disc, x - l.node[from][0]);
-    const endX = l.node[to][0] - dir * energyFlowCircleOffset(l.disc, lane - l.node[to][1]);
+    const x = powerFlowRound(l.node.pv[0] + dir * spacing);
+    const lane = powerFlowRound(laneY);
+    const y0 = l.node[from][1] + (down ? 1 : -1) * powerFlowCircleOffset(l.disc, x - l.node[from][0]);
+    const endX = l.node[to][0] - dir * powerFlowCircleOffset(l.disc, lane - l.node[to][1]);
     const sign = lane >= y0 ? 1 : -1;
-    const radius = energyFlowRound(Math.min(Math.abs(lane - y0), Math.abs(endX - x)));
+    const radius = powerFlowRound(Math.min(Math.abs(lane - y0), Math.abs(endX - x)));
     const fromAngle = dir > 0 ? 180 : 0;
     const toAngle = sign > 0 ? 90 : (dir > 0 ? 270 : -90);
     const bend = { cx: x + dir * radius, cy: lane - sign * radius, radius, fromAngle, toAngle };
-    energyFlowAdd(line, x, y0);
-    if (Math.abs(bend.cy - y0) > 0.5) energyFlowAdd(line, x, bend.cy);
+    powerFlowAdd(line, x, y0);
+    if (Math.abs(bend.cy - y0) > 0.5) powerFlowAdd(line, x, bend.cy);
     line.bendFirst = line.p.length - 1;
     if (radius > 0) {
       line.bend = bend;
-      for (let i = 1; i <= ENERGY_FLOW_BEND_SEGMENTS; ++i) {
-        const angle = (fromAngle + (toAngle - fromAngle) * i / ENERGY_FLOW_BEND_SEGMENTS) * Math.PI / 180;
-        energyFlowAdd(line, bend.cx + radius * Math.cos(angle), bend.cy + radius * Math.sin(angle));
+      for (let i = 1; i <= POWER_FLOW_BEND_SEGMENTS; ++i) {
+        const angle = (fromAngle + (toAngle - fromAngle) * i / POWER_FLOW_BEND_SEGMENTS) * Math.PI / 180;
+        powerFlowAdd(line, bend.cx + radius * Math.cos(angle), bend.cy + radius * Math.sin(angle));
       }
     }
     line.bendLast = line.p.length - 1;
-    if (Math.abs(endX - bend.cx) > 0.5) energyFlowAdd(line, endX, lane);
+    if (Math.abs(endX - bend.cx) > 0.5) powerFlowAdd(line, endX, lane);
     return line;
   }
 
   // `top`: the header's room (flow_geometry.h header_top), the flow below it.
-  function energyFlowLayout(width, height, m, top = 0) {
+  function powerFlowLayout(width, height, m, top = 0) {
     const ox = width / 2, oy = (top + height) / 2;
     const l = { width, height, ring: m.ring, disc: m.disc, node: {
       pv: [ox, top + m.insetY + m.ring], grid: [m.insetX + m.ring, oy],
       home: [width - m.insetX - m.ring, oy], battery: [ox, height - m.insetY - m.ring] } };
     const spacing = Math.min(m.spacing, m.disc * 0.8);
-    const gridHome = energyFlowPolyline();
-    energyFlowAdd(gridHome, l.node.grid[0] + m.disc, oy);
-    energyFlowAdd(gridHome, l.node.home[0] - m.disc, oy);
-    const pvBattery = energyFlowPolyline();
-    energyFlowAdd(pvBattery, ox, l.node.pv[1] + m.disc);
-    energyFlowAdd(pvBattery, ox, l.node.battery[1] - m.disc);
+    const gridHome = powerFlowPolyline();
+    powerFlowAdd(gridHome, l.node.grid[0] + m.disc, oy);
+    powerFlowAdd(gridHome, l.node.home[0] - m.disc, oy);
+    const pvBattery = powerFlowPolyline();
+    powerFlowAdd(pvBattery, ox, l.node.pv[1] + m.disc);
+    powerFlowAdd(pvBattery, ox, l.node.battery[1] - m.disc);
     l.lines = {
       gridHome, pvBattery,
-      pvHome: energyFlowLeg(l, 'pv', 1, 'home', oy - spacing, spacing),
-      pvGrid: energyFlowLeg(l, 'pv', -1, 'grid', oy - spacing, spacing),
-      batHome: energyFlowLeg(l, 'battery', 1, 'home', oy + spacing, spacing),
-      batGrid: energyFlowLeg(l, 'battery', -1, 'grid', oy + spacing, spacing),
+      pvHome: powerFlowLeg(l, 'pv', 1, 'home', oy - spacing, spacing),
+      pvGrid: powerFlowLeg(l, 'pv', -1, 'grid', oy - spacing, spacing),
+      batHome: powerFlowLeg(l, 'battery', 1, 'home', oy + spacing, spacing),
+      batGrid: powerFlowLeg(l, 'battery', -1, 'grid', oy + spacing, spacing),
     };
     return l;
   }
 
-  function energyFlowPointAt(line, distance) {
+  function powerFlowPointAt(line, distance) {
     const n = line.p.length;
     if (!n) return [0, 0];
     if (distance <= 0) return line.p[0];
@@ -17414,9 +17414,9 @@ function maybeFillTitleFromEnergy(tab) {
   }
 
   // ----- Flows: flow_model.h ------------------------------------------------
-  const ENERGY_FLOW_IDLE_WATTS = 10;
+  const POWER_FLOW_IDLE_WATTS = 10;
 
-  function energyFlowCompute(input) {
+  function powerFlowCompute(input) {
     const pos = v => v > 0 ? v : 0;
     const solar = input.hasPv ? pos(input.pv) : 0;
     const gridIn = input.hasGrid ? pos(input.grid) : 0;
@@ -17431,10 +17431,10 @@ function maybeFillTitleFromEnergy(tab) {
     const pvHome = solarLeft - pvBattery;
     const gridHome = gridIn - gridBattery;
     const batHome = batOut - batGrid;
-    const idle = v => v >= ENERGY_FLOW_IDLE_WATTS ? v : 0;
+    const idle = v => v >= POWER_FLOW_IDLE_WATTS ? v : 0;
     const gridToBattery = gridBattery > batGrid;
     const into = [['pv', pvHome], ['grid', gridHome], ['battery', batHome]];
-    let best = ENERGY_FLOW_IDLE_WATTS, homeSource = '';
+    let best = POWER_FLOW_IDLE_WATTS, homeSource = '';
     for (const [node, watts] of into) if (watts >= best) { best = watts; homeSource = node; }
     return {
       watts: { gridHome: idle(gridHome), pvBattery: idle(pvBattery), pvHome: idle(pvHome), pvGrid: idle(pvGrid),
@@ -17446,7 +17446,7 @@ function maybeFillTitleFromEnergy(tab) {
     };
   }
 
-  function energyFlowUnitFactor(unit) {
+  function powerFlowUnitFactor(unit) {
     const u = String(unit || '').trim();
     if (/^[kK]W$/.test(u)) return 1000;
     if (u === 'MW') return 1e6;
@@ -17455,7 +17455,7 @@ function maybeFillTitleFromEnergy(tab) {
     return 1;
   }
 
-  function energyFlowNumber(value) {
+  function powerFlowNumber(value) {
     const text = String(value ?? '').trim().replace(',', '.');
     if (!text) return null;
     const number = Number.parseFloat(text);
@@ -17464,7 +17464,7 @@ function maybeFillTitleFromEnergy(tab) {
 
   // A power's amount and unit, as the panel shows them (renderer.cpp
   // show_power): the unit a step smaller after it (.tile-unit).
-  function energyFlowPower(watts) {
+  function powerFlowPower(watts) {
     const a = Math.abs(watts);
     if (a >= 999950) return [formatLocalizedNumber(a / 1e6, 1), 'MW'];
     if (a >= 999.5) return [formatLocalizedNumber(a / 1000, 1), 'kW'];
@@ -17473,23 +17473,23 @@ function maybeFillTitleFromEnergy(tab) {
 
   // While the battery charges: Home Assistant's charging icon for its level,
   // as on the panel (renderer.cpp charging_icon).
-  function energyFlowChargingIcon(level) {
+  function powerFlowChargingIcon(level) {
     if (level === null) return 'battery-charging';
     if (level < 10) return 'battery-charging-outline';
     return 'battery-charging-' + Math.min(10, Math.round(level / 10)) * 10;
   }
 
   // ----- Preview --------------------------------------------------------------
-  const ENERGY_FLOW_COLORS = Object.freeze({ pv: '#FF9800', grid: '#488FC2', gridReturn: '#8353D1', battery: '#F06292',
+  const POWER_FLOW_COLORS = Object.freeze({ pv: '#FF9800', grid: '#488FC2', gridReturn: '#8353D1', battery: '#F06292',
     batteryOut: '#4DB6AC', header: '#F29C06' });
 
-  function energyFlowHexRgb(hex) {
+  function powerFlowHexRgb(hex) {
     return [1, 3, 5].map(i => parseInt(String(hex).slice(i, i + 2), 16));
   }
 
   // The plain tile disc of an icon color on the card (tile_icon_disc::tile_fill).
-  function energyFlowDisc(card, hex) {
-    const rgb = energyFlowHexRgb(hex);
+  function powerFlowDisc(card, hex) {
+    const rgb = powerFlowHexRgb(hex);
     const glowRaw = String(getComputedStyle(document.documentElement).getPropertyValue('--icon-glow-pct')).trim();
     const glowValue = glowRaw === '' ? 25 : Number(glowRaw);
     const glow = Math.min(100, Math.max(0, Number.isFinite(glowValue) ? glowValue : 25));
@@ -17501,13 +17501,13 @@ function maybeFillTitleFromEnergy(tab) {
     return toneHex(toneFill(card, rgb, true, glow, false).disc);
   }
 
-  // Draws the tile like render_energy_flow_tile() in display pixels, scaled
+  // Draws the tile like render_power_flow_tile() in display pixels, scaled
   // to the preview tile. `tile`: flow_entities, key_code, span_w, span_h,
   // title, icon_name.
-  function applyEnergyFlowPreview(el, tile, meta) {
-    if (!el || typeof ENERGY_FLOW_LAYOUT === 'undefined') return;
-    const L = ENERGY_FLOW_LAYOUT;
-    el.querySelectorAll(':scope > .tile-icon, :scope > .tile-title, :scope > .tile-value, :scope > .energy-flow-preview')
+  function applyPowerFlowPreview(el, tile, meta) {
+    if (!el || typeof POWER_FLOW_LAYOUT === 'undefined') return;
+    const L = POWER_FLOW_LAYOUT;
+    el.querySelectorAll(':scope > .tile-icon, :scope > .tile-title, :scope > .tile-value, :scope > .power-flow-preview')
       .forEach(node => node.remove());
     const rootStyle = getComputedStyle(el.isConnected ? el : document.documentElement);
     const scale = parseFloat(rootStyle.getPropertyValue('--radius-preview-scale')) || 0.5;
@@ -17520,27 +17520,27 @@ function maybeFillTitleFromEnergy(tab) {
     const height = (cellH > 0 ? spanH * (cellH + previewGap) - previewGap : el.offsetHeight) / scale;
     const bits = Number(tile?.key_code) || 0;
     const onCard = (bits & 2) === 0;
-    el.classList.add('energy-flow-tile');
-    el.classList.toggle('energy-flow-no-card', !onCard);
+    el.classList.add('power-flow-tile');
+    el.classList.toggle('power-flow-no-card', !onCard);
     if (!onCard) el.style.setProperty('--tile-border-tint', 'transparent');
 
-    const lines = energyFlowLines(tile?.flow_entities);
+    const lines = powerFlowLines(tile?.flow_entities);
     const entity = { pv: lines[0] || '', grid: lines[1] || '', bat: lines[2] || '', charge: lines[3] || '', home: lines[4] || '' };
     const values = meta?.values || {}, units = meta?.units || {}, icons = meta?.icons || {};
     const watts = id => {
       if (!id) return null;
-      const n = energyFlowNumber(values[id]);
-      return n === null ? null : n * energyFlowUnitFactor(units[id]);
+      const n = powerFlowNumber(values[id]);
+      return n === null ? null : n * powerFlowUnitFactor(units[id]);
     };
     const pv = watts(entity.pv), grid = watts(entity.grid), bat = watts(entity.bat), home = watts(entity.home);
     const input = { hasPv: pv !== null, hasGrid: grid !== null, hasBattery: bat !== null, hasHome: home !== null,
       pv: pv || 0, grid: ((bits & 4) ? -1 : 1) * (grid || 0), battery: ((bits & 8) ? -1 : 1) * (bat || 0), home: home || 0 };
-    const flows = energyFlowCompute(input);
+    const flows = powerFlowCompute(input);
 
-    const l = energyFlowLayout(width, height, L, (bits & 1) ? 2 * L.ring - L.insetY : 0);
+    const l = powerFlowLayout(width, height, L, (bits & 1) ? 2 * L.ring - L.insetY : 0);
     const light = panelLight();
     const cardHex = String(rootStyle.getPropertyValue('--tile-card') || '').trim() || (light ? '#FFFFFF' : '#1A1A1A');
-    const cardRgb = /^#[0-9a-f]{6}$/i.test(cardHex) ? energyFlowHexRgb(cardHex) : (light ? [255, 255, 255] : [26, 26, 26]);
+    const cardRgb = /^#[0-9a-f]{6}$/i.test(cardHex) ? powerFlowHexRgb(cardHex) : (light ? [255, 255, 255] : [26, 26, 26]);
     const idle = !light ? '#3C3C3C' : onCard ? '#DCDEE2' : '#CDD0D5';
     const text = panelRoleHex('text', light ? '#1A1A1A' : '#FFFFFF');
     // The home joins with the first sensor: a tile without any shows no node
@@ -17554,9 +17554,9 @@ function maybeFillTitleFromEnergy(tab) {
     // A node's color now, like the panel (renderer.cpp node_color): the grid
     // purple while it takes the feed-in, the battery magenta only while it
     // charges.
-    const colorOf = { pv: ENERGY_FLOW_COLORS.pv,
-      grid: input.hasGrid && -input.grid >= ENERGY_FLOW_IDLE_WATTS ? ENERGY_FLOW_COLORS.gridReturn : ENERGY_FLOW_COLORS.grid,
-      battery: input.hasBattery && -input.battery >= ENERGY_FLOW_IDLE_WATTS ? ENERGY_FLOW_COLORS.battery : ENERGY_FLOW_COLORS.batteryOut };
+    const colorOf = { pv: POWER_FLOW_COLORS.pv,
+      grid: input.hasGrid && -input.grid >= POWER_FLOW_IDLE_WATTS ? POWER_FLOW_COLORS.gridReturn : POWER_FLOW_COLORS.grid,
+      battery: input.hasBattery && -input.battery >= POWER_FLOW_IDLE_WATTS ? POWER_FLOW_COLORS.battery : POWER_FLOW_COLORS.batteryOut };
     const r = n => Math.round(n);
     let svg = '';
     // Straight pieces and the bend as a true circle arc, like the panel.
@@ -17586,7 +17586,7 @@ function maybeFillTitleFromEnergy(tab) {
     for (const name of Object.keys(l.lines)) {
       if (!live(name)) continue;
       const line = l.lines[name];
-      const p = energyFlowPointAt(line, line.along[line.along.length - 1] / 2);
+      const p = powerFlowPointAt(line, line.along[line.along.length - 1] / 2);
       svg += '<circle cx="' + r(p[0]) + '" cy="' + r(p[1]) + '" r="' + L.dotRadius + '" fill="' + colorOf[source[name]] + '"/>';
     }
     // The global frame line (display-borders.js marks the grid) on the rings
@@ -17606,7 +17606,7 @@ function maybeFillTitleFromEnergy(tab) {
       if (frame) {
         svg += square(cx, cy, L.ring - 0.5, L.ringCorner - 0.5, 'fill="none" stroke="' + frameColor + '" stroke-width="1"');
       }
-      svg += square(cx, cy, L.disc, L.discCorner, 'fill="' + energyFlowDisc(cardRgb, hex) + '"');
+      svg += square(cx, cy, L.disc, L.discCorner, 'fill="' + powerFlowDisc(cardRgb, hex) + '"');
       html += '<i class="mdi mdi-' + escapeHtml(icon) + '" style="position:absolute;left:' + r(cx - L.iconPx / 2) +
         'px;top:' + r(cy - L.iconPx / 2) + 'px;width:' + L.iconPx + 'px;height:' + L.iconPx + 'px;font-size:' + L.iconPx +
         'px;line-height:' + L.iconPx + 'px;text-align:center;color:' + hex + (mirrored ? ';transform:scaleX(-1)' : '') +
@@ -17619,22 +17619,22 @@ function maybeFillTitleFromEnergy(tab) {
         align + ';color:' + text + ';white-space:nowrap;overflow:hidden">' + escapeHtml(parts[0]) +
         (parts[1] ? '<span class="tile-unit">' + escapeHtml(parts[1]) + '</span>' : '') + '</div>';
     };
-    const power = (known, watts) => known ? energyFlowPower(watts) : ['--', ''];
+    const power = (known, watts) => known ? powerFlowPower(watts) : ['--', ''];
     const iconOf = id => String(icons[id] || '').replace(/^mdi:/, '');
     const homeColor = colorOf[flows.homeSource || 'grid'];
-    if (shown.pv) node(l.node.pv[0], l.node.pv[1], ENERGY_FLOW_COLORS.pv, 'solar-power');
+    if (shown.pv) node(l.node.pv[0], l.node.pv[1], POWER_FLOW_COLORS.pv, 'solar-power');
     // The grid's direction past the idle threshold, as on the panel: while
     // it supplies "export" (the arrow leaves the mast towards the lines),
     // while feeding in "import" mirrored (the arrow comes from the lines).
-    const supplying = input.hasGrid && input.grid >= ENERGY_FLOW_IDLE_WATTS;
-    const feeding = input.hasGrid && -input.grid >= ENERGY_FLOW_IDLE_WATTS;
+    const supplying = input.hasGrid && input.grid >= POWER_FLOW_IDLE_WATTS;
+    const feeding = input.hasGrid && -input.grid >= POWER_FLOW_IDLE_WATTS;
     const gridIcon = supplying ? 'transmission-tower-export' : feeding ? 'transmission-tower-import' : 'transmission-tower';
     if (shown.grid) node(l.node.grid[0], l.node.grid[1], colorOf.grid, gridIcon, feeding);
     if (shown.home) node(l.node.home[0], l.node.home[1], homeColor, 'home-lightning-bolt');
-    const level = entity.charge ? energyFlowNumber(values[entity.charge]) : null;
-    const charging = input.hasBattery && -input.battery >= ENERGY_FLOW_IDLE_WATTS;
+    const level = entity.charge ? powerFlowNumber(values[entity.charge]) : null;
+    const charging = input.hasBattery && -input.battery >= POWER_FLOW_IDLE_WATTS;
     if (shown.battery) node(l.node.battery[0], l.node.battery[1], colorOf.battery,
-      charging ? energyFlowChargingIcon(level) : iconOf(entity.charge || entity.bat) || 'battery');
+      charging ? powerFlowChargingIcon(level) : iconOf(entity.charge || entity.bat) || 'battery');
 
     const gap = r(l.ring) + L.valueGap;
     const below = gap + L.valueBelow - (L.valueLine - L.valueBase) + L.valueLine / 2;
@@ -17649,12 +17649,12 @@ function maybeFillTitleFromEnergy(tab) {
     if (shown.battery) {
       label(r(l.node.battery[0]) + gap, width - L.edge - r(l.node.battery[0]) - gap, l.node.battery[1],
         power(input.hasBattery, bat), 'left');
-      const charge = energyFlowNumber(values[entity.charge]);
+      const charge = powerFlowNumber(values[entity.charge]);
       label(L.edge, r(l.node.battery[0]) - gap - L.edge, l.node.battery[1],
         entity.charge && charge !== null ? [formatLocalizedNumber(charge, 0), '%'] : ['--', ''], 'right');
     }
     if (bits & 1) {
-      node(l.ring, l.ring, ENERGY_FLOW_COLORS.header,
+      node(l.ring, l.ring, POWER_FLOW_COLORS.header,
         normalizeMdiIconName(tile?.icon_name || '') || 'lightning-bolt');
       if (tile?.title) {
         const right = width - L.titleRight;
@@ -17664,7 +17664,7 @@ function maybeFillTitleFromEnergy(tab) {
           text + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(tile.title) + '</div>';
       }
     }
-    el.insertAdjacentHTML('afterbegin', '<div class="energy-flow-preview" style="position:absolute;left:0;top:0;width:' +
+    el.insertAdjacentHTML('afterbegin', '<div class="power-flow-preview" style="position:absolute;left:0;top:0;width:' +
       width.toFixed(2) + 'px;height:' + height.toFixed(2) + 'px;transform:scale(' + scale + ');transform-origin:0 0;' +
       'pointer-events:none"><svg width="' + width.toFixed(2) + '" height="' + height.toFixed(2) +
       '" style="position:absolute;left:0;top:0">' + svg + '</svg>' + html + '</div>');

@@ -1,4 +1,4 @@
-#include "src/types/energy_flow/web_html.h"
+#include "src/types/power_flow/web_html.h"
 
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
@@ -35,41 +35,41 @@ void close_place(String& html) { html += "              </div>\n"; }
 // 2026-10-26). Every field is an entity picker of the sensor list; an empty
 // node is left out of the flow. Without an entity of its own the tile's Auto
 // title is the type's name and its icon the header's lightning bolt.
-void append_energy_flow_fields_html(String& html, const String& tab_id) {
-  using i18n::EnergyFlowLabel;
+void append_power_flow_fields_html(String& html, const String& tab_id) {
+  using i18n::PowerFlowLabel;
   const char* language = configManager.getConfig().language;
   html += R"html(
-            <!-- Energy Flow Fields -->
+            <!-- Power Flow Fields -->
             <div id=")html";
   html += tab_id;
-  html += R"html(_energy_flow_fields" class="type-fields" data-auto-title=")html";
-  appendHtmlEscaped(html, i18n::energy_flow_label(language, EnergyFlowLabel::Type));
+  html += R"html(_power_flow_fields" class="type-fields" data-auto-title=")html";
+  appendHtmlEscaped(html, i18n::power_flow_label(language, PowerFlowLabel::Type));
   html += R"html(" data-auto-icon="lightning-bolt">
 )html";
   open_place(html, "head");
-  append_checkbox(html, tab_id, "flow_header", i18n::energy_flow_label(language, EnergyFlowLabel::ShowHeader), false);
+  append_checkbox(html, tab_id, "flow_header", i18n::power_flow_label(language, PowerFlowLabel::ShowHeader), false);
   close_place(html);
   const struct {
     const char* field;
-    EnergyFlowLabel label;
+    PowerFlowLabel label;
     const char* invert;
-  } nodes[] = {{"flow_pv_entity", EnergyFlowLabel::SolarPower, nullptr},
-               {"flow_grid_entity", EnergyFlowLabel::GridPower, "flow_grid_invert"},
-               {"flow_battery_entity", EnergyFlowLabel::BatteryPower, "flow_battery_invert"},
-               {"flow_battery_charge_entity", EnergyFlowLabel::BatteryCharge, nullptr},
-               {"flow_home_entity", EnergyFlowLabel::HomePower, nullptr}};
+  } nodes[] = {{"flow_pv_entity", PowerFlowLabel::SolarPower, nullptr},
+               {"flow_grid_entity", PowerFlowLabel::GridPower, "flow_grid_invert"},
+               {"flow_battery_entity", PowerFlowLabel::BatteryPower, "flow_battery_invert"},
+               {"flow_battery_charge_entity", PowerFlowLabel::BatteryCharge, nullptr},
+               {"flow_home_entity", PowerFlowLabel::HomePower, nullptr}};
   open_place(html, "top");
   for (const auto& node : nodes) {
     html += "                ";
-    appendEntityPickerField(html, tab_id, node.field, i18n::energy_flow_label(language, node.label), "sensors");
+    appendEntityPickerField(html, tab_id, node.field, i18n::power_flow_label(language, node.label), "sensors");
     html += "\n";
     if (node.invert) {
-      append_checkbox(html, tab_id, node.invert, i18n::energy_flow_label(language, EnergyFlowLabel::InvertSign), false);
+      append_checkbox(html, tab_id, node.invert, i18n::power_flow_label(language, PowerFlowLabel::InvertSign), false);
     }
   }
   close_place(html);
   open_place(html, "color");
-  append_checkbox(html, tab_id, "flow_card", i18n::energy_flow_label(language, EnergyFlowLabel::ShowCard), true);
+  append_checkbox(html, tab_id, "flow_card", i18n::power_flow_label(language, PowerFlowLabel::ShowCard), true);
   close_place(html);
   html += R"html(            </div>
 )html";

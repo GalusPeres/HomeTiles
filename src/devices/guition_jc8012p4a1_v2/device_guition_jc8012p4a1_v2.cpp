@@ -320,7 +320,7 @@ void flush_framebuffer_rect(const uint16_t* fb, int32_t x, int32_t y, int32_t w,
   // A short region (a small UI area turned by the CPU) takes one write-back
   // over its rows' whole span: every esp_cache_msync call costs about 20 us,
   // the clean lines between the rows almost nothing. One call per row cost
-  // ~0.3 ms per moving Energy flow dot (b536 log: 2.3 flushes, 0.73 ms per
+  // ~0.3 ms per moving Power flow dot (b536 log: 2.3 flushes, 0.73 ms per
   // frame). Wide regions keep one call per row.
   const size_t span_bytes = ((static_cast<size_t>(h) - 1) * stride + static_cast<size_t>(w)) * sizeof(uint16_t);
   if (h > 1 && span_bytes <= kSingleWritebackMaxBytes) {

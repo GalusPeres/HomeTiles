@@ -45,7 +45,7 @@ const renderer = read('src/tiles/runtime/tile_renderer.cpp');
 assert.ok(renderer.includes('value_unit::show(value_label, target[grid_index].unit_label, displayValue, unit_text);'));
 assert.doesNotMatch(renderer, /combined \+= unit;/, 'no value and unit in one text any more');
 assert.ok(renderer.includes('if (own_unit) value_unit::show_text(widgets.temp_label, temp_text);'));
-has('src/types/energy_flow/renderer.cpp', 'void show_power(lv_obj_t* label, lv_obj_t*& unit, bool known, float watts) {');
+has('src/types/power_flow/renderer.cpp', 'void show_power(lv_obj_t* label, lv_obj_t*& unit, bool known, float watts) {');
 has('src/tiles/runtime/tile_header.h', 'value_unit::show_text(label, text);');
 has('src/types/climate/renderer.cpp', 'value_unit::show_text(value, climate_slot_text(kind, state));');
 has('src/types/value/value_control.cpp',
@@ -101,7 +101,7 @@ has('src/types/sensor/web_scripts.cpp', 'const uint8_t* sizes = value_unit::unit
 const valueUnitStyle = new Function(extractDeliveredFunction('valueUnitStyle') + '\nreturn valueUnitStyle;')();
 assert.equal(valueUnitStyle(28), 'font-size:0.7143em;margin-left:0.1500em;vertical-align:0.2908em', '28 -> 20 like the panel');
 assert.equal(valueUnitStyle(20), 'font-size:0.8000em;margin-left:0.1875em;vertical-align:0.1817em', '20 -> 16 like the forecast');
-has('src/types/energy_flow/admin.js', `(parts[1] ? '<span class="tile-unit">' + escapeHtml(parts[1]) + '</span>' : '')`);
+has('src/types/power_flow/admin.js', `(parts[1] ? '<span class="tile-unit">' + escapeHtml(parts[1]) + '</span>' : '')`);
 // The preview splits finished texts like the panel (the same cases below).
 const escapeHtml = text => String(text).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
 const unitTextHtml = new Function('escapeHtml', extractDeliveredFunction('unitTextHtml') + '\nreturn unitTextHtml;')(escapeHtml);

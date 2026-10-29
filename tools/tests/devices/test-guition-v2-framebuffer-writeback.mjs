@@ -1,6 +1,6 @@
 // Guition V2: a small UI area turned by the CPU into the panel framebuffer
 // is written back from the cache in one call over its rows' span (b536 log:
-// one esp_cache_msync per row cost ~0.3 ms per moving Energy flow dot);
+// one esp_cache_msync per row cost ~0.3 ms per moving Power flow dot);
 // every byte of every row stays covered, and wide regions keep one call per
 // row. Compiles the driver's real flush_framebuffer_rect on the host.
 import assert from 'node:assert/strict';

@@ -52,8 +52,8 @@ assert.ok(corners.includes('if (!g_sets) g_sets = static_cast<CornerSet*>(lv_mal
 assert.ok(corners.includes('if (!g_sets || at < first || at >= first + sizeof(CornerSet) * kMaxSets || (at - first) % sizeof(CornerSet)) {'),
   'a marked task is recognised by the heap block, not by the size of a pointer');
 
-// Energy flow draw probes (96 x 36 bytes).
-const flow = read('src/types/energy_flow/renderer.cpp');
+// Power flow draw probes (96 x 36 bytes).
+const flow = read('src/types/power_flow/renderer.cpp');
 assert.ok(!flow.includes('DrawProbe g_probes[') && flow.includes('DrawProbe* g_probes = nullptr;'));
 assert.ok(flow.includes('if (!g_probes) g_probes = static_cast<DrawProbe*>(lv_malloc_zeroed(sizeof(DrawProbe) * kMaxProbes));\n  if (!g_probes) return;'),
   'made with the first probe');

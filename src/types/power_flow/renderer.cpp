@@ -1,4 +1,4 @@
-#include "src/types/energy_flow/renderer.h"
+#include "src/types/power_flow/renderer.h"
 
 #include <Arduino.h>
 #include <esp_heap_caps.h>
@@ -20,8 +20,8 @@
 #include "src/tiles/runtime/tile_press.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
-#include "src/types/energy_flow/flow_geometry.h"
-#include "src/types/energy_flow/flow_metrics.h"
+#include "src/types/power_flow/flow_geometry.h"
+#include "src/types/power_flow/flow_metrics.h"
 #include "src/ui/popups/popup_shell.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/screensaver/image_screensaver.h"
@@ -30,7 +30,7 @@
 #include "src/ui/shared/ui_theme.h"
 #include "src/ui/shared/value_unit.h"
 
-// The Energy flow tile (decided design: flow_geometry.h). Each node is one
+// The Power flow tile (decided design: flow_geometry.h). Each node is one
 // Home Assistant sensor and opens its normal Sensor popup when tapped; there
 // is no popup of the tile itself. Only what flows now is colored, in the
 // color of its source, with one dot moving from the source to the target.
@@ -42,7 +42,7 @@
 // awake: each step redraws the dot's small area only, never the tile.
 namespace {
 
-using namespace energy_flow;
+using namespace power_flow;
 
 // The node colors of the decided design (Home Assistant's energy colors);
 // grid and battery by direction like Home Assistant's card (user 2026-10-26).
@@ -561,7 +561,7 @@ void log_probes(uint32_t frames) {
   // The twelve most expensive objects (their trees), per dot frame.
   bool shown[kMaxProbes] = {};
   char line[900];
-  int used = snprintf(line, sizeof(line), "[EnergyFlow] Dots draw per frame (%u probes):",
+  int used = snprintf(line, sizeof(line), "[PowerFlow] Dots draw per frame (%u probes):",
                       static_cast<unsigned>(g_probe_count));
   for (int rank = 0; rank < 12; ++rank) {
     int best = -1;
@@ -590,7 +590,7 @@ void log_motion(uint32_t now_ms) {
   if (m.frames) {
     const uint32_t frames = m.frames;
     const uint32_t window = now_ms - m.window_ms;
-    Serial.printf("[EnergyFlow] Dots %lu s: frames=%lu (%.1f/s) dots<=%lu areas avg=%.1f max=%lu px avg=%lu "
+    Serial.printf("[PowerFlow] Dots %lu s: frames=%lu (%.1f/s) dots<=%lu areas avg=%.1f max=%lu px avg=%lu "
                   "render avg=%.2f max=%.2f ms layout avg=%lu us draw avg=%lu us flush avg=%lu us n=%.1f "
                   "tail avg=%lu us lines avg=%lu max=%lu us (line %.1f %lu us dot %.1f %lu us) "
                   "search avg=%lu us step avg=%lu max=%lu us gap max=%.1f ms\n",
@@ -624,7 +624,7 @@ bool g_woken_by_state = false;
 // stall clock: time on another page or behind a popup is no stall.
 void note_still(const char* still, uint32_t now_ms) {
   if (still != g_still_reason && still == kStillHidden) {
-    Serial.printf("[EnergyFlow] Dots wait: tile hidden by %s %ldx%ld, %u levels up\n",
+    Serial.printf("[PowerFlow] Dots wait: tile hidden by %s %ldx%ld, %u levels up\n",
                   g_hidden_by.screen ? "another screen" : "an object", static_cast<long>(g_hidden_by.width),
                   static_cast<long>(g_hidden_by.height), static_cast<unsigned>(g_hidden_by.depth));
   }
@@ -638,12 +638,12 @@ void note_still(const char* still, uint32_t now_ms) {
 // saw and what woke the dots.
 void log_still(uint32_t now_ms) {
   if (!g_still_since_ms || now_ms - g_still_since_ms < kStillLogMs) return;
-  Serial.printf("[EnergyFlow] Dots move again after %lu ms (last frame: %s, woken by %s)\n",
+  Serial.printf("[PowerFlow] Dots move again after %lu ms (last frame: %s, woken by %s)\n",
                 static_cast<unsigned long>(now_ms - g_still_since_ms), g_still_reason ? g_still_reason : "none",
                 g_woken_by_state ? "a state" : "a frame");
 }
 
-// The frames after a page with a flow came up (energy_flow_shown; user
+// The frames after a page with a flow came up (power_flow_shown; user
 // 2026-10-28, b609: after a page turn the dot still stood about a second and
 // no log said why): when each frame came, counted from the showing, and what
 // it found; one line once the dots made kShownMoves steps, after
@@ -701,7 +701,7 @@ void log_shown() {
   char later[64];
   describe_hidden(at_show, sizeof(at_show), t.hidden_at_show, t.at_show);
   describe_hidden(later, sizeof(later), t.hidden_later, t.later);
-  Serial.printf("[EnergyFlow] Shown: first move %s; at the showing %s, last hidden frame %s; frames (ms):%s\n",
+  Serial.printf("[PowerFlow] Shown: first move %s; at the showing %s, last hidden frame %s; frames (ms):%s\n",
                 first, at_show, t.hidden_later ? later : "none", frames);
   t.shown_ms = 0;
 }
@@ -854,7 +854,7 @@ void render_strokes(FlowTileState& st) {
     if (!st.line_shown[line] || st.layout.line[line].count < 2 || width <= 0 || height <= 0) continue;
     uint8_t* pixels = static_cast<uint8_t*>(lv_malloc(static_cast<size_t>(width) * static_cast<size_t>(height)));
     if (!pixels) {
-      Serial.printf("[EnergyFlow] No memory for line %u's picture (%ldx%ld)\n", static_cast<unsigned>(line),
+      Serial.printf("[PowerFlow] No memory for line %u's picture (%ldx%ld)\n", static_cast<unsigned>(line),
                     static_cast<long>(width), static_cast<long>(height));
       continue;
     }
@@ -1231,7 +1231,7 @@ bool register_state(FlowTileState* st) {
   static uint32_t last_log_ms = 0;
   if (last_log_ms == 0 || millis() - last_log_ms > 60000) {
     last_log_ms = millis();
-    Serial.printf("[EnergyFlow] More than %u tiles; this one does not follow states\n",
+    Serial.printf("[PowerFlow] More than %u tiles; this one does not follow states\n",
                   static_cast<unsigned>(kMaxFlowTiles));
   }
   return false;
@@ -1310,11 +1310,11 @@ void place_value(lv_obj_t* label, int x, int width, float centre_y, lv_text_alig
 
 }  // namespace
 
-lv_obj_t* render_energy_flow_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint8_t index,
+lv_obj_t* render_power_flow_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint8_t index,
                                   GridType grid_type) {
   (void)index;
   if (!parent) {
-    Serial.println("[TileRenderer] ERROR: parent NULL for energy flow tile");
+    Serial.println("[TileRenderer] ERROR: parent NULL for power flow tile");
     return nullptr;
   }
   lv_obj_t* card = lv_button_create(parent);
@@ -1336,14 +1336,14 @@ lv_obj_t* render_energy_flow_tile(lv_obj_t* parent, int col, int row, const Tile
 
   FlowTileState* st = new_state();
   if (!st) {
-    Serial.println("[EnergyFlow] ERROR: no memory for the tile state");
+    Serial.println("[PowerFlow] ERROR: no memory for the tile state");
     return card;
   }
   st->card = card;
   for (uint8_t role = 0; role < kRoleCount; ++role) st->entities[role] = flowEntityAt(tile.flow_entities, role);
-  st->grid_invert = energyFlowOption(tile, kFlowGridInvertBit);
-  st->battery_invert = energyFlowOption(tile, kFlowBatteryInvertBit);
-  const bool on_card = !energyFlowOption(tile, kFlowNoCardBit);
+  st->grid_invert = powerFlowOption(tile, kFlowGridInvertBit);
+  st->battery_invert = powerFlowOption(tile, kFlowBatteryInvertBit);
+  const bool on_card = !powerFlowOption(tile, kFlowNoCardBit);
   st->card_color = card_color;
   st->idle_color = !ui_theme::light() ? kIdleDark : on_card ? kIdleLightCard : kIdleLightScreen;
   st->line_width = line_width();
@@ -1354,7 +1354,7 @@ lv_obj_t* render_energy_flow_tile(lv_obj_t* parent, int col, int row, const Tile
   const float width = tile_geometry::extent(tile.col, tile.span_w, GRID_CELL_W, GRID_GAP);
   const float height = tile_geometry::extent(tile.row, tile.span_h, GRID_CELL_H, GRID_GAP);
   const Metrics metrics = device_metrics();
-  st->layout = layout(width, height, metrics, energyFlowOption(tile, kFlowHeaderBit) ? header_top(metrics) : 0.0f);
+  st->layout = layout(width, height, metrics, powerFlowOption(tile, kFlowHeaderBit) ? header_top(metrics) : 0.0f);
   const int pad_left = lv_obj_get_style_pad_left(card, LV_PART_MAIN);
   const int pad_top = lv_obj_get_style_pad_top(card, LV_PART_MAIN);
 
@@ -1447,7 +1447,7 @@ lv_obj_t* render_energy_flow_tile(lv_obj_t* parent, int col, int row, const Tile
 
   // Header (off by default): the tile's icon in a node's disc in the top
   // left corner and the title alone top right (picture 66).
-  if (energyFlowOption(tile, kFlowHeaderBit)) {
+  if (powerFlowOption(tile, kFlowHeaderBit)) {
     NodeWidgets header;
     const float corner = l.ring;
     const int ring = round_px(2.0f * l.ring), disc = round_px(2.0f * l.disc);
@@ -1492,7 +1492,7 @@ lv_obj_t* render_energy_flow_tile(lv_obj_t* parent, int col, int row, const Tile
   return card;
 }
 
-bool energy_flow_entity_changed(const char* entity_id) {
+bool power_flow_entity_changed(const char* entity_id) {
   if (!entity_id || !*entity_id) return false;
   bool used = false;
   for (FlowTileState* st : g_tiles) {
@@ -1508,7 +1508,7 @@ bool energy_flow_entity_changed(const char* entity_id) {
   return used;
 }
 
-void process_energy_flow_updates() {
+void process_power_flow_updates() {
   if (!g_any_dirty) return;
   g_any_dirty = false;
   for (FlowTileState* st : g_tiles) {
@@ -1516,7 +1516,7 @@ void process_energy_flow_updates() {
   }
 }
 
-void energy_flow_touch_down(lv_obj_t* pressed) {
+void power_flow_touch_down(lv_obj_t* pressed) {
   for (lv_obj_t* obj = pressed; obj; obj = lv_obj_get_parent(obj)) {
     const uint32_t count = lv_obj_get_event_count(obj);
     for (uint32_t i = 0; i < count; ++i) {
@@ -1525,7 +1525,7 @@ void energy_flow_touch_down(lv_obj_t* pressed) {
       const FlowTileState* st = static_cast<const FlowTileState*>(lv_event_dsc_get_user_data(dsc));
       const uintptr_t tag = reinterpret_cast<uintptr_t>(lv_obj_get_user_data(obj));
       const uint8_t role = static_cast<uint8_t>(tag / 8);
-      if (!st || role >= energy_flow::kRoleCount || !st->entities[role].length() ||
+      if (!st || role >= power_flow::kRoleCount || !st->entities[role].length() ||
           node_state_history(st->entities[role])) {
         return;
       }
@@ -1535,7 +1535,7 @@ void energy_flow_touch_down(lv_obj_t* pressed) {
   }
 }
 
-void energy_flow_shown(lv_obj_t* shown) {
+void power_flow_shown(lv_obj_t* shown) {
   if (!shown || !g_motion_display) return;
   for (FlowTileState* st : g_tiles) {
     if (!st || !st->card || !any_live(*st)) continue;

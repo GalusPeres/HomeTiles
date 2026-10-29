@@ -1,4 +1,4 @@
-// Energy flow tile (28, types/energy_flow, decided design picture 65, user
+// Power flow tile (28, types/power_flow, decided design picture 65, user
 // 2026-10-24): wired into every list a tile type needs, its five node
 // sensors and options travel through the Web Admin (fields, live binding,
 // draft snapshot, copy/paste, import), the device redraws only from marked
@@ -17,39 +17,39 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
 
 // Stable ID, registry and its type module.
-assert.match(read('src/types/tile_type.h'), /TILE_ENERGY_FLOW = 28\n\};/);
+assert.match(read('src/types/tile_type.h'), /TILE_POWER_FLOW = 28\n\};/);
 const registry = read('src/types/types_registry.cpp');
-assert.match(registry, /TILE_ENERGY_FLOW,\s*"Leistungsfluss",\s*"energy-flow",\s*"energy_flow",\s*"energy_flow",\s*nullptr,\s*"loadEnergyFlowFields",\s*"saveEnergyFlowFields",\s*"resetEnergyFlowFields",\s*0x2A2A2A,\s*false,\s*render_energy_flow_wrapper,\s*apply_energy_flow_wrapper,\s*append_energy_flow_fields_wrapper,\s*append_energy_flow_styles,\s*append_energy_flow_scripts/);
-assert.ok(registry.includes('case TILE_ENERGY_FLOW: return i18n::energy_flow_label(language, i18n::EnergyFlowLabel::Type);'));
+assert.match(registry, /TILE_POWER_FLOW,\s*"Leistungsfluss",\s*"power-flow",\s*"power_flow",\s*"power_flow",\s*nullptr,\s*"loadPowerFlowFields",\s*"savePowerFlowFields",\s*"resetPowerFlowFields",\s*0x2A2A2A,\s*false,\s*render_power_flow_wrapper,\s*apply_power_flow_wrapper,\s*append_power_flow_fields_wrapper,\s*append_power_flow_styles,\s*append_power_flow_scripts/);
+assert.ok(registry.includes('case TILE_POWER_FLOW: return i18n::power_flow_label(language, i18n::PowerFlowLabel::Type);'));
 for (const file of ['renderer.cpp', 'renderer.h', 'web_handler.cpp', 'web_html.cpp', 'web_scripts.cpp', 'web_styles.cpp', 'admin.js',
   'flow_model.h', 'flow_geometry.h', 'flow_metrics.h']) {
-  assert.ok(fs.existsSync(path.join(root, 'src/types/energy_flow', file)), file);
+  assert.ok(fs.existsSync(path.join(root, 'src/types/power_flow', file)), file);
 }
-assert.ok(JSON.parse(read('src/web/admin/bundle.json')).sources.includes('src/types/energy_flow/admin.js'));
+assert.ok(JSON.parse(read('src/web/admin/bundle.json')).sources.includes('src/types/power_flow/admin.js'));
 
 // Web Admin fields: one tab-prefixed entity picker per node in Home
 // Assistant's order and the options; the card starts on, the header off.
 // User 2026-10-26: the sensors at the top of the settings, "Invert sign"
 // right under the grid and the battery, "Show title and icon" under Title
 // and Icon, the card in Color; Auto names the type, not the solar sensor.
-const html = read('src/types/energy_flow/web_html.cpp');
-assert.ok(html.includes('_energy_flow_fields" class="type-fields" data-auto-title=")html";'));
-assert.ok(html.includes('appendHtmlEscaped(html, i18n::energy_flow_label(language, EnergyFlowLabel::Type));'));
+const html = read('src/types/power_flow/web_html.cpp');
+assert.ok(html.includes('_power_flow_fields" class="type-fields" data-auto-title=")html";'));
+assert.ok(html.includes('appendHtmlEscaped(html, i18n::power_flow_label(language, PowerFlowLabel::Type));'));
 assert.ok(html.includes('data-auto-icon="lightning-bolt">'));
 const placeAt = place => html.indexOf(`open_place(html, "${place}");`);
 assert.ok(placeAt('head') > 0 && placeAt('head') < html.indexOf('"flow_header"') && html.indexOf('"flow_header"') < placeAt('top') &&
   placeAt('top') < html.indexOf('for (const auto& node : nodes)') && html.indexOf('for (const auto& node : nodes)') < placeAt('color') &&
   placeAt('color') < html.indexOf('"flow_card"'), 'header under the title, sensors on top, the card in Color');
-assert.ok(html.includes('{"flow_grid_entity", EnergyFlowLabel::GridPower, "flow_grid_invert"}') &&
-  html.includes('{"flow_battery_entity", EnergyFlowLabel::BatteryPower, "flow_battery_invert"}'), 'invert under its sensor');
-assert.ok(html.includes('if (node.invert) {\n      append_checkbox(html, tab_id, node.invert, i18n::energy_flow_label(language, EnergyFlowLabel::InvertSign), false);'));
+assert.ok(html.includes('{"flow_grid_entity", PowerFlowLabel::GridPower, "flow_grid_invert"}') &&
+  html.includes('{"flow_battery_entity", PowerFlowLabel::BatteryPower, "flow_battery_invert"}'), 'invert under its sensor');
+assert.ok(html.includes('if (node.invert) {\n      append_checkbox(html, tab_id, node.invert, i18n::power_flow_label(language, PowerFlowLabel::InvertSign), false);'));
 for (const field of ['flow_pv_entity', 'flow_grid_entity', 'flow_battery_entity', 'flow_battery_charge_entity', 'flow_home_entity']) {
-  assert.ok(html.includes(`{"${field}", EnergyFlowLabel::`), field);
+  assert.ok(html.includes(`{"${field}", PowerFlowLabel::`), field);
 }
-assert.ok(html.includes('appendEntityPickerField(html, tab_id, node.field, i18n::energy_flow_label(language, node.label), "sensors");'));
+assert.ok(html.includes('appendEntityPickerField(html, tab_id, node.field, i18n::power_flow_label(language, node.label), "sensors");'));
 assert.match(html, /append_checkbox\(html, tab_id, "flow_header", [^;]*, false\);/);
 assert.match(html, /append_checkbox\(html, tab_id, "flow_card", [^;]*, true\);/);
-const handler = read('src/types/energy_flow/web_handler.cpp');
+const handler = read('src/types/power_flow/web_handler.cpp');
 for (const marker of ['if (server.hasArg("flow_entities")) tile.flow_entities = server.arg("flow_entities");',
   ': flowEntityAt(before, role);', 'normalizeFlowEntities(tile);', '{"flow_no_card", kFlowNoCardBit}',
   'tile.key_code &= kFlowOptionBits;', 'if (!server.hasArg(option.name)) continue;']) {
@@ -58,19 +58,19 @@ for (const marker of ['if (server.hasArg("flow_entities")) tile.flow_entities = 
 
 // Browser editor: live binding, draft snapshot, copy/paste and import keep
 // the record and the options; a new tile grows to 2x2.
-assert.match(read('src/web/admin/tiles/editor.js'), /for \(const field of \['flow_pv_entity', 'flow_grid_entity', 'flow_battery_entity', 'flow_battery_charge_entity',\s*'flow_home_entity', 'flow_header', 'flow_card', 'flow_grid_invert', 'flow_battery_invert'\]\) \{\s*bindLive\(document\.getElementById\(prefix \+ '_' \+ field\), 'change', field, \(\) => \{\s*if \(field === 'flow_header'\) energyFlowHeaderTitle\(prefix\);\s*updateTilePreview\(tab\); updateDraft\(tab\); scheduleAutoSave\(tab\);/);
-assert.match(read('src/web/admin/tiles/snapshots.js'), /if \(Number\(tile\.type\) === 28 && snapshot && Object\.prototype\.hasOwnProperty\.call\(snapshot, 'flow_header'\)\) \{\s*tile\.key_code = energyFlowOptionBits\(snapshot\);/);
+assert.match(read('src/web/admin/tiles/editor.js'), /for \(const field of \['flow_pv_entity', 'flow_grid_entity', 'flow_battery_entity', 'flow_battery_charge_entity',\s*'flow_home_entity', 'flow_header', 'flow_card', 'flow_grid_invert', 'flow_battery_invert'\]\) \{\s*bindLive\(document\.getElementById\(prefix \+ '_' \+ field\), 'change', field, \(\) => \{\s*if \(field === 'flow_header'\) powerFlowHeaderTitle\(prefix\);\s*updateTilePreview\(tab\); updateDraft\(tab\); scheduleAutoSave\(tab\);/);
+assert.match(read('src/web/admin/tiles/snapshots.js'), /if \(Number\(tile\.type\) === 28 && snapshot && Object\.prototype\.hasOwnProperty\.call\(snapshot, 'flow_header'\)\) \{\s*tile\.key_code = powerFlowOptionBits\(snapshot\);/);
 assert.match(read('src/web/admin/tiles/import-export.js'), /\} else if \(safeType === 28\) \{\s*fd\.append\('flow_entities', tile\.flow_entities \|\| ''\);/);
 assert.ok(read('src/web/admin/tiles/layout.js').includes("if (Number(type) === 28) return [Math.min(2, placeCols()), Math.min(2, placeRows())];"));
-assert.ok(read('src/web/admin/tiles/live-preview.js').includes("if (previewKind === 'energy_flow' && typeof applyEnergyFlowPreview === 'function') {"));
-assert.ok(read('src/web/admin/tiles/grid-preview.js').includes('applyEnergyFlowPreview(el, tile, sensorMeta);'));
+assert.ok(read('src/web/admin/tiles/live-preview.js').includes("if (previewKind === 'power_flow' && typeof applyPowerFlowPreview === 'function') {"));
+assert.ok(read('src/web/admin/tiles/grid-preview.js').includes('applyPowerFlowPreview(el, tile, sensorMeta);'));
 
 // Runtime: a node state marks the tiles showing it (and feeds an open
 // Sensor popup); the loop redraws each marked tile once.
 const tiles = read('src/ui/tabs/tiles/tab_tiles_unified.cpp');
-assert.match(tiles, /const bool changed = cache_entity_payload\(entity_id, value\);[\s\S]{0,300}if \(grid_type == GridType::TAB0 && energy_flow_entity_changed\(entity_id\)\) \{\s*const String unit = haBridgeConfig\.findSensorUnit\(entity_id\);\s*queue_sensor_popup_value\(entity_id, value, unit\.length\(\) \? unit\.c_str\(\) : nullptr\);/);
-assert.match(read('src/tiles/runtime/tile_update_service.h'), /process_media_update_queue\(drain_all \? 0 : 2\);\s*\/\/[^\n]*\n\s*process_energy_flow_updates\(\);/);
-const renderer = read('src/types/energy_flow/renderer.cpp');
+assert.match(tiles, /const bool changed = cache_entity_payload\(entity_id, value\);[\s\S]{0,300}if \(grid_type == GridType::TAB0 && power_flow_entity_changed\(entity_id\)\) \{\s*const String unit = haBridgeConfig\.findSensorUnit\(entity_id\);\s*queue_sensor_popup_value\(entity_id, value, unit\.length\(\) \? unit\.c_str\(\) : nullptr\);/);
+assert.match(read('src/tiles/runtime/tile_update_service.h'), /process_media_update_queue\(drain_all \? 0 : 2\);\s*\/\/[^\n]*\n\s*process_power_flow_updates\(\);/);
+const renderer = read('src/types/power_flow/renderer.cpp');
 for (const marker of [
   // One step per display frame (60 fps, user 2026-10-24): the display's
   // refresh moves the dots, whole pixels counted, not elapsed time (b533's
@@ -90,7 +90,7 @@ for (const marker of [
   'lv_obj_invalidate_area(st.canvas, &area);',
   // What the dots cost, one log line per 10 s while they move.
   'constexpr uint32_t kMotionLogMs = 10000;',
-  'Serial.printf("[EnergyFlow] Dots %lu s: frames=%lu',
+  'Serial.printf("[PowerFlow] Dots %lu s: frames=%lu',
   // State changes only mark; unchanged texts are not set again.
   'st->dirty = true;',
   'if (shown && text == shown) return;',
@@ -114,7 +114,7 @@ for (const marker of [
 ]) assert.ok(renderer.includes(marker), `renderer: ${marker}`);
 // The decided node size on every layout: a 56 px disc in a 6 px ring
 // (b532 took the device's smaller tile radius).
-const metrics = read('src/types/energy_flow/flow_metrics.h');
+const metrics = read('src/types/power_flow/flow_metrics.h');
 assert.ok(metrics.includes('return tile_icon_disc::header_diameter(icon) - 2 * tile_icon_disc::corner_shrink();'),
   'the disc of a 1x1 tile as drawn (b532 took the tile radius, b533 the mockup 56 px)');
 assert.ok(metrics.includes('m.ring = m.disc + tile_icon_disc::inset() + tile_icon_disc::corner_shrink();'),
@@ -130,10 +130,10 @@ assert.doesNotMatch(renderer.slice(renderer.indexOf('void motion_display_cb('), 
   /Serial\.|String |new |malloc/, 'no logs or allocations per frame outside the rate-limited line');
 
 // Every language has the nine labels, none empty; the Web Admin shows them
-// through energy_flow_label only. The tile shows power, not energy (user
+// through power_flow_label only. The tile shows power, not energy (user
 // 2026-10-26): "Leistungsfluss".
 const header = read('src/core/i18n/i18n.h');
-assert.ok(header.includes('const char* energy_flow_labels[9];'));
+assert.ok(header.includes('const char* power_flow_labels[9];'));
 assert.match(header, /ShowCard,\s*InvertSign,\s*Count,/);
 const i18n = read('src/core/i18n/i18n.cpp');
 for (const lang of ['De', 'En', 'Fr', 'Pl', 'Cs', 'Es', 'Sk']) {
@@ -142,7 +142,7 @@ for (const lang of ['De', 'En', 'Fr', 'Pl', 'Cs', 'Es', 'Sk']) {
   const table = i18n.slice(start, i18n.indexOf('"};\n', start) + 3);
   // Right before the entity picker labels (LocaleProfile order).
   const labels = /\n    \{("[^"]+"(?:, "[^"]+"){8})\},\n    \{"[^"]+", "[^"]+", "[^"]*\{query\}/.exec(table);
-  assert.ok(labels, `${lang}: the nine energy flow labels before the entity picker labels`);
+  assert.ok(labels, `${lang}: the nine power flow labels before the entity picker labels`);
   if (lang === 'De') assert.ok(labels[1].startsWith('"Leistungsfluss"') && labels[1].includes('"Titel und Icon anzeigen"') &&
     labels[1].endsWith('"Vorzeichen umkehren"'), labels[1]);
   if (lang === 'En') assert.ok(labels[1].startsWith('"Power flow"'), labels[1]);
@@ -153,7 +153,7 @@ assert.doesNotMatch(html, /"(Solar|Grid|Battery|Home|Header|Card)[^"]*"/, 'no di
 // The real preview code on made-up states (user 2026-10-24: 200 W from the
 // grid and 500 W from the battery): the home in the battery's color, the
 // two flows in their sources' colors, the idle lines grey, the values.
-const admin = read('src/types/energy_flow/admin.js');
+const admin = read('src/types/power_flow/admin.js');
 const nodeOf = () => ({classList: {add() {}, toggle() {}, contains: () => false}, style: {setProperty() {}},
   querySelectorAll: () => [], isConnected: true, offsetWidth: 202, offsetHeight: 160, closest: () => null,
   insertAdjacentHTML(where, markup) { this.html = markup; }});
@@ -161,7 +161,7 @@ const vars = {'--radius-preview-scale': '0.5', '--preview-cell-w': '97', '--prev
   '--tile-card': '#1A1A1A', '--icon-glow-pct': '25'};
 const context = vm.createContext({
   Math, Number, String, Object, Array, JSON, parseFloat, parseInt,
-  ENERGY_FLOW_LAYOUT: {ring: 36, disc: 30, ringCorner: 30, discCorner: 24, insetX: 24, insetY: 20, spacing: 18, lineWidth: 4, dotRadius: 5, iconPx: 48,
+  POWER_FLOW_LAYOUT: {ring: 36, disc: 30, ringCorner: 30, discCorner: 24, insetX: 24, insetY: 20, spacing: 18, lineWidth: 4, dotRadius: 5, iconPx: 48,
     valuePx: 20, valueLine: 24, valueBase: 5, valueGap: 12, valueBelow: 15, edge: 6, titleRight: 17, titleTop: 25},
   document: {documentElement: {}},
   getComputedStyle: () => ({getPropertyValue: name => vars[name] || ''}),
@@ -173,11 +173,11 @@ const context = vm.createContext({
   escapeHtml: text => String(text).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]),
   normalizeMdiIconName: name => String(name || '').replace(/^mdi:/, ''),
 });
-vm.runInContext(admin + '\nthis.applyEnergyFlowPreview = applyEnergyFlowPreview;', context);
+vm.runInContext(admin + '\nthis.applyPowerFlowPreview = applyPowerFlowPreview;', context);
 const el = nodeOf();
 const meta = {values: {'sensor.pv': '0', 'sensor.grid': '200', 'sensor.bat': '0.5', 'sensor.soc': '78'},
   units: {'sensor.pv': 'W', 'sensor.grid': 'W', 'sensor.bat': 'kW', 'sensor.soc': '%'}, icons: {'sensor.soc': 'mdi:battery-70'}};
-context.applyEnergyFlowPreview(el, {flow_entities: 'sensor.pv\nsensor.grid\nsensor.bat\nsensor.soc', key_code: 0, span_w: 2, span_h: 2,
+context.applyPowerFlowPreview(el, {flow_entities: 'sensor.pv\nsensor.grid\nsensor.bat\nsensor.soc', key_code: 0, span_w: 2, span_h: 2,
   title: '<b>Energie</b>'}, meta);
 const drawn = el.html;
 assert.ok(drawn.includes('width="404.00" height="320.00"'), 'the V2 2x2 tile in display pixels');
@@ -194,7 +194,7 @@ assert.ok(/mdi-transmission-tower-export" style="[^"]*color:#488FC2/.test(drawn)
 // A battery at rest is cyan too, magenta only while it charges (user
 // 2026-10-26).
 const resting = nodeOf();
-context.applyEnergyFlowPreview(resting, {flow_entities: 'sensor.pv\nsensor.grid\nsensor.bat\nsensor.soc', key_code: 0, span_w: 2, span_h: 2},
+context.applyPowerFlowPreview(resting, {flow_entities: 'sensor.pv\nsensor.grid\nsensor.bat\nsensor.soc', key_code: 0, span_w: 2, span_h: 2},
   {values: {'sensor.pv': '0', 'sensor.grid': '200', 'sensor.bat': '0', 'sensor.soc': '78'}, units: {}, icons: {'sensor.soc': 'mdi:battery-70'}});
 assert.ok(/mdi-battery-70" style="[^"]*color:#4DB6AC/.test(resting.html), 'resting battery cyan');
 // Every value with its unit a step smaller after it (user 2026-10-26).
@@ -203,7 +203,7 @@ for (const [value, unit] of [['0', 'W'], ['200', 'W'], ['700', 'W'], ['500', 'W'
 }
 assert.ok(!drawn.includes('Energie'), 'no header by default');
 const headed = nodeOf();
-context.applyEnergyFlowPreview(headed, {flow_entities: 'sensor.pv', key_code: 1, span_w: 2, span_h: 2, title: '<b>Energie</b>',
+context.applyPowerFlowPreview(headed, {flow_entities: 'sensor.pv', key_code: 1, span_w: 2, span_h: 2, title: '<b>Energie</b>',
   icon_name: ''}, meta);
 assert.ok(headed.html.includes('&lt;b&gt;Energie&lt;/b&gt;'), 'the header title is escaped');
 assert.ok(headed.html.includes('mdi-lightning-bolt'), 'the header icon');
@@ -211,7 +211,7 @@ assert.ok(!headed.html.includes('mdi-transmission-tower'), 'a node without its e
 // A new tile without any sensor shows no node, not a lone home (user
 // 2026-10-26); the home joins with the first sensor.
 const empty = nodeOf();
-context.applyEnergyFlowPreview(empty, {flow_entities: '', key_code: 0, span_w: 2, span_h: 2}, meta);
+context.applyPowerFlowPreview(empty, {flow_entities: '', key_code: 0, span_w: 2, span_h: 2}, meta);
 assert.ok(!empty.html.includes('<rect') && !empty.html.includes('mdi-') && !empty.html.includes('--'), 'empty tile: no node');
 assert.ok(/mdi-home-lightning-bolt/.test(headed.html), 'the home with the first sensor');
 assert.match(renderer, /const bool has_home = has_pv \|\| has_grid \|\| has_battery \|\| st->entities\[kRoleHome\]\.length\(\) > 0;\s*const bool node_shown\[kNodeCount\] = \{has_pv, has_grid, has_home, has_battery\};/,
@@ -227,7 +227,7 @@ assert.ok(drawn.includes('mdi-solar-power"') && drawn.includes('mdi-transmission
           'solar-power, the grid importing: the arrow leaves the mast');
 for (const key_code of [0, 8]) {
   const signed = nodeOf();
-  context.applyEnergyFlowPreview(signed, {flow_entities: 'sensor.pv\nsensor.grid\nsensor.bat\nsensor.soc', key_code,
+  context.applyPowerFlowPreview(signed, {flow_entities: 'sensor.pv\nsensor.grid\nsensor.bat\nsensor.soc', key_code,
     span_w: 2, span_h: 2}, {values: {'sensor.pv': '0', 'sensor.grid': '-200', 'sensor.bat': '-0.3', 'sensor.soc': '76'},
     units: {'sensor.bat': 'kW'}, icons: {'sensor.soc': 'mdi:battery-70'}});
   const shows = amount => signed.html.includes('>' + amount + '<span class="tile-unit">W</span></div>');
@@ -271,10 +271,10 @@ assert.ok(metrics.includes('inline int value_gap() { return tile_layout::scale(8
 assert.match(renderer, /st->node\[node\]\.value = create_value\(\*st, font\);\s*make_value_tappable\(\*st, st->node\[node\]\.value, kNodeRole\[node\], node\);/);
 assert.ok(renderer.includes('make_value_tappable(*st, st->charge, kRoleBatteryCharge, kNodeBattery);'));
 // With the header on the flow moves down under it (user 2026-10-26), on the
-// panel and in the preview alike (test-energy-flow-model.mjs: the numbers).
-assert.ok(renderer.includes('st->layout = layout(width, height, metrics, energyFlowOption(tile, kFlowHeaderBit) ? header_top(metrics) : 0.0f);'));
-assert.ok(admin.includes('const l = energyFlowLayout(width, height, L, (bits & 1) ? 2 * L.ring - L.insetY : 0);'));
-assert.match(read('src/types/energy_flow/flow_geometry.h'), /inline float header_top\(const Metrics& m\) \{ return 2\.0f \* m\.ring - m\.inset_y; \}/);
+// panel and in the preview alike (test-power-flow-model.mjs: the numbers).
+assert.ok(renderer.includes('st->layout = layout(width, height, metrics, powerFlowOption(tile, kFlowHeaderBit) ? header_top(metrics) : 0.0f);'));
+assert.ok(admin.includes('const l = powerFlowLayout(width, height, L, (bits & 1) ? 2 * L.ring - L.insetY : 0);'));
+assert.match(read('src/types/power_flow/flow_geometry.h'), /inline float header_top\(const Metrics& m\) \{ return 2\.0f \* m\.ring - m\.inset_y; \}/);
 // A node's popup shows whole numbers (user 2026-10-26: Home Assistant sends
 // "9291.81" W, its card shows 9.292 W); kW and MW keep their digits.
 assert.match(renderer, /String unit = init\.unit;\s*unit\.trim\(\);\s*unit\.toLowerCase\(\);\s*if \(unit != "kw" && unit != "mw" && unit != "gw"\) init\.decimals = 0;/);
@@ -287,4 +287,4 @@ assert.ok(renderer.includes('lv_obj_set_style_image_recolor(st.grid_feed, lv_col
   renderer.includes('lv_obj_set_style_image_recolor_opa(st.grid_feed, LV_OPA_COVER, 0);'), 'the feed-in picture recolored');
 assert.match(renderer, /void make_value_tappable\(FlowTileState& st, lv_obj_t\* label, uint8_t role, uint8_t node\) \{\s*if \(!label \|\| !st\.entities\[role\]\.length\(\)\) return;\s*lv_obj_add_flag\(label, LV_OBJ_FLAG_CLICKABLE\);/,
              'a value without its own sensor stays plain text');
-console.log('Energy flow tile: registry, Web Admin fields and editor, runtime marks and timer, popups, translations and the real preview');
+console.log('Power flow tile: registry, Web Admin fields and editor, runtime marks and timer, popups, translations and the real preview');

@@ -6,7 +6,7 @@
 // that frame the whole grid is marked, lv_inv_area drops the dot's area
 // inside it without a refresh request, and the timer stays paused. The frame
 // callback now resumes the timer after a move itself (renderer.cpp
-// motion_display_cb, checked by test-energy-flow-dots-resume.mjs).
+// motion_display_cb, checked by test-power-flow-dots-resume.mjs).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,7 +14,7 @@ import {spawnSync} from 'node:child_process';
 import {lvglHost} from '../../lib/lvgl-host.mjs';
 
 const root = path.resolve(import.meta.dirname, '../../..');
-const renderer = fs.readFileSync(path.join(root, 'src/types/energy_flow/renderer.cpp'), 'utf8').replace(/\r\n/g, '\n');
+const renderer = fs.readFileSync(path.join(root, 'src/types/power_flow/renderer.cpp'), 'utf8').replace(/\r\n/g, '\n');
 assert.ok(renderer.includes('if (moved || waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));'),
   'the frame callback resumes the refresh after a move');
 
@@ -24,7 +24,7 @@ if (!host) {
   process.exit(0);
 }
 
-const out = path.join(root, 'build/tests/energy-flow-next-frame');
+const out = path.join(root, 'build/tests/power-flow-next-frame');
 fs.mkdirSync(out, {recursive: true});
 const cpp = String.raw`
 #include <cstdio>

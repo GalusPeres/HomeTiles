@@ -3,12 +3,12 @@
 #include <math.h>
 #include <stdint.h>
 
-// The Energy flow tile's numbers, without LVGL (host tests: test-energy-flow-model.mjs).
+// The Power flow tile's numbers, without LVGL (host tests: test-power-flow-model.mjs).
 // Every node is one Home Assistant power sensor; the panel splits the powers
 // into the six flows between the nodes like Home Assistant's energy
 // distribution card: exports and battery charging come from solar first,
 // what solar leaves comes from the battery or the grid, the rest goes home.
-namespace energy_flow {
+namespace power_flow {
 
 // The fixed roles of Tile::flow_entities, one entity per line. Later lines
 // are kept for further consumers behind Usage (user 2026-10-24: keep it
@@ -46,7 +46,7 @@ enum Node : uint8_t {
 // Flows below this count as idle (meter noise around zero).
 constexpr float kIdleWatts = 10.0f;
 
-// The sign options (Tile key_code bits, energy_flow_options.h).
+// The sign options (Tile key_code bits, power_flow_options.h).
 // Home Assistant's convention: grid power positive while importing, battery
 // power positive while discharging; some inverters report the other way.
 struct Inputs {
@@ -183,4 +183,4 @@ inline bool unit_factor(const char* unit, float& factor) {
   return true;
 }
 
-}  // namespace energy_flow
+}  // namespace power_flow

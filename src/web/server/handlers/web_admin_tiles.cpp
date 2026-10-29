@@ -47,8 +47,8 @@ static String dynamicMqttEntityForTile(const Tile& tile) {
   // Weather temperature/humidity sensors subscribe to their states too.
   const String sensors = weatherSensorsRecord(tile);
   if (sensors.length()) entity += "|" + sensors;
-  // Energy flow nodes too.
-  if (tile.type == TILE_ENERGY_FLOW && tile.flow_entities.length()) entity += "|" + tile.flow_entities;
+  // Power flow nodes too.
+  if (tile.type == TILE_POWER_FLOW && tile.flow_entities.length()) entity += "|" + tile.flow_entities;
   return entity;
 }
 
@@ -513,7 +513,7 @@ void WebAdminServer::handleGetTiles() {
       appendJsonEscaped(out, tile.weather_humidity_sensor);
       out += "\"";
     }
-    if (tile.type == TILE_ENERGY_FLOW) {
+    if (tile.type == TILE_POWER_FLOW) {
       out += ",\"flow_entities\":\"";
       appendJsonEscaped(out, tile.flow_entities);
       out += "\"";
@@ -870,7 +870,7 @@ void WebAdminServer::handleSaveTiles() {
   }
   // Deletion: the old entity and options must not come back with a new tile.
   if (tile.type == TILE_EMPTY) clearEmptyTileFields(tile);
-  // Only Weather keeps its temperature/humidity sensors, only Energy flow
+  // Only Weather keeps its temperature/humidity sensors, only Power flow
   // its node entities.
   normalizeWeatherSensors(tile);
   normalizeFlowEntities(tile);

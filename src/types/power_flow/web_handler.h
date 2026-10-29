@@ -3,4 +3,4 @@
 #include <WebServer.h>
 #include "src/tiles/config/tile_config.h"
 
-void apply_energy_flow_fields_from_request(WebServer& server, Tile& tile);
+void apply_power_flow_fields_from_request(WebServer& server, Tile& tile);

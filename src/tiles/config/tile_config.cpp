@@ -1266,7 +1266,7 @@ static void applyWeatherSensorsFromSd(uint16_t folder_id, TileGridConfig& grid) 
   }
 }
 
-// Energy flow node entities (Tile::flow_entities) follow the same sidecar
+// Power flow node entities (Tile::flow_entities) follow the same sidecar
 // pattern: one text file per tile, written through a .tmp file.
 static constexpr size_t kFlowEntityRecordMax = kFlowEntityLinesMax * kWeatherSensorEntityMax;
 
@@ -1336,7 +1336,7 @@ static void applyFlowEntitiesFromSd(uint16_t folder_id, TileGridConfig& grid) {
   for (size_t index = 0; index < TILES_PER_GRID; ++index) {
     Tile& tile = grid.tiles[index];
     String record;
-    if (tile.type != TILE_ENERGY_FLOW || !readFlowEntitiesSd(folder_id, index, record)) continue;
+    if (tile.type != TILE_POWER_FLOW || !readFlowEntitiesSd(folder_id, index, record)) continue;
     // Normalized again so a damaged or foreign file cannot reach the runtime.
     tile.flow_entities = record;
     normalizeFlowEntities(tile);
@@ -3018,7 +3018,7 @@ bool TileConfig::loadFolderGridEntitiesOnly(uint16_t folder_id, TileEntitySlot* 
       out[i].sensor_entity = full.tiles[i].sensor_entity;
       out[i].rule_entity = tileIconSourceEntity(full.tiles[i].type, full.tiles[i].icon_colors);
       const String sensors = weatherSensorsRecord(full.tiles[i]);
-      out[i].extra_entities = full.tiles[i].type == TILE_ENERGY_FLOW ? full.tiles[i].flow_entities : sensors;
+      out[i].extra_entities = full.tiles[i].type == TILE_POWER_FLOW ? full.tiles[i].flow_entities : sensors;
     }
     return true;
   }
@@ -3059,11 +3059,11 @@ bool TileConfig::loadFolderGridEntitiesOnly(uint16_t folder_id, TileEntitySlot* 
     applyWeatherSensorsRecord(sensors, record);
     out[i].extra_entities = weatherSensorsRecord(sensors);
   }
-  // Energy flow nodes too, one entity per line.
+  // Power flow nodes too, one entity per line.
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
-    if (out[i].type != TILE_ENERGY_FLOW) continue;
+    if (out[i].type != TILE_POWER_FLOW) continue;
     Tile flow;
-    flow.type = TILE_ENERGY_FLOW;
+    flow.type = TILE_POWER_FLOW;
     if (!readFlowEntitiesSd(folder_id, i, flow.flow_entities)) continue;
     normalizeFlowEntities(flow);
     out[i].extra_entities = flow.flow_entities;
@@ -4448,7 +4448,7 @@ bool TileConfig::saveGridInPlace(uint16_t folder_id, TileGridConfig& grid,
       return false;
     }
     if (!writeFlowEntitiesSd(folder_id, grid_idx, tile.flow_entities)) {
-      Serial.println("[TileConfig] Error saving energy flow entities");
+      Serial.println("[TileConfig] Error saving power flow entities");
       invalidateFolderEntityCache();
       return false;
     }

@@ -22,8 +22,8 @@
 #include "src/types/media/state_icon.h"
 #include "src/types/binary_sensor/renderer.h"
 #include "src/types/energy/energy_data.h"
-#include "src/types/energy_flow/flow_updates.h"
-#include "src/types/energy_flow/renderer.h"
+#include "src/types/power_flow/flow_updates.h"
+#include "src/types/power_flow/renderer.h"
 #include "src/types/media/artwork_payload.h"
 #include "src/web/server/web_admin.h"
 #include "src/tiles/icons/mdi_icons.h"
@@ -2522,7 +2522,7 @@ void tiles_process_reload_requests() {
           lv_obj_add_flag(previous->grid, LV_OBJ_FLAG_HIDDEN);
         }
         lv_obj_clear_flag(target->grid, LV_OBJ_FLAG_HIDDEN);
-        energy_flow_shown(target->grid);
+        power_flow_shown(target->grid);
         switch_step("show");
         home_bar::shown(target->grid, folder_id, previous ? previous->folder_id : kInvalidFolderId);
         switch_step("bar");
@@ -2577,7 +2577,7 @@ void tiles_process_reload_requests() {
           lv_obj_add_flag(previous->grid, LV_OBJ_FLAG_HIDDEN);
         }
         lv_obj_clear_flag(target->grid, LV_OBJ_FLAG_HIDDEN);
-        energy_flow_shown(target->grid);
+        power_flow_shown(target->grid);
         home_bar::shown(target->grid, folder_id, previous ? previous->folder_id : kInvalidFolderId);
         lv_obj_invalidate(target->grid);
         target->last_used_ms = millis();
@@ -2913,9 +2913,9 @@ void tiles_update_sensor_by_entity(GridType grid_type, const char* entity_id, co
   // setting must reach the label), but only a new payload is logged; the
   // renderers skip identical texts and colors.
   const bool changed = cache_entity_payload(entity_id, value);
-  // Energy flow tiles read every node from the cache; they redraw in the
-  // loop (types/energy_flow), and a node's open Sensor popup follows.
-  if (grid_type == GridType::TAB0 && energy_flow_entity_changed(entity_id)) {
+  // Power flow tiles read every node from the cache; they redraw in the
+  // loop (types/power_flow), and a node's open Sensor popup follows.
+  if (grid_type == GridType::TAB0 && power_flow_entity_changed(entity_id)) {
     const String unit = haBridgeConfig.findSensorUnit(entity_id);
     queue_sensor_popup_value(entity_id, value, unit.length() ? unit.c_str() : nullptr);
   }

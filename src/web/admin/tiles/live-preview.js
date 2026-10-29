@@ -410,17 +410,17 @@
         span_h: tileSpan('span_h')
       }, iconName, mediaEntity ? (sensorMetaCache.names?.[mediaEntity] || '') : '');
     }
-    if (previewKind === 'energy_flow' && typeof applyEnergyFlowPreview === 'function') {
-      applyEnergyFlowPreview(tileElem, {
-        flow_entities: energyFlowRecordFromInputs(prefix),
-        key_code: energyFlowOptionsFromInputs(prefix),
+    if (previewKind === 'power_flow' && typeof applyPowerFlowPreview === 'function') {
+      applyPowerFlowPreview(tileElem, {
+        flow_entities: powerFlowRecordFromInputs(prefix),
+        key_code: powerFlowOptionsFromInputs(prefix),
         span_w: tileSpan('span_w'),
         span_h: tileSpan('span_h'),
         title,
         icon_name: iconInput?.value || ''
       }, sensorMetaCache);
     } else {
-      tileElem.classList.remove('energy-flow-tile', 'energy-flow-no-card');
+      tileElem.classList.remove('power-flow-tile', 'power-flow-no-card');
     }
     if (typeof applyTileRulesTint === 'function' && typeof collectIconColorRecord === 'function' &&
         typeof iconColorOwnEntity === 'function') {

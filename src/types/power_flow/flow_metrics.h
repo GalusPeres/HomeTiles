@@ -5,12 +5,12 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
-#include "src/types/energy_flow/flow_geometry.h"
+#include "src/types/power_flow/flow_geometry.h"
 
-// The Energy flow tile's sizes on this device layout, shared by the renderer
+// The Power flow tile's sizes on this device layout, shared by the renderer
 // and the Web Admin preview (web_scripts.cpp). The design values are the
 // V2's (scale 1); the other layouts scale them like every tile.
-namespace energy_flow {
+namespace power_flow {
 
 // The disc of a 1x1 tile on this layout, as drawn: its corner disc around
 // the icon (tile_icon_disc::corner_header), shrunk to keep the bar pill's
@@ -49,4 +49,4 @@ inline int value_edge() { return tile_layout::scale(6); }
 inline int title_right() { return tile_layout::scale(17); }
 inline int title_baseline() { return tile_layout::scale(44); }
 
-}  // namespace energy_flow
+}  // namespace power_flow

@@ -449,11 +449,11 @@
         scheduleAutoSave(tab);
       });
     }
-    // Energy flow: the node sensors and the options (types/energy_flow).
+    // Power flow: the node sensors and the options (types/power_flow).
     for (const field of ['flow_pv_entity', 'flow_grid_entity', 'flow_battery_entity', 'flow_battery_charge_entity',
                          'flow_home_entity', 'flow_header', 'flow_card', 'flow_grid_invert', 'flow_battery_invert']) {
       bindLive(document.getElementById(prefix + '_' + field), 'change', field, () => {
-        if (field === 'flow_header') energyFlowHeaderTitle(prefix);
+        if (field === 'flow_header') powerFlowHeaderTitle(prefix);
         updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
       });
     }

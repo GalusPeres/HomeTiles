@@ -20,8 +20,8 @@ const ui = read('src/ui/ui_manager.cpp');
 const down = ui.slice(ui.indexOf('self->touch_press_ms = lv_tick_get();'));
 assert.ok(down.indexOf('sensor_tile_touch_down(pressed_object);') > 0 &&
   down.indexOf('sensor_tile_touch_down(pressed_object);') < down.indexOf('}'), 'sensor tiles hear the finger');
-assert.ok(down.indexOf('energy_flow_touch_down(pressed_object);') > 0 &&
-  down.indexOf('energy_flow_touch_down(pressed_object);') < down.indexOf('}'), 'so do the power flow nodes');
+assert.ok(down.indexOf('power_flow_touch_down(pressed_object);') > 0 &&
+  down.indexOf('power_flow_touch_down(pressed_object);') < down.indexOf('}'), 'so do the power flow nodes');
 
 // Sensor tile: the same decisions as the tap that opens the popup.
 const sensor = read('src/types/sensor/renderer.cpp');
@@ -36,9 +36,9 @@ assert.ok(touch.includes('data->editable ||') && touch.includes('popup_state_his
 assert.ok(touch.includes('sensor_popup_prefetch_history(data->entity_id);'));
 
 // Power flow node: the node popup's own decision.
-const flow = read('src/types/energy_flow/renderer.cpp');
+const flow = read('src/types/power_flow/renderer.cpp');
 assert.ok(fn(flow, 'open_node_popup').includes('init.state_history_mode = node_state_history(entity);'));
-const flowTouch = fn(flow, 'energy_flow_touch_down');
+const flowTouch = fn(flow, 'power_flow_touch_down');
 assert.ok(flowTouch.includes('lv_event_dsc_get_cb(dsc) != node_click_cb') &&
   flowTouch.includes('node_state_history(st->entities[role])') &&
   flowTouch.includes('sensor_popup_prefetch_history(st->entities[role]);'));

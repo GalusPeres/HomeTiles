@@ -5850,9 +5850,9 @@ const char* weather_sensor_label(const char* language_code, uint8_t index) {
   return locale(language_code).weather_sensor_labels[index];
 }
 
-const char* energy_flow_label(const char* language_code, EnergyFlowLabel label) {
+const char* power_flow_label(const char* language_code, PowerFlowLabel label) {
   const uint8_t index = static_cast<uint8_t>(label);
-  return locale(language_code).energy_flow_labels[index < static_cast<uint8_t>(EnergyFlowLabel::Count) ? index : 0];
+  return locale(language_code).power_flow_labels[index < static_cast<uint8_t>(PowerFlowLabel::Count) ? index : 0];
 }
 
 const char* climate_tile_type_label(const char* language_code) {

@@ -1103,10 +1103,10 @@
           tile.sensor_entity ? (sensorMeta?.mediaValues?.[tile.sensor_entity] ?? '') : ''),
           tile, iconName, tile.sensor_entity ? (metaNames[tile.sensor_entity] || '') : '');
       }
-      if (previewKind === 'energy_flow' && typeof applyEnergyFlowPreview === 'function') {
-        applyEnergyFlowPreview(el, tile, sensorMeta);
+      if (previewKind === 'power_flow' && typeof applyPowerFlowPreview === 'function') {
+        applyPowerFlowPreview(el, tile, sensorMeta);
       } else {
-        el.classList.remove('energy-flow-tile', 'energy-flow-no-card');
+        el.classList.remove('power-flow-tile', 'power-flow-no-card');
       }
       if (typeof applyTileRulesTint === 'function') {
         applyTileRulesTint(el, typeValue, tile.icon_colors, tile.sensor_entity || '', sensorMeta);

@@ -1,8 +1,8 @@
-// Energy flow: what a change redraws. A line that switches on or off redraws
+// Power flow: what a change redraws. A line that switches on or off redraws
 // only where it runs, its dot included (b539 log: the whole card, 42-49 ms
 // frames on the V2, each time the grid crossed its idle threshold); each
 // line's stroke is one picture made once with the layout and kept through
-// color changes (test-energy-flow-stroke.mjs checks its pixels). Compiles
+// color changes (test-power-flow-stroke.mjs checks its pixels). Compiles
 // the renderer's real invalidate_line with the real layout on the host.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -13,7 +13,7 @@ import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
-const renderer = read('src/types/energy_flow/renderer.cpp');
+const renderer = read('src/types/power_flow/renderer.cpp');
 const fn = name => {
   const found = cppFunctionDefinitions(renderer).find(f => f.name === name);
   assert.ok(found, name);
@@ -22,7 +22,7 @@ const fn = name => {
 const withoutIncludes = text => text.replace(/^#include.*$/gm, '').replaceAll('#pragma once', '');
 const compiler = [process.env.CXX, 'clang++', 'g++'].filter(Boolean)
   .find(c => spawnSync(c, ['--version']).status === 0);
-if (!compiler) { console.log('SKIP: Energy flow redraw areas need a native C++ compiler'); process.exit(0); }
+if (!compiler) { console.log('SKIP: Power flow redraw areas need a native C++ compiler'); process.exit(0); }
 
 const cpp = String.raw`
 #include <cassert>
@@ -32,9 +32,9 @@ const cpp = String.raw`
 #include <math.h>
 #include <stdint.h>
 #include <vector>
-${withoutIncludes(read('src/types/energy_flow/flow_model.h'))}
-${withoutIncludes(read('src/types/energy_flow/flow_geometry.h'))}
-using namespace energy_flow;
+${withoutIncludes(read('src/types/power_flow/flow_model.h'))}
+${withoutIncludes(read('src/types/power_flow/flow_geometry.h'))}
+using namespace power_flow;
 struct lv_area_t {int32_t x1, y1, x2, y2;};
 struct lv_obj_t {lv_area_t coords;};
 #define LV_COORD_MAX 1000000
@@ -84,7 +84,7 @@ int main() {
   std::printf("ok %ld\n", all);
 }
 `;
-const out = path.join(root, 'build/tests/energy-flow-redraw-areas');
+const out = path.join(root, 'build/tests/power-flow-redraw-areas');
 fs.mkdirSync(out, {recursive: true});
 const source = path.join(out, 'test.cpp');
 const binary = path.join(out, process.platform === 'win32' ? 'test.exe' : 'test');
@@ -101,4 +101,4 @@ assert.match(renderer, /st->line_color\[line\] = st->idle_color;\s*\}\s*render_s
 assert.match(renderer, /if \(st->stroke_pixels\[line\]\) \{\s*image_dsc\.src = &st->stroke\[line\];\s*image_dsc\.recolor = lv_color_hex\(st->line_color\[line\]\);\s*lv_draw_image\(layer, &image_dsc, &box\);/);
 assert.match(renderer, /lv_image_cache_drop\(&st->stroke\[line\]\);\s*lv_free\(st->stroke_pixels\[line\]\);/);
 assert.doesNotMatch(renderer, /lv_draw_arc\(/, 'no LVGL arc beside LVGL lines (kinks where they met)');
-console.log('Energy flow redraw areas: a switched line redraws only itself with its dot, its picture is made once');
+console.log('Power flow redraw areas: a switched line redraws only itself with its dot, its picture is made once');

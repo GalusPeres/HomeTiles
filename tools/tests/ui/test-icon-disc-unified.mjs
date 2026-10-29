@@ -128,11 +128,11 @@ const renderers = fs.readdirSync(path.join(root, 'src/types'), {withFileTypes: t
   .map(entry => entry.name);
 for (const type of renderers) {
   const source = code(read(`src/types/${type}/renderer.cpp`));
-  // The Energy flow's nodes are tile corners of their own (decided design,
+  // The Power flow's nodes are tile corners of their own (decided design,
   // user 2026-10-24: a disc in a ring), colored by the shared disc rule.
-  if (type === 'energy_flow') {
+  if (type === 'power_flow') {
     assert.ok(source.includes('tile_icon_disc::tile_fill(st.card, st.card_color, rgb, true, false, false,'),
-      'energy_flow colors its node discs like a tile disc');
+      'power_flow colors its node discs like a tile disc');
     continue;
   }
   if (source.includes('FONT_MDI_ICONS') && type !== 'pixelanim') {

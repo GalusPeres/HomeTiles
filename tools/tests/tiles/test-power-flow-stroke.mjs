@@ -1,4 +1,4 @@
-// Energy flow: each line is one smoothed stroke and each dot sits on quarter
+// Power flow: each line is one smoothed stroke and each dot sits on quarter
 // pixels (user 2026-10-27, S3 photo: the bends had kinks where LVGL's
 // straight lines met its arc, and a slow dot stood for about seven frames
 // and then jumped a pixel). Compiles flow_geometry.h and the renderer's real
@@ -16,7 +16,7 @@ import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
-const renderer = read('src/types/energy_flow/renderer.cpp');
+const renderer = read('src/types/power_flow/renderer.cpp');
 const fn = name => {
   const found = cppFunctionDefinitions(renderer).find(f => f.name === name);
   assert.ok(found, name);
@@ -25,7 +25,7 @@ const fn = name => {
 const withoutIncludes = text => text.replace(/^#include.*$/gm, '').replaceAll('#pragma once', '');
 const compiler = [process.env.CXX, 'clang++', 'g++'].filter(Boolean)
   .find(c => spawnSync(c, ['--version']).status === 0);
-if (!compiler) { console.log('SKIP: Energy flow stroke needs a native C++ compiler'); process.exit(0); }
+if (!compiler) { console.log('SKIP: Power flow stroke needs a native C++ compiler'); process.exit(0); }
 
 const cpp = String.raw`
 #include <cassert>
@@ -35,9 +35,9 @@ const cpp = String.raw`
 #include <math.h>
 #include <stdint.h>
 #include <vector>
-${withoutIncludes(read('src/types/energy_flow/flow_model.h'))}
-${withoutIncludes(read('src/types/energy_flow/flow_geometry.h'))}
-using namespace energy_flow;
+${withoutIncludes(read('src/types/power_flow/flow_model.h'))}
+${withoutIncludes(read('src/types/power_flow/flow_geometry.h'))}
+using namespace power_flow;
 struct lv_area_t {int32_t x1, y1, x2, y2;};
 struct lv_point_t {int32_t x, y;};
 int round_px(float value) {return static_cast<int>(lroundf(value));}
@@ -161,7 +161,7 @@ int main() {
   std::printf("ok %ld\n", solid);
 }
 `;
-const out = path.join(root, 'build/tests/energy-flow-stroke');
+const out = path.join(root, 'build/tests/power-flow-stroke');
 fs.mkdirSync(out, {recursive: true});
 const source = path.join(out, 'test.cpp');
 const binary = path.join(out, process.platform === 'win32' ? 'test.exe' : 'test');
@@ -173,4 +173,4 @@ assert.equal(r.status, 0, r.stdout + r.stderr);
 // The renderer draws the dots from these pictures where it has them.
 assert.match(renderer, /image_dsc\.src = &g_dot_image\[fy \* kDotSteps \+ fx\];/);
 assert.match(renderer, /render_dot\(pixels, radius, fx, fy\);/);
-console.log('Energy flow stroke: one smoothed stroke per line with a true circle bend, dots on quarter pixels');
+console.log('Power flow stroke: one smoothed stroke per line with a true circle bend, dots on quarter pixels');

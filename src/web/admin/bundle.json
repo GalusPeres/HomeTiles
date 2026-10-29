@@ -47,7 +47,7 @@
     "src/types/sensor/admin-editor.js",
     "src/types/binary_sensor/admin-editor.js",
     "src/types/energy/admin.js",
-    "src/types/energy_flow/admin.js",
+    "src/types/power_flow/admin.js",
     "src/types/weather/admin-icons.js",
     "src/types/weather/admin.js",
     "src/types/scene/admin.js",

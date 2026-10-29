@@ -1,4 +1,4 @@
-// Energy flow: a dot's redraw leaves out what a node ring covers completely
+// Power flow: a dot's redraw leaves out what a node ring covers completely
 // (b539 log: each dot step near a node drew its ring, disc and icon again,
 // ~0.45 ms of every frame on the V2). Compiles the renderer's real
 // clip_to_rings on the host: only pixels inside the ring's box without its
@@ -12,16 +12,16 @@ import {fileURLToPath} from 'node:url';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const renderer = fs.readFileSync(path.join(root, 'src/types/energy_flow/renderer.cpp'), 'utf8');
+const renderer = fs.readFileSync(path.join(root, 'src/types/power_flow/renderer.cpp'), 'utf8');
 const fn = cppFunctionDefinitions(renderer).find(f => f.name === 'clip_to_rings');
 assert.ok(fn, 'clip_to_rings');
 // The visibility check in between keeps a refused area apart
-// (test-energy-flow-dots-resume.mjs).
+// (test-power-flow-dots-resume.mjs).
 assert.match(renderer, /if \(!clip_to_rings\(st, area\)\) return;[\s\S]{0,320}?lv_obj_invalidate_area\(st\.canvas, &area\);/,
              'every dot area goes through the ring clip before it is invalidated');
 const compiler = [process.env.CXX, 'clang++', 'g++'].filter(Boolean)
   .find(c => spawnSync(c, ['--version']).status === 0);
-if (!compiler) { console.log('SKIP: Energy flow ring clip needs a native C++ compiler'); process.exit(0); }
+if (!compiler) { console.log('SKIP: Power flow ring clip needs a native C++ compiler'); process.exit(0); }
 
 const cpp = String.raw`
 #include <cassert>
@@ -104,7 +104,7 @@ int main() {
   std::puts("ok");
 }
 `;
-const out = path.join(root, 'build/tests/energy-flow-ring-clip');
+const out = path.join(root, 'build/tests/power-flow-ring-clip');
 fs.mkdirSync(out, {recursive: true});
 const source = path.join(out, 'test.cpp');
 const binary = path.join(out, process.platform === 'win32' ? 'test.exe' : 'test');
@@ -113,4 +113,4 @@ let r = spawnSync(compiler, ['-std=c++17', source, '-o', binary], {encoding: 'ut
 assert.equal(r.status, 0, r.stdout + r.stderr);
 r = spawnSync(binary, [], {encoding: 'utf8'});
 assert.equal(r.status, 0, r.stdout + r.stderr);
-console.log('Energy flow ring clip: only pixels a ring covers are left out of a dot redraw');
+console.log('Power flow ring clip: only pixels a ring covers are left out of a dot redraw');

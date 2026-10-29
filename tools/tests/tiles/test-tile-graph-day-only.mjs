@@ -27,6 +27,9 @@ const harness = String.raw`
 #include <cstring>
 #include <string>
 #include <vector>
+// The renderer calls isfinite() unqualified like the Arduino core allows;
+// Linux libstdc++ puts it in the global namespace only through <math.h>.
+#include <math.h>
 #include "src/core/json_scan.h"
 
 // The few Arduino String members the renderer's helpers use.

@@ -48,12 +48,15 @@ void append_energy_fields_html(String& html, const String& tab_id) {
     const SwitchChoice displays[] = {{"0", tr.sensor_layout_value}, {"2", tr.sensor_display_graph}};
     append_switch_choice(html, tab_id, "energy_display_mode", tr.switch_display, displays, 2);
   }
-  html += R"html(                <label for=")html";
+  // The value's Y offset stays hidden: the Sensor editor shows it with the
+  // old gauge only (user 2026-10-28), which the Energy tile does not have.
+  // The field keeps a stored offset when the tile is saved.
+  html += R"html(                <label class="hidden" for=")html";
   html += tab_id;
   html += R"html(_energy_value_y_offset">)html";
   html += tr.sensor_value_y_offset;
   html += R"html(</label>
-                <input type="number" id=")html";
+                <input class="hidden" type="number" id=")html";
   html += tab_id;
   html += R"html(_energy_value_y_offset" min="-100" max="200" step="1" placeholder="0">
 )html";

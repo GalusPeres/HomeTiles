@@ -32,7 +32,14 @@ assert.ok(render.includes('head.title = title_text;') &&
   'the Switch header beside the disc, with the source name when the tile has none');
 assert.ok(render.indexOf('if (bars_frame) tile_icon_source::refresh_controls(card);') >
   render.indexOf('tile_icon_disc::add_round(card, icon_lbl);'), 'the circle color after the disc exists');
+// The bars' lower corners keep the header disc's gap to the rounded tile
+// corner along its 45-degree diagonal (user 2026-10-29): the disc's edge
+// inset plus its radius times (1 - 1/sqrt 2) from both card edges.
+const margin = fn(renderer, 'bars_corner_margin');
+assert.ok(margin.includes('const float radius = (tile_icon_disc::header_diameter(icon_width) - 2 * shrink) / 2.0f;') &&
+  margin.includes('return tile_icon_disc::inset() + shrink + static_cast<int32_t>(lroundf(radius * (1.0f - 0.70710678f)));'));
 const create = fn(renderer, 'create_energy_bars');
+assert.ok(create.includes('bars->room = std::max<int32_t>(0, bars_corner_margin() - climate_layout::kOuterInset);'), 'inside the frame');
 assert.ok(create.includes('tile_icon_disc::mark_surface(frame);') && create.includes('lv_obj_set_style_bg_opa(frame, LV_OPA_TRANSP, LV_PART_MAIN);') &&
   create.includes('const lv_area_t box = tile_graph_box::box(tile);'), 'the Sensor graph\'s box and resting surface');
 assert.ok(read('src/types/sensor/renderer.cpp').includes('static lv_area_t sensor_graph_box(const Tile& tile) { return tile_graph_box::box(tile); }'),
@@ -59,6 +66,11 @@ assert.ok(html.indexOf('"energy_value_font"') < html.indexOf('_energy_unit') &&
   html.indexOf('_energy_value_y_offset') < html.indexOf('"energy_popup_open_mode"'), 'the Sensor editor\'s order');
 assert.ok(read('src/types/switch/admin.js').includes("'energy_value_font', 'energy_display_mode', 'energy_popup_open_mode'"),
   'the choices follow their selects');
+// No value offset row: the Sensor editor shows it with the old gauge only
+// (user 2026-10-28, again 2026-10-29 for Energy); the field keeps its value.
+assert.ok(html.includes('<label class="hidden" for=")html";') && html.includes('<input class="hidden" type="number" id=")html";') &&
+  html.indexOf('<input class="hidden" type="number" id=")html";') < html.indexOf('_energy_value_y_offset" min="-100"'),
+  'the value offset stays hidden');
 const admin = read('src/types/energy/admin.js');
 assert.ok(admin.includes("if (displayEl) displayEl.value = Number(data.sensor_display_mode) === 2 ? '2' : '0';") &&
   admin.includes("formData.append('sensor_display_mode', document.getElementById(prefix + '_energy_display_mode')?.value || '0');") &&
@@ -102,7 +114,10 @@ namespace tile_layout { constexpr int scale(int v) { return v; } }
 namespace ui_theme { struct SurfaceScope {}; inline uint32_t text() { return 0xFFFFFF; } }
 namespace tile_surface { inline ui_theme::SurfaceScope scope(lv_obj_t*) { return {}; } }
 namespace ui_surface_style { inline uint8_t icon_glow_percent() { return 25; } }
-namespace tile_icon_disc { inline bool see_through(lv_obj_t*) { return false; } }
+// A V2-like header disc: 54 px box, 4 px inset, drawn 2 px smaller per side.
+#define FONT_MDI_ICONS (static_cast<const lv_font_t*>(nullptr))
+namespace tile_icon_disc { inline bool see_through(lv_obj_t*) { return false; } constexpr uint32_t kMdiReferenceGlyph = 0xF0001;
+ inline int inset() { return 4; } inline int corner_shrink() { return 2; } inline int header_diameter(int) { return 54; } }
 namespace tone_color { inline uint8_t control_opa(uint8_t, bool) { return LV_OPA_COVER; } }
 struct TestSerial{template<class... T> void printf(const char*,T...){}} Serial;
 namespace {
@@ -159,11 +174,15 @@ int main() {
   lv_obj_set_size(frame, W - 12, H - 76);
   auto* bars = new EnergyTileBars();
   bars->icon = icon;
+  bars->room = 6;  // bars_corner_margin() - kOuterInset on a panel
   lv_obj_set_user_data(frame, bars);
   lv_obj_add_event_cb(frame, energy_bars_draw_cb, LV_EVENT_DRAW_MAIN, bars);
   lv_obj_update_layout(screen);
   lv_obj_get_coords(frame, &box);
   const int room = climate_layout::kOuterInset;
+  // The corner margin: the disc's diagonal point (edge 6 px, radius 25 px)
+  // lies 6 + 25 * (1 - 1/sqrt 2) = 13.3 px from both edges.
+  assert(bars_corner_margin() == 13 && "the disc's distance to the corner, along the diagonal");
 
   // Consumption over the whole day, the highest in the last hour: the first
   // and the last bar stand the outer inset from the frame's sides, the

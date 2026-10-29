@@ -491,8 +491,8 @@ bool slot_date(const EnergyEntryData& entry, int offset, struct tm& out) {
 
 // Today: lines and hours every six hours. Week: each weekday, lines between
 // the days. Month: a line and the day's number at each week's first day
-// (Settings > Localization), like the Sensor graph's 30D. Year: every second
-// month's short name, a line before each pair.
+// (Settings > Localization), like the Sensor graph's 30D. Year: lines between
+// the months, every second month's short name.
 void collect_axis_marks(const EnergyEntryData& entry, uint8_t slot_count, AxisMarks& marks) {
   marks.labels = marks.lines = 0;
   auto add_label = [&](uint8_t slot, const String& text) {
@@ -531,14 +531,11 @@ void collect_axis_marks(const EnergyEntryData& entry, uint8_t slot_count, AxisMa
   int year = 0, month = 1, day = 0, hour = 0;
   if (!parse_iso_start(entry.start, year, month, day, hour)) month = 1;
   const char* language = configManager.getConfig().language;
-  // Every second month on every panel (user 2026-10-29: twelve names and
-  // eleven lines looked crowded on the large panels): a line before Mar, May,
-  // Jul, Sep and Nov, each pair's first month named under its bar, like the
-  // month view's weeks.
-  for (uint8_t i = 0; i < slot_count; i += 2) {
-    if (i > 0) add_line(i);
-    add_label(i, i18n::weather_month_short(language, (month - 1 + i) % 12 + 1));
-  }
+  // A line between every two months, a name under every second month on
+  // every panel (user 2026-10-29: twelve names looked crowded on the large
+  // panels, the lines stay).
+  for (uint8_t i = 0; i < slot_count; i += 2) add_label(i, i18n::weather_month_short(language, (month - 1 + i) % 12 + 1));
+  for (uint8_t i = 1; i < slot_count; ++i) add_line(i);
 }
 
 int slot_x(int slot, uint8_t slot_count, int plot_left, int plot_w) {
@@ -1408,8 +1405,8 @@ PeriodCapacity period_capacity(EnergyPeriod period) {
     case EnergyPeriod::Week: return {kWeekSlotCount, kWeekSlotCount, kWeekSlotCount - 1};
     // At most five first weekdays in a month, a line at each but the 1st.
     case EnergyPeriod::Month: return {31, 5, 5};
-    // Every second month named, a line before each pair but the first.
-    case EnergyPeriod::Year: return {kYearSlotCount, kYearSlotCount / 2, kYearSlotCount / 2 - 1};
+    // Every second month named, a line between every two months.
+    case EnergyPeriod::Year: return {kYearSlotCount, kYearSlotCount / 2, kYearSlotCount - 1};
     default: return {kDaySlotCount, 5, 5};
   }
 }

@@ -626,13 +626,16 @@ inline void emit_look(const Spec& spec, Emit&& emit) {
 }
 
 // Where the value's top goes for a look with the value inside (picture
-// rows, the value `size` px high, its em box): open arcs of every size at
-// the middle of their inside (arc_value_top, the battery arc); a closed ring
+// rows, the value `size` px high, its em box): open arcs of every size put
+// the standard size's top (20 on one-row tiles, 24 on taller ones,
+// `standard`) at the middle of their inside (arc_value_top, the battery arc),
+// and a chosen size keeps that size's centre, so it grows up and down alike
+// (user 2026-10-29: a larger value grew downwards only). A closed ring
 // centres the value's digits on its centre: Inter's digits sit around the
 // middle of the em box (user 2026-10-28: cy - 0.6 size looked too high).
-inline float value_top(uint8_t mode, const Arc& arc, float size) {
+inline float value_top(uint8_t mode, const Arc& arc, float size, float standard) {
   if (is_ring(mode)) return arc.cy - size * 0.5f;
-  return arc_value_top(arc);
+  return arc_value_top(arc) + (standard - size) * 0.5f;
 }
 
 }  // namespace sensor_look

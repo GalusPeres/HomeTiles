@@ -441,7 +441,7 @@ int main(){
  lv_obj_send_event(ctx->period_btns[3],LV_EVENT_CLICKED,nullptr);settle(display);
  assert(ctx->shown_period==EnergyPeriod::Year&&ctx->shown_slots==12&&ctx->readout_slot==9&&strcmp(ctx->readout_time_text,"October")==0);
  {const auto texts=axis_texts(ctx);assert((texts==std::vector<std::string>{"Jan","Mar","May","Jul","Sep","Nov"})&&"Year: every second month on every panel");
-  int lines=0;for(auto* line:ctx->x_lines)if(line&&shown(line))++lines;assert(lines==5&&"a line before each pair");}
+  int lines=0;for(auto* line:ctx->x_lines)if(line&&shown(line))++lines;assert(lines==11&&"a line between every two months");}
  touch_at(bar_x(2,12),y);lv_refr_now(display);assert(strcmp(ctx->readout_time_text,"March")==0&&strcmp(ctx->readout_value_text,"120.00")==0);touch_release();
  lv_obj_send_event(ctx->period_btns[0],LV_EVENT_CLICKED,nullptr);settle(display);
  assert(ctx->shown_period==EnergyPeriod::Day&&ctx->readout_slot==23&&ctx->readout_latest&&strcmp(ctx->readout_value_text,"9.00")==0&&strcmp(value_unit::unit_text(ctx->readout_value_label),"kWh")==0);

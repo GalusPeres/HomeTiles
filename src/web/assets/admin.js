@@ -16542,13 +16542,14 @@ function maybeFillTitleFromSensor(tab) {
     return null;
   }
 
-  // sensor_look::value_top: open arcs put the value's top at the middle of
-  // their inside, a closed ring centres its digits on the ring's centre.
-  function sensorLookValueTop(mode, arc, size) {
+  // sensor_look::value_top: open arcs put the standard size's top at the
+  // middle of their inside and keep its centre for a chosen size, a closed
+  // ring centres its digits on the ring's centre.
+  function sensorLookValueTop(mode, arc, size, standard) {
     mode = Number(mode);
     if (mode >= 11 && mode <= 14) return arc.cy - size * 0.5;
     const bottom = Math.min(arc.cy + arc.r - arc.sw / 2, arc.cy - arc.r * Math.cos(arc.half));
-    return (arc.cy - arc.r + arc.sw / 2 + bottom) / 2;
+    return (arc.cy - arc.r + arc.sw / 2 + bottom) / 2 + (standard - size) / 2;
   }
 
   // ---- Shapes as SVG (the lab's drawing, box-local coordinates) ----
@@ -16742,10 +16743,12 @@ function maybeFillTitleFromSensor(tab) {
     const valueEl = el.querySelector(':scope > .tile-value');
     if (valueEl && sensorLookValueInside(mode) && arc) {
       const taller = Number(el.dataset.lookTall) === 1;
-      const chosen = {1: 20, 2: 24, 3: 32, 4: 40, 5: 28}[Number(el.dataset.lookFont)] || (taller ? 24 : 20);
+      const standardSize = taller ? 24 : 20;
+      const chosen = {1: 20, 2: 24, 3: 32, 4: 40, 5: 28}[Number(el.dataset.lookFont)] || standardSize;
       const fontPx = sensorLookRootValue('--fs' + chosen, chosen * scale);
       const size = fontPx / scale;
-      valueEl.style.top = sensorLookNum((box.y + sensorLookValueTop(mode, arc, size)) * scale - 3) + 'px';
+      const standard = sensorLookRootValue('--fs' + standardSize, standardSize * scale) / scale;
+      valueEl.style.top = sensorLookNum((box.y + sensorLookValueTop(mode, arc, size, standard)) * scale - 3) + 'px';
       valueEl.style.fontSize = sensorLookNum(fontPx) + 'px';
     } else if (valueEl) {
       valueEl.style.removeProperty('top');

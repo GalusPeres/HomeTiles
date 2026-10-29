@@ -27,18 +27,36 @@ namespace {
 // Switch header like the Sensor graph tile, in the circle's tone with the
 // value's edge in the icon color, the running hour all icon color. A zero
 // line where the range puts it: feed-in hangs below it with its edge at the
-// bottom. The bars keep the box's outer inset from its sides, top and
-// bottom, so the first and last hour never reach the rounded corners and
-// keep the same distance to the tile's edge at the sides as at the bottom.
+// bottom. The first bar's lower-left and the last bar's lower-right corner
+// keep the header disc's distance to the tile's rounded corner, measured
+// along the corner's 45-degree diagonal (bars_corner_margin, user
+// 2026-10-29); the bars are smaller for it.
 constexpr uint8_t kEnergyBarsMode = 2;
 constexpr uint8_t kEnergyBarHours = 24;
 
 struct EnergyTileBars {
   String entity_id;
   lv_obj_t* icon = nullptr;
+  // Room inside the frame at its sides and its bottom (bars_corner_margin).
+  int32_t room = 0;
   float values[kEnergyBarHours] = {};
   bool valid[kEnergyBarHours] = {};
 };
+
+// How far the bars' lower corners stay from the card's side and bottom
+// edges. The header disc's point nearest the tile's top-left corner, on the
+// corner's 45-degree diagonal, lies at the disc's edge inset plus its radius
+// times (1 - 1/sqrt 2) from both card edges; a bar corner at that distance
+// from both edges keeps the disc's gap to the rounded corner along the same
+// diagonal, whatever the tile radius (the radius cancels). The disc's edge
+// inset and size as tile_icon_disc draws it (corner_header, shrink_corner_disc).
+int32_t bars_corner_margin() {
+  const int icon_width =
+      FONT_MDI_ICONS ? lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0) : 0;
+  const int shrink = tile_icon_disc::corner_shrink();
+  const float radius = (tile_icon_disc::header_diameter(icon_width) - 2 * shrink) / 2.0f;
+  return tile_icon_disc::inset() + shrink + static_cast<int32_t>(lroundf(radius * (1.0f - 0.70710678f)));
+}
 
 // Live bars by tile, so a new day answer reaches every grid that shows the
 // source (also the cached pages); a full table only keeps a tile from
@@ -72,9 +90,12 @@ void energy_bars_draw_cb(lv_event_t* e) {
   const ui_theme::SurfaceScope surface = tile_surface::scope(frame);
   lv_area_t coords;
   lv_obj_get_coords(frame, &coords);
-  const int32_t room = climate_layout::kOuterInset;
+  // The sides and the bottom keep the corner margin; the top the box's inset
+  // below the header.
+  const int32_t room = bars->room;
   const int32_t left = coords.x1 + room, width = lv_area_get_width(&coords) - 2 * room;
-  const int32_t top = coords.y1 + room, height = lv_area_get_height(&coords) - 2 * room;
+  const int32_t top = coords.y1 + climate_layout::kOuterInset;
+  const int32_t height = lv_area_get_height(&coords) - climate_layout::kOuterInset - room;
   if (width < kEnergyBarHours || height < 4) return;
 
   float max_v = 0.0f, min_v = 0.0f;
@@ -165,6 +186,8 @@ lv_obj_t* create_energy_bars(lv_obj_t* card, const Tile& tile, lv_obj_t* icon) {
   auto* bars = new EnergyTileBars();
   bars->entity_id = tile.sensor_entity;
   bars->icon = icon;
+  // The frame sits the outer inset inside the card (tile_graph_box.h).
+  bars->room = std::max<int32_t>(0, bars_corner_margin() - climate_layout::kOuterInset);
   EnergyEntryData entry;
   if (energy_find_entry(tile.sensor_entity, "day", entry)) copy_day_values(*bars, entry);
   lv_obj_add_event_cb(frame, energy_bars_draw_cb, LV_EVENT_DRAW_MAIN, bars);

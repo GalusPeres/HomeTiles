@@ -22,7 +22,7 @@ lv_obj_t* create(lv_obj_t* card, const Tile& tile, lv_obj_t* icon, const lv_area
 
 // The top row (the card's content box) of a value `size` px high inside
 // the look's arc or ring (sensor_look::value_top).
-int32_t value_top(lv_obj_t* look, int32_t size);
+int32_t value_top(lv_obj_t* look, int32_t size, int32_t standard);
 
 // A state update: the value on the gauge, NAN for none (an empty gauge).
 // Redraws only when the shown amount changes.

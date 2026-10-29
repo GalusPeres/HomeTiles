@@ -572,7 +572,9 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
         // line is Inter's ascent plus descent, 1.211 em.
         const int32_t line_h = lv_font_get_line_height(font);
         const int32_t size = (line_h * 1000 + 605) / 1211;
-        const int32_t top = look ? sensor_look_view::value_top(look, size) : 0;
+        // A chosen size keeps the standard size's centre (sensor_look::value_top).
+        const int32_t standard_size = (lv_font_get_line_height(standard) * 1000 + 605) / 1211;
+        const int32_t top = look ? sensor_look_view::value_top(look, size, standard_size) : 0;
         lv_obj_set_pos(v, -lv_obj_get_style_pad_left(card, LV_PART_MAIN), top - (line_h - size) / 2);
       }
     } else {

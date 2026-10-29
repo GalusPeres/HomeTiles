@@ -319,11 +319,11 @@ lv_obj_t* create(lv_obj_t* card, const Tile& tile, lv_obj_t* icon, const lv_area
   return frame;
 }
 
-int32_t value_top(lv_obj_t* look, int32_t size) {
+int32_t value_top(lv_obj_t* look, int32_t size, int32_t standard) {
   View* view = view_of(look);
   if (!view) return 0;
-  return view->top + static_cast<int32_t>(std::lround(
-                                  sensor_look::value_top(view->spec.mode, view->spec.arc, static_cast<float>(size))));
+  return view->top + static_cast<int32_t>(std::lround(sensor_look::value_top(
+                         view->spec.mode, view->spec.arc, static_cast<float>(size), static_cast<float>(standard))));
 }
 
 void set_value(lv_obj_t* look, float value) {

@@ -104,7 +104,7 @@ assert.ok(renderer.includes('look = sensor_look_view::create(card, tile, icon_lb
 assert.ok(renderer.includes('const lv_font_t* font = tile_layout::value_font_for_choice(tile.sensor_value_font, standard);') &&
   read('src/web/admin/tiles/layout.js').includes('if (inside && sizes.length > 5) sizes[0] = sizes[inside === 2 ? 2 : 1];') &&
   read('src/types/sensor/admin-editor.js').includes("row('sensor_value_font', true);") &&
-  read('src/types/sensor/admin-look.js').includes("const chosen = {1: 20, 2: 24, 3: 32, 4: 40, 5: 28}[Number(el.dataset.lookFont)] || (taller ? 24 : 20);"),
+  read('src/types/sensor/admin-look.js').includes("const chosen = {1: 20, 2: 24, 3: 32, 4: 40, 5: 28}[Number(el.dataset.lookFont)] || standardSize;"),
   'the value inside a ring has a size choice on the panel, in the editor and the preview');
 const tileRenderer = read('src/tiles/runtime/tile_renderer.cpp');
 assert.ok(tileRenderer.includes('sensor_look_view::set_value(look, numeric);') &&
@@ -277,12 +277,17 @@ int main() {
     assert(pieces == kRulePieces && discs == 2 && "closed ring: pieces, a start and a value end");
     // A closed ring centres the value's digits on its centre (the em box
     // half above it; cy - 0.6 size looked too high, user 2026-10-28); open
-    // arcs keep the top at the middle of their inside on every size.
-    assert(std::fabs(value_top(kRing, ring_arc, 24) - (ring_arc.cy - 12)) < 0.01f && "a ring's digits on its centre");
+    // arcs put the standard size's top at the middle of their inside and a
+    // chosen size keeps its centre (user 2026-10-29: a larger value grew
+    // downwards only).
+    assert(std::fabs(value_top(kRing, ring_arc, 24, 24) - (ring_arc.cy - 12)) < 0.01f && "a ring's digits on its centre");
     {
       Arc open = ring_arc;
       open.half = 145 * kPi / 180;
-      assert(std::fabs(value_top(kTickArcValue, open, 24) - arc_value_top(open)) < 0.01f && "no ring rule for open arcs");
+      assert(std::fabs(value_top(kTickArcValue, open, 24, 24) - arc_value_top(open)) < 0.01f && "no ring rule for open arcs");
+      for (float size : {20.f, 28.f, 32.f, 40.f})
+        assert(std::fabs(value_top(kTickArcValue, open, size, 24) + size * 0.5f - (arc_value_top(open) + 12)) < 0.01f &&
+               "a chosen size keeps the standard size's centre");
     }
     // A ring of stripes: evenly around, 11 px apart, none doubled at the top.
     spec.mode = kTickRing;

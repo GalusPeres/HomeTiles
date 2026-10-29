@@ -87,6 +87,7 @@
 // Only these profiles select the MIPI DSI clock that v3 silicon accepts;
 // the shared Waveshare P4 DSI driver does for every board it runs.
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_7B) || defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1) || \
+    defined(DEVICE_WAVESHARE_TOUCH_LCD_4_3) || \
     defined(DEVICE_GUITION_JC8012P4A1_V2) || defined(DEVICE_WAVESHARE_P4_DSI_BOARD)
 #define FW_META_V3_PROFILE 1
 #else

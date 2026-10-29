@@ -64,10 +64,34 @@
       "ciLabel": "Waveshare Touch LCD 4.3",
       "legacySlug": "waveshare-touch-lcd-4-3",
       "installer": {
-        "label": "Waveshare Touch LCD 4.3 inch",
+        "label": "Waveshare Touch LCD 4.3 inch (ESP32-P4 before v3.0)",
         "status": "validation-pending",
         "hardwareCheck": "The exact product is ESP32-P4-WIFI6-Touch-LCD-4.3 with a 480x800 ST7701 panel and an ESP32-P4 revision before v3.0.",
         "acceptsLegacyDescriptor": true
+      }
+    },
+    {
+      "buildProfile": "waveshare_4_3_rev3",
+      "key": "waveshare_touch_lcd_4_3_rev3",
+      "metadataDeviceKey": "waveshare_touch_lcd_4_3",
+      "define": "DEVICE_WAVESHARE_TOUCH_LCD_4_3",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 33554432,
+      "siliconVariant": "post_v3",
+      "minimumRevision": 301,
+      "maximumRevision": 399,
+      "rxVariant": "repo-a8204",
+      "elfFlags": "",
+      "publish": true,
+      "ciOrder": 21,
+      "ciLabel": "Waveshare Touch LCD 4.3 (ESP32-P4 v3.1 or newer, experimental)",
+      "legacySlug": "waveshare-touch-lcd-4-3-rev3",
+      "installer": {
+        "label": "Waveshare Touch LCD 4.3 inch (ESP32-P4 v3.1 or newer, experimental)",
+        "status": "validation-pending",
+        "hardwareCheck": "The exact product is ESP32-P4-WIFI6-Touch-LCD-4.3 with a 480x800 ST7701 panel and esptool chip-id reports ESP32-P4 revision v3.1 or newer. Revision v3.0 is unsupported by the pinned toolchain.",
+        "acceptsLegacyDescriptor": false,
+        "explicitMetadataKey": true
       }
     },
     {

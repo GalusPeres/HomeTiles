@@ -261,6 +261,14 @@ jobs:
             define: DEVICE_GOLDEN_SECURITY_GS_T3E_V2
             rx_variant: native-s3
             publish: true
+          - label: Waveshare Touch LCD 4.3 (ESP32-P4 v3.1 or newer, experimental)
+            profile: waveshare_4_3_rev3
+            key: waveshare_touch_lcd_4_3_rev3
+            metadata_key: waveshare_touch_lcd_4_3
+            define: DEVICE_WAVESHARE_TOUCH_LCD_4_3
+            silicon_variant: post_v3
+            rx_variant: repo-a8204
+            publish: true
         # END GENERATED DEVICE MATRIX
 
     steps:

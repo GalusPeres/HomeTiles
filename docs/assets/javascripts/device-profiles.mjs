@@ -29,7 +29,7 @@ export const DEVICE_PROFILES = Object.freeze([
   Object.freeze({
     "key": "waveshare_touch_lcd_4_3",
     "buildProfile": "waveshare_4_3",
-    "label": "Waveshare Touch LCD 4.3 inch",
+    "label": "Waveshare Touch LCD 4.3 inch (ESP32-P4 before v3.0)",
     "chipFamily": "ESP32-P4",
     "flashSize": 33554432,
     "status": "validation-pending",
@@ -38,6 +38,20 @@ export const DEVICE_PROFILES = Object.freeze([
     "minimumRevision": 1,
     "maximumRevision": 199,
     "acceptsLegacyDescriptor": true
+  }),
+  Object.freeze({
+    "key": "waveshare_touch_lcd_4_3_rev3",
+    "buildProfile": "waveshare_4_3_rev3",
+    "label": "Waveshare Touch LCD 4.3 inch (ESP32-P4 v3.1 or newer, experimental)",
+    "chipFamily": "ESP32-P4",
+    "flashSize": 33554432,
+    "status": "validation-pending",
+    "hardwareCheck": "The exact product is ESP32-P4-WIFI6-Touch-LCD-4.3 with a 480x800 ST7701 panel and esptool chip-id reports ESP32-P4 revision v3.1 or newer. Revision v3.0 is unsupported by the pinned toolchain.",
+    "metadataDeviceKey": "waveshare_touch_lcd_4_3",
+    "siliconVariant": "post_v3",
+    "minimumRevision": 301,
+    "maximumRevision": 399,
+    "acceptsLegacyDescriptor": false
   }),
   Object.freeze({
     "key": "waveshare_touch_lcd_5",

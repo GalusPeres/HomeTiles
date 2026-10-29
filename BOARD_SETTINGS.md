@@ -75,14 +75,19 @@ Arduino IDE:
 
 Used for:
 - `src/devices/waveshare_touch_lcd_4_3`
-- build profile `waveshare_4_3`
+- build profile `waveshare_4_3` for ESP32-P4 before v3.0 (1–199)
+- build profile `waveshare_4_3_rev3` for ESP32-P4 v3.1 or newer (301–399)
 
 Important:
 - This profile is only for the exact `ESP32-P4-WIFI6-Touch-LCD-4.3` product.
 - The native panel is a `480x800` ST7701 MIPI-DSI display. HomeTiles renders
   it as an `800x480` landscape dashboard.
 - The tested board reports ESP32-P4 revision v1.3 and uses the pre-v3
-  revisions 1–199 firmware contract.
+  revisions 1–199 firmware contract. Boards with ESP32-P4 v3.1 or newer
+  (#135, v3.2) use `waveshare_4_3_rev3` with `Chip Variant: v3.00 or newer`;
+  the same code then selects the default MIPI DSI PHY clock that v3 silicon
+  accepts. Check the revision with `esptool chip-id` first. The v3 build is
+  experimental and not yet hardware-tested.
 - Touch uses GT911 on SDA GPIO7 and SCL GPIO8 without interrupt or reset pins.
 - The active-low backlight is GPIO26 and the active-low panel reset is GPIO27.
 - The microSD interface uses SDMMC slot 0 on GPIO39-44 and P4 LDO channel 4.

@@ -31,7 +31,7 @@
     {
       "key": "waveshare_touch_lcd_4_3",
       "buildProfile": "waveshare_4_3",
-      "label": "Waveshare Touch LCD 4.3 inch",
+      "label": "Waveshare Touch LCD 4.3 inch (ESP32-P4 before v3.0)",
       "chipFamily": "ESP32-P4",
       "siliconVariant": "pre_v3",
       "minimumRevision": 1,

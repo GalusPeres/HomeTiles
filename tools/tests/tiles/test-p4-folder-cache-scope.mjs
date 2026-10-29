@@ -68,6 +68,7 @@ const p4Profiles = [
   'tab5',
   'waveshare_b4',
   'waveshare_4_3',
+  'waveshare_4_3_rev3',
   'waveshare_5',
   'waveshare_5_rev3',
   'waveshare_7',

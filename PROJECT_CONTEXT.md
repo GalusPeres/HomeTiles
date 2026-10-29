@@ -1,6 +1,6 @@
 # HomeTiles shared project context
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-29
 
 ## Sources of truth
 
@@ -12,7 +12,7 @@ Last reviewed: 2026-10-26
 
 ## Releases and builds
 
-- FW v0.9.5 (hotfix) and FW + Bridge v0.9.4 released 2026-10-23. Bridge beta v0.9.6b3.
+- FW + Bridge v0.9.6 released 2026-10-29; v0.9.5 hotfix 2026-10-23.
 - Pairing by IP, no mDNS (#114, Bridge #16): `GET /api/link`; HA ok (b513).
 - Test builds stay `v0.6.12bNNN` on purpose (System Update offers releases); beta define in `firmware_version.h`, last b619.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build (warm: only repo headers changed, same LVGL config hash).

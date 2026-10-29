@@ -1054,6 +1054,9 @@
       if (tile.sensor_value_y_offset !== undefined && tile.sensor_value_y_offset !== null && String(tile.sensor_value_y_offset).length > 0) {
         fd.append('sensor_value_y_offset', tile.sensor_value_y_offset);
       }
+      // The bars below the header (2); the screensaver shows the value alone.
+      const screensaverEnergy = Number(folderId) === Number(SCREENSAVER_FOLDER_ID);
+      fd.append('sensor_display_mode', !screensaverEnergy && Number(tile.sensor_display_mode) === 2 ? '2' : '0');
     } else if (safeType === 28) {
       fd.append('flow_entities', tile.flow_entities || '');
       const bits = Number(tile.key_code) || 0;

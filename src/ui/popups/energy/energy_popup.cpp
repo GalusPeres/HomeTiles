@@ -341,19 +341,15 @@ lv_coord_t measure_label_line_height(lv_obj_t* label) {
          lv_obj_get_style_pad_bottom(label, LV_PART_MAIN);
 }
 
-String format_axis_value(float value, const String& unit, uint8_t decimals) {
+// An axis label's number; its unit follows a step smaller (value_unit.h),
+// like the Sensor popup's axis.
+String format_axis_number(float value, uint8_t decimals) {
   if (!isfinite(value)) return String("");
   uint8_t d = decimals > 6 ? 6 : decimals;
   if (fabsf(value - roundf(value)) < 0.05f && d > 1) {
     d = 1;
   }
-  String out = i18n::format_number(
-      configManager.getConfig().language, value, d);
-  if (unit.length()) {
-    out += " ";
-    out += unit;
-  }
-  return out;
+  return i18n::format_number(configManager.getConfig().language, value, d);
 }
 
 bool parse_iso_start(const String& iso, int& year, int& month, int& day, int& hour);
@@ -390,9 +386,10 @@ void clear_chart(EnergyChartView* ctx) {
   lv_chart_set_all_value(ctx->chart, ctx->series, LV_CHART_POINT_NONE);
   lv_chart_set_range(ctx->chart, LV_CHART_AXIS_PRIMARY_Y, 0, 1);
   lv_chart_refresh(ctx->chart);
-  if (ctx->y_max_label) lv_label_set_text(ctx->y_max_label, "");
-  if (ctx->y_zero_label) lv_label_set_text(ctx->y_zero_label, "");
-  if (ctx->y_min_label) lv_label_set_text(ctx->y_min_label, "");
+  // value_unit::show hides the unit beside the number too.
+  if (ctx->y_max_label) value_unit::show(ctx->y_max_label, "", "");
+  if (ctx->y_zero_label) value_unit::show(ctx->y_zero_label, "", "");
+  if (ctx->y_min_label) value_unit::show(ctx->y_min_label, "", "");
   if (ctx->y_max_line) lv_obj_add_flag(ctx->y_max_line, LV_OBJ_FLAG_HIDDEN);
   if (ctx->y_zero_line) lv_obj_add_flag(ctx->y_zero_line, LV_OBJ_FLAG_HIDDEN);
   if (ctx->y_min_line) lv_obj_add_flag(ctx->y_min_line, LV_OBJ_FLAG_HIDDEN);
@@ -961,21 +958,28 @@ void apply_entry_to_chart(EnergyPopupContext* ctx, const EnergyEntryData& entry,
                      static_cast<lv_coord_t>(ceilf(max_v * scale)));
   lv_chart_refresh(ctx->chart);
 
-  String axis_unit = ctx->unit.length() ? ctx->unit : entry.unit;
+  // The numbers with their unit a step smaller after them (value_unit.h,
+  // user 2026-10-29: like the Sensor popup's axis); sized to their text
+  // first, so the unit always splits off, then one width right-aligned below.
+  const String axis_unit = ctx->unit.length() ? ctx->unit : entry.unit;
+  auto show_axis_label = [&](lv_obj_t* label, const String& number) {
+    if (!label) return;
+    lv_obj_set_width(label, LV_SIZE_CONTENT);
+    value_unit::show(label, number, number.length() ? axis_unit : String());
+  };
+  const String zero_text = "0";  // without decimals, as before
   if (show_zero) {
-    if (ctx->y_max_label) lv_label_set_text(ctx->y_max_label, format_axis_value(max_v, axis_unit, ctx->decimals).c_str());
-    if (ctx->y_min_label) lv_label_set_text(ctx->y_min_label, format_axis_value(min_v, axis_unit, ctx->decimals).c_str());
-    if (ctx->y_zero_label) lv_label_set_text(ctx->y_zero_label, "0");
+    show_axis_label(ctx->y_max_label, format_axis_number(max_v, ctx->decimals));
+    show_axis_label(ctx->y_min_label, format_axis_number(min_v, ctx->decimals));
+    show_axis_label(ctx->y_zero_label, zero_text);
   } else if (has_negative) {
-    String zero_label = String("0 ") + axis_unit;
-    if (ctx->y_max_label) lv_label_set_text(ctx->y_max_label, zero_label.c_str());
-    if (ctx->y_min_label) lv_label_set_text(ctx->y_min_label, format_axis_value(min_v, axis_unit, ctx->decimals).c_str());
-    if (ctx->y_zero_label) lv_label_set_text(ctx->y_zero_label, "");
+    show_axis_label(ctx->y_max_label, zero_text);
+    show_axis_label(ctx->y_min_label, format_axis_number(min_v, ctx->decimals));
+    show_axis_label(ctx->y_zero_label, String());
   } else {
-    String zero_label = String("0 ") + axis_unit;
-    if (ctx->y_max_label) lv_label_set_text(ctx->y_max_label, format_axis_value(max_v, axis_unit, ctx->decimals).c_str());
-    if (ctx->y_min_label) lv_label_set_text(ctx->y_min_label, zero_label.c_str());
-    if (ctx->y_zero_label) lv_label_set_text(ctx->y_zero_label, "");
+    show_axis_label(ctx->y_max_label, format_axis_number(max_v, ctx->decimals));
+    show_axis_label(ctx->y_min_label, zero_text);
+    show_axis_label(ctx->y_zero_label, String());
   }
 
   constexpr int kLineOverlap = 6;
@@ -1007,10 +1011,12 @@ void apply_entry_to_chart(EnergyPopupContext* ctx, const EnergyEntryData& entry,
   int plot_w = avail_w - plot_left - chart_right_reserve;
   if (plot_w < 10) plot_w = 10;
 
+  // One width, right-aligned: the units stand in one column at the plot.
   auto set_axis_label_width = [&](lv_obj_t* label) {
     if (!label) return;
     lv_obj_set_width(label, label_w);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_RIGHT, 0);
+    value_unit::place(label);
   };
   set_axis_label_width(ctx->y_max_label);
   set_axis_label_width(ctx->y_min_label);

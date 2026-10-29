@@ -47,7 +47,22 @@ void append_energy_fields_html(String& html, const String& tab_id) {
               </select>
 )html";
   if (tab_id != "screensaver") {
+    // The value alone or today's hours as bars below the header (whole-height
+    // tiles, renderer.cpp).
     html += R"html(              <label>)html";
+    html += tr.sensor_display_mode;
+    html += R"html(</label>
+              <select id=")html";
+    html += tab_id;
+    html += R"html(_energy_display_mode">
+                <option value="0">)html";
+    html += tr.sensor_layout_value;
+    html += R"html(</option>
+                <option value="2">)html";
+    html += tr.sensor_display_graph;
+    html += R"html(</option>
+              </select>
+              <label>)html";
     html += tr.popup_open;
     html += R"html(</label>
               <select id=")html";

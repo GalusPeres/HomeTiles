@@ -878,6 +878,9 @@ struct Strings {
   const char* media_this_player;
   // Media library: the row that plays the opened playlist or album.
   const char* media_play_all;
+  // Web Admin Settings > Localization: the first day of the week, with its
+  // colon like the rows above it (the Calendar tile's label without one).
+  const char* week_start_label;
 };
 
 // Locale-specific display rules and short runtime strings shared by

@@ -55,14 +55,16 @@ const fields = ['media_popup_layout', 'media_layout_cover_left', 'media_layout_c
 const header = read('src/core/i18n/i18n.h');
 const structBody = header.slice(header.indexOf('struct Strings {'), header.indexOf('\n};', header.indexOf('struct Strings {')));
 const declared = [...structBody.matchAll(/const char\* (\w+);/g)].map(match => match[1]);
-assert.deepEqual(declared.slice(-fields.length), fields, 'the media texts end the Strings schema');
+// Only the Localization week start label follows them (user 2026-10-29).
+assert.deepEqual(declared.slice(-fields.length - 1, -1), fields, 'the media texts end the Strings schema');
+assert.equal(declared[declared.length - 1], 'week_start_label');
 const i18n = read('src/core/i18n/i18n.cpp');
 for (const lang of ['De', 'En', 'Fr', 'Pl', 'Cs', 'Es', 'Sk']) {
   const start = i18n.indexOf(`static const Strings kStrings${lang} = {`);
   assert.ok(start >= 0, lang);
   const table = i18n.slice(start, i18n.indexOf('\n};', start));
   const texts = [...table.matchAll(/^\s*"((?:[^"\\]|\\.)*)",\s*$/gm)].map(match => match[1]);
-  const tail = texts.slice(-fields.length);
+  const tail = texts.slice(-fields.length - 1, -1);
   assert.equal(tail.length, fields.length, `${lang}: media texts`);
   for (const text of tail) assert.ok(text.length > 0, `${lang}: empty media text`);
 }

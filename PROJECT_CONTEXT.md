@@ -14,7 +14,7 @@ Last reviewed: 2026-10-26
 
 - FW v0.9.5 (hotfix) and FW + Bridge v0.9.4 released 2026-10-23. Bridge beta v0.9.6b3.
 - Pairing by IP, no mDNS (#114, Bridge #16): `GET /api/link`; HA ok (b513).
-- Test builds stay `v0.6.12bNNN` on purpose (System Update then offers releases); beta define in `firmware_version.h`, last b615.
+- Test builds stay `v0.6.12bNNN` on purpose (System Update then offers releases); beta define in `firmware_version.h`, last b616.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build (warm: only repo headers changed, same LVGL config hash).
 - Docs CI: Chrome for Testing 154.0.8037.57; dispatch docs (`main`) after a release.
 - Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need icons on HomeTiles-staging (tag = FW_VERSION).
@@ -99,7 +99,7 @@ Last reviewed: 2026-10-26
 - Lock/Alarm/Fan (24-26, `src/types/device/`): sealed commands need pairing + Web Admin password; HW ok 2026-10-02.
 - Calendar 27 (PR #127, `docs-dev/calendar.md`): Bridge v0.9.6b1 `events` (`entity_search` 5); V2 HW pending.
 - Sensor graph (#131, mockup sensor-graph-3): pictures (`area_graph.h`), circle-color area fading low, 1 px 8 % lines, labels right; tile 24 h; numeric popup 30D/7D/24H/6H/1H; corners in masks. HW ok b613.
-- Energy popup: Year/Month/Week/Today, bars like the graph (Bridge v0.9.6b3); week start: Localization (`week_start.h`).
+- Energy: popup Year/Month/Week/Today (Bridge v0.9.6b3); tile mode 2 = today's bars; week start: Localization.
 - Sensor looks (`build/analysis/2026-10-28-analyse.md`): modes 3-14 (`sensor_look.h`, `look_view.cpp`, `admin-look.js`), A8 masks rebuilt on value change; Switch-like menu; b570 HW pending.
 - Rule icons (b574): stop/state colors may carry an MDI icon (`RRGGBB,<icon>`); `tile_rule_icon.h` swaps/restores the glyph (renderers: `set_glyph`), popup head too; Switch & co. own rules b575. HW pending.
 - Switch layouts `sensor_decimals` 0-3, 4-6 upright bar (`bar_orientation.h`; Fan upright = 1; sim ok, HW pending); `command_pacer.h` pacing: reporter test pending (#11).

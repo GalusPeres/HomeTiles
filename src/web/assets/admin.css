@@ -2001,11 +2001,13 @@
     .tile.switch.switch-bar,
     .tile.cover.switch-bar,
     .tile.device.switch-bar,
+    .tile.energy.sensor-graph,
     .tile.sensor.sensor-graph,
     .tile.sensor.sensor-look-head { display:block; }
     .tile.switch.switch-bar > .tile-icon,
     .tile.cover.switch-bar > .tile-icon,
     .tile.device.switch-bar > .tile-icon,
+    .tile.energy.sensor-graph > .tile-icon,
     .tile.sensor.sensor-graph > .tile-icon,
     .tile.sensor.sensor-look-head > .tile-icon { margin:0; }
     /* Title and state left-aligned beside the corner disc like the
@@ -2015,6 +2017,7 @@
     .tile.cover.switch-bar,
     .tile.device.switch-bar,
     .tile.climate.climate-header,
+    .tile.energy.sensor-graph,
     .tile.sensor.sensor-graph,
     .tile.sensor.sensor-look-head {
       --switch-text-left:calc(3 * var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) - 3px);
@@ -2029,8 +2032,10 @@
     .tile.device.switch-bar > .tile-switch-state,
     .tile.climate.climate-header > .tile-title,
     .tile.climate.climate-header > .tile-switch-state,
+    .tile.energy.sensor-graph > .tile-title,
     .tile.sensor.sensor-graph > .tile-title,
     .tile.sensor.sensor-look-head > .tile-title,
+    .tile.energy.sensor-graph > .tile-value,
     .tile.sensor.sensor-graph > .tile-value,
     .tile.sensor.sensor-look-head > .tile-value {
       position:absolute;
@@ -2050,6 +2055,7 @@
     .tile.cover.switch-bar > .tile-title,
     .tile.device.switch-bar > .tile-title,
     .tile.climate.climate-header > .tile-title,
+    .tile.energy.sensor-graph > .tile-title,
     .tile.sensor.sensor-graph > .tile-title,
     .tile.sensor.sensor-look-head > .tile-title {
       /* On the LVGL baseline like the half-height tiles (--compact-*-dy). */
@@ -2061,6 +2067,7 @@
     .tile.cover.switch-bar > .tile-switch-state,
     .tile.device.switch-bar > .tile-switch-state,
     .tile.climate.climate-header > .tile-switch-state,
+    .tile.energy.sensor-graph > .tile-value,
     .tile.sensor.sensor-graph > .tile-value,
     .tile.sensor.sensor-look-head > .tile-value {
       top:calc(var(--switch-text-top) + var(--compact-title-line, 12px) + var(--compact-value-dy, 0px));
@@ -2072,6 +2079,7 @@
     .tile.cover.switch-bar:not(:has(> .tile-title)) > .tile-switch-state,
     .tile.device.switch-bar:not(:has(> .tile-title)) > .tile-switch-state,
     .tile.climate.climate-header:not(:has(> .tile-title)) > .tile-switch-state,
+    .tile.energy.sensor-graph:not(:has(> .tile-title)) > .tile-value,
     .tile.sensor.sensor-graph:not(:has(> .tile-title)) > .tile-value,
     .tile.sensor.sensor-look-head:not(:has(> .tile-title)) > .tile-value {
       top:calc(var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) / 2 - 3px
@@ -2080,6 +2088,7 @@
     .tile.switch.switch-bar.compact-value-24,
     .tile.cover.switch-bar.compact-value-24,
     .tile.device.switch-bar.compact-value-24,
+    .tile.energy.sensor-graph.compact-value-24,
     .tile.sensor.sensor-graph.compact-value-24,
     .tile.sensor.sensor-look-head.compact-value-24 {
       --compact-value-font:var(--compact-value-font-24); --compact-value-line:var(--compact-value-line-step-24);
@@ -2088,6 +2097,7 @@
     .tile.switch.switch-bar.compact-value-28,
     .tile.cover.switch-bar.compact-value-28,
     .tile.device.switch-bar.compact-value-28,
+    .tile.energy.sensor-graph.compact-value-28,
     .tile.sensor.sensor-graph.compact-value-28,
     .tile.sensor.sensor-look-head.compact-value-28 {
       --compact-value-font:var(--compact-value-font-28); --compact-value-line:var(--compact-value-line-step-28);

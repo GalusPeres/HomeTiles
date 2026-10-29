@@ -710,6 +710,7 @@ static const Strings kStringsDe = {
     "Die Mediathek ist nicht verfügbar",
     "Dieser Player",
     "Alle abspielen",
+    "Erster Wochentag:",
 };
 
 static const Strings kStringsEn = {
@@ -1415,6 +1416,7 @@ static const Strings kStringsEn = {
     "The library is not available",
     "This player",
     "Play all",
+    "First day of the week:",
 };
 
 static const Strings kStringsFr = {
@@ -2120,6 +2122,7 @@ static const Strings kStringsFr = {
     "La médiathèque est indisponible",
     "Ce lecteur",
     "Tout lire",
+    "Premier jour de la semaine\u00A0:",
 };
 
 static const LocaleProfile kLocaleDe = {
@@ -3229,6 +3232,7 @@ static const Strings kStringsPl = {
     "Biblioteka jest niedostępna",
     "Ten odtwarzacz",
     "Odtwórz wszystko",
+    "Pierwszy dzień tygodnia:",
 };
 
 static const Strings kStringsCs = {
@@ -3904,6 +3908,7 @@ static const Strings kStringsCs = {
     "Knihovna není dostupná",
     "Tento přehrávač",
     "Přehrát vše",
+    "První den týdne:",
 };
 
 static const Strings kStringsEs = {
@@ -4579,6 +4584,7 @@ static const Strings kStringsEs = {
     "La biblioteca no está disponible",
     "Este reproductor",
     "Reproducir todo",
+    "Primer día de la semana:",
 };
 
 static const Strings kStringsSk = {
@@ -5254,6 +5260,7 @@ static const Strings kStringsSk = {
     "Knižnica nie je dostupná",
     "Tento prehrávač",
     "Prehrať všetko",
+    "Prvý deň týždňa:",
 };
 
 static const LocaleProfile kLocalePl = {

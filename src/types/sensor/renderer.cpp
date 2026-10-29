@@ -14,6 +14,7 @@
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include <Arduino.h>
 #include <lvgl_private.h>
+#include "src/tiles/runtime/tile_graph_box.h"
 #include "src/tiles/runtime/tile_header.h"
 #include "src/types/climate/layout.h"
 #include "src/types/value/value_control.h"
@@ -30,16 +31,9 @@ static const lv_font_t* get_sensor_value_font(const Tile& tile) {
 // 2026-10-26): the Switch header beside the corner disc, the graph below it
 // in the Switch bar's box over the rest of the tile (insets, the bar's
 // radius at the bottom, an open top). The line in the icon's color, the area
-// below it in the circle's color.
-static lv_area_t sensor_graph_box(const Tile& tile) {
-  const int tile_w = tile_geometry::extent(tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP);
-  const int tile_h = tile_geometry::extent(tile.row, std::max(1.0f, tile.span_h), GRID_CELL_H, GRID_GAP);
-  const int icon_width =
-      FONT_MDI_ICONS ? lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0) : 0;
-  const int top = climate_layout::content_top(tile_icon_disc::header_diameter(icon_width), tile_icon_disc::inset());
-  return {climate_layout::kOuterInset, top, tile_w - climate_layout::kOuterInset - 1,
-          tile_h - climate_layout::kOuterInset - 1};
-}
+// below it in the circle's color. The box is shared with the Energy tile's
+// bars (tile_graph_box.h).
+static lv_area_t sensor_graph_box(const Tile& tile) { return tile_graph_box::box(tile); }
 
 // The graph's pictures (area_graph.h): the area and the line as A8 masks in
 // the LVGL heap, drawn recolored in the circle's and the icon's current

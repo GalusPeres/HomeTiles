@@ -1966,7 +1966,7 @@ data-dhcp-note=")html";
 </div>
 <div>
 <label for="locale_week_start">)html";
-  appendHtmlEscaped(html, i18n::calendar_label(cfg.language, i18n::CalendarLabel::WeekStart));
+  appendHtmlEscaped(html, tr.week_start_label);
   html += R"html(</label>
 <select id="locale_week_start" name="locale_week_start">)html";
   html += buildWeekStartOptionsHtml(cfg.week_start, cfg.language);

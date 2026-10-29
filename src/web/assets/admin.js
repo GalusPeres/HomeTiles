@@ -6795,8 +6795,9 @@ async function saveGestureEdge(select) {
     // A Sensor graph tile (display mode 2) has the Switch header beside the
     // disc at the half-height value sizes (types/sensor/renderer.cpp); its
     // graph needs the Bridge's history, so the box below stays empty like
-    // the panel's before the history arrives.
-    const sensorGraph = Number(type) === 1 && Number(mode) === 2 && !halfHeight;
+    // the panel's before the history arrives. An Energy tile with bars has
+    // the same header and box (types/energy/renderer.cpp).
+    const sensorGraph = (Number(type) === 1 || Number(type) === 14) && Number(mode) === 2 && !halfHeight;
     el.classList.toggle('sensor-graph', sensorGraph);
     // The looks below the header (types/sensor/sensor_look.h, admin-look.js):
     // the graph's header with the value beside the disc, or the title alone
@@ -7711,6 +7712,7 @@ async function saveGestureEdge(select) {
       const energyDecimalsInput = document.getElementById(prefix + '_energy_decimals');
       const energyValueFontSelect = document.getElementById(prefix + '_energy_value_font');
       const energyPopupModeSelect = document.getElementById(prefix + '_energy_popup_open_mode');
+      const energyDisplayModeSelect = document.getElementById(prefix + '_energy_display_mode');
       const energyValueYOffsetInput = document.getElementById(prefix + '_energy_value_y_offset');
       const sceneInput = document.getElementById(prefix + '_scene_alias');
     const textInput = document.getElementById(prefix + '_text_value');
@@ -7865,6 +7867,7 @@ async function saveGestureEdge(select) {
     bindLive(energyDecimalsInput, 'input', 'energyDecimals', () => { updateEnergyValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(energyValueFontSelect, 'change', 'energyValueFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(energyPopupModeSelect, 'change', 'energyPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
+    bindLive(energyDisplayModeSelect, 'change', 'energyDisplayMode', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(energyValueYOffsetInput, 'input', 'energyValueYOffset', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(unitInput, 'input', 'sensorUnit', () => { updateSensorValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(decimalsInput, 'input', 'sensorDecimals', () => { updateSensorValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
@@ -8238,8 +8241,13 @@ async function saveGestureEdge(select) {
     const isEnergyType = type === '14';
     // Half-height tiles offer only the value sizes that fit.
     const halfHeight = tileSpan('span_h') === 0.5;
-    for (const id of ['_binary_sensor_value_font', '_energy_value_font'])
-      syncCompactValueFontOptions(document.getElementById(prefix + id), halfHeight);
+    // An Energy tile with bars has its value beside the disc like the Sensor
+    // graph tile (types/energy/renderer.cpp).
+    const energyBars = isEnergyType && document.getElementById(prefix + '_energy_display_mode')?.value === '2';
+    syncCompactValueFontOptions(document.getElementById(prefix + '_binary_sensor_value_font'), halfHeight);
+    syncCompactValueFontOptions(document.getElementById(prefix + '_energy_value_font'), halfHeight || energyBars);
+    // The display mode the previews take: the Energy tile keeps its own field.
+    const previewDisplayMode = document.getElementById(prefix + (isEnergyType ? '_energy_display_mode' : '_sensor_display_mode'))?.value || 0;
     // A Sensor graph tile, and a look with its value in the head, shows its
     // value in the header row beside the disc like a half-height tile
     // (types/sensor/renderer.cpp).
@@ -8382,8 +8390,7 @@ async function saveGestureEdge(select) {
       applyTileAriaLabel(tileElem, '', type);
       if (wasActive) tileElem.classList.add('active');
       updateLayoutFromInputs(tab);
-    applyCompactSensorPreview(tileElem, type, sensorLookLayout(),
-      document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
+    applyCompactSensorPreview(tileElem, type, sensorLookLayout(), previewDisplayMode, sensorValueFont);
       return;
     }
 
@@ -8629,8 +8636,7 @@ async function saveGestureEdge(select) {
     }
     if (type === '5') updateSwitchValuePreview(tab);
     updateLayoutFromInputs(tab);
-    applyCompactSensorPreview(tileElem, type, sensorLookLayout(),
-      document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
+    applyCompactSensorPreview(tileElem, type, sensorLookLayout(), previewDisplayMode, sensorValueFont);
     // The analog and the wall clock place their face once the tile has its
     // size and classes again (updateLayoutFromInputs, applyCompactSensorPreview):
     // before them the tile measured 1 x 1 in the middle of its rebuild, and the
@@ -10262,6 +10268,9 @@ async function saveGestureEdge(select) {
       if (tile.sensor_value_y_offset !== undefined && tile.sensor_value_y_offset !== null && String(tile.sensor_value_y_offset).length > 0) {
         fd.append('sensor_value_y_offset', tile.sensor_value_y_offset);
       }
+      // The bars below the header (2); the screensaver shows the value alone.
+      const screensaverEnergy = Number(folderId) === Number(SCREENSAVER_FOLDER_ID);
+      fd.append('sensor_display_mode', !screensaverEnergy && Number(tile.sensor_display_mode) === 2 ? '2' : '0');
     } else if (safeType === 28) {
       fd.append('flow_entities', tile.flow_entities || '');
       const bits = Number(tile.key_code) || 0;
@@ -17194,6 +17203,9 @@ function maybeFillTitleFromEnergy(tab) {
     if (decEl) decEl.value = (data.sensor_decimals !== undefined && data.sensor_decimals >= 0) ? data.sensor_decimals : '1';
     const fontEl = document.getElementById(prefix + '_energy_value_font');
     if (fontEl) fontEl.value = (data.sensor_value_font !== undefined) ? String(data.sensor_value_font) : '0';
+    // The value alone (0) or today's hours as bars below the header (2).
+    const displayEl = document.getElementById(prefix + '_energy_display_mode');
+    if (displayEl) displayEl.value = Number(data.sensor_display_mode) === 2 ? '2' : '0';
     const popupModeEl = document.getElementById(prefix + '_energy_popup_open_mode');
     if (popupModeEl) popupModeEl.value = (data.popup_open_mode !== undefined) ? String(data.popup_open_mode) : '1';
     const valueYOffsetEl = document.getElementById(prefix + '_energy_value_y_offset');
@@ -17211,6 +17223,7 @@ function maybeFillTitleFromEnergy(tab) {
     formData.append('sensor_unit', document.getElementById(prefix + '_energy_unit')?.value || '');
     formData.append('sensor_decimals', document.getElementById(prefix + '_energy_decimals')?.value || '1');
     formData.append('sensor_value_font', document.getElementById(prefix + '_energy_value_font')?.value || '0');
+    formData.append('sensor_display_mode', document.getElementById(prefix + '_energy_display_mode')?.value || '0');
     formData.append('popup_open_mode', document.getElementById(prefix + '_energy_popup_open_mode')?.value || '1');
     formData.append('sensor_value_y_offset', document.getElementById(prefix + '_energy_value_y_offset')?.value || '');
   }
@@ -17226,6 +17239,8 @@ function maybeFillTitleFromEnergy(tab) {
     if (decEl) decEl.value = '1';
     const fontEl = document.getElementById(prefix + '_energy_value_font');
     if (fontEl) fontEl.value = '0';
+    const displayEl = document.getElementById(prefix + '_energy_display_mode');
+    if (displayEl) displayEl.value = '0';
     const popupModeEl = document.getElementById(prefix + '_energy_popup_open_mode');
     if (popupModeEl) popupModeEl.value = '1';
     const valueYOffsetEl = document.getElementById(prefix + '_energy_value_y_offset');

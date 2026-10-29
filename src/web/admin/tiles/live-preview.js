@@ -57,8 +57,13 @@
     const isEnergyType = type === '14';
     // Half-height tiles offer only the value sizes that fit.
     const halfHeight = tileSpan('span_h') === 0.5;
-    for (const id of ['_binary_sensor_value_font', '_energy_value_font'])
-      syncCompactValueFontOptions(document.getElementById(prefix + id), halfHeight);
+    // An Energy tile with bars has its value beside the disc like the Sensor
+    // graph tile (types/energy/renderer.cpp).
+    const energyBars = isEnergyType && document.getElementById(prefix + '_energy_display_mode')?.value === '2';
+    syncCompactValueFontOptions(document.getElementById(prefix + '_binary_sensor_value_font'), halfHeight);
+    syncCompactValueFontOptions(document.getElementById(prefix + '_energy_value_font'), halfHeight || energyBars);
+    // The display mode the previews take: the Energy tile keeps its own field.
+    const previewDisplayMode = document.getElementById(prefix + (isEnergyType ? '_energy_display_mode' : '_sensor_display_mode'))?.value || 0;
     // A Sensor graph tile, and a look with its value in the head, shows its
     // value in the header row beside the disc like a half-height tile
     // (types/sensor/renderer.cpp).
@@ -201,8 +206,7 @@
       applyTileAriaLabel(tileElem, '', type);
       if (wasActive) tileElem.classList.add('active');
       updateLayoutFromInputs(tab);
-    applyCompactSensorPreview(tileElem, type, sensorLookLayout(),
-      document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
+    applyCompactSensorPreview(tileElem, type, sensorLookLayout(), previewDisplayMode, sensorValueFont);
       return;
     }
 
@@ -448,8 +452,7 @@
     }
     if (type === '5') updateSwitchValuePreview(tab);
     updateLayoutFromInputs(tab);
-    applyCompactSensorPreview(tileElem, type, sensorLookLayout(),
-      document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
+    applyCompactSensorPreview(tileElem, type, sensorLookLayout(), previewDisplayMode, sensorValueFont);
     // The analog and the wall clock place their face once the tile has its
     // size and classes again (updateLayoutFromInputs, applyCompactSensorPreview):
     // before them the tile measured 1 x 1 in the middle of its rebuild, and the

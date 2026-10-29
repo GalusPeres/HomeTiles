@@ -33,8 +33,14 @@ const html = read('src/web/server/render/web_admin_html.cpp');
 assert.ok(html.includes('<select id="locale_week_start" name="locale_week_start">'));
 assert.ok(html.indexOf('locale_week_start') > html.indexOf('locale_date_format') &&
   html.indexOf('locale_week_start') < html.indexOf('</section>', html.indexOf('locale_date_format')), 'in the Localization section');
-assert.ok(html.includes('appendHtmlEscaped(html, i18n::calendar_label(cfg.language, i18n::CalendarLabel::WeekStart));'),
-  'the Calendar tile\'s translated label');
+// With its colon like the rows above it (user 2026-10-29: "bitte mit
+// Doppelpunkt"), French with the non-breaking space before it.
+assert.ok(html.includes('appendHtmlEscaped(html, tr.week_start_label);'), 'the Localization label');
+const strings = read('src/core/i18n/i18n.cpp');
+for (const label of ['"Erster Wochentag:"', '"First day of the week:"', '"Premier jour de la semaine\\u00A0:"',
+  '"Pierwszy dzień tygodnia:"', '"První den týdne:"', '"Primer día de la semana:"', '"Prvý deň týždňa:"']) {
+  assert.ok(strings.includes(label), label);
+}
 const options = fn(html, 'buildWeekStartOptionsHtml');
 assert.match(options, /append\(calendar_model::kWeekStartAuto, automatic\.c_str\(\)\);\s*append\(1, loc\.weekday_names\[1\]\);\s*append\(0, loc\.weekday_names\[0\]\);\s*append\(6, loc\.weekday_names\[6\]\);/);
 const handlers = read('src/web/server/handlers/web_admin_handlers.cpp');

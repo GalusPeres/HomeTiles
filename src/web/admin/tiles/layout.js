@@ -153,8 +153,9 @@
     // A Sensor graph tile (display mode 2) has the Switch header beside the
     // disc at the half-height value sizes (types/sensor/renderer.cpp); its
     // graph needs the Bridge's history, so the box below stays empty like
-    // the panel's before the history arrives.
-    const sensorGraph = Number(type) === 1 && Number(mode) === 2 && !halfHeight;
+    // the panel's before the history arrives. An Energy tile with bars has
+    // the same header and box (types/energy/renderer.cpp).
+    const sensorGraph = (Number(type) === 1 || Number(type) === 14) && Number(mode) === 2 && !halfHeight;
     el.classList.toggle('sensor-graph', sensorGraph);
     // The looks below the header (types/sensor/sensor_look.h, admin-look.js):
     // the graph's header with the value beside the disc, or the title alone

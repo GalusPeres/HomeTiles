@@ -83,7 +83,7 @@ ${read('src/tiles/config/tile_config.h').match(/static constexpr uint8_t SENSOR_
 namespace tile_icon_source { inline lv_obj_t* card_icon(lv_obj_t*) { return nullptr; } inline void refresh_card(lv_obj_t*, const Tile&) {} inline uint32_t popup_background(lv_obj_t*, uint32_t fallback) { return fallback; } inline void refresh_controls(lv_obj_t*) {} }
 constexpr int TILE_POPUP_OPEN_SHORT_PRESS=1;
 int getTilePopupOpenMode(const Tile&t){return t.popup_open_mode;}
-struct Logger{void println(const char*){}}Serial;
+struct Logger{void println(const char*){}template<class... T>void printf(const char*,T...){}}Serial;
 struct Bridge{String findSensorName(const String&){return "Home";}String findEntityIcon(const String&){return "weather-sunny";}String findSensorUnit(const String&){return "";}String findSensorInitialValue(const String&){return "98";}String findSensorStateKind(const String&){return "number";}String findEditableValue(const String&){return "";}}haBridgeConfig;
 uint32_t tileDefaultBgColor(){return 0x2A2A2A;}uint32_t tileBgColorOrDefault(const Tile&,uint32_t c){return c;}
 bool isMdiIconDisabled(const String&){return false;}String normalizeMdiIconName(const String&s){return s;}
@@ -134,6 +134,7 @@ bool sensor_popup_should_use_state_history(const String&,const String&){return f
 void show_sensor_popup(const SensorPopupInit&){++sensor_opens;}void sensor_popup_prefetch_history(const String&){}void request_tile_graph_history(const char*){}
 // The graph tile's header and area (types/sensor/renderer.cpp).
 ${strip(read('src/tiles/runtime/tile_header.h'))}
+${strip(read('src/tiles/runtime/tile_graph_box.h'))}
 ${strip(read('src/ui/shared/area_graph.h'))}
 ${strip(read('src/types/sensor/sensor_look.h'))}
 ${strip(read('src/types/sensor/look_view.h'))}
@@ -146,6 +147,10 @@ lv_obj_t* render_sensor_tile(lv_obj_t* parent, int col, int row, const Tile& til
 }
 ${strip(read('src/ui/popups/energy/energy_popup.h'))}
 void show_energy_popup(const EnergyPopupInit&){}void energy_request_period(const char*,bool){}
+// The Energy tile's bars read the day from the cache (types/energy/energy_data.h).
+${read('src/types/energy/energy_data.h').match(/static constexpr uint8_t ENERGY_VALUES_MAX = \d+;/)[0]}
+${read('src/types/energy/energy_data.h').match(/struct EnergyEntryData \{[\s\S]*?\n\};/)[0]}
+bool energy_find_entry(const String&,const char*,EnergyEntryData&){return false;}
 String energy_source_icon(const String& id){return haBridgeConfig.findEntityIcon(id);}
 ${strip(read('src/types/energy/renderer.cpp')).replaceAll('is_disabled_token','energy_is_disabled_token')}
 void check_energy_layout() {

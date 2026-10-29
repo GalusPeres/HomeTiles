@@ -12,6 +12,7 @@
 #include "src/network/network_manager.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer.h"
+#include "src/types/energy/renderer.h"
 #include "src/ui/popups/energy/energy_popup.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
@@ -291,6 +292,7 @@ void parse_energy_response(const char* payload) {
 
     if (strcmp(period, "day") == 0) {
       queue_energy_tile_update_for_entry(entry);
+      energy_tile_bars_update(entry);
     }
     parsed.push_back(entry);
   }

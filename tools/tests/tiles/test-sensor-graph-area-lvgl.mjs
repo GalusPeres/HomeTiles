@@ -75,7 +75,7 @@ assert.ok(read('HomeTiles.ino').includes('    process_tile_graph_queue();\n    t
 // Web Admin preview: the graph tile shows the same header beside the disc
 // (the graph itself needs the Bridge's history, which the preview lacks).
 const layoutJs = read('src/web/admin/tiles/layout.js');
-assert.ok(layoutJs.includes("const sensorGraph = Number(type) === 1 && Number(mode) === 2 && !halfHeight;") &&
+assert.ok(layoutJs.includes("const sensorGraph = (Number(type) === 1 || Number(type) === 14) && Number(mode) === 2 && !halfHeight;") &&
   layoutJs.includes("el.classList.toggle('sensor-graph', sensorGraph);"), 'preview: the graph tile class');
 const css = read('src/web/assets/admin.css');
 assert.ok(css.includes('.tile.sensor.sensor-graph > .tile-value,') && css.includes('.tile.sensor.sensor-graph,' + String.fromCharCode(10) + '    .tile.sensor.sensor-look-head { display:block; }'),

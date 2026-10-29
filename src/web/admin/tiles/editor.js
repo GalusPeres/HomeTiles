@@ -204,6 +204,7 @@
       const energyDecimalsInput = document.getElementById(prefix + '_energy_decimals');
       const energyValueFontSelect = document.getElementById(prefix + '_energy_value_font');
       const energyPopupModeSelect = document.getElementById(prefix + '_energy_popup_open_mode');
+      const energyDisplayModeSelect = document.getElementById(prefix + '_energy_display_mode');
       const energyValueYOffsetInput = document.getElementById(prefix + '_energy_value_y_offset');
       const sceneInput = document.getElementById(prefix + '_scene_alias');
     const textInput = document.getElementById(prefix + '_text_value');
@@ -358,6 +359,7 @@
     bindLive(energyDecimalsInput, 'input', 'energyDecimals', () => { updateEnergyValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(energyValueFontSelect, 'change', 'energyValueFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(energyPopupModeSelect, 'change', 'energyPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
+    bindLive(energyDisplayModeSelect, 'change', 'energyDisplayMode', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(energyValueYOffsetInput, 'input', 'energyValueYOffset', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(unitInput, 'input', 'sensorUnit', () => { updateSensorValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(decimalsInput, 'input', 'sensorDecimals', () => { updateSensorValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });

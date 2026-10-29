@@ -330,6 +330,15 @@ int main(){
  {lv_area_t value,chart;lv_obj_get_coords(ctx->readout_value_label,&value);lv_obj_get_coords(ctx->chart,&chart);
   const int dot_top=chart.y1-kReadoutDotLift-kReadoutDotSize/2;
   assert(dot_top-value.y2>=popup_layout::scale(16)&&"Room between the readout value and the dot");}
+ // The axis labels: the number alone, its unit a step smaller after it like
+ // the Sensor popup's (user 2026-10-29), the units in one column at the plot.
+ {assert(strcmp(lv_label_get_text(ctx->y_max_label),"5.75")==0&&strcmp(value_unit::unit_text(ctx->y_max_label),"kWh")==0);
+  assert(strcmp(lv_label_get_text(ctx->y_min_label),"0")==0&&strcmp(value_unit::unit_text(ctx->y_min_label),"kWh")==0);
+  lv_obj_t* max_unit=lv_obj_get_child(ctx->y_max_label,0);lv_obj_t* min_unit=lv_obj_get_child(ctx->y_min_label,0);
+  // The unit label (value_unit.h picks its font a step smaller where the
+  // layout has one).
+  assert(max_unit&&min_unit&&"the unit beside the number");
+  lv_area_t a,b;lv_obj_get_coords(max_unit,&a);lv_obj_get_coords(min_unit,&b);assert(a.x2==b.x2&&"units in one column");}
  // Year, Month, Week, Today from left to right; the day button names today.
  {lv_area_t area[kPeriodCount];for(uint8_t p=0;p<kPeriodCount;++p)lv_obj_get_coords(ctx->period_btns[p],&area[p]);
   assert(area[3].x2<area[2].x1&&area[2].x2<area[1].x1&&area[1].x2<area[0].x1&&"Year, Month, Week, Today");

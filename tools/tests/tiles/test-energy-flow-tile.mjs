@@ -79,12 +79,11 @@ for (const marker of [
   'lv_display_add_event_cb(g_motion_display, motion_display_cb, code, nullptr);',
   'st.step[line] = dot_speed(flows.watts[line], strongest);',
   'st->phase[line] = fmodf(st->phase[line] + st->step[line], length);',
-  'if (waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));',
-  // Never behind a popup, asleep or off screen; only the dot's area, and
-  // only the part of a line's picture inside it.
-  // (behind a popup and off screen they keep asking for frames,
-  // test-energy-flow-dots-resume.mjs).
-  'if (popup_shell_active()) {\n    still = kStillPopup;\n    waiting = any_flow();\n    return 0;\n  }',
+  'if (moved || waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));',
+  // Never behind a popup, asleep or off screen, and no frames asked for
+  // there; only the dot's area, and only the part of a line's picture
+  // inside it.
+  'if (popup_shell_active()) {\n    still = kStillPopup;\n    return 0;\n  }',
   'if (powerManager.isInSleep()) {\n    still = kStillSleep;\n    return 0;\n  }',
   'if (image_screensaver_covers_ui()) {\n    still = kStillScreensaver;\n    return 0;\n  }',
   'if (!st || !any_live(*st)) continue;\n    if (lv_obj_t* hider = st->card ? hidden_by(st->card) : nullptr) {',

@@ -5,10 +5,12 @@
 // - lv_obj_invalidate_area drops an area that is not visible yet without a
 //   word, and the step counted it as drawn (b608: a refused step keeps the
 //   dot and asks for the next frame);
-// - a frame that found the tile hidden asked for nothing, and the page turn
-//   that showed it again left no frame that stepped the dots (b608 log
-//   "last frame: hidden"). A hidden flow, and one behind a popup, now keeps
-//   asking for frames, so the dots go on with the first frame that shows it.
+// - the frame that shows a page again stepped the dots once and asked for no
+//   next frame: its whole grid was marked, and lv_inv_area drops the dot's
+//   area inside it without a refresh request (b610 trace "22m 8293m"). The
+//   frame callback now asks for the next frame after a move itself
+//   (test-energy-flow-next-frame-lvgl.mjs shows it with real LVGL). b609's
+//   frames while hidden or behind a popup are gone again.
 import assert from 'node:assert/strict';
 import {readRepoFile} from '../../lib/admin-source.mjs';
 
@@ -36,19 +38,19 @@ assert.ok(refusedAt >= 0 && refusedAt < step.indexOf('st->dot[line] = next;'),
 assert.ok(step.slice(refusedAt, step.indexOf('st->dot[line] = next;')).includes('waiting = true;'),
   'and asks for the next frame');
 
-// A hidden flow and one behind a popup keep asking; sleep and the
-// screensaver do not (nothing is drawn there).
+// Hidden, behind a popup, asleep or under the screensaver nothing asks for
+// frames (no work in the background, user 2026-10-28).
 const hiddenAt = step.indexOf('if (lv_obj_t* hider = st->card ? hidden_by(st->card) : nullptr) {');
 assert.ok(hiddenAt >= 0, 'what hides the tile is looked up');
 const hidden = step.slice(hiddenAt, step.indexOf('still = kStillWaiting;'));
-assert.ok(hidden.includes('still = kStillHidden;') && hidden.includes('waiting = true;') && hidden.includes('continue;'),
-  'a hidden flow asks for the next frame');
-const popup = step.slice(step.indexOf('if (popup_shell_active()) {'), step.indexOf('if (powerManager.isInSleep()) {'));
-assert.ok(popup.includes('still = kStillPopup;') && popup.includes('waiting = any_flow();'), 'so does one behind a popup');
-for (const [from, to] of [['if (powerManager.isInSleep()) {', 'if (image_screensaver_covers_ui()) {'],
+assert.ok(hidden.includes('still = kStillHidden;') && hidden.includes('continue;'));
+for (const [from, to] of [['if (popup_shell_active()) {', 'if (powerManager.isInSleep()) {'],
+  ['if (powerManager.isInSleep()) {', 'if (image_screensaver_covers_ui()) {'],
   ['if (image_screensaver_covers_ui()) {', 'uint32_t moved = 0;']]) {
   assert.ok(!step.slice(step.indexOf(from), step.indexOf(to)).includes('waiting'), `${from} asks for nothing`);
 }
+assert.ok(!hidden.includes('waiting'), 'a hidden flow asks for nothing');
+assert.ok(!renderer.includes('any_flow'), 'no frames kept running for a hidden flow');
 for (const reason of ['kStillNoFlow = "no flow"', 'kStillPopup = "popup"', 'kStillSleep = "sleep"', 'kStillScreensaver = "screensaver"',
   'kStillHidden = "hidden"', 'kStillWaiting = "waiting"', 'kStillRefused = "not visible"']) {
   assert.ok(renderer.includes(`constexpr const char* ${reason};`), reason);
@@ -66,8 +68,10 @@ const log = between('void log_still(uint32_t now_ms) {', 'void motion_display_cb
 assert.ok(log.includes('if (!g_still_since_ms || now_ms - g_still_since_ms < kStillLogMs) return;') &&
   log.includes('"[EnergyFlow] Dots move again after %lu ms (last frame: %s, woken by %s)\\n"'));
 const frame = between('void motion_display_cb(', 'void wake_motion(');
-assert.ok(frame.includes('note_still(still, now_ms);') &&
-  frame.indexOf('note_still(still, now_ms);') < frame.indexOf('if (waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));'));
+const resumeAt = frame.indexOf('if (moved || waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));');
+assert.ok(resumeAt >= 0 && resumeAt < frame.indexOf('if (!moved) {'),
+  'a frame that moved a dot asks for the next one itself, not through the dot\'s area');
+assert.ok(frame.includes('note_still(still, now_ms);'));
 assert.ok(frame.indexOf('log_still(now_ms);') > frame.indexOf('if (!moved) {'), 'logged when the dots move again');
 assert.ok(between('void wake_motion(', 'void count_piece(').includes('g_woken_by_state = true;'));
 

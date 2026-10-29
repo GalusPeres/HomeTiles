@@ -384,26 +384,20 @@ HiddenBy hidden_info(lv_obj_t* card, lv_obj_t* hider) {
   return {hider == lv_obj_get_screen(card) && hider != card, depth, lv_obj_get_width(hider), lv_obj_get_height(hider)};
 }
 
-bool any_flow() {
-  for (const FlowTileState* st : g_tiles) {
-    if (st && any_live(*st)) return true;
-  }
-  return false;
-}
-
 // One step of every shown dot; the number of dots that moved. `waiting`:
-// the next frame should come (a dot shown that did not change its pixel, or
-// a flow that cannot be shown yet). `still`: why nothing moved.
+// the next frame should come although no dot moved (a dot shown that did not
+// change its pixel, or one whose area is not visible yet). `still`: why
+// nothing moved.
 uint32_t step_dots(bool& waiting, const char*& still) {
   waiting = false;
   still = kStillNoFlow;
   // Nothing moves where nobody sees it: behind a popup, asleep, or under the
   // screensaver (b539 log: there the dots ran on at ~47 frames a second and
-  // redrew the screensaver above them in every area). Behind a popup a flow
-  // keeps asking for frames, so its dots go on with the frame that closes it.
+  // redrew the screensaver above them in every area). Nothing asks for frames
+  // there either: the redraw that shows the tile again brings a frame, and
+  // that frame steps the dots and asks for the next (motion_display_cb).
   if (popup_shell_active()) {
     still = kStillPopup;
-    waiting = any_flow();
     return 0;
   }
   if (powerManager.isInSleep()) {
@@ -418,13 +412,12 @@ uint32_t step_dots(bool& waiting, const char*& still) {
   for (FlowTileState* st : g_tiles) {
     if (!st || !any_live(*st)) continue;
     if (lv_obj_t* hider = st->card ? hidden_by(st->card) : nullptr) {
-      // A hidden flow keeps asking for frames: the page turn, tab or overlay
-      // that shows it again may leave no frame that steps the dots, and they
-      // stood until the next state arrived (user 2026-10-28: ~5 s after every
-      // page turn, b608 log "last frame: hidden").
+      // A hidden flow asks for no frames (b609 kept them running here in the
+      // background; the dots' stop after a page turn had another cause, see
+      // motion_display_cb). Showing the tile redraws it, and that frame
+      // steps its dots.
       g_hidden_by = hidden_info(st->card, hider);
       still = kStillHidden;
-      waiting = true;
       continue;
     }
     still = kStillWaiting;
@@ -745,9 +738,15 @@ void motion_display_cb(lv_event_t* e) {
     const uint32_t moved = step_dots(waiting, still);
     const uint32_t now_ms = millis();
     trace_frame(moved, still, now_ms);
+    // The next frame is asked for here, also after a move: the refresh paused
+    // its timer before this event, and the area of the step does not always
+    // restart it. lv_inv_area drops an area inside one already marked without
+    // a refresh request (lv_refr.c), and in the frame that shows a page again
+    // its whole grid is marked: the dots made one step and stood until the
+    // next state (user 2026-10-28, b610 trace "22m 8293m", "23m 3674m").
+    if (moved || waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));
     if (!moved) {
       note_still(still, now_ms);
-      if (waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));
       return;
     }
     log_still(now_ms);

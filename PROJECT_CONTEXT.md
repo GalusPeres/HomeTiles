@@ -107,4 +107,4 @@ Last reviewed: 2026-10-26
 - Direct link: TCP 8140, Bridge = broker, frames sealed with pairing keys (`docs-dev/bridge-link.md`). The panel declares every entity it uses; without a password only released entities and the Energy Dashboard categories reach it. Picker lists Recent/Favorites/All (b369): V2 HW pending.
 - Security: optional Web Admin password (PBKDF2 300k), sessions, CSRF; command channel pairing v2 (X25519, 6-digit code), `docs-dev/command-encryption.md`.
 - Commands validate targets/availability/features and ignore retained commands; stable tile IDs in reserved PackedTileV7 bytes.
-- Languages en/de/fr/pl/cs/es/sk are data only (Strings + LocaleProfile incl. long date pattern and keyboard; no language codes in code); `test-i18n-panel-glyphs` rejects missing glyphs. Device text fit cs/es/sk pending.
+- Languages en/de/fr/pl/cs/es/sk/ru are data only (Strings + LocaleProfile); `test-i18n-panel-glyphs` checks all text sizes. Russian (PR #124): Cyrillic fallbacks (`generate-cyrillic-fonts.mjs`), JCUKEN keys. Fit cs/es/sk/ru pending.

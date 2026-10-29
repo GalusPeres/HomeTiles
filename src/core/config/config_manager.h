@@ -87,7 +87,7 @@ struct DeviceConfig {
   // Localization): the Energy popup's week, the Calendar tile under
   // Automatic and the Sensor graph's 30D lines.
   uint8_t week_start;
-  uint8_t keyboard_layout;  // 0=Auto (language), 1=German QWERTZ, 2=English QWERTY, 3=French AZERTY
+  uint8_t keyboard_layout;  // 0=Auto (language), 1=German QWERTZ, 2=English QWERTY, 3=French AZERTY, 4=Russian JCUKEN
   bool configured;  // Whether a configuration is stored.
 
   // Display & Power Settings

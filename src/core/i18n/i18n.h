@@ -881,6 +881,9 @@ struct Strings {
   // Web Admin Settings > Localization: the first day of the week, with its
   // colon like the rows above it (the Calendar tile's label without one).
   const char* week_start_label;
+  // Settings: the System category's name (Russian brought it into the
+  // tables, 2026-10-29).
+  const char* settings_system;
 };
 
 // Locale-specific display rules and short runtime strings shared by
@@ -1014,10 +1017,11 @@ struct LocaleProfile {
 
   // The panel keyboard (settings_keyboard), as data so a language brings
   // its own: the letter layout under Auto (0 QWERTY, 1 QWERTZ, 2 AZERTY,
-  // settings_keyboard::Layout) and the language's own letters and signs in
-  // lower case ("áčďéěíňóřšťúůýž"), first on the accent page and first
-  // among the forms of a held letter (keyboard_letters.h makes the
-  // capitals). Only characters of the panel fonts.
+  // 3 JCUKEN, settings_keyboard::Layout) and the language's own letters and
+  // signs in lower case ("áčďéěíňóřšťúůýž"), first on the accent page and
+  // first among the forms of a held letter (keyboard_letters.h makes the
+  // capitals; Russian "ёъ" are held е and ь, its accent key switches to
+  // QWERTY). Only characters of the panel fonts.
   uint8_t keyboard_layout;
   const char* keyboard_letters;
 

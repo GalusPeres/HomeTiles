@@ -81,8 +81,12 @@ const step = Number(option('step') || 0);
 // --lang=<code> renders the firmware in that language, any registered one
 // (the mockup stays English).
 const language = option('lang') || 'en';
-// --keys=accents shows the keyboard's accent page (with --entry).
+// --keys=accents shows the keyboard's accent page, latin the QWERTY page of
+// a layout with its own alphabet (Russian), shift the capitals (with --entry).
 const keys = option('keys');
+const keysCode = {accents: 'settings_keyboard::g_kb.accents = true;', latin: 'settings_keyboard::g_kb.latin = true;',
+  shift: 'settings_keyboard::g_kb.shift = true;'}[keys];
+if (keys !== undefined && !keysCode) throw new Error(`unknown keys ${keys}`);
 const dialogs = {github: 'git', restart: 'restart', unpair: 'encOff', password: 'pwOff', pairing: 'code', leave: 'wzExit'};
 if (dialog !== undefined && !(dialog in dialogs)) throw new Error(`unknown dialog ${dialog}`);
 const categories = {display: 0, wifi: 1, localization: 2, system: 3, setup: 0};
@@ -308,7 +312,7 @@ bool time_text(char* buf, size_t len) { snprintf(buf, len, "%s", "${time}"); ret
 bool update_available() { return false; }
 // Localization: English, Berlin, the rest Auto (mockup st.loc).
 uint8_t locale_option_count(LocaleList list) {
-  static const uint8_t kCounts[] = {${codes.length}, 27, 3, 4, 4};
+  static const uint8_t kCounts[] = {${codes.length}, 27, 3, 4, 5};
   return kCounts[static_cast<int>(list)];
 }
 const char* locale_option(LocaleList list, uint8_t index) {
@@ -317,7 +321,7 @@ const char* locale_option(LocaleList list, uint8_t index) {
   static const char* const kTimes[] = {"Auto (language)", "24-hour", "12-hour"};
   static const char* const kDates[] = {"Auto (language)", "DD.MM.YYYY", "MM/DD/YYYY", "YYYY/MM/DD"};
   static const char* const kKeyboards[] = {"Auto (language)", "Deutsch (QWERTZ)", "English (QWERTY)",
-                                           "Fran\xC3\xA7" "ais (AZERTY)"};
+                                           "Fran\xC3\xA7" "ais (AZERTY)", "Русский (ЙЦУКЕН)"};
   switch (list) {
     case LocaleList::Language: return kLanguages[index];
     case LocaleList::TimeZone: return kZones[index];
@@ -470,7 +474,7 @@ int main(int argc, char** argv) {
   ${open === undefined ? '' : `setup_screen::open_locale_list(${Number(open)});`}
   ${press === undefined ? '' : `lv_obj_add_state(setup_screen::g_locale_rows[${Number(press)}].row, LV_STATE_PRESSED);`}
   ${entry === undefined ? '' : `setup_screen::open_entry(${entry === 'manual'}, "FRITZ!Box 7590 XY");`}
-  ${keys === 'accents' ? 'settings_keyboard::g_kb.accents = true; settings_keyboard::lay_out();' : ''}
+  ${keysCode ? `${keysCode} settings_keyboard::lay_out();` : ''}
   ${dialog === 'leave' ? 'setup_screen::open_leave_dialog();' : ''}
   ${option('drag') === 'up' ? `{
     // The step's list that scrolls in itself (step 0: the language group on
@@ -507,7 +511,7 @@ int main(int argc, char** argv) {
   }` : ''}
   ${args.includes('--press-close') ? 'lv_obj_add_state(settings_screen::g_close, LV_STATE_PRESSED);' : ''}
   ${entry === undefined ? '' : `settings_screen::open_entry(${entry === 'manual'}, "FRITZ!Box 7590 XY");`}
-  ${keys === 'accents' ? 'settings_keyboard::g_kb.accents = true; settings_keyboard::lay_out();' : ''}
+  ${keysCode ? `${keysCode} settings_keyboard::lay_out();` : ''}
   ${dialog === undefined || dialog === 'pairing' ? '' : `settings_screen::open_dialog(settings_screen::Dialog::${{github: 'GitHub', restart: 'Restart', unpair: 'Unpair', password: 'RemovePassword'}[dialog]});`}
   `}
   ui_surface_style::process_pending_updates();

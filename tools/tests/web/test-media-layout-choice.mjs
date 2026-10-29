@@ -55,16 +55,20 @@ const fields = ['media_popup_layout', 'media_layout_cover_left', 'media_layout_c
 const header = read('src/core/i18n/i18n.h');
 const structBody = header.slice(header.indexOf('struct Strings {'), header.indexOf('\n};', header.indexOf('struct Strings {')));
 const declared = [...structBody.matchAll(/const char\* (\w+);/g)].map(match => match[1]);
-// Only the Localization week start label follows them (user 2026-10-29).
-assert.deepEqual(declared.slice(-fields.length - 1, -1), fields, 'the media texts end the Strings schema');
-assert.equal(declared[declared.length - 1], 'week_start_label');
+// Only later texts follow them: the Localization week start label and the
+// Settings System name (both 2026-10-29).
+const after = ['week_start_label', 'settings_system'];
+assert.deepEqual(declared.slice(-fields.length - after.length, -after.length), fields, 'the media texts end the Strings schema');
+assert.deepEqual(declared.slice(-after.length), after);
 const i18n = read('src/core/i18n/i18n.cpp');
-for (const lang of ['De', 'En', 'Fr', 'Pl', 'Cs', 'Es', 'Sk']) {
+const languages = [...i18n.matchAll(/\{&kStrings(\w+), &kLocale\w+\}/g)].map(match => match[1]);
+assert.ok(languages.length >= 8, 'every built-in language is registered');
+for (const lang of languages) {
   const start = i18n.indexOf(`static const Strings kStrings${lang} = {`);
   assert.ok(start >= 0, lang);
   const table = i18n.slice(start, i18n.indexOf('\n};', start));
   const texts = [...table.matchAll(/^\s*"((?:[^"\\]|\\.)*)",\s*$/gm)].map(match => match[1]);
-  const tail = texts.slice(-fields.length - 1, -1);
+  const tail = texts.slice(-fields.length - after.length, -after.length);
   assert.equal(tail.length, fields.length, `${lang}: media texts`);
   for (const text of tail) assert.ok(text.length > 0, `${lang}: empty media text`);
 }

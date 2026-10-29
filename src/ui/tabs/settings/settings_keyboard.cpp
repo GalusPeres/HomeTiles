@@ -13,11 +13,16 @@ namespace {
 
 using settings_style::Colors;
 
-// The letter and symbol rows (mockup keyboard()). Row 2 holds up to ten
-// keys, row 3 up to seven between Shift and Backspace.
+// The letter and symbol rows (mockup keyboard()) on a grid of `columns`
+// keys: ten, where row 2 holds up to ten keys and row 3 up to seven between
+// Shift and Backspace, or eleven (JCUKEN), where the first two rows hold
+// eleven and row 3 nine. `name` is a letter page's own alphabet ("АБВ"),
+// none for the Latin pages ("ABC").
 struct Page {
   const char* const* rows[3];
   uint8_t counts[3];
+  uint8_t columns;
+  const char* name;
 };
 
 const char* const kQwerty1[] = {"q", "w", "e", "r", "t", "y", "u", "i", "o", "p"};
@@ -28,6 +33,10 @@ const char* const kAzerty2[] = {"q", "s", "d", "f", "g", "h", "j", "k", "l", "m"
 const char* const kQwerty3[] = {"z", "x", "c", "v", "b", "n", "m"};
 const char* const kQwertz3[] = {"y", "x", "c", "v", "b", "n", "m"};
 const char* const kAzerty3[] = {"w", "x", "c", "v", "b", "n"};
+// Russian JCUKEN; ё and ъ are the held forms of е and ь (keyboard_letters).
+const char* const kJcuken1[] = {"й", "ц", "у", "к", "е", "н", "г", "ш", "щ", "з", "х"};
+const char* const kJcuken2[] = {"ф", "ы", "в", "а", "п", "р", "о", "л", "д", "ж", "э"};
+const char* const kJcuken3[] = {"я", "ч", "с", "м", "и", "т", "ь", "б", "ю"};
 const char* const kSymbols1[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"};
 const char* const kSymbols2[] = {"@", "#", "$", "%", "&", "*", "-", "+", "("};
 const char* const kSymbols3[] = {"!", "\"", "'", ":", ";", "/", "?"};
@@ -36,13 +45,19 @@ const char* const kMore1[] = {")", "_", "=", "[", "]", "{", "}", "<", ">", "\\"}
 const char* const kMore2[] = {"^", "`", "|", "~", ",", "\xE2\x82\xAC", "\xC2\xA3", "\xC2\xA5", "\xC2\xB0"};
 const char* const kMore3[] = {"\xC2\xA7", "\xC2\xBF", "\xC2\xA1", "\xC2\xAB", "\xC2\xBB", "\xE2\x80\xA2", "\xE2\x80\x99"};
 
+// The letter pages in Layout order, then the two symbol pages.
 const Page kPages[] = {
-    {{kQwerty1, kQwerty2, kQwerty3}, {10, 9, 7}},
-    {{kQwertz1, kQwerty2, kQwertz3}, {10, 9, 7}},
-    {{kAzerty1, kAzerty2, kAzerty3}, {10, 10, 6}},
-    {{kSymbols1, kSymbols2, kSymbols3}, {10, 9, 7}},
-    {{kMore1, kMore2, kMore3}, {10, 9, 7}},
+    {{kQwerty1, kQwerty2, kQwerty3}, {10, 9, 7}, 10, nullptr},
+    {{kQwertz1, kQwerty2, kQwertz3}, {10, 9, 7}, 10, nullptr},
+    {{kAzerty1, kAzerty2, kAzerty3}, {10, 10, 6}, 10, nullptr},
+    {{kJcuken1, kJcuken2, kJcuken3}, {11, 11, 9}, 11, "АБВ"},
+    {{kSymbols1, kSymbols2, kSymbols3}, {10, 9, 7}, 10, nullptr},
+    {{kMore1, kMore2, kMore3}, {10, 9, 7}, 10, nullptr},
 };
+constexpr uint8_t kSymbolsPage = 4;
+constexpr uint8_t kMorePage = 5;
+// The most keys a letter row holds (JCUKEN's first two rows, nine in row 3).
+constexpr uint8_t kRowKeys[3] = {11, 11, 9};
 
 enum Special : uint8_t { kShift = 40, kBackspace, kSymbols, kAccentKey, kSpace, kDot, kOk };
 
@@ -65,8 +80,11 @@ struct State {
   bool more = false;
   // The accent page shows in the letter rows.
   bool accents = false;
-  lv_obj_t* keys[3][10] = {};
+  // A layout with its own alphabet (JCUKEN) shows QWERTY instead.
+  bool latin = false;
+  lv_obj_t* keys[3][11] = {};
   lv_obj_t* shift_key = nullptr;
+  lv_obj_t* backspace_key = nullptr;
   lv_obj_t* symbols_key = nullptr;
   lv_obj_t* accent_key = nullptr;
   // The accented forms of a held letter.
@@ -77,32 +95,47 @@ struct State {
 };
 State g_kb;
 
-float unit() { return (g_kb.g.width - 9.0f * g_kb.g.gap) / 10.0f; }
+float unit(uint8_t columns) { return (g_kb.g.width - (columns - 1.0f) * g_kb.g.gap) / columns; }
 
 // A key `units` wide starting `start` units into the row: every unit of the
-// grid is a key and a gap wide.
-void place(lv_obj_t* key, int row, float start, float units) {
-  const float u = unit();
+// grid is a key and a gap wide. The bottom row keeps the ten-key grid.
+void place(lv_obj_t* key, int row, float start, float units, uint8_t columns = 10) {
+  const float u = unit(columns);
   const float x = start * (u + g_kb.g.gap);
   const float w = units * u + (units - 1) * g_kb.g.gap;
   lv_obj_set_pos(key, static_cast<int>(lroundf(x)), row * g_kb.g.step);
   lv_obj_set_size(key, static_cast<int>(lroundf(w)), g_kb.g.key_h);
 }
 
+const Page& layout_page() { return kPages[static_cast<uint8_t>(g_kb.layout)]; }
+
+// The layout brings its own alphabet (JCUKEN): the accent key switches
+// between it and QWERTY instead of showing the accent page.
+bool own_alphabet() { return layout_page().name != nullptr; }
+
 const Page& page() {
-  if (g_kb.symbols) return kPages[g_kb.more ? 4 : 3];
-  return kPages[static_cast<uint8_t>(g_kb.layout)];
+  if (g_kb.symbols) return kPages[g_kb.more ? kMorePage : kSymbolsPage];
+  if (g_kb.latin) return kPages[static_cast<uint8_t>(Layout::Qwerty)];
+  return layout_page();
 }
+
+// The name of the letter page the symbols key returns to.
+const char* letters_name() { return own_alphabet() && !g_kb.latin ? layout_page().name : "ABC"; }
 
 void set_label(lv_obj_t* key, const char* text) {
   lv_obj_t* label = lv_obj_get_child(key, 0);
   if (label && strcmp(lv_label_get_text(label), text) != 0) lv_label_set_text(label, text);
 }
 
-// Letters uppercase with Shift (ASCII letters only; symbols stay).
+// Letters uppercase with Shift (Latin and Cyrillic; symbols stay).
 void key_text(const char* text, char* out, size_t len) {
+  const char* rest = text;
+  const uint32_t letter = keyboard_letters::next(rest);
+  if (g_kb.shift && !g_kb.symbols && letter && !*rest) {
+    keyboard_letters::encode(keyboard_letters::upper(letter), out, len);
+    return;
+  }
   snprintf(out, len, "%s", text);
-  if (g_kb.shift && !g_kb.symbols && out[0] >= 'a' && out[0] <= 'z' && !out[1]) out[0] = static_cast<char>(out[0] - 32);
 }
 
 // A letter of the accent page or of a held letter's forms, the capital
@@ -115,19 +148,26 @@ void lay_out() {
   const Page& p = page();
   uint8_t counts[3];
   uint8_t first[3] = {0, 0, 0};
+  uint8_t columns = p.columns;
   if (g_kb.accents) {
     // The accent page in the letter rows' shape, in order.
     keyboard_letters::row_counts(g_kb.page_count, counts);
     first[1] = counts[0];
     first[2] = static_cast<uint8_t>(counts[0] + counts[1]);
+    columns = 10;
   } else {
     for (int row = 0; row < 3; ++row) counts[row] = p.counts[row];
   }
+  // Shift and Backspace take one and a half keys of the ten-key grid, one
+  // key of the eleven-key grid, so row 3 holds seven or nine letters.
+  const float side = columns > 10 ? 1.0f : 1.5f;
+  if (g_kb.shift_key) place(g_kb.shift_key, 2, 0, side, columns);
+  if (g_kb.backspace_key) place(g_kb.backspace_key, 2, columns - side, side, columns);
   for (int row = 0; row < 3; ++row) {
     const int count = counts[row];
     // Shorter rows are centered on the grid; row 3 sits after Shift.
-    const float start = row == 2 ? 1.5f : (10 - count) / 2.0f;
-    for (int i = 0; i < 10; ++i) {
+    const float start = row == 2 ? side : (columns - count) / 2.0f;
+    for (int i = 0; i < kRowKeys[row]; ++i) {
       lv_obj_t* key = g_kb.keys[row][i];
       if (!key) continue;
       if (i >= count) {
@@ -135,7 +175,7 @@ void lay_out() {
         continue;
       }
       lv_obj_remove_flag(key, LV_OBJ_FLAG_HIDDEN);
-      place(key, row, start + i, 1);
+      place(key, row, start + i, 1, columns);
       char text[8];
       if (g_kb.accents) {
         letter_text(g_kb.page_letters[first[row] + i], text, sizeof(text));
@@ -166,16 +206,23 @@ void lay_out() {
       }
     }
   }
-  if (g_kb.symbols_key) set_label(g_kb.symbols_key, g_kb.symbols ? "ABC" : "?123");
-  if (g_kb.accent_key) set_label(g_kb.accent_key, g_kb.accents ? "ABC" : g_kb.accent_label);
+  if (g_kb.symbols_key) set_label(g_kb.symbols_key, g_kb.symbols ? letters_name() : "?123");
+  if (g_kb.accent_key) {
+    // Its own alphabet: the other letter page; else the accent page.
+    if (own_alphabet()) {
+      set_label(g_kb.accent_key, g_kb.latin ? layout_page().name : "ABC");
+    } else {
+      set_label(g_kb.accent_key, g_kb.accents ? "ABC" : g_kb.accent_label);
+    }
+  }
 }
 
-// The forms of a held plain letter (letter pages only): the language's own
-// first.
+// The forms of a held letter (letter pages only): the language's own first.
 uint8_t variants_for(const char* text, uint32_t* out) {
-  if (g_kb.symbols || g_kb.accents || !text || !text[0] || text[1]) return 0;
-  const char letter = static_cast<char>(text[0] | 0x20);
-  if (letter < 'a' || letter > 'z') return 0;
+  if (g_kb.symbols || g_kb.accents || !text) return 0;
+  const char* rest = text;
+  const uint32_t letter = keyboard_letters::lower(keyboard_letters::next(rest));
+  if (!letter || *rest) return 0;
   return keyboard_letters::variants(g_kb.letters, letter, out, keyboard_letters::kVariantCapacity);
 }
 
@@ -315,7 +362,11 @@ void special_key_cb(lv_event_t* e) {
       lay_out();
       break;
     case kAccentKey:
-      g_kb.accents = !g_kb.accents;
+      if (own_alphabet()) {
+        g_kb.latin = !g_kb.latin;
+      } else {
+        g_kb.accents = !g_kb.accents;
+      }
       g_kb.symbols = false;
       g_kb.more = false;
       g_kb.shift = false;
@@ -407,8 +458,7 @@ lv_obj_t* create(lv_obj_t* parent, const Geometry& geometry, Layout layout, cons
 
   const lv_font_t* font = popup_layout::font28();
   for (int row = 0; row < 3; ++row) {
-    for (int i = 0; i < 10; ++i) {
-      if (row == 2 && i >= 7) break;
+    for (int i = 0; i < kRowKeys[row]; ++i) {
       lv_obj_t* key = make_key(colors.button, colors.pressed);
       key_label(key, "", font, ui_theme::text());
       for (lv_event_code_t code : {LV_EVENT_SHORT_CLICKED, LV_EVENT_LONG_PRESSED, LV_EVENT_PRESSING, LV_EVENT_RELEASED,
@@ -422,8 +472,8 @@ lv_obj_t* create(lv_obj_t* parent, const Geometry& geometry, Layout layout, cons
   g_kb.shift_key = special_key(kShift, colors.group, colors.button, 2, 0, 1.5f);
   icon_label(g_kb.shift_key, "apple-keyboard-shift", ui_theme::text());
   key_label(g_kb.shift_key, "#+=", font, ui_theme::text());
-  lv_obj_t* backspace = special_key(kBackspace, colors.group, colors.button, 2, 8.5f, 1.5f);
-  icon_label(backspace, "backspace-outline", ui_theme::text());
+  g_kb.backspace_key = special_key(kBackspace, colors.group, colors.button, 2, 8.5f, 1.5f);
+  icon_label(g_kb.backspace_key, "backspace-outline", ui_theme::text());
   // The mode key's text is smaller (mockup: 20 px class-scaled, 16 px on the 480 class).
 #if defined(DEVICE_LAYOUT_480X480)
   const lv_font_t* mode_font = settings_style::row_font();

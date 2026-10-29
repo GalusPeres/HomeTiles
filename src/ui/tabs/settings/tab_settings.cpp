@@ -455,7 +455,7 @@ uint8_t locale_option_count(LocaleList list) {
     case LocaleList::DateFormat:
       return 4;
     case LocaleList::Keyboard:
-      return 4;
+      return 5;
   }
   return 0;
 }
@@ -482,7 +482,7 @@ const char* locale_option(LocaleList list, uint8_t index) {
     }
     case LocaleList::Keyboard: {
       const char* const options[] = {s.format_auto_language, "Deutsch (QWERTZ)", "English (QWERTY)",
-                                     "Fran\xC3\xA7" "ais (AZERTY)"};
+                                     "Fran\xC3\xA7" "ais (AZERTY)", "Русский (ЙЦУКЕН)"};
       return options[index];
     }
   }
@@ -501,7 +501,7 @@ uint8_t locale_selected(LocaleList list) {
     case LocaleList::DateFormat:
       return clock_tile::normalize_date_format(cfg.global_date_format);
     case LocaleList::Keyboard:
-      return cfg.keyboard_layout > 3 ? 0 : cfg.keyboard_layout;
+      return cfg.keyboard_layout > 4 ? 0 : cfg.keyboard_layout;
   }
   return 0;
 }
@@ -868,8 +868,9 @@ uint8_t keyboard_layout() {
   if (cfg.keyboard_layout == 1) return 1;
   if (cfg.keyboard_layout == 2) return 0;
   if (cfg.keyboard_layout == 3) return 2;
+  if (cfg.keyboard_layout == 4) return 3;
   const uint8_t layout = i18n::locale(cfg.language).keyboard_layout;
-  return layout <= 2 ? layout : 0;
+  return layout <= 3 ? layout : 0;
 }
 
 // The accent page follows the language, whatever the letters' layout.

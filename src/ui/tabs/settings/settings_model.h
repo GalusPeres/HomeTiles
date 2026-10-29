@@ -177,7 +177,7 @@ struct WifiValues {
 };
 // Also finishes a running scan.
 WifiValues wifi_values();
-// The keyboard's letters: 0 QWERTY, 1 QWERTZ, 2 AZERTY (the Keyboard
+// The keyboard's letters: 0 QWERTY, 1 QWERTZ, 2 AZERTY, 3 JCUKEN (the Keyboard
 // setting, or the language's on Auto).
 uint8_t keyboard_layout();
 // The language's own keyboard letters (LocaleProfile::keyboard_letters).

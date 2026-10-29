@@ -117,7 +117,7 @@ const char* category_title(Category category) {
     case Category::Localization:
       return s.admin_settings_language;
     case Category::System:
-      return "System";
+      return s.settings_system;
   }
   return "";
 }

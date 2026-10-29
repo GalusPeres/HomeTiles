@@ -10,6 +10,8 @@
 #include "lvgl.h"
 #endif
 
+extern const lv_font_t ui_font_cyrillic_64;
+
 #include "src/fonts/glyph_cache.h"
 
 #ifndef UI_FONT_64
@@ -15444,7 +15446,7 @@ lv_font_t ui_font_64 = {
 #endif
     .dsc = &font_dsc,          /*The custom font data. Will be accessed by `get_glyph_bitmap/dsc` */
 #if LV_VERSION_CHECK(8, 2, 0) || LVGL_VERSION_MAJOR >= 9
-    .fallback = NULL,
+    .fallback = &ui_font_cyrillic_64,
 #endif
     .user_data = NULL,
 };

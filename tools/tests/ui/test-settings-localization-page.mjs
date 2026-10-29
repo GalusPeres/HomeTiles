@@ -35,6 +35,7 @@ const expected = {
   kStringsCs: ['Jazyk', 'Časové pásmo', 'Formát času', 'Formát data', 'Klávesnice'],
   kStringsEs: ['Idioma', 'Zona horaria', 'Formato de hora', 'Formato de fecha', 'Teclado'],
   kStringsSk: ['Jazyk', 'Časová zóna', 'Formát času', 'Formát dátumu', 'Klávesnica'],
+  kStringsRu: ['Язык', 'Часовой пояс', 'Формат времени', 'Формат даты', 'Клавиатура'],
 };
 const struct = header.slice(header.indexOf('struct Strings {'), header.indexOf('\n};', header.indexOf('struct Strings {')));
 const fields = [...struct.replace(/\/\/[^\n]*/g, '').matchAll(/const char\*\s+(\w+);/g)].map(match => match[1]);

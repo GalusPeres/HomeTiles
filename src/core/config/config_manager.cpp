@@ -375,7 +375,7 @@ bool ConfigManager::load() {
   config.week_start =
       calendar_model::normalize_week_start(prefs.getUChar("week_start", calendar_model::kWeekStartAuto));
   config.keyboard_layout = prefs.getUChar("kb_layout", 0);
-  if (config.keyboard_layout > 3) config.keyboard_layout = 0;
+  if (config.keyboard_layout > 4) config.keyboard_layout = 0;
 
   // Load display and power settings.
   config.display_brightness = prefs.getUChar("disp_bright", 200);
@@ -609,7 +609,7 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
   normalized.global_date_format =
       normalize_global_date_format(normalized.global_date_format);
   normalized.week_start = calendar_model::normalize_week_start(normalized.week_start);
-  if (normalized.keyboard_layout > 3) normalized.keyboard_layout = 0;
+  if (normalized.keyboard_layout > 4) normalized.keyboard_layout = 0;
   if (normalized.theme > 2) normalized.theme = 0;
   if (normalized.theme_auto_last > 1) normalized.theme_auto_last = 0;
   if (normalized.settings_reveal_edge >

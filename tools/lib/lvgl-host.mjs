@@ -26,7 +26,7 @@ export async function lvglHost(root, extra = []) {
   // own src/fonts/mdi_icons_*.c load most bitmaps from the icon file instead and
   // are tested by test-mdi-icon-loader-lvgl.mjs.
   const fonts = [
-    ...walk(path.join(root, 'src/fonts')).filter(p => /(?:ui_(font_(12|14|16|20|24|28|32|40|48|56|64|72|80|96|cyrillic_12|cyrillic_14|cyrillic_16|cyrillic_20|cyrillic_24)|symbols_(20|24))|mdi_bar_icons_(15|18|22|26|34)|weather_icons_(32|40|48))\.c$/.test(p)),
+    ...walk(path.join(root, 'src/fonts')).filter(p => /(?:ui_(font_(12|14|16|20|24|28|32|40|48|56|64|72|80|96|cyrillic_(12|14|16|20|24|28|32|40|48|56|64|72))|symbols_(20|24))|mdi_bar_icons_(15|18|22|26|34)|weather_icons_(32|40|48))\.c$/.test(p)),
     ...walk(path.join(root, 'tools/mdi-fonts')).filter(p => /mdi_icons_(32|40|48)\.c$/.test(p)),
     // The icon fonts unpack their glyphs through it.
     path.join(root, 'src/fonts/glyph_cache.c'),

@@ -26,11 +26,28 @@ const languages = codes.map(code => {
 });
 const of = code => languages.find(language => language.code === code);
 
-// The panel text fonts' ranges (ui_font_20.c and the other text sizes).
-const opts = /Opts:.*$/m.exec(readRepoFile('src/fonts/ui_font_20.c'))[0];
-const ranges = [...opts.matchAll(/-r (0x[0-9A-Fa-f]+)(?:-(0x[0-9A-Fa-f]+))?/g)]
-  .map(match => [parseInt(match[1], 16), parseInt(match[2] || match[1], 16)]);
-const inFont = cp => ranges.some(([first, last]) => cp >= first && cp <= last);
+// The panel text fonts' ranges with their Cyrillic fallbacks (the keys
+// draw in popup_layout::font28(), 28 to 48 px by layout).
+function fontRanges(name) {
+  const source = readRepoFile(`src/fonts/${name}.c`);
+  const opts = /Opts:.*$/m.exec(source)[0];
+  const ranges = [...opts.matchAll(/(?:-r|--range) (\S+)/g)].flatMap(match => match[1].split(',')).map(part => {
+    const [first, last] = part.split('-').map(value => parseInt(value, 16));
+    return [first, last ?? first];
+  });
+  const fallback = /\.fallback = &(\w+),/.exec(source);
+  return fallback ? [...ranges, ...fontRanges(fallback[1])] : ranges;
+}
+const fontList = [16, 20, 24, 28, 32, 40, 48].map(size => fontRanges(`ui_font_${size}`));
+const inFont = cp => fontList.every(ranges => ranges.some(([first, last]) => cp >= first && cp <= last));
+
+// The Russian JCUKEN rows of the keyboard (settings_keyboard.cpp).
+const keyboardSource = readRepoFile('src/ui/tabs/settings/settings_keyboard.cpp');
+const jcuken = [1, 2, 3].map(row => {
+  const match = new RegExp(`kJcuken${row}\\[\\] = \\{([^}]*)\\}`).exec(keyboardSource);
+  assert.ok(match, `kJcuken${row}`);
+  return [...match[1].matchAll(/"([^"]*)"/g)].map(m => m[1]);
+});
 
 const harness = `#include <cstdio>
 #include "src/ui/tabs/settings/keyboard_letters.h"
@@ -66,6 +83,25 @@ static void language(const char* code, const char* own) {
 }
 int main() {
 ${languages.map(language => `  language("${language.code}", ${language.literal});`).join('\n')}
+  // Held Cyrillic е and ь, and the JCUKEN letters' capitals and back.
+${languages.map(language => `  {
+    uint32_t forms[kVariantCapacity];
+    uint8_t found = variants(${language.literal}, 0x435, forms, kVariantCapacity);
+    list("holdcyr435", "${language.code}", forms, found);
+    found = variants(${language.literal}, 0x44C, forms, kVariantCapacity);
+    list("holdcyr44C", "${language.code}", forms, found);
+  }`).join('\n')}
+  {
+    const char* letters = ${JSON.stringify(jcuken.flat().join('') + 'ёъ')};
+    uint32_t capitals[40];
+    uint8_t count = 0;
+    for (const char* p = letters; *p && count < 40;) {
+      const uint32_t cp = next(p);
+      capitals[count++] = upper(cp);
+      if (lower(upper(cp)) != cp) std::printf("caseback %X\\n", static_cast<unsigned>(cp));
+    }
+    list("jcukenupper", "Ru", capitals, count);
+  }
   // Every shared letter has its plain letter.
   for (const char* p = kCommon; *p;) {
     const uint32_t cp = next(p);
@@ -81,14 +117,14 @@ ${languages.map(language => `  language("${language.code}", ${language.literal})
 const output = compileAndRun({label: 'keyboard letters', harness});
 if (output !== null) {
   const lines = output.trim().split('\n');
-  assert.deepEqual(lines.filter(line => /^(roundtrip|noplain) /.test(line)), [], 'UTF-8 and plain letters');
+  assert.deepEqual(lines.filter(line => /^(roundtrip|noplain|caseback) /.test(line)), [], 'UTF-8, plain letters, case');
   const read = (tag, code) => {
     const line = lines.find(l => l === `${tag} ${code}` || l.startsWith(`${tag} ${code} `));
     assert.ok(line, `${tag} ${code}`);
     return line.split(' ').slice(2).map(hex => String.fromCodePoint(parseInt(hex, 16)));
   };
   for (const {code, layout, letters} of languages) {
-    assert.ok(layout >= 0 && layout <= 2, `${code}: QWERTY, QWERTZ or AZERTY`);
+    assert.ok(layout >= 0 && layout <= 3, `${code}: QWERTY, QWERTZ, AZERTY or JCUKEN`);
     const own = [...letters];
     for (const ch of own) {
       const cp = ch.codePointAt(0);
@@ -125,6 +161,23 @@ if (output !== null) {
   assert.equal(of('De').layout, 1, 'German types on QWERTZ');
   assert.equal(of('Fr').layout, 2, 'French types on AZERTY');
   for (const code of ['En', 'Pl', 'Es']) assert.equal(of(code).layout, 0, `${code} types on QWERTY`);
+  // Russian types on JCUKEN (2026-10-29, PR #124): eleven, eleven and nine
+  // keys like the common Russian phone keyboards, ё and ъ held on е and ь,
+  // so all 33 letters can be typed, and every capital is in the fonts.
+  assert.equal(of('Ru').layout, 3, 'Russian types on JCUKEN');
+  assert.deepEqual(jcuken.map(row => row.length), [11, 11, 9], 'JCUKEN rows');
+  assert.deepEqual(read('holdcyr435', 'Ru').slice(0, 1), ['ё'], 'ё on a held е');
+  assert.deepEqual(read('holdcyr44C', 'Ru').slice(0, 1), ['ъ'], 'ъ on a held ь');
+  const alphabet = [...'абвгдеёжзийклмнопрстуфхцчшщъыьэюя'];
+  const typed = new Set([...jcuken.flat(), ...read('holdcyr435', 'Ru'), ...read('holdcyr44C', 'Ru')]);
+  assert.deepEqual(alphabet.filter(ch => !typed.has(ch)), [], 'every Russian letter can be typed');
+  const capitals = read('jcukenupper', 'Ru');
+  assert.equal(capitals.join(''), (jcuken.flat().join('') + 'ёъ').toUpperCase(), 'JCUKEN capitals');
+  for (const ch of [...alphabet, ...capitals]) assert.ok(inFont(ch.codePointAt(0)), `${ch} is in the panel fonts`);
+  // The other languages keep their Latin letters on a held е or ь.
+  for (const {code} of languages.filter(language => language.code !== 'Ru')) {
+    assert.deepEqual(read('holdcyr435', code), [], `${code}: nothing on a held е`);
+  }
   assert.deepEqual(read('holdc', 'Cs').slice(0, 1), ['č']);
   assert.deepEqual(read('holdn', 'Es').slice(0, 1), ['ñ']);
   assert.ok(read('page', 'Es').includes('¿') && read('page', 'Es').includes('¡'), 'Spanish ¿ and ¡ on the accent page');

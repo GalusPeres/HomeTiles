@@ -12,7 +12,7 @@ Last reviewed: 2026-10-29
 
 ## Releases and builds
 
-- FW + Bridge v0.9.6 released 2026-10-29.
+- FW + Bridge v0.9.7 released 2026-10-30.
 - Pairing by IP, no mDNS (#114, Bridge #16): `GET /api/link`.
 - Test builds stay `v0.6.12bNNN` on purpose (System Update offers releases); beta define in `firmware_version.h`, last b632.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build (warm: only repo headers changed, same LVGL config hash).
@@ -21,7 +21,7 @@ Last reviewed: 2026-10-29
 
 ## Active work
 
-- Vacuum tile 29 (#50, `src/types/vacuum/`), Bridge v0.9.7b3 (level 6); b632 V2, HW pending.
+- Vacuum tile 29 (#50, `src/types/vacuum/`), Bridge level 6; V2 HW ok, others pending.
 - Power flow tile 28 ("Leistungsfluss", `src/types/power_flow/`, picture 65): nodes in `/_tile_flow_entities`, options in key_code, node tap = Sensor popup; V2 HW ok b542; smooth lines/dots b568.
 - Media popup: layouts `sensor_display_mode` 0 cover left, 1 centre; controls only with their HA feature bit; menu box: speakers, source, library; tile/head icon state form (`state_icon.h`).
 - #116 (JC4880 camera popup ends after 18-60 min): Bridge waits 45 s per chunk ACK; reporter pending.

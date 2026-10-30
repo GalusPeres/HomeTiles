@@ -10,7 +10,7 @@ Lights, climate, sensors, energy, weather, cameras and more on a 4 to 10.1 inch 
 
 <a href="https://galusperes.github.io/"><img src="docs/images/readme-nav-docs.png" alt="Documentation" height="42"></a>
 <a href="https://galusperes.github.io/installer/"><img src="docs/images/readme-nav-flasher.png" alt="Online flasher" height="42"></a>
-<a href="https://github.com/GalusPeres/HomeTiles/releases/latest"><img src="docs/images/readme-nav-release-v096.png" alt="Latest release" height="42"></a>
+<a href="https://github.com/GalusPeres/HomeTiles/releases/latest"><img src="docs/images/readme-nav-release-v097.png" alt="Latest release" height="42"></a>
 <a href="https://buymeacoffee.com/galusperes"><img src="docs/images/readme-nav-coffee.png" alt="Buy Me a Coffee" height="42"></a>
 <a href="LICENSE"><img src="docs/images/readme-nav-license.png" alt="MIT License" height="42"></a>
 

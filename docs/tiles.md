@@ -563,6 +563,20 @@ What the tile shows depends on its size and **View**:
 
 The display shows the events in Home Assistant's time zone. Events edited in Home Assistant appear within 15 minutes; an event that starts or ends updates the tile at once.
 
+### Vacuum
+
+Controls a `vacuum` entity. Requires HomeTiles Bridge v0.9.7 or newer; select the vacuums under **Vacuums** in the [Bridge options](bridge.md#entity-configuration).
+
+- **Half height:** the name and the state with the battery.
+- **One row:** the name and the state ("Docked · 84 %") beside the icon, the buttons below: **Clean** (**Pause** while cleaning) on one column, **Clean** and **Dock** on two, **Clean**, **Stop** and **Dock** from three columns. From 1.5 rows the state stands in the middle.
+- **Two columns and two rows or more:** the map on the left, the state, battery and cleaned area beside it, the buttons below.
+
+Only the buttons the vacuum supports are active.
+
+**Map:** **Automatic** takes the image or camera entity of the vacuum's device; or choose one. **Refresh (s)** sets how often a camera map is fetched (3 to 60 seconds); an image entity sends a new map when it changes.
+
+**Popup:** the map (**Map left** or **Map centre**), cleaned area, cleaning time and battery, **Clean**, **Stop** and **Dock**, and a menu (⋯) with the suction power, the rooms to clean and **Locate**. Rooms are the Home Assistant areas mapped to the vacuum; they need Home Assistant 2026.3 or newer and the area mapping in the vacuum's entity settings.
+
 ## Local Tiles
 
 These types work without Home Assistant.

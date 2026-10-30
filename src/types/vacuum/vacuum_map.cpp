@@ -68,7 +68,9 @@ std::vector<Want> g_wants;
 // popup opens with a copy in its size instead of decoding the JPEG while it
 // opens, and the tile's square takes its own copy from it, one picture and
 // one decode for both (user 2026-10-30: the map still came after the popup).
-// Kept a while after its last wish, so a rebuilt tile finds it.
+// Kept after its last wish (the newest kSourcesMax), so a tile built again
+// on a page change shows its map in its first frame like a Media cover
+// (user 2026-10-30: the map was missing for a moment).
 struct Source {
   String entity;
   uint16_t fetch = 0;
@@ -77,6 +79,7 @@ struct Source {
   uint32_t wanted_ms = 0;
 };
 std::vector<Source> g_sources;
+constexpr size_t kSourcesMax = 2;
 
 // The pixels of a deleted map, for a while: a Web Admin change or a new
 // layout builds the tile again, and the new square shows them at once
@@ -236,6 +239,42 @@ bool show_from_source(View& view) {
   return true;
 }
 
+// The wish's picture decoded into its source when a newer one is stored;
+// true when it was decoded now. The oldest source beyond kSourcesMax goes.
+bool refresh_source(const Want& wish) {
+  const uint16_t fetch = fetch_edge(wish.edge);
+  const bridge_images::Picture* picture =
+      bridge_images::find(wish.entity.c_str(), fetch, fetch, bridge_images::kContain);
+  if (!picture) return false;
+  auto it = std::find_if(g_sources.begin(), g_sources.end(), [&](const Source& source) {
+    return source.fetch == fetch && source.entity.equalsIgnoreCase(wish.entity);
+  });
+  if (it != g_sources.end() && strcmp(it->key, picture->key) == 0) return false;
+  const uint32_t started_ms = millis();
+  lv_image_dsc_t* dsc = decode(*picture, fetch, wish.entity);
+  if (!dsc) return false;
+  if (it == g_sources.end()) {
+    if (g_sources.size() >= kSourcesMax) {
+      auto oldest = std::min_element(g_sources.begin(), g_sources.end(), [](const Source& a, const Source& b) {
+        return a.wanted_ms < b.wanted_ms;
+      });
+      free_dsc(oldest->dsc);
+      g_sources.erase(oldest);
+    }
+    g_sources.push_back(Source{});
+    it = g_sources.end() - 1;
+    it->entity = wish.entity;
+    it->fetch = fetch;
+  }
+  free_dsc(it->dsc);
+  it->dsc = dsc;
+  it->wanted_ms = millis();
+  memcpy(it->key, picture->key, sizeof(it->key));
+  Serial.printf("[VacuumMap] %s %s decoded ahead in %lu ms (%u px)\n", it->entity.c_str(), it->key,
+                static_cast<unsigned long>(millis() - started_ms), static_cast<unsigned>(fetch));
+  return true;
+}
+
 void show(View& view, const bridge_images::Picture& picture) {
   const uint32_t started_ms = millis();
   const uint16_t fetch = fetch_edge(view.edge);
@@ -386,6 +425,16 @@ void show_now(lv_obj_t* box) {
     view->due = false;
     return;
   }
+  // No source yet (the first build, or one dropped): the wish's stored
+  // picture decoded now, so the square shows it in this frame.
+  for (const Want& wish : g_wants) {
+    if (!wish.entity.equalsIgnoreCase(view->entity)) continue;
+    refresh_source(wish);
+    if (show_from_source(*view)) {
+      view->due = false;
+      return;
+    }
+  }
   const uint16_t fetch = fetch_edge(view->edge);
   const bridge_images::Picture* picture =
       bridge_images::find(view->entity.c_str(), fetch, fetch, bridge_images::kContain);
@@ -441,43 +490,12 @@ void service() {
   for (Source& source : g_sources) {
     if (wanted(source.entity)) source.wanted_ms = now;
   }
-  for (auto it = g_sources.begin(); it != g_sources.end();) {
-    if (now - it->wanted_ms < kParkedMs) {
-      ++it;
-      continue;
-    }
-    free_dsc(it->dsc);
-    it = g_sources.erase(it);
-  }
   for (const Want& wish : g_wants) {
-    const uint16_t fetch = fetch_edge(wish.edge);
-    const bridge_images::Picture* picture =
-        bridge_images::find(wish.entity.c_str(), fetch, fetch, bridge_images::kContain);
-    if (!picture) continue;
-    auto it = std::find_if(g_sources.begin(), g_sources.end(), [&](const Source& source) {
-      return source.fetch == fetch && source.entity.equalsIgnoreCase(wish.entity);
-    });
-    if (it != g_sources.end() && strcmp(it->key, picture->key) == 0) continue;
     bool shown = on_screen(wish.card);
     for (const View* view : g_views) {
       shown = shown || (view->entity.equalsIgnoreCase(wish.entity) && on_screen(view->box));
     }
-    if (!shown) continue;
-    const uint32_t started_ms = millis();
-    lv_image_dsc_t* dsc = decode(*picture, fetch, wish.entity);
-    if (!dsc) break;
-    if (it == g_sources.end()) {
-      g_sources.push_back(Source{});
-      it = g_sources.end() - 1;
-      it->entity = wish.entity;
-      it->fetch = fetch;
-    }
-    free_dsc(it->dsc);
-    it->dsc = dsc;
-    it->wanted_ms = now;
-    memcpy(it->key, picture->key, sizeof(it->key));
-    Serial.printf("[VacuumMap] %s %s decoded ahead in %lu ms (%u px)\n", it->entity.c_str(), it->key,
-                  static_cast<unsigned long>(millis() - started_ms), static_cast<unsigned>(fetch));
+    if (!shown || !refresh_source(wish)) continue;
     for (View* view : g_views) {
       if (view->entity.equalsIgnoreCase(wish.entity)) view->due = true;
     }

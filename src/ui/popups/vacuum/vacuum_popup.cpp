@@ -47,8 +47,8 @@ namespace ml = media_popup_layout;
 using vacuum_detail::Detail;
 
 // The row (user 2026-10-30, mockup vacuum/popup-row.html): Clean, Stop and
-// Dock without a surface at rest (a surface reads as a state; the fill shows
-// only while pressed, like the Media popup's buttons), the menu button's
+// Dock (Clean, the main action, on the circle's color; Stop and Dock without
+// a surface at rest, the fill only while pressed), the menu button's
 // height, each as wide as its icon and text, one gap apart, the group in the
 // card's middle in every language (it moves left only where it would reach
 // the menu button). Clean takes the width of the longer of Clean and Pause,
@@ -742,10 +742,9 @@ void build_body(bool centered) {
   pop.main = row_button(pop.root, 0, "play", text(i18n::VacuumLabel::Clean), c);
   pop.main_glyph = pop.row_glyphs[0];
   pop.main_text = pop.row_texts[0];
-  // The most important button in the vacuum's color (user 2026-10-30), still
-  // without a surface: glyph and text, not a state.
-  lv_obj_set_style_text_color(pop.main_glyph, lv_color_hex(c.icon), 0);
-  lv_obj_set_style_text_color(pop.main_text, lv_color_hex(c.icon), 0);
+  // The most important button on the circle's color, like the popups'
+  // colored buttons (user 2026-10-30); glyph and text stay white.
+  filled(pop.main, c);
   lv_obj_add_event_cb(pop.main, on_main, LV_EVENT_CLICKED, nullptr);
   pop.stop = row_button(pop.root, 1, "stop", text(i18n::VacuumLabel::Stop), c);
   lv_obj_add_event_cb(pop.stop, on_stop, LV_EVENT_CLICKED, nullptr);

@@ -218,15 +218,16 @@ void show(View* view) {
   set_enabled(view->main, ready && (view->pauses || vacuum_detail::can_start(d)));
   set_enabled(view->stop, ready && (d.features & vacuum_detail::kStop));
   set_enabled(view->dock, ready && (d.features & vacuum_detail::kReturnHome));
-  // The map: on the tile, and the popup's ahead of its opening.
+  // The map: the popup's picture wished first (decoded ahead), so the
+  // tile's square shows its copy in its first frame.
   const char* map = view->map_entity.length() ? view->map_entity.c_str() : d.map;
-  if (view->map) {
-    vacuum_map::set_entity(view->map, map, view->map_every);
-    vacuum_map::show_now(view->map);
-  }
   if (view->interactive) {
     vacuum_map::want(view, view->card, map, static_cast<uint16_t>(vacuum_popup_map_edge(view->map_centered)),
                      view->map_every);
+  }
+  if (view->map) {
+    vacuum_map::set_entity(view->map, map, view->map_every);
+    vacuum_map::show_now(view->map);
   }
   // The icon color steers the controls' fill (Circle in icon color).
   tile_icon_source::refresh_controls(view->card);

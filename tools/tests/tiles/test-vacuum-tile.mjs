@@ -141,8 +141,8 @@ assert.ok(popupRow.includes('widths[i] = glyphs[i] + kRowGlyphGap + words[i] + 2
 assert.ok(popupRow.includes('int x = popup_layout::kCardWidth / 2 - total / 2;') &&
   popupRow.includes('if (x + total > right) x = right - total;'), 'the group in the middle, left of the menu button');
 assert.match(popupRow, /set_shown\(pop\.menu_button, menu\);\s*place_row\(\);/);
-assert.ok(popupRow.includes('lv_obj_set_style_text_color(pop.main_glyph, lv_color_hex(c.icon), 0);') &&
-  popupRow.includes('lv_obj_set_style_text_color(pop.main_text, lv_color_hex(c.icon), 0);'), "Clean in the vacuum's color");
+assert.match(popupRow, /pop\.main_text = pop\.row_texts\[0\];[\s\S]{0,200}filled\(pop\.main, c\);/, "Clean on the circle's color");
+assert.ok(!popupRow.includes('lv_color_hex(c.icon), 0);'), 'glyph and text stay white');
 assert.ok(!popupRow.includes('text_button(') && !popupRow.includes('kRowStep'), 'no spread text buttons');
 // User 2026-10-30: the map still came after the popup. Like the Media tile
 // keeps its popup cover decoded (MediaCoverRef::popup_dsc), the wish is
@@ -154,6 +154,17 @@ assert.match(mapSource, /void show_now\(lv_obj_t\* box\) \{[\s\S]*?if \(show_fro
 assert.ok(mapSource.includes('lv_image_dsc_t* dsc = make_media_popup_cover_dsc(source->dsc, view.edge);'), 'the Media copy');
 assert.ok(mapSource.includes('if (!wanted(view->entity)) add(view->entity, view->edge, view->every, view->box);'),
   'one picture for tile and popup');
+// User 2026-10-30: on a page change the tile showed no map for a moment
+// (Media covers do not). The wish comes before the square, a missing source
+// is decoded from the stored picture in that frame, and sources stay after
+// their wish (the newest kSourcesMax) instead of 15 s.
+const tileShow = read('src/types/vacuum/vacuum_tile.cpp');
+assert.ok(tileShow.indexOf('vacuum_map::want(view, view->card, map,') < tileShow.indexOf('vacuum_map::show_now(view->map);'),
+  'the wish before the square');
+assert.match(mapSource, /void show_now\(lv_obj_t\* box\) \{[\s\S]*?refresh_source\(wish\);\s*if \(show_from_source\(\*view\)\)/,
+  'a missing source decoded in the first frame');
+assert.ok(mapSource.includes('constexpr size_t kSourcesMax = 2;') && !mapSource.includes('now - it->wanted_ms < kParkedMs'),
+  'sources are not dropped after 15 s');
 // User 2026-10-30 on b624: no black square before the popup's map. The
 // tile fetches the popup's picture ahead while it is on screen (like the
 // Media tile holds its cover) and the popup shows it in its first frame.

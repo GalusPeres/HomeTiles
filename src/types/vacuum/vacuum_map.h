@@ -19,9 +19,25 @@ namespace vacuum_map {
 // its corners rounded with the given radius. Freed with the object; its
 // picture stays a while for a square built again in the same size.
 lv_obj_t* create(lv_obj_t* parent, int x, int y, int edge, int radius);
+// The color the corners are rounded towards. Without it the nearest opaque
+// parent's; the popup names its card's color, because its body is
+// transparent (the shared popup frame draws the card) and the search ended
+// at the black screen (user 2026-10-30: square corners on b623), like the
+// Media popup's cover rounded towards colors.card.
+void set_under(lv_obj_t* view, uint32_t rgb);
 // The entity whose picture the view shows ("" none: the placeholder);
 // `moving`: the vacuum cleans or returns, a camera map refreshes fast.
 void set_entity(lv_obj_t* view, const char* entity, bool moving);
+
+// A picture fetched ahead of its square: the popup's map while its tile is
+// on screen, so the popup opens with it (like the Media tile holds its
+// cover for the popup). `owner` is the tile (one wish per owner); an empty
+// entity drops the wish.
+void want(const void* owner, lv_obj_t* card, const char* entity, uint16_t edge, bool moving);
+void unwant(const void* owner);
+// Shows a stored picture of the square's entity at once (a popup's first
+// frame, a tile built again), instead of waiting for the loop's decode.
+void show_now(lv_obj_t* view);
 
 // A picture of `entity_id` arrived or was cleared (bridge_images.cpp).
 void arrived(const char* entity_id);

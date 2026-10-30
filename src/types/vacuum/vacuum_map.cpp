@@ -52,9 +52,20 @@ struct View {
   char key[bridge_images::kKeyLength + 1] = "";
   bool due = true;
   bool moving = false;
+  int32_t under_rgb = -1;  // set_under; -1: the nearest opaque parent's
 };
 
 std::vector<View*> g_views;
+
+// Pictures fetched ahead of their square (want).
+struct Want {
+  const void* owner = nullptr;
+  lv_obj_t* card = nullptr;
+  String entity;
+  uint16_t edge = 0;
+  bool moving = false;
+};
+std::vector<Want> g_wants;
 
 // The pixels of a deleted map, for a while: a Web Admin change or a new
 // layout builds the tile again, and the new square shows them at once
@@ -123,6 +134,10 @@ uint32_t color_behind(lv_obj_t* box) {
   return host ? lv_color_to_u32(lv_obj_get_style_bg_color(host, LV_PART_MAIN)) & 0xFFFFFF : 0;
 }
 
+uint32_t corner_color(const View& view) {
+  return view.under_rgb >= 0 ? static_cast<uint32_t>(view.under_rgb) : color_behind(view.box);
+}
+
 bool on_screen(lv_obj_t* box) {
   if (!box || lv_obj_get_screen(box) != lv_screen_active()) return false;
   for (lv_obj_t* obj = box; obj; obj = lv_obj_get_parent(obj)) {
@@ -180,7 +195,7 @@ void show(View& view, const bridge_images::Picture& picture) {
     }
     dsc = copy;
   }
-  const uint16_t under = camera_picture_layout::rgb565(color_behind(view.box));
+  const uint16_t under = camera_picture_layout::rgb565(corner_color(view));
   camera_picture_layout::round_corners(reinterpret_cast<uint16_t*>(const_cast<uint8_t*>(dsc->data)), view.edge,
                                        view.edge, view.radius, under, wallpaper_cover::rounded_pixel_coverage);
   view.under = under;
@@ -219,7 +234,7 @@ bool adopt_parked(View& view) {
 // the popup taking its tile's color).
 void follow_corners(View& view) {
   if (!view.dsc || !view.image) return;
-  const uint16_t under = camera_picture_layout::rgb565(color_behind(view.box));
+  const uint16_t under = camera_picture_layout::rgb565(corner_color(view));
   if (under == view.under) return;
   camera_picture_layout::reround_corners(reinterpret_cast<uint16_t*>(const_cast<uint8_t*>(view.dsc->data)),
                                          view.edge, view.edge, view.radius, view.under, under,
@@ -262,6 +277,10 @@ lv_obj_t* create(lv_obj_t* parent, int x, int y, int edge, int radius) {
   return box;
 }
 
+void set_under(lv_obj_t* box, uint32_t rgb) {
+  if (View* view = view_of(box)) view->under_rgb = static_cast<int32_t>(rgb & 0xFFFFFF);
+}
+
 void set_entity(lv_obj_t* box, const char* entity, bool moving) {
   View* view = view_of(box);
   if (!view) return;
@@ -272,6 +291,40 @@ void set_entity(lv_obj_t* box, const char* entity, bool moving) {
   show_placeholder(*view);
   if (next.length()) adopt_parked(*view);
   view->due = next.length() > 0;
+}
+
+void want(const void* owner, lv_obj_t* card, const char* entity, uint16_t edge, bool moving) {
+  if (!owner) return;
+  auto it = std::find_if(g_wants.begin(), g_wants.end(), [owner](const Want& w) { return w.owner == owner; });
+  if (!entity || !*entity || edge < 16) {
+    if (it != g_wants.end()) g_wants.erase(it);
+    return;
+  }
+  if (it == g_wants.end()) {
+    g_wants.push_back(Want{});
+    it = g_wants.end() - 1;
+  }
+  it->owner = owner;
+  it->card = card;
+  it->entity = entity;
+  it->edge = edge;
+  it->moving = moving;
+}
+
+void unwant(const void* owner) {
+  g_wants.erase(std::remove_if(g_wants.begin(), g_wants.end(), [owner](const Want& w) { return w.owner == owner; }),
+                g_wants.end());
+}
+
+void show_now(lv_obj_t* box) {
+  View* view = view_of(box);
+  if (!view || !view->entity.length()) return;
+  const uint16_t fetch = fetch_edge(view->edge);
+  const bridge_images::Picture* picture =
+      bridge_images::find(view->entity.c_str(), fetch, fetch, bridge_images::kContain);
+  if (!picture || strcmp(picture->key, view->key) == 0) return;
+  view->due = false;
+  show(*view, *picture);
 }
 
 void arrived(const char* entity_id) {
@@ -285,18 +338,25 @@ void collect_topics(std::vector<String>& entities, std::vector<String>& suffixes
   if (!networkManager.linkConfigured()) return;
   const bool awake = !powerManager.isInSleep() && !image_screensaver_covers_ui() && !camera_popup_is_busy();
   char suffix[40];
-  for (const View* view : g_views) {
-    if (!view->entity.length()) continue;
-    const bool camera = is_camera(view->entity);
-    if (camera && !(awake && on_screen(view->box))) continue;
-    const uint16_t fetch = fetch_edge(view->edge);
+  // A camera only while its square (or the tile that wants it) is on screen
+  // and the display awake; each topic once.
+  auto add = [&](const String& entity, uint16_t edge, bool moving, lv_obj_t* shown) {
+    if (!entity.length()) return;
+    const bool camera = is_camera(entity);
+    if (camera && !(awake && on_screen(shown))) return;
+    const uint16_t fetch = fetch_edge(edge);
     if (!bridge_images::pictureSuffix(suffix, sizeof(suffix), fetch, fetch, bridge_images::kContain,
-                                      camera ? (view->moving ? kCameraEveryMoving : kCameraEveryResting) : 0)) {
-      continue;
+                                      camera ? (moving ? kCameraEveryMoving : kCameraEveryResting) : 0)) {
+      return;
     }
-    entities.push_back(view->entity);
+    for (size_t i = 0; i < entities.size(); ++i) {
+      if (entities[i] == entity && suffixes[i] == suffix) return;
+    }
+    entities.push_back(entity);
     suffixes.push_back(suffix);
-  }
+  };
+  for (const View* view : g_views) add(view->entity, view->edge, view->moving, view->box);
+  for (const Want& wish : g_wants) add(wish.entity, wish.edge, wish.moving, wish.card);
 }
 
 void service() {

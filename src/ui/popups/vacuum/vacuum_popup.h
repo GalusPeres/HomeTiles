@@ -31,3 +31,6 @@ void preload_vacuum_popup();
 void vacuum_popup_follow_tile_color(uint32_t color);
 // The detail state of `entity` changed.
 void vacuum_popup_refresh(const String& entity);
+// The side of the popup's map square in either layout (the tiles fetch its
+// picture ahead, vacuum_map::want).
+int vacuum_popup_map_edge(bool centered);

@@ -625,6 +625,11 @@ void build_menu() {
 // ---------------------------------------------------------------------------
 // Body
 
+// One value line under the centred map: the text or the icon, the taller.
+int value_line() {
+  return std::max<int>(lv_font_get_line_height(popup_layout::font20()), lv_font_get_line_height(FONT_MDI_ICONS));
+}
+
 Value make_value(lv_obj_t* parent, const char* icon, const Colors& c) {
   Value value;
   value.box = plain(parent);
@@ -636,6 +641,14 @@ Value make_value(lv_obj_t* parent, const char* icon, const Colors& c) {
   // The size of the Media popup's times and volume.
   value.text = add_text(value.box, popup_layout::font20(), c.text, "");
   return value;
+}
+
+int map_edge(bool centered) {
+  const int L = ml::kEdge;
+  const int top = ml::kLeftCoverTop;
+  const int row = ml::kVolumeTop;
+  if (!centered) return row - L - top;
+  return row - L - top - value_line() - L;
 }
 
 void build_body(bool centered) {
@@ -658,7 +671,7 @@ void build_body(bool centered) {
   if (!centered) {
     // The map left (the Media cover's place over the seek and volume rows),
     // the values in a column beside it.
-    const int edge = row - L - top;
+    const int edge = map_edge(false);
     pop.map = vacuum_map::create(pop.root, L, top, edge, kMapRadius);
     lv_obj_t* column = plain(pop.root);
     lv_obj_set_pos(column, L + edge + L, top);
@@ -670,9 +683,8 @@ void build_body(bool centered) {
   } else {
     // The map centred, one value line and one edge less high, the values in
     // that line below it.
-    const int line = std::max<int>(lv_font_get_line_height(popup_layout::font20()),
-                                   lv_font_get_line_height(FONT_MDI_ICONS));
-    const int edge = row - L - top - line - L;
+    const int line = value_line();
+    const int edge = map_edge(true);
     pop.map = vacuum_map::create(pop.root, (W - edge) / 2, top, edge, kMapRadius);
     lv_obj_t* line_box = plain(pop.root);
     lv_obj_set_pos(line_box, 0, top + edge + L);
@@ -781,8 +793,12 @@ void refresh(bool show) {
   if (!pop.built || pop.built_centered != pop.target.map_centered || pop.built_colors != colors_key(colors)) {
     build_body(pop.target.map_centered);
   }
+  // The corners round towards the card (the popup body is transparent).
+  vacuum_map::set_under(pop.map, pop.card_rgb);
   vacuum_map::set_entity(pop.map, pop.target.map_entity.length() ? pop.target.map_entity.c_str() : d.map,
                          vacuum_detail::moving(d));
+  // A picture fetched ahead shows in the popup's first frame.
+  if (show) vacuum_map::show_now(pop.map);
   show_values(d);
   const bool ready = d.valid && d.available;
   const bool pauses = vacuum_detail::main_pauses(d);
@@ -867,6 +883,8 @@ void vacuum_popup_follow_tile_color(uint32_t color) {
   popup_shell_follow_tile_color(color);
   refresh(false);
 }
+
+int vacuum_popup_map_edge(bool centered) { return map_edge(centered); }
 
 void vacuum_popup_refresh(const String& entity) {
   const ui_theme::SurfaceScope popup_scope = popup_surface::scope();

@@ -68,6 +68,7 @@ struct View {
   int16_t button = 0;
   int16_t gap = 0;
   bool pauses = false;
+  bool interactive = false;
 };
 
 View* g_views = nullptr;
@@ -211,9 +212,15 @@ void show(View* view) {
   set_enabled(view->main, view->main_box, ready && (view->pauses || vacuum_detail::can_start(d)));
   set_enabled(view->dock, nullptr, ready && (d.features & vacuum_detail::kReturnHome));
   set_enabled(view->stop, nullptr, ready && (d.features & vacuum_detail::kStop));
+  // The map: on the tile's square, and the popup's ahead of its opening.
+  const char* map = view->map_entity.length() ? view->map_entity.c_str() : d.map;
   if (view->map) {
-    vacuum_map::set_entity(view->map, view->map_entity.length() ? view->map_entity.c_str() : d.map,
-                           vacuum_detail::moving(d));
+    vacuum_map::set_entity(view->map, map, vacuum_detail::moving(d));
+    vacuum_map::show_now(view->map);
+  }
+  if (view->interactive) {
+    vacuum_map::want(view, view->card, map, static_cast<uint16_t>(vacuum_popup_map_edge(view->map_centered)),
+                     vacuum_detail::moving(d));
   }
   place_row(view);
   // The icon color steers the controls' fill (Circle in icon color).
@@ -240,6 +247,7 @@ void on_card_event(lv_event_t* e) {
   if (!view) return;
   const lv_event_code_t code = lv_event_get_code(e);
   if (code == LV_EVENT_DELETE) {
+    vacuum_map::unwant(view);
     unregister(view);
     delete view;
     return;
@@ -323,6 +331,7 @@ lv_obj_t* render_vacuum_tile(lv_obj_t* parent, int col, int row, const Tile& til
   view->state_width = header.state_width;
   view->state_center = header.state_center;
   const bool interactive = view->entity.length() && grid_type != GridType::SCREENSAVER;
+  view->interactive = interactive;
 
   if (view->layout == Layout::Compact) {
     compact_sensor_layout::apply(card, view->icon, header.title, header.state, tile);

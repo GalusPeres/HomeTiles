@@ -94,7 +94,14 @@ for (const marker of ['d.features & vacuum_detail::kReturnHome', 'd.features & v
 const map = read('src/types/vacuum/vacuum_map.cpp');
 assert.ok(map.includes('constexpr uint8_t kCameraEveryMoving = bridge_images::kEveryMin;'));
 assert.ok(map.includes('constexpr uint8_t kCameraEveryResting = bridge_images::kEveryMax;'));
-assert.ok(map.includes('camera ? (view->moving ? kCameraEveryMoving : kCameraEveryResting) : 0'));
+assert.ok(map.includes('camera ? (moving ? kCameraEveryMoving : kCameraEveryResting) : 0'));
+// User 2026-10-30 on b624: no black square before the popup's map. The
+// tile fetches the popup's picture ahead while it is on screen (like the
+// Media tile holds its cover) and the popup shows it in its first frame.
+assert.ok(read('src/types/vacuum/vacuum_tile.cpp').includes('vacuum_map::want(view, view->card, map, static_cast<uint16_t>(vacuum_popup_map_edge(view->map_centered)),'));
+assert.ok(read('src/types/vacuum/vacuum_tile.cpp').includes('vacuum_map::unwant(view);'));
+assert.ok(read('src/ui/popups/vacuum/vacuum_popup.cpp').includes('if (show) vacuum_map::show_now(pop.map);'));
+assert.ok(map.includes('for (const Want& wish : g_wants) add(wish.entity, wish.edge, wish.moving, wish.card);'));
 const config = read('src/tiles/config/tile_config.h');
 assert.match(config, /static constexpr bool tileKeepsFlowEntities\(int type\) \{\s*return type == TILE_POWER_FLOW \|\| type == TILE_VACUUM;/);
 assert.ok(config.includes('tile.flow_entities = map.startsWith("image.") || map.startsWith("camera.") ? map : String();'));
@@ -142,6 +149,8 @@ assert.ok(map.includes('ui_surface_style::apply_radius(box, radius, 0);') &&
   map.includes('lv_obj_get_style_radius(box, LV_PART_MAIN)'), 'the picture is rounded with the resolved radius');
 assert.ok(map.includes('park(*view);') && map.includes('if (next.length()) adopt_parked(*view);'), 'a rebuilt square keeps its picture');
 assert.ok(popup.includes('constexpr int kMapRadius = popup_layout::scale480(18);'), 'the Media cover radius');
+assert.ok(popup.includes('vacuum_map::set_under(pop.map, pop.card_rgb);') && map.includes('return view.under_rgb >= 0 ? static_cast<uint32_t>(view.under_rgb) : color_behind(view.box);'),
+  'the popup map rounds towards its card, not the black screen behind the transparent body');
 assert.ok(popup.includes('add_icon(value.box, icon, c.control_icon);') && popup.includes('if (icon) add_icon(row, icon, c.secondary);'),
   'icons like the Media popup');
 assert.ok(read('src/network/mqtt/mqtt_handlers.cpp').includes('device_control::refresh_all();'), 'icon updates reach the vacuum');

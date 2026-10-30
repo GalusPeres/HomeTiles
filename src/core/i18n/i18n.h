@@ -986,7 +986,7 @@ struct LocaleProfile {
   // one (tm_wday: 0 Sunday, 1 Monday).
   uint8_t first_weekday;
   // The Vacuum tile and popup (types/vacuum), VacuumLabel order.
-  const char* vacuum_labels[16];
+  const char* vacuum_labels[17];
   // Vacuum states: cleaning, docked, idle, paused, returning, error,
   // unavailable, unknown.
   const char* vacuum_states[8];
@@ -1057,9 +1057,10 @@ enum class VacuumLabel : uint8_t {
   Layout,
   MapLeft,
   MapCentered,
+  Map,  // the Web Admin map field; empty takes the device's map
   Count,
 };
-static_assert(static_cast<int>(VacuumLabel::Count) == 16, "LocaleProfile::vacuum_labels size");
+static_assert(static_cast<int>(VacuumLabel::Count) == 17, "LocaleProfile::vacuum_labels size");
 // Index into LocaleProfile::power_flow_labels.
 enum class PowerFlowLabel : uint8_t {
   Type,

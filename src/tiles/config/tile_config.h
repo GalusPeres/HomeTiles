@@ -181,9 +181,11 @@ struct Tile {
   // /_tile_weather_sensors sidecar. Empty = the weather entity's value.
   String weather_temperature_sensor;
   String weather_humidity_sensor;
-  // Power flow only: its node entities, one per line in power_flow::Role
-  // order (solar, grid, battery, battery charge, home; later lines are kept
-  // for further consumers), in the /_tile_flow_entities sidecar.
+  // Power flow: its node entities, one per line in power_flow::Role order
+  // (solar, grid, battery, battery charge, home; later lines are kept for
+  // further consumers). Vacuum: its map, an image or camera entity (empty:
+  // the map the Bridge finds on the vacuum's device). In the
+  // /_tile_flow_entities sidecar.
   String flow_entities;
 
   Tile()
@@ -394,9 +396,22 @@ static inline void applyWeatherSensorsRecord(Tile& tile, const String& record) {
 // entity). Trailing empty lines are dropped, so "" means none at all.
 static constexpr size_t kFlowEntityLinesMax = 12;
 
+// The types that keep Tile::flow_entities.
+static constexpr bool tileKeepsFlowEntities(int type) {
+  return type == TILE_POWER_FLOW || type == TILE_VACUUM;
+}
+
 static inline void normalizeFlowEntities(Tile& tile) {
-  if (tile.type != TILE_POWER_FLOW) {
+  if (!tileKeepsFlowEntities(tile.type)) {
     tile.flow_entities = "";
+    return;
+  }
+  if (tile.type == TILE_VACUUM) {
+    // Its first line only.
+    String line;
+    for (const char* c = tile.flow_entities.c_str(); *c && *c != '\n'; ++c) line += *c;
+    const String map = normalizeWeatherSensorEntity(line);
+    tile.flow_entities = map.startsWith("image.") || map.startsWith("camera.") ? map : String();
     return;
   }
   String record;

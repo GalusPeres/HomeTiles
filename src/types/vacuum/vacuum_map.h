@@ -6,7 +6,8 @@
 #include <vector>
 
 // The Vacuum tile's and popup's map: the Bridge's picture of the vacuum's
-// map entity (an image entity as it changes, a camera's still every 10 s),
+// map entity (an image entity as it changes; a camera's still every 3 s while
+// the vacuum cleans or returns, every 60 s otherwise),
 // rendered by the Bridge whole into a square (Contain) and shown in an image
 // object with corners rounded towards the color behind it. Over the direct
 // link only; until the first picture the square shows the map icon on the
@@ -16,8 +17,9 @@ namespace vacuum_map {
 // A square map view of `edge` px in `parent` at x, y (parent coordinates),
 // its corners rounded with the given radius. Freed with the object.
 lv_obj_t* create(lv_obj_t* parent, int x, int y, int edge, int radius);
-// The entity whose picture the view shows ("" none: the placeholder).
-void set_entity(lv_obj_t* view, const char* entity);
+// The entity whose picture the view shows ("" none: the placeholder);
+// `moving`: the vacuum cleans or returns, a camera map refreshes fast.
+void set_entity(lv_obj_t* view, const char* entity, bool moving);
 
 // A picture of `entity_id` arrived or was cleared (bridge_images.cpp).
 void arrived(const char* entity_id);

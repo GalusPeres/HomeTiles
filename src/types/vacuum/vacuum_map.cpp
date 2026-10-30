@@ -21,8 +21,10 @@
 namespace vacuum_map {
 namespace {
 
-// A camera map is a still the Bridge loads again at this interval.
-constexpr uint8_t kCameraEvery = 10;
+// A camera map is a still the Bridge loads again at this interval: as fast
+// as the Bridge allows while the vacuum moves, rarely while it stands.
+constexpr uint8_t kCameraEveryMoving = bridge_images::kEveryMin;
+constexpr uint8_t kCameraEveryResting = bridge_images::kEveryMax;
 
 struct View {
   lv_obj_t* box = nullptr;    // the square: control surface until a picture
@@ -35,6 +37,7 @@ struct View {
   uint16_t under = 0;  // RGB565 the corners were rounded towards
   char key[bridge_images::kKeyLength + 1] = "";
   bool due = true;
+  bool moving = false;
 };
 
 std::vector<View*> g_views;
@@ -175,9 +178,10 @@ lv_obj_t* create(lv_obj_t* parent, int x, int y, int edge, int radius) {
   return box;
 }
 
-void set_entity(lv_obj_t* box, const char* entity) {
+void set_entity(lv_obj_t* box, const char* entity, bool moving) {
   View* view = view_of(box);
   if (!view) return;
+  view->moving = moving;
   const String next = entity ? String(entity) : String();
   if (next.equalsIgnoreCase(view->entity)) return;
   view->entity = next;
@@ -201,7 +205,7 @@ void collect_topics(std::vector<String>& entities, std::vector<String>& suffixes
     const bool camera = is_camera(view->entity);
     if (camera && !(awake && on_screen(view->box))) continue;
     if (!bridge_images::pictureSuffix(suffix, sizeof(suffix), view->edge, view->edge, bridge_images::kContain,
-                                      camera ? kCameraEvery : 0)) {
+                                      camera ? (view->moving ? kCameraEveryMoving : kCameraEveryResting) : 0)) {
       continue;
     }
     entities.push_back(view->entity);

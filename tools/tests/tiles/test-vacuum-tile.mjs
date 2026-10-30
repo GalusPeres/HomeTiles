@@ -88,6 +88,35 @@ for (const marker of ['d.features & vacuum_detail::kReturnHome', 'd.features & v
   assert.ok(popup.includes(marker), `vacuum popup: ${marker}`);
 }
 
+// The map: a camera refreshes every 3 s while the vacuum moves, 60 s
+// otherwise; the Web Admin choice (Tile::flow_entities, its sidecar) wins
+// over the Bridge's suggestion and is declared as a picture.
+const map = read('src/types/vacuum/vacuum_map.cpp');
+assert.ok(map.includes('constexpr uint8_t kCameraEveryMoving = bridge_images::kEveryMin;'));
+assert.ok(map.includes('constexpr uint8_t kCameraEveryResting = bridge_images::kEveryMax;'));
+assert.ok(map.includes('camera ? (view->moving ? kCameraEveryMoving : kCameraEveryResting) : 0'));
+const config = read('src/tiles/config/tile_config.h');
+assert.match(config, /static constexpr bool tileKeepsFlowEntities\(int type\) \{\s*return type == TILE_POWER_FLOW \|\| type == TILE_VACUUM;/);
+assert.ok(config.includes('tile.flow_entities = map.startsWith("image.") || map.startsWith("camera.") ? map : String();'));
+const configCpp = read('src/tiles/config/tile_config.cpp');
+assert.ok(!configCpp.includes('tile.type != TILE_POWER_FLOW || !readFlowEntitiesSd'), 'the sidecar is read for every type that keeps it');
+assert.ok(configCpp.includes('if (!tileKeepsFlowEntities(tile.type) || !readFlowEntitiesSd(folder_id, index, record)) continue;'));
+assert.ok(read('src/types/device/web.cpp').includes('appendEntityPickerField(html, tab_id, "vacuum_map", i18n::vacuum_label(lang, i18n::VacuumLabel::Map), "images");'));
+assert.ok(read('src/types/device/web.cpp').includes('tile.flow_entities = type == TILE_VACUUM && server.hasArg("vacuum_map") ? server.arg("vacuum_map") : String();'));
+assert.ok(read('src/web/server/handlers/web_admin_tiles.cpp').includes(',\\"vacuum_map\\":\\"'), 'the tile JSON carries the map');
+assert.ok(search.includes('if (!strncmp(entity, "image.", 6) || !strncmp(entity, "camera.", 7)) return "images";'));
+assert.ok(read('src/types/vacuum/vacuum_tile.cpp').includes('view->map_entity.length() ? view->map_entity.c_str() : d.map'));
+assert.ok(popup.includes('pop.target.map_entity.length() ? pop.target.map_entity.c_str() : d.map'));
+// The menu box's shadow as pictures like the Media popup, freed on close.
+for (const marker of ['lv_snapshot_take(probe, LV_COLOR_FORMAT_A8)', 'if (!pop.menu_shadow) build_menu_shadow();',
+                      'free_menu_shadow(true);\n  hide_popup_shell(pop.card);']) {
+  assert.ok(popup.includes(marker), `vacuum popup: ${marker}`);
+}
+assert.ok(!popup.includes('lv_obj_set_style_border_width(pop.box'), 'no border instead of the shadow');
+// The battery ring on the disc.
+const tileSource = read('src/types/vacuum/vacuum_tile.cpp');
+assert.ok(tileSource.includes('view->ring = battery_ring(disc);') && tileSource.includes('lv_arc_set_value(view->ring, d.battery);'));
+
 // Map pictures share the tile picture topics and arrivals.
 assert.ok(read('src/types/camera/picture.cpp').includes('vacuum_map::collect_topics(entities, suffixes);'));
 assert.ok(read('src/network/bridge/bridge_images.cpp').includes('vacuum_map::arrived(entity);'));

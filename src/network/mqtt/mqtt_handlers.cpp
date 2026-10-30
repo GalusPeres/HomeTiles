@@ -1580,8 +1580,9 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
       const FolderEntitySlotView& slot = slots[i];
       // Rules on another entity (tile_icon_colors.h).
       if (slot.rule_entity[0]) add_route(String(slot.rule_entity), -1, "state");
-      // Weather temperature/humidity sensors, one entity per line.
-      for (const char* extra = slot.extra_entities; *extra;) {
+      // Weather temperature/humidity sensors, one entity per line (a
+      // Vacuum's chosen map comes as a picture, not as a state).
+      for (const char* extra = slot.type == TILE_VACUUM ? "" : slot.extra_entities; *extra;) {
         const char* end = strchr(extra, '\n');
         const size_t length = end ? static_cast<size_t>(end - extra) : strlen(extra);
         if (length) add_route(String(extra).substring(0, length), -1, "state");

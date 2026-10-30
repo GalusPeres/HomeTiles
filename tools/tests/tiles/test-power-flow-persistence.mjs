@@ -32,7 +32,7 @@ assert(defs.some(f => f.name === 'TileConfig::deleteFolder' && f.source.includes
 assert(fn('gridSidecarsMatchStored').includes('readFlowEntitiesSd(folder_id, index, stored_flow)'));
 const slots = fn('TileConfig::loadFolderGridEntitiesOnly');
 assert(slots.includes('out[i].extra_entities = flow.flow_entities;'));
-assert(slots.includes('full.tiles[i].type == TILE_POWER_FLOW ? full.tiles[i].flow_entities : sensors'));
+assert(slots.includes('tileKeepsFlowEntities(full.tiles[i].type) ? full.tiles[i].flow_entities : sensors'));
 assert(fn('sidecarTextsFor').includes('g_flow_entity_sidecar_texts'));
 assert(fn('ensureSidecarIndexBuilt').includes('scanSidecarDir(kFlowEntityPathDir, g_flow_entity_sidecar_keys);'));
 assert(fnIn(header, 'tileContentEquals').includes('a.flow_entities == b.flow_entities'));
@@ -40,7 +40,7 @@ assert(fnIn(header, 'tileTransparent').includes('powerFlowOption(tile, kFlowNoCa
 const handler = fs.readFileSync(path.join(root, 'src/web/server/handlers/web_admin_tiles.cpp'), 'utf8');
 assert(handler.includes('normalizeFlowEntities(tile);'), 'the save handler normalizes the record');
 assert(handler.includes('out += ",\\"flow_entities\\":\\"";'), 'GET /api/tiles returns the record');
-assert(handler.includes('if (tile.type == TILE_POWER_FLOW && tile.flow_entities.length()) entity += "|" + tile.flow_entities;'),
+assert(handler.includes('if (tileKeepsFlowEntities(tile.type) && tile.flow_entities.length()) entity += "|" + tile.flow_entities;'),
   'a changed node reloads the routes');
 
 const compiler = [process.env.CXX, 'clang++', 'g++'].filter(Boolean)
@@ -78,7 +78,7 @@ struct FS {bool exists(const String&p){return files.count(p)||directories.count(
  return {p,{},0,files.count(p)>0,false};
  }} filesystem;
 FS& storageFS(){return filesystem;}bool storageReady(){return ready;}
-constexpr size_t TILES_PER_GRID=4;enum TileType{TILE_EMPTY=0,TILE_SENSOR=1,TILE_WEATHER=12,TILE_POWER_FLOW=28};
+constexpr size_t TILES_PER_GRID=4;enum TileType{TILE_EMPTY=0,TILE_SENSOR=1,TILE_WEATHER=12,TILE_POWER_FLOW=28,TILE_VACUUM=29};
 const char*kTitlePathDir="/_tile_titles",*kImagePathDir="/_tile_images",*kEntityPathDir="/_tile_entities",*kIconColorPathDir="/_tile_icon_colors",*kWeatherSensorPathDir="/_tile_weather_sensors",*kFlowEntityPathDir="/_tile_flow_entities";
 bool g_sidecar_index_built=false;std::vector<uint32_t> g_title_sidecar_keys,g_image_sidecar_keys,g_entity_sidecar_keys,g_icon_color_sidecar_keys,g_weather_sensor_sidecar_keys,g_flow_entity_sidecar_keys;
 using PsString=std::string;struct SidecarText{uint32_t key;PsString text;};using SidecarTexts=std::vector<SidecarText>;
@@ -89,7 +89,7 @@ struct TileGridConfig{Tile tiles[TILES_PER_GRID];};
 static constexpr size_t kWeatherSensorEntityMax = 128;
 ` + fnIn(header, 'normalizeWeatherSensorEntity') +
   '\nstatic constexpr size_t kFlowEntityLinesMax = 12;\n' +
-  ['normalizeFlowEntities', 'flowEntityAt'].map(name => fnIn(header, name)).join('\n') +
+  ['tileKeepsFlowEntities', 'normalizeFlowEntities', 'flowEntityAt'].map(name => fnIn(header, name)).join('\n') +
   '\nstatic constexpr uint8_t kFlowHeaderBit = 0x01;\nstatic constexpr uint8_t kFlowNoCardBit = 0x02;\n' +
   fnIn(header, 'powerFlowOption') +
   '\nstatic constexpr size_t kFlowEntityRecordMax = kFlowEntityLinesMax * kWeatherSensorEntityMax;\n' +
@@ -112,6 +112,10 @@ int main(){
  std::string many;for(int i=0;i<20;++i){many+="sensor.n"+std::to_string(i)+"\n";}
  t=flow(many.c_str());normalizeFlowEntities(t);assert(flowEntityAt(t.flow_entities,11)=="sensor.n11"&&flowEntityAt(t.flow_entities,12).empty());
  t=flow("sensor.pv");t.type=TILE_SENSOR;normalizeFlowEntities(t);assert(t.flow_entities.empty());
+ // A Vacuum keeps one line: its chosen map, an image or camera entity.
+ t=flow(" camera.robo_map \nsensor.x");t.type=TILE_VACUUM;normalizeFlowEntities(t);assert(t.flow_entities=="camera.robo_map");
+ t=flow("image.floor_1");t.type=TILE_VACUUM;normalizeFlowEntities(t);assert(t.flow_entities=="image.floor_1");
+ t=flow("sensor.robo_map");t.type=TILE_VACUUM;normalizeFlowEntities(t);assert(t.flow_entities.empty());
  // Options: only Power flow tiles read their key_code bits.
  t=flow("");t.key_code=kFlowNoCardBit;assert(powerFlowOption(t,kFlowNoCardBit)&&!powerFlowOption(t,kFlowHeaderBit));
  t.type=TILE_SENSOR;assert(!powerFlowOption(t,kFlowNoCardBit));
@@ -125,6 +129,12 @@ int main(){
  assert(writeFlowEntitiesSd(3,1,"sensor.pv2\nsensor.grid"));
  grid=TileGridConfig{};grid.tiles[1].type=TILE_POWER_FLOW;reboot();applyFlowEntitiesFromSd(3,grid);
  assert(grid.tiles[1].flow_entities=="sensor.pv2\nsensor.grid");
+
+ // A Vacuum's map comes back after a reboot.
+ assert(writeFlowEntitiesSd(7,0,"camera.robo_map"));
+ grid=TileGridConfig{};grid.tiles[0].type=TILE_VACUUM;reboot();applyFlowEntitiesFromSd(7,grid);
+ assert(grid.tiles[0].flow_entities=="camera.robo_map");
+ assert(writeFlowEntitiesSd(7,0,""));
 
  // A tile of another type in the slot ignores a stale file.
  grid=TileGridConfig{};grid.tiles[1].type=TILE_SENSOR;applyFlowEntitiesFromSd(3,grid);assert(grid.tiles[1].flow_entities.empty());

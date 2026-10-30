@@ -333,6 +333,9 @@
     // A Vacuum's popup layout (sensor_display_mode: 0 map left, 1 centred).
     const layout = document.getElementById(tab + '_' + prefix + '_layout');
     if (layout) layout.value = Number(data.sensor_display_mode) === 1 ? '1' : '0';
+    // A Vacuum's chosen map (empty: the map the Bridge finds on its device).
+    const map = document.getElementById(tab + '_' + prefix + '_map');
+    if (map) map.value = data.vacuum_map || '';
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromEntity(tab, '_' + prefix + '_entity');
   }
@@ -350,6 +353,8 @@
     if (orientation) formData.append('bar_orientation', orientation.value === '1' ? '1' : '0');
     const layout = document.getElementById(tab + '_' + prefix + '_layout');
     if (layout) formData.append('vacuum_layout', layout.value === '1' ? '1' : '0');
+    const map = document.getElementById(tab + '_' + prefix + '_map');
+    if (map) formData.append('vacuum_map', map.value || '');
   }
 
   function resetDeviceFields(tab, prefix) {
@@ -364,6 +369,8 @@
     if (orientation) orientation.value = '0';
     const layout = document.getElementById(tab + '_' + prefix + '_layout');
     if (layout) layout.value = '0';
+    const map = document.getElementById(tab + '_' + prefix + '_map');
+    if (map) map.value = '';
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
 

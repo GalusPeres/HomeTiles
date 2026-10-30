@@ -48,8 +48,8 @@ static String dynamicMqttEntityForTile(const Tile& tile) {
   // Weather temperature/humidity sensors subscribe to their states too.
   const String sensors = weatherSensorsRecord(tile);
   if (sensors.length()) entity += "|" + sensors;
-  // Power flow nodes too.
-  if (tile.type == TILE_POWER_FLOW && tile.flow_entities.length()) entity += "|" + tile.flow_entities;
+  // Power flow nodes and a Vacuum's chosen map too.
+  if (tileKeepsFlowEntities(tile.type) && tile.flow_entities.length()) entity += "|" + tile.flow_entities;
   return entity;
 }
 
@@ -516,6 +516,11 @@ void WebAdminServer::handleGetTiles() {
     }
     if (tile.type == TILE_POWER_FLOW) {
       out += ",\"flow_entities\":\"";
+      appendJsonEscaped(out, tile.flow_entities);
+      out += "\"";
+    }
+    if (tile.type == TILE_VACUUM) {
+      out += ",\"vacuum_map\":\"";
       appendJsonEscaped(out, tile.flow_entities);
       out += "\"";
     }

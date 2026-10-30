@@ -1,5 +1,8 @@
 #include "src/ui/popups/vacuum/vacuum_popup.h"
 
+// lvgl.h no longer exports lv_image_cache_drop() (tile_renderer.cpp).
+#include <misc/cache/instance/lv_image_cache.h>
+
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -103,6 +106,10 @@ struct Popup {
   // The menu (Media's menu box).
   lv_obj_t* shield = nullptr;
   lv_obj_t* box = nullptr;
+  // Under the box: its shadow as pictures while the popup is open
+  // (build_menu_shadow).
+  lv_obj_t* menu_shadow = nullptr;
+  lv_draw_buf_t* menu_shadow_parts[8] = {};
   lv_obj_t* menu_title = nullptr;
   lv_obj_t* go = nullptr;
   lv_obj_t* go_text = nullptr;
@@ -270,6 +277,95 @@ MenuGeometry menu_geometry() {
 
 void open_tab(Tab tab);
 
+// The menu box's shadow as pictures, exactly like the Media popup's
+// (media_popup.cpp build_menu_shadow): LVGL draws the shadow once around a
+// small probe with the box's radius; its four corners and a short piece of
+// each side stay as alpha pictures, drawn in black under the box, made when
+// the menu first opens and freed with the popup. A real LVGL shadow on the
+// box pushed the card's shadow corner out of LVGL's one-entry shadow cache
+// (V2 b524: 157-180 ms per opening frame).
+constexpr int32_t kShadowSidePiece = 16;  // px along a side, tiled
+
+void free_menu_shadow(bool delete_objects) {
+  if (pop.menu_shadow && delete_objects) lv_obj_delete(pop.menu_shadow);
+  pop.menu_shadow = nullptr;
+  for (lv_draw_buf_t*& part : pop.menu_shadow_parts) {
+    if (!part) continue;
+    lv_image_cache_drop(part);
+    lv_draw_buf_destroy(part);
+    part = nullptr;
+  }
+}
+
+void build_menu_shadow() {
+  free_menu_shadow(true);
+  if (!pop.box || !pop.root) return;
+  const uint32_t started_ms = millis();
+  const MenuGeometry m = menu_geometry();
+  const int32_t card_radius = lv_obj_get_style_radius(pop.card, LV_PART_MAIN);
+  const int32_t radius = lv_obj_get_style_radius(pop.box, LV_PART_MAIN);
+  const int32_t blur = popup_layout::shadow_width_for(card_radius);
+  // LVGL's shadow corner piece (lv_draw_sw_box_shadow.c corner_size).
+  const int32_t corner = blur + radius;
+  lv_obj_t* probe = plain(pop.root);
+  lv_obj_set_size(probe, 2 * corner + kShadowSidePiece, 2 * corner + kShadowSidePiece);
+  lv_obj_set_style_radius(probe, radius, 0);
+  popup_layout::apply_card_shadow(probe);
+  lv_obj_set_style_shadow_width(probe, blur, 0);
+  lv_obj_update_layout(probe);
+  const int32_t ext = lv_obj_get_ext_draw_size(probe);
+  lv_draw_buf_t* snap = lv_snapshot_take(probe, LV_COLOR_FORMAT_A8);
+  lv_obj_delete(probe);
+  if (!snap) return;
+  const int32_t sw = snap->header.w;
+  const int32_t sh = snap->header.h;
+  const int32_t piece = kShadowSidePiece;
+  const lv_area_t from[8] = {{0, 0, corner - 1, corner - 1},
+                             {sw - corner, 0, sw - 1, corner - 1},
+                             {0, sh - corner, corner - 1, sh - 1},
+                             {sw - corner, sh - corner, sw - 1, sh - 1},
+                             {corner, 0, corner + piece - 1, ext - 1},
+                             {corner, sh - ext, corner + piece - 1, sh - 1},
+                             {0, corner, ext - 1, corner + piece - 1},
+                             {sw - ext, corner, sw - 1, corner + piece - 1}};
+  const int32_t w = popup_layout::kCardWidth - 2 * m.box_offset + 2 * ext;
+  const int32_t h = popup_layout::kCardHeight - m.box_offset - m.top + 2 * ext;
+  const lv_area_t to[8] = {{0, 0, corner - 1, corner - 1},
+                           {w - corner, 0, w - 1, corner - 1},
+                           {0, h - corner, corner - 1, h - 1},
+                           {w - corner, h - corner, w - 1, h - 1},
+                           {corner, 0, w - corner - 1, ext - 1},
+                           {corner, h - ext, w - corner - 1, h - 1},
+                           {0, corner, ext - 1, h - corner - 1},
+                           {w - ext, corner, w - 1, h - corner - 1}};
+  pop.menu_shadow = plain(pop.root);
+  lv_obj_move_to_index(pop.menu_shadow, lv_obj_get_index(pop.box));
+  lv_obj_set_pos(pop.menu_shadow, m.box_offset - ext, m.top - ext);
+  lv_obj_set_size(pop.menu_shadow, w, h);
+  uint32_t bytes = 0;
+  for (int i = 0; i < 8; ++i) {
+    const lv_area_t& a = from[i];
+    const int32_t pw = lv_area_get_width(&a);
+    const int32_t ph = lv_area_get_height(&a);
+    lv_draw_buf_t* part = lv_draw_buf_create(pw, ph, LV_COLOR_FORMAT_A8, LV_STRIDE_AUTO);
+    if (!part) continue;
+    for (int32_t y = 0; y < ph; ++y) {
+      memcpy(part->data + y * part->header.stride, snap->data + (a.y1 + y) * snap->header.stride + a.x1, pw);
+    }
+    bytes += part->data_size;
+    pop.menu_shadow_parts[i] = part;
+    lv_obj_t* image = lv_image_create(pop.menu_shadow);
+    lv_image_set_src(image, part);
+    lv_obj_set_pos(image, to[i].x1, to[i].y1);
+    lv_obj_set_size(image, lv_area_get_width(&to[i]), lv_area_get_height(&to[i]));
+    if (i >= 4) lv_image_set_inner_align(image, LV_IMAGE_ALIGN_TILE);
+    lv_obj_set_style_image_recolor(image, lv_color_black(), 0);
+  }
+  lv_draw_buf_destroy(snap);
+  Serial.printf("[VacuumPopup] Menu shadow pictures: %u bytes until the popup closes, %lu ms\n",
+                static_cast<unsigned>(bytes), static_cast<unsigned long>(millis() - started_ms));
+}
+
 void on_shield(lv_event_t*) { open_tab(Tab::None); }
 
 void on_tab(lv_event_t* e) {
@@ -378,10 +474,13 @@ void show_menu() {
   if (pop.tab != Tab::None && !tab_offered(d, pop.tab)) pop.tab = Tab::None;
   if (pop.tab == Tab::None) {
     set_shown(pop.box, false);
+    set_shown(pop.menu_shadow, false);
     lv_obj_remove_flag(pop.shield, LV_OBJ_FLAG_CLICKABLE);
     return;
   }
   lv_obj_add_flag(pop.shield, LV_OBJ_FLAG_CLICKABLE);
+  if (!pop.menu_shadow) build_menu_shadow();
+  set_shown(pop.menu_shadow, true);
   set_shown(pop.box, true);
   lv_label_set_text(pop.menu_title, tab_title(pop.tab));
   const Colors& c = pop.colors;
@@ -456,11 +555,7 @@ void build_menu() {
   lv_obj_set_style_radius(pop.box, std::max<int32_t>(0, card_radius - m.box_offset), 0);
   lv_obj_set_style_bg_color(pop.box, lv_color_hex(c.card), 0);
   lv_obj_set_style_bg_opa(pop.box, LV_OPA_COVER, 0);
-  // Its edge in the control fill (no shadow: the Media menu's shadow comes as
-  // pictures, media_popup.cpp build_menu_shadow).
-  lv_obj_set_style_border_color(pop.box, c.control, 0);
-  lv_obj_set_style_border_opa(pop.box, c.control_opa, 0);
-  lv_obj_set_style_border_width(pop.box, popup_layout::scale(2), 0);
+  // Its shadow comes as pictures when the menu opens (build_menu_shadow).
   lv_obj_add_flag(pop.box, LV_OBJ_FLAG_HIDDEN);
 
   pop.menu_title = add_text(pop.box, settings_style::row_font(), c.text, "");
@@ -532,7 +627,9 @@ Value make_value(lv_obj_t* parent, const char* icon, const Colors& c) {
 }
 
 void build_body(bool centered) {
-  // Everything on the root goes (the map view frees its picture itself).
+  // Everything on the root goes (the map view frees its picture itself, the
+  // shadow pictures are freed here).
+  free_menu_shadow(false);
   if (pop.root) lv_obj_clean(pop.root);
   pop.map = pop.dock = pop.main = pop.main_glyph = pop.main_text = pop.stop = pop.menu_button = nullptr;
   pop.shield = pop.box = pop.menu_title = pop.go = pop.go_text = pop.list = nullptr;
@@ -635,7 +732,10 @@ void ensure_popup() {
   pop.overlay = parts.overlay;
   // A theme change deletes the popup (popup_shell_delete_popups); the next
   // opening builds it again.
-  lv_obj_add_event_cb(pop.overlay, [](lv_event_t*) { pop = Popup{}; }, LV_EVENT_DELETE, nullptr);
+  lv_obj_add_event_cb(pop.overlay, [](lv_event_t*) {
+    free_menu_shadow(false);
+    pop = Popup{};
+  }, LV_EVENT_DELETE, nullptr);
   pop.card = parts.card;
   pop.title = parts.title;
   pop.icon = parts.icon;
@@ -671,7 +771,8 @@ void refresh(bool show) {
   if (!pop.built || pop.built_centered != pop.target.map_centered || pop.built_colors != colors_key(colors)) {
     build_body(pop.target.map_centered);
   }
-  vacuum_map::set_entity(pop.map, d.map);
+  vacuum_map::set_entity(pop.map, pop.target.map_entity.length() ? pop.target.map_entity.c_str() : d.map,
+                         vacuum_detail::moving(d));
   show_values(d);
   const bool ready = d.valid && d.available;
   const bool pauses = vacuum_detail::main_pauses(d);
@@ -735,6 +836,8 @@ void hide_vacuum_popup() {
   pop.open = false;
   pop.tab = Tab::None;
   show_menu();
+  // Nothing kept for good: the shadow pictures come again with the next menu.
+  free_menu_shadow(true);
   hide_popup_shell(pop.card);
   cancel_popup_open(pop.card);
   lv_obj_add_flag(pop.card, LV_OBJ_FLAG_HIDDEN);

@@ -42,6 +42,8 @@ struct View {
   String icon_name;
   bool icon_visible = true;
   bool map_centered = false;
+  // The map chosen in the Web Admin ("" takes the Bridge's, detail.map).
+  String map_entity;
   Layout layout = Layout::Pill;
   lv_obj_t* card = nullptr;
   lv_obj_t* icon = nullptr;
@@ -57,6 +59,9 @@ struct View {
   lv_obj_t* dock = nullptr;
   lv_obj_t* stop = nullptr;
   lv_obj_t* map = nullptr;
+  // The battery as a ring on the icon disc (mockup 2x1 and 2x2); hidden
+  // while the vacuum reports no battery.
+  lv_obj_t* ring = nullptr;
   int16_t main_center = 0;  // Row: the pill's centre, the side buttons beside it
   int16_t row_top = 0;
   int16_t button = 0;
@@ -83,6 +88,7 @@ VacuumPopupTarget popup_target(const View* view) {
   target.icon_name = view->icon_name;
   target.icon_visible = view->icon_visible;
   target.map_centered = view->map_centered;
+  target.map_entity = view->map_entity;
   target.source = view->card;
   return target;
 }
@@ -163,6 +169,30 @@ void set_enabled(lv_obj_t* btn, bool enabled) {
   }
 }
 
+// The ring on the disc's edge: the battery's share in the icon color over a
+// faint full circle of the same color.
+lv_obj_t* battery_ring(lv_obj_t* disc) {
+  lv_obj_t* ring = lv_arc_create(disc);
+  lv_obj_add_flag(ring, LV_OBJ_FLAG_IGNORE_LAYOUT);
+  lv_obj_remove_flag(ring, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_size(ring, LV_PCT(100), LV_PCT(100));
+  lv_obj_center(ring);
+  lv_obj_set_style_pad_all(ring, 0, LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(ring, LV_OPA_TRANSP, LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(ring, LV_OPA_TRANSP, LV_PART_KNOB);
+  lv_obj_set_style_pad_all(ring, 0, LV_PART_KNOB);
+  const int width = std::max<int>(2, tile_layout::scale_480(3));
+  lv_obj_set_style_arc_width(ring, width, LV_PART_MAIN);
+  lv_obj_set_style_arc_width(ring, width, LV_PART_INDICATOR);
+  lv_obj_set_style_arc_rounded(ring, true, LV_PART_INDICATOR);
+  lv_obj_set_style_arc_opa(ring, LV_OPA_30, LV_PART_MAIN);
+  lv_arc_set_rotation(ring, 270);
+  lv_arc_set_bg_angles(ring, 0, 360);
+  lv_arc_set_range(ring, 0, 100);
+  lv_obj_add_flag(ring, LV_OBJ_FLAG_HIDDEN);
+  return ring;
+}
+
 void show(View* view) {
   if (!view) return;
   const ui_theme::SurfaceScope surface = tile_surface::scope(view->card);
@@ -182,6 +212,19 @@ void show(View* view) {
 
   const bool ready = d.valid && d.available;
   view->pauses = vacuum_detail::main_pauses(d);
+  if (view->ring) {
+    const bool shown = d.valid && d.available && d.has_battery;
+    if (shown) {
+      const lv_color_t accent = lv_color_hex(view->icon ? tile_icon_disc::icon_color(view->icon) : v.color);
+      lv_obj_set_style_arc_color(view->ring, accent, LV_PART_MAIN);
+      lv_obj_set_style_arc_color(view->ring, accent, LV_PART_INDICATOR);
+      lv_arc_set_value(view->ring, d.battery);
+    }
+    if (shown == lv_obj_has_flag(view->ring, LV_OBJ_FLAG_HIDDEN)) {
+      if (shown) lv_obj_remove_flag(view->ring, LV_OBJ_FLAG_HIDDEN);
+      else lv_obj_add_flag(view->ring, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
   if (view->main) {
     const uint32_t accent = view->icon ? tile_icon_disc::icon_color(view->icon) : device_visual::kCyan;
     const uint32_t ink = vacuum_visual::on_accent(accent);
@@ -202,7 +245,10 @@ void show(View* view) {
   }
   set_enabled(view->dock, ready && (d.features & vacuum_detail::kReturnHome));
   set_enabled(view->stop, ready && (d.features & vacuum_detail::kStop));
-  if (view->map) vacuum_map::set_entity(view->map, d.map);
+  if (view->map) {
+    vacuum_map::set_entity(view->map, view->map_entity.length() ? view->map_entity.c_str() : d.map,
+                           vacuum_detail::moving(d));
+  }
   place_row(view);
 }
 
@@ -285,6 +331,7 @@ lv_obj_t* render_vacuum_tile(lv_obj_t* parent, int col, int row, const Tile& til
   view->icon_visible = !isMdiIconDisabled(tile.icon_name);
   view->icon_name = view->icon_visible ? normalizeMdiIconName(tile.icon_name) : String();
   view->map_centered = tile.sensor_display_mode == 1;
+  view->map_entity = tile.flow_entities;
   const bool compact = tile_geometry::compact_device_control(tile.type, tile.span_w, tile.span_h);
   view->layout = compact                                  ? Layout::Compact
                  : tile.span_w >= 2 && tile.span_h >= 2   ? Layout::Map
@@ -312,7 +359,9 @@ lv_obj_t* render_vacuum_tile(lv_obj_t* parent, int col, int row, const Tile& til
   if (view->layout == Layout::Compact) {
     compact_sensor_layout::apply(card, view->icon, header.title, header.state, tile);
   } else {
-    if (view->icon) tile_icon_disc::add_round(card, view->icon);
+    if (view->icon) {
+      if (lv_obj_t* disc = tile_icon_disc::add_round(card, view->icon)) view->ring = battery_ring(disc);
+    }
     const int tile_w = tile_geometry::extent(tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP);
     const int tile_h = tile_geometry::extent(tile.row, std::max(1.0f, tile.span_h), GRID_CELL_H, GRID_GAP);
     const int inset = climate_layout::kOuterInset;

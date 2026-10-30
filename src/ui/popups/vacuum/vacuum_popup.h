@@ -18,6 +18,8 @@ struct VacuumPopupTarget {
   String icon_name;
   bool icon_visible = true;
   bool map_centered = false;
+  // The map chosen in the Web Admin; "" takes the one the Bridge finds.
+  String map_entity;
   // The opening tile card (popup color and header disc), may be null.
   lv_obj_t* source = nullptr;
 };

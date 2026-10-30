@@ -407,6 +407,10 @@
       bindLive(document.getElementById(prefix + id), 'change', id === '_fan_orientation' ? 'fanOrientation' : 'switchOrientation',
         () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     }
+    // The Vacuum popup's layout (map left or centred).
+    bindLive(document.getElementById(prefix + '_vacuum_layout'), 'change', 'vacuumLayout', () => { updateDraft(tab); scheduleAutoSave(tab); });
+    // The Vacuum's map (empty: the map the Bridge finds on its device).
+    bindLive(document.getElementById(prefix + '_vacuum_map'), 'change', 'vacuumMap', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(switchPopupModeSelect, 'change', 'switchPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(mediaSelect, 'change', 'mediaEntity', () => { maybeFillTitleFromMedia(tab); updateTilePreview(tab); updateMediaValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(climateSelect, 'change', 'climateEntity', () => {
@@ -434,8 +438,8 @@
       updateDraft(tab);
       scheduleAutoSave(tab);
     });
-    // Lock, Alarm panel and Fan: entity, state size and popup gesture.
-    for (const kind of ['lock', 'alarm', 'fan']) {
+    // Lock, Alarm panel, Fan and Vacuum: entity, state size and popup gesture.
+    for (const kind of ['lock', 'alarm', 'fan', 'vacuum']) {
       const select = document.getElementById(prefix + '_' + kind + '_entity');
       bindLive(document.getElementById(prefix + '_' + kind + '_value_font'), 'change', kind + 'ValueFont', () => {
         updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);

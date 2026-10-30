@@ -68,6 +68,9 @@ void append_device_fields_html(String& html, const String& tab_id, TileType type
   // (sensor_display_mode, like the Media popup's cover).
   if (type == TILE_VACUUM) {
     const char* lang = language();
+    // The map: an image or camera entity; empty takes the one the Bridge
+    // finds on the vacuum's device.
+    appendEntityPickerField(html, tab_id, "vacuum_map", i18n::vacuum_label(lang, i18n::VacuumLabel::Map), "images");
     const SwitchChoice layouts[] = {{"0", i18n::vacuum_label(lang, i18n::VacuumLabel::MapLeft)},
                                     {"1", i18n::vacuum_label(lang, i18n::VacuumLabel::MapCentered)}};
     append_switch_choice(html, tab_id, "vacuum_layout", i18n::vacuum_label(lang, i18n::VacuumLabel::Layout),
@@ -118,6 +121,10 @@ bool apply_device_fields_from_request(WebServer& server, Tile& tile) {
   // A Vacuum's popup layout: 1 = the map centred (vacuum_popup.h).
   tile.sensor_display_mode =
       type == TILE_VACUUM && server.hasArg("vacuum_layout") && server.arg("vacuum_layout").toInt() == 1 ? 1 : 0;
+  // A Vacuum's chosen map (Tile::flow_entities, normalizeFlowEntities).
+  tile.flow_entities = type == TILE_VACUUM && server.hasArg("vacuum_map") ? server.arg("vacuum_map") : String();
+  tile.flow_entities.trim();
+  normalizeFlowEntities(tile);
   tile.sensor_gauge_min = 0;
   tile.sensor_gauge_max = 100;
   tile.key_code = 0;

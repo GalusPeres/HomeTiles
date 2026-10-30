@@ -110,6 +110,8 @@ const char* listOfSource(const char* entity) {
   if (!strncmp(entity, "binary_sensor.", 14)) return "binary_sensors";
   if (!strncmp(entity, "climate.", 8)) return "climates";
   if (!strncmp(entity, "cover.", 6)) return "covers";
+  // A Vacuum's chosen map: an image or a camera picture.
+  if (!strncmp(entity, "image.", 6) || !strncmp(entity, "camera.", 7)) return "images";
   return "switches";
 }
 

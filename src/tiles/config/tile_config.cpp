@@ -1336,7 +1336,7 @@ static void applyFlowEntitiesFromSd(uint16_t folder_id, TileGridConfig& grid) {
   for (size_t index = 0; index < TILES_PER_GRID; ++index) {
     Tile& tile = grid.tiles[index];
     String record;
-    if (tile.type != TILE_POWER_FLOW || !readFlowEntitiesSd(folder_id, index, record)) continue;
+    if (!tileKeepsFlowEntities(tile.type) || !readFlowEntitiesSd(folder_id, index, record)) continue;
     // Normalized again so a damaged or foreign file cannot reach the runtime.
     tile.flow_entities = record;
     normalizeFlowEntities(tile);
@@ -3018,7 +3018,7 @@ bool TileConfig::loadFolderGridEntitiesOnly(uint16_t folder_id, TileEntitySlot* 
       out[i].sensor_entity = full.tiles[i].sensor_entity;
       out[i].rule_entity = tileIconSourceEntity(full.tiles[i].type, full.tiles[i].icon_colors);
       const String sensors = weatherSensorsRecord(full.tiles[i]);
-      out[i].extra_entities = full.tiles[i].type == TILE_POWER_FLOW ? full.tiles[i].flow_entities : sensors;
+      out[i].extra_entities = tileKeepsFlowEntities(full.tiles[i].type) ? full.tiles[i].flow_entities : sensors;
     }
     return true;
   }
@@ -3059,11 +3059,11 @@ bool TileConfig::loadFolderGridEntitiesOnly(uint16_t folder_id, TileEntitySlot* 
     applyWeatherSensorsRecord(sensors, record);
     out[i].extra_entities = weatherSensorsRecord(sensors);
   }
-  // Power flow nodes too, one entity per line.
+  // Power flow nodes and a Vacuum's chosen map too, one entity per line.
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
-    if (out[i].type != TILE_POWER_FLOW) continue;
+    if (!tileKeepsFlowEntities(out[i].type)) continue;
     Tile flow;
-    flow.type = TILE_POWER_FLOW;
+    flow.type = out[i].type;
     if (!readFlowEntitiesSd(folder_id, i, flow.flow_entities)) continue;
     normalizeFlowEntities(flow);
     out[i].extra_entities = flow.flow_entities;
@@ -4448,7 +4448,7 @@ bool TileConfig::saveGridInPlace(uint16_t folder_id, TileGridConfig& grid,
       return false;
     }
     if (!writeFlowEntitiesSd(folder_id, grid_idx, tile.flow_entities)) {
-      Serial.println("[TileConfig] Error saving power flow entities");
+      Serial.println("[TileConfig] Error saving power flow or vacuum map entities");
       invalidateFolderEntityCache();
       return false;
     }

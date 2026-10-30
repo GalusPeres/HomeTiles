@@ -4513,8 +4513,15 @@ async function saveGestureEdge(select) {
       tile.key_code = cameraTransparency(snapshot.camera_transparency);
       tile.key_modifier = cameraOptionFlags({head: snapshot.camera_head, tap: snapshot.camera_tap});
     }
-    for (const kind of ['lock', 'alarm', 'fan']) {
+    for (const kind of ['lock', 'alarm', 'fan', 'vacuum']) {
       if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, kind + '_entity')) tile.sensor_entity = snapshot[kind + '_entity'] || '';
+    }
+    // The Vacuum popup's layout (types/device/web.cpp vacuum_layout).
+    if (Number(tile.type) === 29 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'vacuum_layout')) {
+      tile.sensor_display_mode = String(snapshot.vacuum_layout) === '1' ? 1 : 0;
+    }
+    if (Number(tile.type) === 29 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'vacuum_map')) {
+      tile.vacuum_map = snapshot.vacuum_map || '';
     }
     // Calendar: the view and the first day of the week (types/calendar/web.h).
     if (Number(tile.type) === 27 && snapshot) {
@@ -7915,6 +7922,10 @@ async function saveGestureEdge(select) {
       bindLive(document.getElementById(prefix + id), 'change', id === '_fan_orientation' ? 'fanOrientation' : 'switchOrientation',
         () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     }
+    // The Vacuum popup's layout (map left or centred).
+    bindLive(document.getElementById(prefix + '_vacuum_layout'), 'change', 'vacuumLayout', () => { updateDraft(tab); scheduleAutoSave(tab); });
+    // The Vacuum's map (empty: the map the Bridge finds on its device).
+    bindLive(document.getElementById(prefix + '_vacuum_map'), 'change', 'vacuumMap', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(switchPopupModeSelect, 'change', 'switchPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(mediaSelect, 'change', 'mediaEntity', () => { maybeFillTitleFromMedia(tab); updateTilePreview(tab); updateMediaValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(climateSelect, 'change', 'climateEntity', () => {
@@ -7942,8 +7953,8 @@ async function saveGestureEdge(select) {
       updateDraft(tab);
       scheduleAutoSave(tab);
     });
-    // Lock, Alarm panel and Fan: entity, state size and popup gesture.
-    for (const kind of ['lock', 'alarm', 'fan']) {
+    // Lock, Alarm panel, Fan and Vacuum: entity, state size and popup gesture.
+    for (const kind of ['lock', 'alarm', 'fan', 'vacuum']) {
       const select = document.getElementById(prefix + '_' + kind + '_entity');
       bindLive(document.getElementById(prefix + '_' + kind + '_value_font'), 'change', kind + 'ValueFont', () => {
         updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
@@ -10315,7 +10326,10 @@ async function saveGestureEdge(select) {
       const kind = devicePreviewKind(safeType);
       fd.append(kind + '_entity', tile.sensor_entity || tile[kind + '_entity'] || '');
       if (safeType === 26) fd.append('bar_orientation', Number(tile.bar_orientation) === 1 ? '1' : '0');
-      if (safeType === 29) fd.append('vacuum_layout', Number(tile.sensor_display_mode) === 1 ? '1' : '0');
+      if (safeType === 29) {
+        fd.append('vacuum_layout', Number(tile.sensor_display_mode) === 1 ? '1' : '0');
+        fd.append('vacuum_map', tile.vacuum_map || '');
+      }
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }
@@ -18484,7 +18498,8 @@ function maybeFillTitleFromSwitch(tab) {
   // The Climate tile's Layout and the Camera tile's choices use the same
   // segmented choice.
   const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode', 'climate_view', 'media_layout',
-    'cover_value_font', 'lock_value_font', 'alarm_value_font', 'fan_value_font', 'camera_display', 'camera_fit',
+    'cover_value_font', 'lock_value_font', 'alarm_value_font', 'fan_value_font', 'vacuum_value_font', 'vacuum_layout',
+    'camera_display', 'camera_fit',
     'camera_head', 'camera_tap', 'switch_orientation', 'fan_orientation', 'sensor_layout', 'sensor_form',
     'sensor_orientation', 'sensor_ring', 'sensor_place', 'sensor_value_font', 'sensor_popup_open_mode',
     'energy_value_font', 'energy_display_mode', 'energy_popup_open_mode'];
@@ -19576,6 +19591,9 @@ function maybeFillTitleFromSwitch(tab) {
     // A Vacuum's popup layout (sensor_display_mode: 0 map left, 1 centred).
     const layout = document.getElementById(tab + '_' + prefix + '_layout');
     if (layout) layout.value = Number(data.sensor_display_mode) === 1 ? '1' : '0';
+    // A Vacuum's chosen map (empty: the map the Bridge finds on its device).
+    const map = document.getElementById(tab + '_' + prefix + '_map');
+    if (map) map.value = data.vacuum_map || '';
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromEntity(tab, '_' + prefix + '_entity');
   }
@@ -19593,6 +19611,8 @@ function maybeFillTitleFromSwitch(tab) {
     if (orientation) formData.append('bar_orientation', orientation.value === '1' ? '1' : '0');
     const layout = document.getElementById(tab + '_' + prefix + '_layout');
     if (layout) formData.append('vacuum_layout', layout.value === '1' ? '1' : '0');
+    const map = document.getElementById(tab + '_' + prefix + '_map');
+    if (map) formData.append('vacuum_map', map.value || '');
   }
 
   function resetDeviceFields(tab, prefix) {
@@ -19607,6 +19627,8 @@ function maybeFillTitleFromSwitch(tab) {
     if (orientation) orientation.value = '0';
     const layout = document.getElementById(tab + '_' + prefix + '_layout');
     if (layout) layout.value = '0';
+    const map = document.getElementById(tab + '_' + prefix + '_map');
+    if (map) map.value = '';
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
 

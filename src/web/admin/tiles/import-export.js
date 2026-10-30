@@ -1098,7 +1098,10 @@
       const kind = devicePreviewKind(safeType);
       fd.append(kind + '_entity', tile.sensor_entity || tile[kind + '_entity'] || '');
       if (safeType === 26) fd.append('bar_orientation', Number(tile.bar_orientation) === 1 ? '1' : '0');
-      if (safeType === 29) fd.append('vacuum_layout', Number(tile.sensor_display_mode) === 1 ? '1' : '0');
+      if (safeType === 29) {
+        fd.append('vacuum_layout', Number(tile.sensor_display_mode) === 1 ? '1' : '0');
+        fd.append('vacuum_map', tile.vacuum_map || '');
+      }
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }

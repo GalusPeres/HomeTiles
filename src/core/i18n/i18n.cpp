@@ -2243,7 +2243,7 @@ static const LocaleProfile kLocaleDe = {
     {"Januar", "Februar", "März", "April", "Mai", "Juni",
      "Juli", "August", "September", "Oktober", "November", "Dezember"},
     1,  // Monday
-    {"Staubsauger", "Staubsauger-Entität", "Reinigen", "Pausieren", "Dock", "Stopp", "Saugkraft", "Räume", "Finden", "Spot", "nur diese Stelle", "der Sauger piept", "%u saugen", "Popup", "Karte links", "Karte Mitte"},
+    {"Staubsauger", "Staubsauger-Entität", "Reinigen", "Pausieren", "Dock", "Stopp", "Saugkraft", "Räume", "Finden", "Spot", "nur diese Stelle", "der Sauger piept", "%u saugen", "Popup", "Karte links", "Karte Mitte", "Karte (leer: automatisch)"},
     {"Saugt", "Angedockt", "Bereit", "Pausiert", "Fährt zum Dock", "Fehler", "Nicht verfügbar", "Unbekannt"},
     {"Leistungsfluss", "Solarleistung", "Netzleistung", "Batterieleistung", "Batterieladung", "Hausverbrauch", "Titel und Icon anzeigen", "Karte anzeigen", "Vorzeichen umkehren"},
     {"Entität wählen", "Suchen", "Keine Entität passt zu „{query}“",
@@ -2376,7 +2376,7 @@ static const LocaleProfile kLocaleEn = {
     {"January", "February", "March", "April", "May", "June",
      "July", "August", "September", "October", "November", "December"},
     0,  // Sunday
-    {"Vacuum", "Vacuum entity", "Clean", "Pause", "Dock", "Stop", "Suction", "Rooms", "Locate", "Spot", "only this spot", "the vacuum beeps", "Clean %u", "Popup", "Map left", "Map centre"},
+    {"Vacuum", "Vacuum entity", "Clean", "Pause", "Dock", "Stop", "Suction", "Rooms", "Locate", "Spot", "only this spot", "the vacuum beeps", "Clean %u", "Popup", "Map left", "Map centre", "Map (empty: automatic)"},
     {"Cleaning", "Docked", "Idle", "Paused", "Returning", "Error", "Unavailable", "Unknown"},
     {"Power flow", "Solar power", "Grid power", "Battery power", "Battery charge", "Home power", "Show title and icon", "Show card", "Invert sign"},
     {"Choose an entity", "Search", "No entity matches “{query}”",
@@ -2514,7 +2514,7 @@ static const LocaleProfile kLocaleFr = {
     {"Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
      "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"},
     1,  // Monday
-    {"Aspirateur", "Entité aspirateur", "Nettoyer", "Pause", "Base", "Arrêt", "Puissance", "Pièces", "Localiser", "Spot", "seulement cet endroit", "l'aspirateur émet un bip", "Nettoyer %u", "Popup", "Carte à gauche", "Carte au centre"},
+    {"Aspirateur", "Entité aspirateur", "Nettoyer", "Pause", "Base", "Arrêt", "Puissance", "Pièces", "Localiser", "Spot", "seulement cet endroit", "l'aspirateur émet un bip", "Nettoyer %u", "Popup", "Carte à gauche", "Carte au centre", "Carte (vide : automatique)"},
     {"Nettoie", "Sur la base", "Inactif", "En pause", "Retour à la base", "Erreur", "Indisponible", "Inconnu"},
     {"Flux de puissance", "Puissance solaire", "Puissance réseau", "Puissance batterie", "Charge batterie", "Consommation maison", "Afficher le titre et l’icône", "Afficher la carte", "Inverser le signe"},
     {"Choisir une entité", "Rechercher", "Aucune entité ne correspond à « {query} »",
@@ -6027,7 +6027,7 @@ static const LocaleProfile kLocalePl = {
     {"Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
      "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"},
     1,  // Monday
-    {"Odkurzacz", "Encja odkurzacza", "Sprzątaj", "Pauza", "Stacja", "Stop", "Moc ssania", "Pokoje", "Znajdź", "Punkt", "tylko to miejsce", "odkurzacz piszczy", "Sprzątaj %u", "Okno", "Mapa z lewej", "Mapa na środku"},
+    {"Odkurzacz", "Encja odkurzacza", "Sprzątaj", "Pauza", "Stacja", "Stop", "Moc ssania", "Pokoje", "Znajdź", "Punkt", "tylko to miejsce", "odkurzacz piszczy", "Sprzątaj %u", "Okno", "Mapa z lewej", "Mapa na środku", "Mapa (puste: automatycznie)"},
     {"Sprząta", "W stacji", "Bezczynny", "Wstrzymany", "Wraca do stacji", "Błąd", "Niedostępny", "Nieznany"},
     {"Przepływ mocy", "Moc solarna", "Moc sieci", "Moc baterii", "Naładowanie baterii", "Zużycie domu", "Pokaż tytuł i ikonę", "Pokaż kartę", "Odwróć znak"},
     {"Wybierz encję", "Szukaj", "Żadna encja nie pasuje do „{query}”",
@@ -6094,7 +6094,7 @@ static const LocaleProfile kLocaleCs = {
     {"Leden", "Únor", "Březen", "Duben", "Květen", "Červen",
      "Červenec", "Srpen", "Září", "Říjen", "Listopad", "Prosinec"},
     1,  // Monday
-    {"Vysavač", "Entita vysavače", "Uklidit", "Pozastavit", "Stanice", "Stop", "Sací výkon", "Místnosti", "Najít", "Bod", "jen toto místo", "vysavač pípá", "Uklidit %u", "Okno", "Mapa vlevo", "Mapa uprostřed"},
+    {"Vysavač", "Entita vysavače", "Uklidit", "Pozastavit", "Stanice", "Stop", "Sací výkon", "Místnosti", "Najít", "Bod", "jen toto místo", "vysavač pípá", "Uklidit %u", "Okno", "Mapa vlevo", "Mapa uprostřed", "Mapa (prázdné: automaticky)"},
     {"Uklízí", "V základně", "Nečinný", "Pozastaveno", "Vrací se", "Chyba", "Nedostupné", "Neznámé"},
     {"Tok výkonu", "Solární výkon", "Výkon sítě", "Výkon baterie", "Nabití baterie", "Spotřeba domu", "Zobrazit název a ikonu", "Zobrazit kartu", "Obrátit znaménko"},
     {"Vybrat entitu", "Hledat", "Žádná entita neodpovídá „{query}“",
@@ -6227,7 +6227,7 @@ static const LocaleProfile kLocaleEs = {
     {"Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"},
     1,  // Monday
-    {"Aspiradora", "Entidad de aspiradora", "Limpiar", "Pausar", "Base", "Parar", "Potencia", "Habitaciones", "Localizar", "Punto", "solo este punto", "la aspiradora pita", "Limpiar %u", "Popup", "Mapa a la izquierda", "Mapa en el centro"},
+    {"Aspiradora", "Entidad de aspiradora", "Limpiar", "Pausar", "Base", "Parar", "Potencia", "Habitaciones", "Localizar", "Punto", "solo este punto", "la aspiradora pita", "Limpiar %u", "Popup", "Mapa a la izquierda", "Mapa en el centro", "Mapa (vacío: automático)"},
     {"Limpiando", "En la base", "Inactiva", "En pausa", "Volviendo", "Error", "No disponible", "Desconocido"},
     {"Flujo de potencia", "Potencia solar", "Potencia de red", "Potencia de batería", "Carga de batería", "Consumo de la casa", "Mostrar título e icono", "Mostrar tarjeta", "Invertir signo"},
     {"Elige una entidad", "Buscar", "Ninguna entidad coincide con “{query}”",
@@ -6370,7 +6370,7 @@ static const LocaleProfile kLocaleSk = {
     {"Január", "Február", "Marec", "Apríl", "Máj", "Jún",
      "Júl", "August", "September", "Október", "November", "December"},
     1,  // Monday
-    {"Vysávač", "Entita vysávača", "Upratať", "Pozastaviť", "Stanica", "Stop", "Sací výkon", "Miestnosti", "Nájsť", "Bod", "len toto miesto", "vysávač pípa", "Upratať %u", "Okno", "Mapa vľavo", "Mapa v strede"},
+    {"Vysávač", "Entita vysávača", "Upratať", "Pozastaviť", "Stanica", "Stop", "Sací výkon", "Miestnosti", "Nájsť", "Bod", "len toto miesto", "vysávač pípa", "Upratať %u", "Okno", "Mapa vľavo", "Mapa v strede", "Mapa (prázdne: automaticky)"},
     {"Upratuje", "V stanici", "Nečinný", "Pozastavené", "Vracia sa", "Chyba", "Nedostupné", "Neznáme"},
     {"Tok výkonu", "Solárny výkon", "Výkon siete", "Výkon batérie", "Nabitie batérie", "Spotreba domu", "Zobraziť názov a ikonu", "Zobraziť kartu", "Obrátiť znamienko"},
     {"Vyberte entitu", "Hľadať", "Žiadna entita sa nezhoduje s „{query}“",
@@ -6503,7 +6503,7 @@ static const LocaleProfile kLocaleRu = {
     {"Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
      "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"},
     1,  // Monday
-    {"Пылесос", "Сущность пылесоса", "Уборка", "Пауза", "База", "Стоп", "Мощность", "Комнаты", "Найти", "Точка", "только это место", "пылесос пищит", "Убрать %u", "Окно", "Карта слева", "Карта по центру"},
+    {"Пылесос", "Сущность пылесоса", "Уборка", "Пауза", "База", "Стоп", "Мощность", "Комнаты", "Найти", "Точка", "только это место", "пылесос пищит", "Убрать %u", "Окно", "Карта слева", "Карта по центру", "Карта (пусто: автоматически)"},
     {"Убирает", "На базе", "Ожидает", "Пауза", "Возвращается", "Ошибка", "Недоступно", "Неизвестно"},
     {"Поток мощности", "Солнечная мощность", "Мощность сети", "Мощность батареи", "Заряд батареи", "Потребление дома", "Показывать название и иконку", "Показывать карточку", "Инвертировать знак"},
     {"Выберите сущность", "Поиск", "Ни одна сущность не соответствует «{query}»",

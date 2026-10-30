@@ -23,6 +23,7 @@
 #include "src/web/server/handlers/preview_payload.h"
 #include "src/types/types_registry.h"
 #include "src/types/navigate/web_handler.h"
+#include "src/types/scene/web_handler.h"
 #include "src/types/energy/energy_data.h"
 #include "src/types/sensor/gauge_range.h"
 #include "src/tiles/icons/mdi_icons.h"
@@ -568,8 +569,9 @@ void WebAdminServer::handleGetTiles() {
     out += ",\"image_slideshow_sec\":";
     out += String(tile.image_slideshow_sec);
     out += ",\"scene_alias\":\"";
-    // A Scene tile shows its target here (alias or entity id, sceneTarget).
-    appendJsonEscaped(out, tile.type == TILE_SCENE ? sceneTarget(tile) : tile.scene_alias);
+    // A Scene tile shows its target here: the entity id, also for an alias
+    // the Bridge maps to one (scene_picker_value).
+    appendJsonEscaped(out, tile.type == TILE_SCENE ? scene_picker_value(tile) : tile.scene_alias);
     out += "\",\"key_macro\":\"";
     appendJsonEscaped(out, tile.key_macro);
     out += "\",\"key_code\":";
@@ -1404,8 +1406,8 @@ void WebAdminServer::handleGetEntityOptions() {
   const HaBridgeConfigData& ha = haBridgeConfig.get();
 
   // The entities the Bridge released, one list per tile field, for the shared
-  // entity picker (tiles/entity-picker.js): v = entity id (scene alias),
-  // t = name, i = MDI icon when the Bridge sent one, e = scene entity.
+  // entity picker (tiles/entity-picker.js): v = entity id, t = name, i = MDI
+  // icon when the Bridge sent one, e = the entity when it differs from v.
   String json = "{\"success\":true";
   auto appendEntry = [&](const String& value, const String& name, const String& icon,
                          const String& entity, bool& first) {
@@ -1519,9 +1521,11 @@ void WebAdminServer::handleGetEntityOptions() {
   json += "],\"scenes\":[";
   {
     bool first = true;
+    // The value is the entity id, never the Bridge alias: an alias went into
+    // scene_alias and lost every character past 31 (issue #138).
     for (const auto& scene : parseSceneList(ha.scene_alias_text)) {
-      appendEntry(scene.alias, humanizeIdentifier(scene.alias, false),
-                  haBridgeConfig.findEntityIcon(scene.entity), scene.entity, first);
+      appendEntry(scene.entity, humanizeIdentifier(scene.alias, false),
+                  haBridgeConfig.findEntityIcon(scene.entity), String(), first);
     }
   }
   json += "]}";

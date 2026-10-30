@@ -169,7 +169,7 @@ assert.ok(tallRenderer.includes('tile_header::create(container, tile, tall, bar_
           tallRenderer.includes('if (center >= 0) lv_obj_set_y(label, center - lv_font_get_line_height(font) / 2);'));
 assert.ok(tallRenderer.includes('switch_layout::bar_growth(tile_h, GRID_CELL_H)'));
 const layoutJsTall = readRepoFile('src/web/admin/tiles/layout.js');
-assert.ok(layoutJsTall.includes("const switchTall = switchHeader && Number(layout?.span_h) > 1 && !el.classList.contains('switch-upright');"));
+assert.ok(layoutJsTall.includes("const switchTall = switchHeader && Number(layout?.span_h) > 1 && !el.classList.contains('switch-upright') && !vacuumMap;"));
 assert.ok(admin.includes('function switchSensorLook(style, spanH, upright = false) {'));
 const livePreview = readRepoFile('src/web/admin/tiles/live-preview.js');
 assert.ok(livePreview.includes('!switchSensorLook(switchStyle, spanH, switchUpright));'),

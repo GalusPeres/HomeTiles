@@ -6,8 +6,8 @@
 #include <vector>
 
 // The Vacuum tile's and popup's map: the Bridge's picture of the vacuum's
-// map entity (an image entity as it changes; a camera's still every 3 s while
-// the vacuum cleans or returns, every 60 s otherwise),
+// map entity (an image entity as it changes; a camera's still at the tile's
+// interval, Web Admin "vacuum_every"),
 // rendered by the Bridge whole into a square (Contain, transparent parts on
 // black) in the hardware decoder's steps of 16, shown as an averaged copy in
 // the square's size with its corners rounded towards the color behind it,
@@ -26,14 +26,16 @@ lv_obj_t* create(lv_obj_t* parent, int x, int y, int edge, int radius);
 // Media popup's cover rounded towards colors.card.
 void set_under(lv_obj_t* view, uint32_t rgb);
 // The entity whose picture the view shows ("" none: the placeholder);
-// `moving`: the vacuum cleans or returns, a camera map refreshes fast.
-void set_entity(lv_obj_t* view, const char* entity, bool moving);
+// `every`: a camera map's interval in seconds (every_of).
+void set_entity(lv_obj_t* view, const char* entity, uint8_t every);
+// A stored interval (Tile::image_slideshow_sec) within the Bridge's 3..60 s.
+uint8_t every_of(uint16_t seconds);
 
 // A picture fetched ahead of its square: the popup's map while its tile is
 // on screen, so the popup opens with it (like the Media tile holds its
 // cover for the popup). `owner` is the tile (one wish per owner); an empty
 // entity drops the wish.
-void want(const void* owner, lv_obj_t* card, const char* entity, uint16_t edge, bool moving);
+void want(const void* owner, lv_obj_t* card, const char* entity, uint16_t edge, uint8_t every);
 void unwant(const void* owner);
 // Shows a stored picture of the square's entity at once (a popup's first
 // frame, a tile built again), instead of waiting for the loop's decode.

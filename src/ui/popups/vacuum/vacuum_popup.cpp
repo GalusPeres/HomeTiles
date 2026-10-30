@@ -796,7 +796,7 @@ void refresh(bool show) {
   // The corners round towards the card (the popup body is transparent).
   vacuum_map::set_under(pop.map, pop.card_rgb);
   vacuum_map::set_entity(pop.map, pop.target.map_entity.length() ? pop.target.map_entity.c_str() : d.map,
-                         vacuum_detail::moving(d));
+                         pop.target.map_every);
   // A picture fetched ahead shows in the popup's first frame.
   if (show) vacuum_map::show_now(pop.map);
   show_values(d);

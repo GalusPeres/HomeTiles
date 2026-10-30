@@ -92,16 +92,28 @@ for (const marker of ['d.features & vacuum_detail::kReturnHome', 'd.features & v
 // otherwise; the Web Admin choice (Tile::flow_entities, its sidecar) wins
 // over the Bridge's suggestion and is declared as a picture.
 const map = read('src/types/vacuum/vacuum_map.cpp');
-assert.ok(map.includes('constexpr uint8_t kCameraEveryMoving = bridge_images::kEveryMin;'));
-assert.ok(map.includes('constexpr uint8_t kCameraEveryResting = bridge_images::kEveryMax;'));
-assert.ok(map.includes('camera ? (moving ? kCameraEveryMoving : kCameraEveryResting) : 0'));
+// A camera map's interval is the tile's (Web Admin vacuum_every, 3..60 s,
+// Tile::image_slideshow_sec; user 2026-10-30).
+assert.ok(map.includes('camera ? every : 0'));
+assert.ok(map.includes('if (seconds < bridge_images::kEveryMin) return bridge_images::kEveryMin;'));
+const deviceWeb = read('src/types/device/web.cpp');
+assert.ok(deviceWeb.includes('_vacuum_every\\" min=\\"3\\" max=\\"60\\"') && deviceWeb.includes('tile.image_slideshow_sec = static_cast<uint16_t>(every < 3 ? 3 : every > 60 ? 60 : every);'));
+// One row on every size (Dock, Clean, Stop); two rows: the map above it,
+// the header beside the disc; from 1.5 rows otherwise the state centred like
+// the Lock/Alarm/Fan tiles, in the panel and the preview alike.
+const tileCpp = read('src/types/vacuum/vacuum_tile.cpp');
+assert.ok(tileCpp.includes('const bool tall = view->layout != Layout::Map && tile.span_h > 1.0f;'));
+assert.ok(tileCpp.includes('if (view->layout == Layout::Row || view->layout == Layout::Map) {'));
+assert.ok(tileCpp.includes('const int edge = std::min(row_top - view->gap - content_top, tile_w - 2 * inset);'));
+assert.ok(read('src/web/admin/tiles/layout.js').includes("const vacuumMap = Number(type) === 29 && Number(layout?.span_w) >= 2 && Number(layout?.span_h) >= 2;"));
+assert.ok(read('src/types/device/admin.js').includes('const edge = Math.max(0, Math.min(rowTop - gap - top, tileWidth - 2 * inset));'));
 // User 2026-10-30 on b624: no black square before the popup's map. The
 // tile fetches the popup's picture ahead while it is on screen (like the
 // Media tile holds its cover) and the popup shows it in its first frame.
 assert.ok(read('src/types/vacuum/vacuum_tile.cpp').includes('vacuum_map::want(view, view->card, map, static_cast<uint16_t>(vacuum_popup_map_edge(view->map_centered)),'));
 assert.ok(read('src/types/vacuum/vacuum_tile.cpp').includes('vacuum_map::unwant(view);'));
 assert.ok(read('src/ui/popups/vacuum/vacuum_popup.cpp').includes('if (show) vacuum_map::show_now(pop.map);'));
-assert.ok(map.includes('for (const Want& wish : g_wants) add(wish.entity, wish.edge, wish.moving, wish.card);'));
+assert.ok(map.includes('for (const Want& wish : g_wants) add(wish.entity, wish.edge, wish.every, wish.card);'));
 const config = read('src/tiles/config/tile_config.h');
 assert.match(config, /static constexpr bool tileKeepsFlowEntities\(int type\) \{\s*return type == TILE_POWER_FLOW \|\| type == TILE_VACUUM;/);
 assert.ok(config.includes('tile.flow_entities = map.startsWith("image.") || map.startsWith("camera.") ? map : String();'));

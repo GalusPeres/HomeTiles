@@ -146,6 +146,9 @@
     if (Number(tile.type) === 29 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'vacuum_map')) {
       tile.vacuum_map = snapshot.vacuum_map || '';
     }
+    if (Number(tile.type) === 29 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'vacuum_every')) {
+      tile.image_slideshow_sec = Math.max(3, Math.min(60, Number(snapshot.vacuum_every) || 5));
+    }
     // Calendar: the view and the first day of the week (types/calendar/web.h).
     if (Number(tile.type) === 27 && snapshot) {
       if (Object.prototype.hasOwnProperty.call(snapshot, 'calendar_view')) tile.sensor_display_mode = Number(snapshot.calendar_view) || 0;

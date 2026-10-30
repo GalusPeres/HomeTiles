@@ -140,7 +140,5 @@ inline bool main_pauses(const Detail& detail) {
   return is(detail, "cleaning") && (detail.features & kPause) != 0;
 }
 inline bool can_start(const Detail& detail) { return (detail.features & kStart) != 0; }
-// Cleaning or on its way to the dock: the map changes.
-inline bool moving(const Detail& detail) { return is(detail, "cleaning") || is(detail, "returning"); }
 
 }  // namespace vacuum_detail

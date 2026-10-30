@@ -71,6 +71,15 @@ void append_device_fields_html(String& html, const String& tab_id, TileType type
     // The map: an image or camera entity; empty takes the one the Bridge
     // finds on the vacuum's device.
     appendEntityPickerField(html, tab_id, "vacuum_map", i18n::vacuum_label(lang, i18n::VacuumLabel::Map), "images");
+    // A camera map's interval, like the Camera tile's (an image entity sends
+    // each new picture at once).
+    html += "<label for=\"";
+    html += tab_id;
+    html += "_vacuum_every\">";
+    appendHtmlEscaped(html, tr.screensaver_picture_every);
+    html += "</label><input type=\"number\" id=\"";
+    html += tab_id;
+    html += "_vacuum_every\" min=\"3\" max=\"60\" step=\"1\" value=\"5\">";
     const SwitchChoice layouts[] = {{"0", i18n::vacuum_label(lang, i18n::VacuumLabel::MapLeft)},
                                     {"1", i18n::vacuum_label(lang, i18n::VacuumLabel::MapCentered)}};
     append_switch_choice(html, tab_id, "vacuum_layout", i18n::vacuum_label(lang, i18n::VacuumLabel::Layout),
@@ -121,6 +130,11 @@ bool apply_device_fields_from_request(WebServer& server, Tile& tile) {
   // A Vacuum's popup layout: 1 = the map centred (vacuum_popup.h).
   tile.sensor_display_mode =
       type == TILE_VACUUM && server.hasArg("vacuum_layout") && server.arg("vacuum_layout").toInt() == 1 ? 1 : 0;
+  // A Vacuum's camera map interval (Tile::image_slideshow_sec, 3..60 s).
+  if (type == TILE_VACUUM) {
+    const long every = server.hasArg("vacuum_every") ? server.arg("vacuum_every").toInt() : 5;
+    tile.image_slideshow_sec = static_cast<uint16_t>(every < 3 ? 3 : every > 60 ? 60 : every);
+  }
   // A Vacuum's chosen map (Tile::flow_entities, normalizeFlowEntities).
   tile.flow_entities = type == TILE_VACUUM && server.hasArg("vacuum_map") ? server.arg("vacuum_map") : String();
   tile.flow_entities.trim();

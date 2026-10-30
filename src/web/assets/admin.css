@@ -2243,47 +2243,46 @@
     .tile-device-part.button { background:var(--device-button, rgba(255,255,255,0.18)); }
     .tile-device-part.lit { background:var(--switch-accent, #9E9E9E); color:var(--switch-card, #1A1A1A); }
     .tile-switch.is-unavailable > * { display:none !important; }
-    /* Vacuum (render_vacuum_tile): the buttons in the level bar's box; two
-       columns and rows: the map centred below the header with Dock left and
-       the main button as a circle right. */
+    /* Vacuum (render_vacuum_tile) in the device's own measures: the row in
+       the level bar's place (inset from the card, one bar high), one gap
+       between Dock, the main button and Stop, the main button padded like
+       the device's, glyph at the icon size, text at the title size. Two
+       columns and rows: the square map from the content top to the bottom
+       inset, centred, Dock and the main button centred in the side strips
+       (applyVacuumPreview places them). */
     .tile.device.switch-bar > .tile-vacuum {
       position:absolute;
       left:calc(var(--climate-margin-x, 5px) - 3px);
       right:calc(var(--climate-margin-x, 5px) - 3px);
       bottom:calc(var(--climate-slots-bottom, 3px) - 3px);
       height:var(--switch-bar-height, 30px);
-      display:flex; align-items:center; justify-content:center; gap:var(--climate-margin-x, 5px);
+      display:flex; align-items:center; justify-content:center; gap:var(--climate-grid-gap, 7px);
     }
     /* The main button: the controls' fill with the level bar's radius
        (concentric with the card), text in the text color. */
     .tile-vacuum-main {
-      height:100%; display:flex; align-items:center; justify-content:center; gap:4px; min-width:0;
-      padding:0 10px 0 6px; box-sizing:border-box; border-radius:var(--climate-control-radius, 8px);
+      height:100%; display:flex; align-items:center; justify-content:center; gap:var(--vacuum-glyph-gap, 2px);
+      min-width:0; flex:0 1 auto; box-sizing:border-box;
+      padding:0 var(--vacuum-pad-end, 8px) 0 var(--vacuum-pad-start, 6px);
+      border-radius:var(--climate-control-radius, 8px);
       background:var(--control-fill, rgba(255,255,255,0.12)); color:var(--pv-text, #fff);
-      font-size:var(--title-font, 12px); white-space:nowrap; overflow:hidden;
+      font-size:var(--fs20, 10px); white-space:nowrap; overflow:hidden;
     }
-    .tile-vacuum-main i { font-size:calc(var(--switch-bar-height, 30px) * .55); line-height:1; }
+    .tile-vacuum-main i, .tile-vacuum-side i { font-size:var(--icon-size, 24px); line-height:1; }
     .tile-vacuum-main span { overflow:hidden; text-overflow:ellipsis; }
-    .tile-vacuum[data-layout="pill"] .tile-vacuum-main { flex:1 1 auto; }
+    .tile-vacuum[data-layout="pill"] .tile-vacuum-main { flex:1 1 auto; padding:0; }
     .tile-vacuum-side {
       width:var(--switch-bar-height, 30px); height:100%; flex:0 0 auto;
-      display:flex; align-items:center; justify-content:center;
-      color:var(--pv-text, #fff); font-size:calc(var(--switch-bar-height, 30px) * .55); line-height:1;
+      display:flex; align-items:center; justify-content:center; color:var(--pv-text, #fff);
     }
     .tile-vacuum .off { opacity:.4; }
-    .tile.device.switch-bar > .tile-vacuum[data-layout="map"] {
-      top:calc(var(--climate-slots-top, 35px) - 3px); height:auto; align-items:flex-end;
-      justify-content:space-between;
-    }
-    .tile-vacuum[data-layout="map"] .tile-vacuum-side,
-    .tile-vacuum[data-layout="map"] .tile-vacuum-main { height:var(--switch-bar-height, 30px); }
-    .tile-vacuum[data-layout="map"] .tile-vacuum-main { width:var(--switch-bar-height, 30px); padding:0; }
     .tile-vacuum-map {
-      height:100%; aspect-ratio:1; display:flex; align-items:center; justify-content:center;
-      border-radius:var(--climate-control-radius, 8px); background:var(--control-fill, rgba(255,255,255,0.12));
-      color:var(--pv-text, #fff); opacity:.9; font-size:calc(var(--switch-bar-height, 30px) * .8);
+      position:absolute;
+      display:flex; align-items:center; justify-content:center; box-sizing:border-box;
+      border-radius:var(--climate-control-radius, 8px); background:#000;
+      color:#fff; font-size:var(--icon-size, 24px);
     }
-    .tile-vacuum-map i { opacity:.6; }
+    .tile-vacuum-map i { opacity:.4; }
     /* Upright (bar_orientation.h): the bar below the header over the rest
        of the tile; the fill rises from the bottom with the handle line
        across it, the switch is on at the top, a Fan's speeds stack from the

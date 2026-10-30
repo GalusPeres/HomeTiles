@@ -22,10 +22,6 @@
 namespace vacuum_map {
 namespace {
 
-// A camera map is a still the Bridge loads again at this interval: as fast
-// as the Bridge allows while the vacuum moves, rarely while it stands.
-constexpr uint8_t kCameraEveryMoving = bridge_images::kEveryMin;
-constexpr uint8_t kCameraEveryResting = bridge_images::kEveryMax;
 
 // The side the Bridge sends: the P4's hardware JPEG decoder takes sides in
 // steps of 16 only (like the Media popup's cover, bridge_images.cpp
@@ -51,7 +47,7 @@ struct View {
   uint16_t under = 0;  // RGB565 the corners were rounded towards
   char key[bridge_images::kKeyLength + 1] = "";
   bool due = true;
-  bool moving = false;
+  uint8_t every = 5;  // a camera's interval
   int32_t under_rgb = -1;  // set_under; -1: the nearest opaque parent's
 };
 
@@ -63,7 +59,7 @@ struct Want {
   lv_obj_t* card = nullptr;
   String entity;
   uint16_t edge = 0;
-  bool moving = false;
+  uint8_t every = 5;
 };
 std::vector<Want> g_wants;
 
@@ -281,10 +277,16 @@ void set_under(lv_obj_t* box, uint32_t rgb) {
   if (View* view = view_of(box)) view->under_rgb = static_cast<int32_t>(rgb & 0xFFFFFF);
 }
 
-void set_entity(lv_obj_t* box, const char* entity, bool moving) {
+uint8_t every_of(uint16_t seconds) {
+  if (seconds < bridge_images::kEveryMin) return bridge_images::kEveryMin;
+  if (seconds > bridge_images::kEveryMax) return bridge_images::kEveryMax;
+  return static_cast<uint8_t>(seconds);
+}
+
+void set_entity(lv_obj_t* box, const char* entity, uint8_t every) {
   View* view = view_of(box);
   if (!view) return;
-  view->moving = moving;
+  view->every = every_of(every);
   const String next = entity ? String(entity) : String();
   if (next.equalsIgnoreCase(view->entity)) return;
   view->entity = next;
@@ -293,7 +295,7 @@ void set_entity(lv_obj_t* box, const char* entity, bool moving) {
   view->due = next.length() > 0;
 }
 
-void want(const void* owner, lv_obj_t* card, const char* entity, uint16_t edge, bool moving) {
+void want(const void* owner, lv_obj_t* card, const char* entity, uint16_t edge, uint8_t every) {
   if (!owner) return;
   auto it = std::find_if(g_wants.begin(), g_wants.end(), [owner](const Want& w) { return w.owner == owner; });
   if (!entity || !*entity || edge < 16) {
@@ -308,7 +310,7 @@ void want(const void* owner, lv_obj_t* card, const char* entity, uint16_t edge, 
   it->card = card;
   it->entity = entity;
   it->edge = edge;
-  it->moving = moving;
+  it->every = every_of(every);
 }
 
 void unwant(const void* owner) {
@@ -340,13 +342,13 @@ void collect_topics(std::vector<String>& entities, std::vector<String>& suffixes
   char suffix[40];
   // A camera only while its square (or the tile that wants it) is on screen
   // and the display awake; each topic once.
-  auto add = [&](const String& entity, uint16_t edge, bool moving, lv_obj_t* shown) {
+  auto add = [&](const String& entity, uint16_t edge, uint8_t every, lv_obj_t* shown) {
     if (!entity.length()) return;
     const bool camera = is_camera(entity);
     if (camera && !(awake && on_screen(shown))) return;
     const uint16_t fetch = fetch_edge(edge);
     if (!bridge_images::pictureSuffix(suffix, sizeof(suffix), fetch, fetch, bridge_images::kContain,
-                                      camera ? (moving ? kCameraEveryMoving : kCameraEveryResting) : 0)) {
+                                      camera ? every : 0)) {
       return;
     }
     for (size_t i = 0; i < entities.size(); ++i) {
@@ -355,8 +357,8 @@ void collect_topics(std::vector<String>& entities, std::vector<String>& suffixes
     entities.push_back(entity);
     suffixes.push_back(suffix);
   };
-  for (const View* view : g_views) add(view->entity, view->edge, view->moving, view->box);
-  for (const Want& wish : g_wants) add(wish.entity, wish.edge, wish.moving, wish.card);
+  for (const View* view : g_views) add(view->entity, view->edge, view->every, view->box);
+  for (const Want& wish : g_wants) add(wish.entity, wish.edge, wish.every, wish.card);
 }
 
 void service() {

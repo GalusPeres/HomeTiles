@@ -43,8 +43,10 @@ struct View {
   String icon_name;
   bool icon_visible = true;
   bool map_centered = false;
-  // The map chosen in the Web Admin ("" takes the Bridge's, detail.map).
+  // The map chosen in the Web Admin ("" takes the Bridge's, detail.map) and
+  // a camera map's interval (Tile::image_slideshow_sec, 3..60 s).
   String map_entity;
+  uint8_t map_every = 5;
   Layout layout = Layout::Pill;
   lv_obj_t* card = nullptr;
   lv_obj_t* icon = nullptr;
@@ -90,6 +92,7 @@ VacuumPopupTarget popup_target(const View* view) {
   target.icon_visible = view->icon_visible;
   target.map_centered = view->map_centered;
   target.map_entity = view->map_entity;
+  target.map_every = view->map_every;
   target.source = view->card;
   return target;
 }
@@ -161,10 +164,10 @@ void main_button(View* view, int width, int height, bool with_text) {
   view->main = btn;
 }
 
-// Row: Dock and Stop sit one gap beside the main button, whose width follows
-// its text (the mockup's 2x1 tile).
+// Row (and Map below its map): Dock and Stop sit one gap beside the main
+// button, whose width follows its text (the mockup's 2x1 tile).
 void place_row(View* view) {
-  if (view->layout != Layout::Row || !view->main_box) return;
+  if ((view->layout != Layout::Row && view->layout != Layout::Map) || !view->main_box) return;
   lv_obj_update_layout(view->main_box);
   const int width = lv_obj_get_width(view->main_box);
   const int left = view->main_center - width / 2;
@@ -215,12 +218,12 @@ void show(View* view) {
   // The map: on the tile's square, and the popup's ahead of its opening.
   const char* map = view->map_entity.length() ? view->map_entity.c_str() : d.map;
   if (view->map) {
-    vacuum_map::set_entity(view->map, map, vacuum_detail::moving(d));
+    vacuum_map::set_entity(view->map, map, view->map_every);
     vacuum_map::show_now(view->map);
   }
   if (view->interactive) {
     vacuum_map::want(view, view->card, map, static_cast<uint16_t>(vacuum_popup_map_edge(view->map_centered)),
-                     vacuum_detail::moving(d));
+                     view->map_every);
   }
   place_row(view);
   // The icon color steers the controls' fill (Circle in icon color).
@@ -308,6 +311,7 @@ lv_obj_t* render_vacuum_tile(lv_obj_t* parent, int col, int row, const Tile& til
   view->icon_name = view->icon_visible ? normalizeMdiIconName(tile.icon_name) : String();
   view->map_centered = tile.sensor_display_mode == 1;
   view->map_entity = tile.flow_entities;
+  view->map_every = vacuum_map::every_of(tile.image_slideshow_sec);
   const bool compact = tile_geometry::compact_device_control(tile.type, tile.span_w, tile.span_h);
   view->layout = compact                                  ? Layout::Compact
                  : tile.span_w >= 2 && tile.span_h >= 2   ? Layout::Map
@@ -322,9 +326,10 @@ lv_obj_t* render_vacuum_tile(lv_obj_t* parent, int col, int row, const Tile& til
   }
 
   const level_bar::BarBox box = level_bar::box(tile);
-  // The Map layout keeps the header beside the disc; the state sits in the
-  // header like a one-row tile.
-  const bool tall = view->layout == Layout::Pill && tile.span_h > 1.0f;
+  // From 1.5 rows the state centred like the Lock/Alarm/Fan tiles'
+  // (device_tile.cpp); the Map layout keeps it beside the disc, where the
+  // map takes the middle.
+  const bool tall = view->layout != Layout::Map && tile.span_h > 1.0f;
   const tile_header::Header header = tile_header::create(card, tile, tall, box.top);
   view->state_label = header.state;
   view->state_font = header.state_font;
@@ -343,26 +348,20 @@ lv_obj_t* render_vacuum_tile(lv_obj_t* parent, int col, int row, const Tile& til
     view->button = static_cast<int16_t>(box.base);
     view->gap = static_cast<int16_t>(climate_layout::kGap);
     if (view->layout == Layout::Map) {
-      // The map below the header, centred, as high as the rest of the tile;
-      // the side strips keep room for one button each.
+      // The map between the header and the row, centred, one gap above the
+      // row; the row is the Row layout's.
       const int icon_width =
           FONT_MDI_ICONS ? lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0) : 0;
       const int content_top =
           climate_layout::content_top(tile_icon_disc::header_diameter(icon_width), tile_icon_disc::inset());
-      int edge = tile_h - inset - content_top;
-      edge = std::min(edge, tile_w - 2 * (view->button + 2 * inset));
+      const int row_top = tile_h - inset - view->button;
+      const int edge = std::min(row_top - view->gap - content_top, tile_w - 2 * inset);
       if (edge >= 16) {
-        const int x = (tile_w - edge) / 2;
-        view->map = vacuum_map::create(card, x - pad_x(), tile_h - inset - edge - pad_y(), edge,
+        view->map = vacuum_map::create(card, (tile_w - edge) / 2 - pad_x(), content_top - pad_y(), edge,
                                        climate_layout::kControlRadius);
       }
-      const int side = (tile_w - std::max(edge, 0)) / 2;
-      const int y = tile_h - inset - view->button - pad_y();
-      view->dock = side_button(card, "home-import-outline", view->button);
-      lv_obj_set_pos(view->dock, (side - view->button) / 2 - pad_x(), y);
-      main_button(view, view->button, view->button, false);
-      lv_obj_set_pos(view->main_box, tile_w - side + (side - view->button) / 2 - pad_x(), y);
-    } else if (view->layout == Layout::Row) {
+    }
+    if (view->layout == Layout::Row || view->layout == Layout::Map) {
       view->row_top = static_cast<int16_t>(box.top + box.height - view->button - pad_y());
       view->main_center = static_cast<int16_t>(tile_w / 2 - pad_x());
       main_button(view, 0, view->button, true);

@@ -1101,6 +1101,7 @@
       if (safeType === 29) {
         fd.append('vacuum_layout', Number(tile.sensor_display_mode) === 1 ? '1' : '0');
         fd.append('vacuum_map', tile.vacuum_map || '');
+        fd.append('vacuum_every', String(Math.max(3, Math.min(60, Number(tile.image_slideshow_sec) || 5))));
       }
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);

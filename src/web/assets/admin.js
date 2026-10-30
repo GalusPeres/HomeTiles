@@ -4523,6 +4523,9 @@ async function saveGestureEdge(select) {
     if (Number(tile.type) === 29 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'vacuum_map')) {
       tile.vacuum_map = snapshot.vacuum_map || '';
     }
+    if (Number(tile.type) === 29 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'vacuum_every')) {
+      tile.image_slideshow_sec = Math.max(3, Math.min(60, Number(snapshot.vacuum_every) || 5));
+    }
     // Calendar: the view and the first day of the week (types/calendar/web.h).
     if (Number(tile.type) === 27 && snapshot) {
       if (Object.prototype.hasOwnProperty.call(snapshot, 'calendar_view')) tile.sensor_display_mode = Number(snapshot.calendar_view) || 0;
@@ -6793,7 +6796,10 @@ async function saveGestureEdge(select) {
     // Lock, Alarm panel and Fan too (types/device).
     const switchHeader = [5, 19, 24, 25, 26, 29].includes(Number(type)) && el.classList.contains('switch-bar');
     // An upright bar keeps the header beside the disc (bar_orientation.h).
-    const switchTall = switchHeader && Number(layout?.span_h) > 1 && !el.classList.contains('switch-upright');
+    // A two-by-two Vacuum keeps it beside the disc too: its map takes the
+    // middle (render_vacuum_tile).
+    const vacuumMap = Number(type) === 29 && Number(layout?.span_w) >= 2 && Number(layout?.span_h) >= 2;
+    const switchTall = switchHeader && Number(layout?.span_h) > 1 && !el.classList.contains('switch-upright') && !vacuumMap;
     el.classList.toggle('switch-tall', switchTall);
     if (switchTall) el.style?.setProperty?.('--switch-span-h', String(Number(layout.span_h)));
     else el.style?.removeProperty?.('--switch-span-h');
@@ -7926,6 +7932,8 @@ async function saveGestureEdge(select) {
     bindLive(document.getElementById(prefix + '_vacuum_layout'), 'change', 'vacuumLayout', () => { updateDraft(tab); scheduleAutoSave(tab); });
     // The Vacuum's map (empty: the map the Bridge finds on its device).
     bindLive(document.getElementById(prefix + '_vacuum_map'), 'change', 'vacuumMap', () => { updateDraft(tab); scheduleAutoSave(tab); });
+    // A camera map's interval.
+    bindLive(document.getElementById(prefix + '_vacuum_every'), 'change', 'vacuumEvery', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(switchPopupModeSelect, 'change', 'switchPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(mediaSelect, 'change', 'mediaEntity', () => { maybeFillTitleFromMedia(tab); updateTilePreview(tab); updateMediaValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(climateSelect, 'change', 'climateEntity', () => {
@@ -10329,6 +10337,7 @@ async function saveGestureEdge(select) {
       if (safeType === 29) {
         fd.append('vacuum_layout', Number(tile.sensor_display_mode) === 1 ? '1' : '0');
         fd.append('vacuum_map', tile.vacuum_map || '');
+        fd.append('vacuum_every', String(Math.max(3, Math.min(60, Number(tile.image_slideshow_sec) || 5))));
       }
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
@@ -19454,21 +19463,46 @@ function maybeFillTitleFromSwitch(tab) {
     const pauses = d.state === 'cleaning' && (d.features & 4);
     const ready = d.valid && d.available;
     const glyph = '<i class="mdi mdi-' + (pauses ? 'pause' : 'play') + '"></i>';
-    const text = layout === 'map' ? '' : '<span>' + escapeHtml(pauses ? (words.pause || 'Pause') :
-      (words.clean || 'Clean')) + '</span>';
+    const text = '<span>' + escapeHtml(pauses ? (words.pause || 'Pause') : (words.clean || 'Clean')) + '</span>';
     const main = '<span class="tile-vacuum-main' + (ready && (pauses || (d.features & 8192)) ? '' : ' off') + '">' +
       glyph + text + '</span>';
     const side = (icon, bit) => '<span class="tile-vacuum-side' + (ready && (d.features & bit) ? '' : ' off') +
       '"><i class="mdi mdi-' + icon + '"></i></span>';
     box.dataset.layout = layout;
     if (layout === 'map') {
-      box.innerHTML = side('home-import-outline', 16) +
-        '<span class="tile-vacuum-map"><i class="mdi mdi-map-outline"></i></span>' + main;
+      box.innerHTML = '<span class="tile-vacuum-map"><i class="mdi mdi-map-outline"></i></span>' +
+        side('home-import-outline', 16) + main + side('stop', 8);
+      placeVacuumMapPreview(tileElem, box);
+      if (typeof ResizeObserver === 'function' && !box.__vacuumObserved) {
+        box.__vacuumObserved = true;
+        new ResizeObserver(() => placeVacuumMapPreview(tileElem, box)).observe(box);
+      }
     } else if (layout === 'row') {
       box.innerHTML = side('home-import-outline', 16) + main + side('stop', 8);
     } else {
       box.innerHTML = main;
     }
+  }
+
+  // render_vacuum_tile's Map layout: the square from the content top down to
+  // one gap above the row (no wider than the card less two insets), centred;
+  // the row as in the Row layout. The map is placed from the row box, which
+  // starts one inset in from the card and one button above its bottom inset.
+  function placeVacuumMapPreview(tileElem, box) {
+    const style = getComputedStyle(tileElem);
+    const value = name => parseFloat(style.getPropertyValue(name)) || 0;
+    const inset = value('--climate-margin-x');
+    const button = value('--switch-bar-height');
+    const gap = value('--climate-grid-gap');
+    const top = value('--climate-slots-top');
+    const tileWidth = tileElem.offsetWidth;
+    const tileHeight = tileElem.offsetHeight;
+    if (!tileWidth || !tileHeight) return;
+    const rowTop = tileHeight - inset - button;
+    const edge = Math.max(0, Math.min(rowTop - gap - top, tileWidth - 2 * inset));
+    const map = box.querySelector('.tile-vacuum-map');
+    if (map) Object.assign(map.style, {left: ((tileWidth - edge) / 2 - inset) + 'px', top: (top - rowTop) + 'px',
+      width: edge + 'px', height: edge + 'px'});
   }
 
   // bar_model(): the bar the device draws for this state. `upright`: a
@@ -19590,6 +19624,8 @@ function maybeFillTitleFromSwitch(tab) {
     // A Vacuum's chosen map (empty: the map the Bridge finds on its device).
     const map = document.getElementById(tab + '_' + prefix + '_map');
     if (map) map.value = data.vacuum_map || '';
+    const every = document.getElementById(tab + '_' + prefix + '_every');
+    if (every) every.value = String(Math.max(3, Math.min(60, Number(data.image_slideshow_sec) || 5)));
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromEntity(tab, '_' + prefix + '_entity');
   }
@@ -19609,6 +19645,8 @@ function maybeFillTitleFromSwitch(tab) {
     if (layout) formData.append('vacuum_layout', layout.value === '1' ? '1' : '0');
     const map = document.getElementById(tab + '_' + prefix + '_map');
     if (map) formData.append('vacuum_map', map.value || '');
+    const every = document.getElementById(tab + '_' + prefix + '_every');
+    if (every) formData.append('vacuum_every', String(Math.max(3, Math.min(60, Number(every.value) || 5))));
   }
 
   function resetDeviceFields(tab, prefix) {
@@ -19625,6 +19663,8 @@ function maybeFillTitleFromSwitch(tab) {
     if (layout) layout.value = '0';
     const map = document.getElementById(tab + '_' + prefix + '_map');
     if (map) map.value = '';
+    const every = document.getElementById(tab + '_' + prefix + '_every');
+    if (every) every.value = '5';
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
 

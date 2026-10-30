@@ -196,21 +196,46 @@
     const pauses = d.state === 'cleaning' && (d.features & 4);
     const ready = d.valid && d.available;
     const glyph = '<i class="mdi mdi-' + (pauses ? 'pause' : 'play') + '"></i>';
-    const text = layout === 'map' ? '' : '<span>' + escapeHtml(pauses ? (words.pause || 'Pause') :
-      (words.clean || 'Clean')) + '</span>';
+    const text = '<span>' + escapeHtml(pauses ? (words.pause || 'Pause') : (words.clean || 'Clean')) + '</span>';
     const main = '<span class="tile-vacuum-main' + (ready && (pauses || (d.features & 8192)) ? '' : ' off') + '">' +
       glyph + text + '</span>';
     const side = (icon, bit) => '<span class="tile-vacuum-side' + (ready && (d.features & bit) ? '' : ' off') +
       '"><i class="mdi mdi-' + icon + '"></i></span>';
     box.dataset.layout = layout;
     if (layout === 'map') {
-      box.innerHTML = side('home-import-outline', 16) +
-        '<span class="tile-vacuum-map"><i class="mdi mdi-map-outline"></i></span>' + main;
+      box.innerHTML = '<span class="tile-vacuum-map"><i class="mdi mdi-map-outline"></i></span>' +
+        side('home-import-outline', 16) + main + side('stop', 8);
+      placeVacuumMapPreview(tileElem, box);
+      if (typeof ResizeObserver === 'function' && !box.__vacuumObserved) {
+        box.__vacuumObserved = true;
+        new ResizeObserver(() => placeVacuumMapPreview(tileElem, box)).observe(box);
+      }
     } else if (layout === 'row') {
       box.innerHTML = side('home-import-outline', 16) + main + side('stop', 8);
     } else {
       box.innerHTML = main;
     }
+  }
+
+  // render_vacuum_tile's Map layout: the square from the content top down to
+  // one gap above the row (no wider than the card less two insets), centred;
+  // the row as in the Row layout. The map is placed from the row box, which
+  // starts one inset in from the card and one button above its bottom inset.
+  function placeVacuumMapPreview(tileElem, box) {
+    const style = getComputedStyle(tileElem);
+    const value = name => parseFloat(style.getPropertyValue(name)) || 0;
+    const inset = value('--climate-margin-x');
+    const button = value('--switch-bar-height');
+    const gap = value('--climate-grid-gap');
+    const top = value('--climate-slots-top');
+    const tileWidth = tileElem.offsetWidth;
+    const tileHeight = tileElem.offsetHeight;
+    if (!tileWidth || !tileHeight) return;
+    const rowTop = tileHeight - inset - button;
+    const edge = Math.max(0, Math.min(rowTop - gap - top, tileWidth - 2 * inset));
+    const map = box.querySelector('.tile-vacuum-map');
+    if (map) Object.assign(map.style, {left: ((tileWidth - edge) / 2 - inset) + 'px', top: (top - rowTop) + 'px',
+      width: edge + 'px', height: edge + 'px'});
   }
 
   // bar_model(): the bar the device draws for this state. `upright`: a
@@ -332,6 +357,8 @@
     // A Vacuum's chosen map (empty: the map the Bridge finds on its device).
     const map = document.getElementById(tab + '_' + prefix + '_map');
     if (map) map.value = data.vacuum_map || '';
+    const every = document.getElementById(tab + '_' + prefix + '_every');
+    if (every) every.value = String(Math.max(3, Math.min(60, Number(data.image_slideshow_sec) || 5)));
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromEntity(tab, '_' + prefix + '_entity');
   }
@@ -351,6 +378,8 @@
     if (layout) formData.append('vacuum_layout', layout.value === '1' ? '1' : '0');
     const map = document.getElementById(tab + '_' + prefix + '_map');
     if (map) formData.append('vacuum_map', map.value || '');
+    const every = document.getElementById(tab + '_' + prefix + '_every');
+    if (every) formData.append('vacuum_every', String(Math.max(3, Math.min(60, Number(every.value) || 5))));
   }
 
   function resetDeviceFields(tab, prefix) {
@@ -367,6 +396,8 @@
     if (layout) layout.value = '0';
     const map = document.getElementById(tab + '_' + prefix + '_map');
     if (map) map.value = '';
+    const every = document.getElementById(tab + '_' + prefix + '_every');
+    if (every) every.value = '5';
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
 

@@ -20,6 +20,8 @@ struct VacuumPopupTarget {
   bool map_centered = false;
   // The map chosen in the Web Admin; "" takes the one the Bridge finds.
   String map_entity;
+  // A camera map's interval in seconds (the tile's).
+  uint8_t map_every = 5;
   // The opening tile card (popup color and header disc), may be null.
   lv_obj_t* source = nullptr;
 };

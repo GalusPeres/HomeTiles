@@ -399,6 +399,11 @@ void appendPreviewScaleVars(String& html, const char* selector = ":root", bool p
       GRID_CELL_W - climate_layout::kOuterInset * 2);
   emit_exact("climate-control-v-pad-top", tile_layout::scale_480(5));
   emit_exact("climate-control-v-pad-bottom", tile_layout::scale_480(5));
+  // The Vacuum's main button (types/vacuum/vacuum_tile.cpp main_button):
+  // its paddings beside glyph and text and the gap between them.
+  emit_exact("vacuum-pad-start", tile_layout::scale_480(12));
+  emit_exact("vacuum-pad-end", tile_layout::scale_480(16));
+  emit_exact("vacuum-glyph-gap", tile_layout::scale_480(4));
   {
     // Switch tile header layouts (types/switch/renderer.cpp): the control bar
     // one Climate gap below the corner disc, as high as in a one-row tile,

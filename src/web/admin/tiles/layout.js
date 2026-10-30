@@ -144,7 +144,10 @@
     // Lock, Alarm panel and Fan too (types/device).
     const switchHeader = [5, 19, 24, 25, 26, 29].includes(Number(type)) && el.classList.contains('switch-bar');
     // An upright bar keeps the header beside the disc (bar_orientation.h).
-    const switchTall = switchHeader && Number(layout?.span_h) > 1 && !el.classList.contains('switch-upright');
+    // A two-by-two Vacuum keeps it beside the disc too: its map takes the
+    // middle (render_vacuum_tile).
+    const vacuumMap = Number(type) === 29 && Number(layout?.span_w) >= 2 && Number(layout?.span_h) >= 2;
+    const switchTall = switchHeader && Number(layout?.span_h) > 1 && !el.classList.contains('switch-upright') && !vacuumMap;
     el.classList.toggle('switch-tall', switchTall);
     if (switchTall) el.style?.setProperty?.('--switch-span-h', String(Number(layout.span_h)));
     else el.style?.removeProperty?.('--switch-span-h');

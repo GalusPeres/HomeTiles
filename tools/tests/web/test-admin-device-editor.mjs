@@ -93,6 +93,7 @@ for (const d of devices) {
 }
 elements.folder1_vacuum_layout = new TestElement('0');
 elements.folder1_vacuum_map = new TestElement('');
+elements.folder1_vacuum_every = new TestElement('5');
 elements['folder1-tile-3'] = new TestElement();
 elements['folder1-tile-3'].dataset.type = '0';
 
@@ -156,6 +157,14 @@ assert.equal(elements.folder1_vacuum_map.value, 'image.floor', 'a reload shows t
 assert.equal(elements.folder1_vacuum_layout.value, '1', 'a reload shows the stored layout');
 vm.runInContext("resetVacuumFields('folder1')", sandbox);
 assert.equal(elements.folder1_vacuum_map.value, '', 'a reset clears the map');
+
+// The camera map's interval: draft and autosave, sent as vacuum_every, clamped.
+const beforeEvery = counters();
+elements.folder1_vacuum_every.value = '90';
+elements.folder1_vacuum_every.dispatch('change');
+assert.equal(counters().save - beforeEvery.save, 1, 'the interval schedules the autosave');
+const everyForm = vm.runInContext("(() => { const f = new FormData(); saveVacuumFields('folder1', f); return Object.fromEntries(f); })()", sandbox);
+assert.equal(everyForm.vacuum_every, '60', 'the interval is clamped to 60 s');
 
 // The segmented choices follow their hidden selects.
 const switchAdmin = readRepoFile('src', 'types', 'switch', 'admin.js');

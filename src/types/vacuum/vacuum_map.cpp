@@ -63,6 +63,21 @@ struct Want {
 };
 std::vector<Want> g_wants;
 
+// The popup's picture decoded ahead while its tile is on screen, as the
+// Media tile keeps its popup cover decoded (MediaCoverRef::popup_dsc): the
+// popup opens with a copy in its size instead of decoding the JPEG while it
+// opens, and the tile's square takes its own copy from it, one picture and
+// one decode for both (user 2026-10-30: the map still came after the popup).
+// Kept a while after its last wish, so a rebuilt tile finds it.
+struct Source {
+  String entity;
+  uint16_t fetch = 0;
+  char key[bridge_images::kKeyLength + 1] = "";
+  lv_image_dsc_t* dsc = nullptr;  // fetch x fetch RGB565, corners not rounded
+  uint32_t wanted_ms = 0;
+};
+std::vector<Source> g_sources;
+
 // The pixels of a deleted map, for a while: a Web Admin change or a new
 // layout builds the tile again, and the new square shows them at once
 // instead of the placeholder until the next picture (user 2026-10-30: "das
@@ -157,20 +172,19 @@ void present(View& view, lv_image_dsc_t* dsc) {
   if (view.icon) lv_obj_add_flag(view.icon, LV_OBJ_FLAG_HIDDEN);
 }
 
-void show(View& view, const bridge_images::Picture& picture) {
-  const uint32_t started_ms = millis();
-  const uint16_t fetch = fetch_edge(view.edge);
+// The picture as RGB565 pixels in its own size (`fetch` x `fetch`).
+lv_image_dsc_t* decode(const bridge_images::Picture& picture, uint16_t fetch, const String& entity) {
   uint16_t w = 0, h = 0;
   uint16_t* pixels = image_screensaver_decode_picture(picture.jpeg, picture.length, fetch, fetch, w, h);
   if (!pixels || w != fetch || h != fetch) {
     free(pixels);
-    Serial.printf("[VacuumMap] %s: picture could not be decoded\n", view.entity.c_str());
-    return;
+    Serial.printf("[VacuumMap] %s: picture could not be decoded\n", entity.c_str());
+    return nullptr;
   }
   lv_image_dsc_t* dsc = static_cast<lv_image_dsc_t*>(malloc(sizeof(lv_image_dsc_t)));
   if (!dsc) {
     free(pixels);
-    return;
+    return nullptr;
   }
   memset(dsc, 0, sizeof(*dsc));
   dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
@@ -180,6 +194,53 @@ void show(View& view, const bridge_images::Picture& picture) {
   dsc->header.stride = static_cast<uint32_t>(w) * 2;
   dsc->data_size = static_cast<uint32_t>(w) * h * 2;
   dsc->data = reinterpret_cast<const uint8_t*>(pixels);
+  return dsc;
+}
+
+Source* source_of(const String& entity) {
+  for (Source& source : g_sources) {
+    if (source.dsc && source.entity.equalsIgnoreCase(entity)) return &source;
+  }
+  return nullptr;
+}
+
+bool wanted(const String& entity) {
+  for (const Want& wish : g_wants) {
+    if (wish.entity.equalsIgnoreCase(entity)) return true;
+  }
+  return false;
+}
+
+// From the decoded popup picture, the square's own copy (averaged to its
+// size, corners rounded): no JPEG decode. False without one.
+bool show_from_source(View& view) {
+  const Source* source = source_of(view.entity);
+  if (!source) return false;
+  if (strcmp(source->key, view.key) == 0) return true;
+  const uint32_t started_ms = millis();
+  lv_image_dsc_t* dsc = make_media_popup_cover_dsc(source->dsc, view.edge);
+  if (!dsc) {
+    Serial.printf("[VacuumMap] %s: no memory for the %u px copy\n", view.entity.c_str(),
+                  static_cast<unsigned>(view.edge));
+    return true;
+  }
+  const uint16_t under = camera_picture_layout::rgb565(corner_color(view));
+  camera_picture_layout::round_corners(reinterpret_cast<uint16_t*>(const_cast<uint8_t*>(dsc->data)), view.edge,
+                                       view.edge, view.radius, under, wallpaper_cover::rounded_pixel_coverage);
+  view.under = under;
+  present(view, dsc);
+  memcpy(view.key, source->key, sizeof(view.key));
+  Serial.printf("[VacuumMap] %s %s copied in %lu ms (%u px from %u px)\n", view.entity.c_str(), view.key,
+                static_cast<unsigned long>(millis() - started_ms), static_cast<unsigned>(view.edge),
+                static_cast<unsigned>(source->fetch));
+  return true;
+}
+
+void show(View& view, const bridge_images::Picture& picture) {
+  const uint32_t started_ms = millis();
+  const uint16_t fetch = fetch_edge(view.edge);
+  lv_image_dsc_t* dsc = decode(picture, fetch, view.entity);
+  if (!dsc) return;
   if (fetch != view.edge) {
     // The Media popup's averaged copy in the square's size.
     lv_image_dsc_t* copy = make_media_popup_cover_dsc(dsc, view.edge);
@@ -321,6 +382,10 @@ void unwant(const void* owner) {
 void show_now(lv_obj_t* box) {
   View* view = view_of(box);
   if (!view || !view->entity.length()) return;
+  if (show_from_source(*view)) {
+    view->due = false;
+    return;
+  }
   const uint16_t fetch = fetch_edge(view->edge);
   const bridge_images::Picture* picture =
       bridge_images::find(view->entity.c_str(), fetch, fetch, bridge_images::kContain);
@@ -357,7 +422,10 @@ void collect_topics(std::vector<String>& entities, std::vector<String>& suffixes
     entities.push_back(entity);
     suffixes.push_back(suffix);
   };
-  for (const View* view : g_views) add(view->entity, view->edge, view->every, view->box);
+  // A square whose entity a tile wants takes its copy from that picture.
+  for (const View* view : g_views) {
+    if (!wanted(view->entity)) add(view->entity, view->edge, view->every, view->box);
+  }
   for (const Want& wish : g_wants) add(wish.entity, wish.edge, wish.every, wish.card);
 }
 
@@ -368,11 +436,62 @@ void service() {
     g_parked.erase(g_parked.begin());
   }
   for (View* view : g_views) follow_corners(*view);
+  // The wished pictures: decoded once when a new one is here and its tile
+  // (or a square of its entity) is on screen; one decode per pass.
+  for (Source& source : g_sources) {
+    if (wanted(source.entity)) source.wanted_ms = now;
+  }
+  for (auto it = g_sources.begin(); it != g_sources.end();) {
+    if (now - it->wanted_ms < kParkedMs) {
+      ++it;
+      continue;
+    }
+    free_dsc(it->dsc);
+    it = g_sources.erase(it);
+  }
+  for (const Want& wish : g_wants) {
+    const uint16_t fetch = fetch_edge(wish.edge);
+    const bridge_images::Picture* picture =
+        bridge_images::find(wish.entity.c_str(), fetch, fetch, bridge_images::kContain);
+    if (!picture) continue;
+    auto it = std::find_if(g_sources.begin(), g_sources.end(), [&](const Source& source) {
+      return source.fetch == fetch && source.entity.equalsIgnoreCase(wish.entity);
+    });
+    if (it != g_sources.end() && strcmp(it->key, picture->key) == 0) continue;
+    bool shown = on_screen(wish.card);
+    for (const View* view : g_views) {
+      shown = shown || (view->entity.equalsIgnoreCase(wish.entity) && on_screen(view->box));
+    }
+    if (!shown) continue;
+    const uint32_t started_ms = millis();
+    lv_image_dsc_t* dsc = decode(*picture, fetch, wish.entity);
+    if (!dsc) break;
+    if (it == g_sources.end()) {
+      g_sources.push_back(Source{});
+      it = g_sources.end() - 1;
+      it->entity = wish.entity;
+      it->fetch = fetch;
+    }
+    free_dsc(it->dsc);
+    it->dsc = dsc;
+    it->wanted_ms = now;
+    memcpy(it->key, picture->key, sizeof(it->key));
+    Serial.printf("[VacuumMap] %s %s decoded ahead in %lu ms (%u px)\n", it->entity.c_str(), it->key,
+                  static_cast<unsigned long>(millis() - started_ms), static_cast<unsigned>(fetch));
+    for (View* view : g_views) {
+      if (view->entity.equalsIgnoreCase(wish.entity)) view->due = true;
+    }
+    return;
+  }
   for (View* view : g_views) {
     if (!view->due || !view->entity.length()) continue;
     // Off screen nothing decodes; the picture waits for the next pass.
     if (!on_screen(view->box)) continue;
     view->due = false;
+    // A copy of the wished picture (no decode), the next square in the same
+    // pass; a square without a wish decodes its own picture.
+    if (show_from_source(*view)) continue;
+    if (wanted(view->entity)) continue;
     const uint16_t fetch = fetch_edge(view->edge);
     const bridge_images::Picture* picture =
         bridge_images::find(view->entity.c_str(), fetch, fetch, bridge_images::kContain);

@@ -31,10 +31,11 @@ void set_entity(lv_obj_t* view, const char* entity, uint8_t every);
 // A stored interval (Tile::image_slideshow_sec) within the Bridge's 3..60 s.
 uint8_t every_of(uint16_t seconds);
 
-// A picture fetched ahead of its square: the popup's map while its tile is
-// on screen, so the popup opens with it (like the Media tile holds its
-// cover for the popup). `owner` is the tile (one wish per owner); an empty
-// entity drops the wish.
+// A picture fetched and decoded ahead of its square: the popup's map while
+// its tile is on screen, so the popup opens with a copy of it (like the Media
+// tile holds its decoded cover for the popup); the tile's own square takes
+// its copy from the same picture. `owner` is the tile (one wish per owner);
+// an empty entity drops the wish.
 void want(const void* owner, lv_obj_t* card, const char* entity, uint16_t edge, uint8_t every);
 void unwant(const void* owner);
 // Shows a stored picture of the square's entity at once (a popup's first

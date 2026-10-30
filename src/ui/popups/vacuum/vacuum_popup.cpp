@@ -15,6 +15,7 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
+#include "src/types/climate/layout.h"
 #include "src/types/vacuum/vacuum_control.h"
 #include "src/types/vacuum/vacuum_map.h"
 #include "src/types/vacuum/vacuum_visual.h"
@@ -38,6 +39,7 @@
 #include "src/ui/popups/weather/weather_popup.h"
 #include "src/ui/shared/title_label.h"
 #include "src/ui/shared/tone_color.h"
+#include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/shared/ui_theme.h"
 #include "src/ui/tabs/settings/settings_style.h"
 
@@ -46,10 +48,11 @@ namespace {
 namespace ml = media_popup_layout;
 using vacuum_detail::Detail;
 
-// The row (user 2026-10-30): the main button (Clean), Stop in the middle,
-// Dock, the outer two this far from the middle, the tile's order; the menu
-// button in the corner like the Media popup's.
-constexpr int kRowStep = popup_layout::scale(190);
+// The row (user 2026-10-30): Clean, Stop and Dock as the tile's buttons
+// (vacuum_tile.cpp row_button), three equal surfaces one tile gap apart from
+// the card's left edge to one gap before the menu button in the corner (the
+// Media popup's), or to the right edge without a menu.
+constexpr int kRowGap = climate_layout::kGap;
 constexpr int kListRowHeight = popup_layout::scale(72);
 constexpr int kOptionGap = 2;
 // The values beside the map: one card edge apart; under the centred map in
@@ -105,6 +108,8 @@ struct Popup {
   lv_obj_t* main_glyph = nullptr;
   lv_obj_t* main_text = nullptr;
   lv_obj_t* stop = nullptr;
+  lv_obj_t* row_glyphs[3] = {};  // Clean, Stop, Dock
+  lv_obj_t* row_texts[3] = {};
   lv_obj_t* menu_button = nullptr;
   // The menu (Media's menu box).
   lv_obj_t* shield = nullptr;
@@ -206,31 +211,57 @@ lv_obj_t* round_button(lv_obj_t* parent, int x, int y, const char* icon, const C
   return btn;
 }
 
-// A button with icon and text centred on `center_x` (Dock, Stop): no circle
-// at rest, the control fill while pressed.
-lv_obj_t* text_button(lv_obj_t* parent, int center_x, int y, const char* icon, const char* label, const Colors& c) {
+// A row button like the tile's: the controls' fill with the tile buttons'
+// radius, one control step up while pressed, glyph and text centred; its
+// place and width come from place_row.
+lv_obj_t* row_button(lv_obj_t* parent, int slot, const char* icon, const char* label, const Colors& c) {
   lv_obj_t* btn = plain(parent);
   lv_obj_add_flag(btn, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_height(btn, ml::kButton);
-  lv_obj_set_width(btn, LV_SIZE_CONTENT);
-  lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_size(btn, ml::kButton, ml::kButton);
+  ui_surface_style::apply_radius(btn, climate_layout::kControlRadius, 0);
+  filled(btn, c);
   lv_obj_set_style_opa(btn, LV_OPA_30, LV_PART_MAIN | LV_STATE_DISABLED);
-  lv_obj_set_style_pad_hor(btn, popup_layout::scale(14), 0);
   lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(btn, popup_layout::scale(8), 0);
-  press_fill(btn, c);
-  add_icon(btn, icon, c.control_icon);
-  add_text(btn, popup_layout::font20(), c.text, label);
-  lv_obj_update_layout(btn);
-  lv_obj_set_pos(btn, center_x - lv_obj_get_width(btn) / 2, y);
+  pop.row_glyphs[slot] = add_icon(btn, icon, c.control_icon);
+  pop.row_texts[slot] = add_text(btn, popup_layout::font20(), c.text, label);
+  lv_label_set_long_mode(pop.row_texts[slot], LV_LABEL_LONG_DOT);
   return btn;
 }
 
-void place_centered(lv_obj_t* btn, int center_x) {
-  if (!btn) return;
-  lv_obj_update_layout(btn);
-  lv_obj_set_x(btn, center_x - lv_obj_get_width(btn) / 2);
+// Clean, Stop and Dock: equal widths from the card's left edge to one gap
+// before the menu button (to the right edge while it is hidden); a text
+// gives way (dots) before it would leave its button.
+void place_row() {
+  lv_obj_t* const buttons[3] = {pop.main, pop.stop, pop.dock};
+  if (!pop.main || !pop.stop || !pop.dock) return;
+  const int L = ml::kEdge;
+  int right = popup_layout::kCardWidth - L;
+  if (pop.menu_button && !lv_obj_has_flag(pop.menu_button, LV_OBJ_FLAG_HIDDEN)) {
+    right = lv_obj_get_style_x(pop.menu_button, LV_PART_MAIN) - kRowGap;
+  }
+  const int usable = std::max<int>(3, right - L - 2 * kRowGap);
+  const int pad = popup_layout::scale(12);
+  int x = L;
+  for (int i = 0; i < 3; ++i) {
+    const int width = usable * (i + 1) / 3 - usable * i / 3;
+    lv_obj_set_pos(buttons[i], x, ml::kVolumeTop);
+    lv_obj_set_width(buttons[i], width);
+    int glyph = 0;
+    if (pop.row_glyphs[i]) {
+      lv_point_t size;
+      lv_text_get_size(&size, lv_label_get_text(pop.row_glyphs[i]),
+                       lv_obj_get_style_text_font(pop.row_glyphs[i], LV_PART_MAIN), 0, 0, LV_COORD_MAX,
+                       LV_TEXT_FLAG_NONE);
+      glyph = size.x;
+    }
+    if (pop.row_texts[i]) {
+      lv_obj_set_style_max_width(pop.row_texts[i],
+                                 std::max<int>(1, width - glyph - popup_layout::scale(8) - 2 * pad), 0);
+    }
+    x += width + kRowGap;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -657,6 +688,7 @@ void build_body(bool centered) {
   free_menu_shadow(false);
   if (pop.root) lv_obj_clean(pop.root);
   pop.map = pop.dock = pop.main = pop.main_glyph = pop.main_text = pop.stop = pop.menu_button = nullptr;
+  for (int i = 0; i < 3; ++i) pop.row_glyphs[i] = pop.row_texts[i] = nullptr;
   pop.shield = pop.box = pop.menu_title = pop.go = pop.go_text = pop.list = nullptr;
   for (lv_obj_t*& tab : pop.tabs) tab = nullptr;
   for (Value& value : pop.values) value = Value{};
@@ -694,27 +726,15 @@ void build_body(bool centered) {
     lv_obj_set_style_pad_column(line_box, kValueLineGap, 0);
     for (int i = 0; i < 3; ++i) pop.values[i] = make_value(line_box, kValueIcons[i], c);
   }
-  // The row: the main button, Stop in the middle, Dock, the menu corner.
-  pop.dock = text_button(pop.root, W / 2 + kRowStep, row, "home-import-outline", text(i18n::VacuumLabel::Dock), c);
-  lv_obj_add_event_cb(pop.dock, on_dock, LV_EVENT_CLICKED, nullptr);
-  pop.stop = text_button(pop.root, W / 2, row, "stop", text(i18n::VacuumLabel::Stop), c);
-  lv_obj_add_event_cb(pop.stop, on_stop, LV_EVENT_CLICKED, nullptr);
-  pop.main = plain(pop.root);
-  lv_obj_add_flag(pop.main, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_height(pop.main, ml::kButton);
-  lv_obj_set_width(pop.main, LV_SIZE_CONTENT);
-  lv_obj_set_style_radius(pop.main, LV_RADIUS_CIRCLE, 0);
-  filled(pop.main, c);
-  lv_obj_set_style_opa(pop.main, LV_OPA_30, LV_PART_MAIN | LV_STATE_DISABLED);
-  lv_obj_set_style_pad_left(pop.main, popup_layout::scale(22), 0);
-  lv_obj_set_style_pad_right(pop.main, popup_layout::scale(28), 0);
-  lv_obj_set_flex_flow(pop.main, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(pop.main, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(pop.main, popup_layout::scale(10), 0);
-  pop.main_glyph = add_icon(pop.main, "play", c.control_icon);
-  pop.main_text = add_text(pop.main, popup_layout::font20(), c.text, text(i18n::VacuumLabel::Clean));
-  lv_obj_set_y(pop.main, row);
+  // The row: Clean, Stop, Dock (place_row), the menu corner.
+  pop.main = row_button(pop.root, 0, "play", text(i18n::VacuumLabel::Clean), c);
+  pop.main_glyph = pop.row_glyphs[0];
+  pop.main_text = pop.row_texts[0];
   lv_obj_add_event_cb(pop.main, on_main, LV_EVENT_CLICKED, nullptr);
+  pop.stop = row_button(pop.root, 1, "stop", text(i18n::VacuumLabel::Stop), c);
+  lv_obj_add_event_cb(pop.stop, on_stop, LV_EVENT_CLICKED, nullptr);
+  pop.dock = row_button(pop.root, 2, "home-import-outline", text(i18n::VacuumLabel::Dock), c);
+  lv_obj_add_event_cb(pop.dock, on_dock, LV_EVENT_CLICKED, nullptr);
   pop.menu_button = round_button(pop.root, W - L - ml::kButton, row, "dots-horizontal", c);
   lv_obj_add_event_cb(pop.menu_button, on_menu_button, LV_EVENT_CLICKED, nullptr);
   build_menu();
@@ -804,13 +824,13 @@ void refresh(bool show) {
   const bool pauses = vacuum_detail::main_pauses(d);
   lv_label_set_text(pop.main_glyph, getMdiChar(pauses ? "pause" : "play").c_str());
   lv_label_set_text(pop.main_text, text(pauses ? i18n::VacuumLabel::Pause : i18n::VacuumLabel::Clean));
-  place_centered(pop.main, popup_layout::kCardWidth / 2 - kRowStep);
   set_enabled(pop.main, ready && (pauses || vacuum_detail::can_start(d)));
   set_enabled(pop.dock, ready && (d.features & vacuum_detail::kReturnHome));
   set_enabled(pop.stop, ready && (d.features & vacuum_detail::kStop));
   bool menu = false;
   for (Tab tab : kTabs) menu = menu || tab_offered(d, tab);
   set_shown(pop.menu_button, menu);
+  place_row();
   show_menu();
   if (show) {
     pop.open = true;

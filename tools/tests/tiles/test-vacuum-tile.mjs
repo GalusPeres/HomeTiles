@@ -127,9 +127,26 @@ assert.ok(!read('src/web/admin/tiles/layout.js').includes('vacuumMap'), 'the map
 const visualH = read('src/types/vacuum/vacuum_visual.h');
 assert.ok(visualH.includes('inline String values_line(const vacuum_detail::Detail& d) {'));
 const popupRow = read('src/ui/popups/vacuum/vacuum_popup.cpp');
-assert.ok(popupRow.includes('pop.dock = text_button(pop.root, W / 2 + kRowStep, row,') &&
-  popupRow.includes('pop.stop = text_button(pop.root, W / 2, row,') &&
-  popupRow.includes('place_centered(pop.main, popup_layout::kCardWidth / 2 - kRowStep);'), 'the popup row: Clean, Stop, Dock');
+// User 2026-10-30: the popup's Clean, Stop and Dock are the tile's buttons,
+// three equal surfaces from the card's left edge to the menu button.
+assert.ok(/pop\.main = row_button\(pop\.root, 0, "play"[\s\S]*?pop\.stop = row_button\(pop\.root, 1, "stop"[\s\S]*?pop\.dock = row_button\(pop\.root, 2, "home-import-outline"/.test(popupRow),
+  'the popup row: Clean, Stop, Dock');
+assert.ok(popupRow.includes('ui_surface_style::apply_radius(btn, climate_layout::kControlRadius, 0);') &&
+  popupRow.includes('filled(btn, c);'), 'surfaces with the tile buttons\' radius');
+assert.ok(popupRow.includes('const int width = usable * (i + 1) / 3 - usable * i / 3;') &&
+  popupRow.includes('right = lv_obj_get_style_x(pop.menu_button, LV_PART_MAIN) - kRowGap;'), 'equal widths up to the menu button');
+assert.match(popupRow, /set_shown\(pop\.menu_button, menu\);\s*place_row\(\);/);
+assert.ok(!popupRow.includes('text_button(') && !popupRow.includes('kRowStep'), 'no spread text buttons');
+// User 2026-10-30: the map still came after the popup. Like the Media tile
+// keeps its popup cover decoded (MediaCoverRef::popup_dsc), the wish is
+// decoded ahead while the tile is on screen; the popup and the tile take
+// copies of it and decode nothing while opening.
+const mapSource = read('src/types/vacuum/vacuum_map.cpp');
+assert.ok(mapSource.includes('lv_image_dsc_t* dsc = decode(*picture, fetch, wish.entity);'), 'the wish decoded ahead');
+assert.match(mapSource, /void show_now\(lv_obj_t\* box\) \{[\s\S]*?if \(show_from_source\(\*view\)\) \{/, 'the popup opens with a copy');
+assert.ok(mapSource.includes('lv_image_dsc_t* dsc = make_media_popup_cover_dsc(source->dsc, view.edge);'), 'the Media copy');
+assert.ok(mapSource.includes('if (!wanted(view->entity)) add(view->entity, view->edge, view->every, view->box);'),
+  'one picture for tile and popup');
 // User 2026-10-30 on b624: no black square before the popup's map. The
 // tile fetches the popup's picture ahead while it is on screen (like the
 // Media tile holds its cover) and the popup shows it in its first frame.
@@ -171,7 +188,7 @@ assert.ok(tileSource.includes('haBridgeConfig.findEntityIcon(view->entity)'));
 const visual = read('src/types/vacuum/vacuum_visual.h');
 assert.ok(visual.includes('constexpr uint32_t kColor = 0x29B6F6;') && !visual.includes('on_accent'));
 assert.ok(!/grey\(\)[^;]*;\s*\}\s*if \(vacuum_detail::is\(d, "error"\)\)/.test(visual));
-assert.ok(popup.includes('filled(pop.main, c);') && popup.includes('add_text(pop.main, popup_layout::font20(), c.text'));
+assert.ok(popup.includes('filled(btn, c);') && popup.includes('pop.row_texts[slot] = add_text(btn, popup_layout::font20(), c.text, label);'));
 assert.ok(popup.includes('value.text = add_text(value.box, popup_layout::font20(), c.text, "");'), 'values in the Media times size');
 assert.ok(map.includes('lv_obj_remove_style_all(box);'), 'no white default style');
 // User 2026-10-30 on b622: no tinted map (black like the map's own

@@ -46,9 +46,9 @@ namespace {
 namespace ml = media_popup_layout;
 using vacuum_detail::Detail;
 
-// The row (user 2026-10-30, mockup): Dock, the main button in the middle,
-// Stop, each this far from the middle; the menu button in the corner like
-// the Media popup's.
+// The row (user 2026-10-30): the main button (Clean), Stop in the middle,
+// Dock, the outer two this far from the middle, the tile's order; the menu
+// button in the corner like the Media popup's.
 constexpr int kRowStep = popup_layout::scale(190);
 constexpr int kListRowHeight = popup_layout::scale(72);
 constexpr int kOptionGap = 2;
@@ -694,10 +694,10 @@ void build_body(bool centered) {
     lv_obj_set_style_pad_column(line_box, kValueLineGap, 0);
     for (int i = 0; i < 3; ++i) pop.values[i] = make_value(line_box, kValueIcons[i], c);
   }
-  // The row: Dock, the main button in the middle, Stop, the menu corner.
-  pop.dock = text_button(pop.root, W / 2 - kRowStep, row, "home-import-outline", text(i18n::VacuumLabel::Dock), c);
+  // The row: the main button, Stop in the middle, Dock, the menu corner.
+  pop.dock = text_button(pop.root, W / 2 + kRowStep, row, "home-import-outline", text(i18n::VacuumLabel::Dock), c);
   lv_obj_add_event_cb(pop.dock, on_dock, LV_EVENT_CLICKED, nullptr);
-  pop.stop = text_button(pop.root, W / 2 + kRowStep, row, "stop", text(i18n::VacuumLabel::Stop), c);
+  pop.stop = text_button(pop.root, W / 2, row, "stop", text(i18n::VacuumLabel::Stop), c);
   lv_obj_add_event_cb(pop.stop, on_stop, LV_EVENT_CLICKED, nullptr);
   pop.main = plain(pop.root);
   lv_obj_add_flag(pop.main, LV_OBJ_FLAG_CLICKABLE);
@@ -804,7 +804,7 @@ void refresh(bool show) {
   const bool pauses = vacuum_detail::main_pauses(d);
   lv_label_set_text(pop.main_glyph, getMdiChar(pauses ? "pause" : "play").c_str());
   lv_label_set_text(pop.main_text, text(pauses ? i18n::VacuumLabel::Pause : i18n::VacuumLabel::Clean));
-  place_centered(pop.main, popup_layout::kCardWidth / 2);
+  place_centered(pop.main, popup_layout::kCardWidth / 2 - kRowStep);
   set_enabled(pop.main, ready && (pauses || vacuum_detail::can_start(d)));
   set_enabled(pop.dock, ready && (d.features & vacuum_detail::kReturnHome));
   set_enabled(pop.stop, ready && (d.features & vacuum_detail::kStop));

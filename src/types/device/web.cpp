@@ -175,6 +175,8 @@ void append_device_scripts(String& html) {
   }
   vacuum["clean"] = i18n::vacuum_label(lang, i18n::VacuumLabel::Clean);
   vacuum["pause"] = i18n::vacuum_label(lang, i18n::VacuumLabel::Pause);
+  vacuum["stop"] = i18n::vacuum_label(lang, i18n::VacuumLabel::Stop);
+  vacuum["dock"] = i18n::vacuum_label(lang, i18n::VacuumLabel::Dock);
   String json;
   serializeJson(doc, json);
   json.replace("<", "\\u003c");

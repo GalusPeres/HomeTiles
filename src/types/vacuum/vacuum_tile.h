@@ -5,14 +5,16 @@
 
 #include "src/tiles/runtime/tile_renderer.h"
 
-// The Vacuum tile (build/design-mockups/vacuum): the Lock/Alarm/Fan tiles'
-// header (corner disc, title, state "Docked · 84 %"; from 1.5 rows the state
-// centred like theirs; the Sensor compact layout at half height) with its
-// controls in the level bar's place. One column: the main button (Clean, or
-// Pause while cleaning) across it. Two columns: Dock, the main button, Stop,
-// the same row on every size; two columns and two rows put the map between
-// the header (beside the disc) and that row. Every button runs only what the
-// vacuum's feature bits allow; the rest of the card opens the popup.
+// The Vacuum tile (build/design-mockups/vacuum/tiles-media.html): the
+// Lock/Alarm/Fan tiles' header (corner disc, title, state "Docked · 84 %";
+// from 1.5 rows the state centred like theirs; the Sensor compact layout at
+// half height) with a row of equal buttons with icon and text in the level
+// bar's place: one column Clean (Pause while cleaning), two Clean and Dock,
+// from three Clean, Stop and Dock. Two columns and two rows take the Media
+// tile's arrangement: the title top right, the map in the cover's place, the
+// state and the values line ("84 % · 58 m²") right of it, the row below.
+// Every button runs only what the vacuum's feature bits allow; the rest of
+// the card opens the popup.
 //
 // Views are found by entity, so a hidden cached folder grid follows the
 // state too (like the Lock, Alarm panel and Fan tiles).

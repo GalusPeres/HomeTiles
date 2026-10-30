@@ -2244,38 +2244,40 @@
     .tile-device-part.lit { background:var(--switch-accent, #9E9E9E); color:var(--switch-card, #1A1A1A); }
     .tile-switch.is-unavailable > * { display:none !important; }
     /* Vacuum (render_vacuum_tile) in the device's own measures: the row in
-       the level bar's place (inset from the card, one bar high), one gap
-       between Dock, the main button and Stop, the main button padded like
-       the device's, glyph at the icon size, text at the title size. Two
-       columns and rows: the square map from the content top to the bottom
-       inset, centred, Dock and the main button centred in the side strips
-       (applyVacuumPreview places them). */
+       the level bar's place (inset from the card, one bar high), equal
+       buttons one gap apart, each the controls' fill with the level bar's
+       radius (concentric with the card), glyph at the icon size and text at
+       the title size in the text color. Two columns and rows (vacuum-map):
+       the tall title top right, the map in the Media cover's place, the
+       state and the values line beside it (placeVacuumMapPreview). */
     .tile.device.switch-bar > .tile-vacuum {
       position:absolute;
       left:calc(var(--climate-margin-x, 5px) - 3px);
       right:calc(var(--climate-margin-x, 5px) - 3px);
       bottom:calc(var(--climate-slots-bottom, 3px) - 3px);
       height:var(--switch-bar-height, 30px);
-      display:flex; align-items:center; justify-content:center; gap:var(--climate-grid-gap, 7px);
+      display:flex; gap:var(--climate-grid-gap, 7px);
     }
-    /* The main button: the controls' fill with the level bar's radius
-       (concentric with the card), text in the text color. */
-    .tile-vacuum-main {
-      height:100%; display:flex; align-items:center; justify-content:center; gap:var(--vacuum-glyph-gap, 2px);
-      min-width:0; flex:0 1 auto; box-sizing:border-box;
-      padding:0 var(--vacuum-pad-end, 8px) 0 var(--vacuum-pad-start, 6px);
+    .tile-vacuum-button {
+      flex:1 1 0; min-width:0; height:100%; box-sizing:border-box;
+      display:flex; align-items:center; justify-content:center; gap:var(--vacuum-glyph-gap, 2px);
+      padding:0 var(--vacuum-button-pad, 4px);
       border-radius:var(--climate-control-radius, 8px);
       background:var(--control-fill, rgba(255,255,255,0.12)); color:var(--pv-text, #fff);
       font-size:var(--fs20, 10px); white-space:nowrap; overflow:hidden;
     }
-    .tile-vacuum-main i, .tile-vacuum-side i { font-size:var(--icon-size, 24px); line-height:1; }
-    .tile-vacuum-main span { overflow:hidden; text-overflow:ellipsis; }
-    .tile-vacuum[data-layout="pill"] .tile-vacuum-main { flex:1 1 auto; padding:0; }
-    .tile-vacuum-side {
-      width:var(--switch-bar-height, 30px); height:100%; flex:0 0 auto;
-      display:flex; align-items:center; justify-content:center; color:var(--pv-text, #fff);
-    }
+    .tile-vacuum-button i { font-size:var(--icon-size, 24px); line-height:1; }
+    .tile-vacuum-button span { overflow:hidden; text-overflow:ellipsis; }
     .tile-vacuum .off { opacity:.4; }
+    .tile.device.switch-bar.switch-tall.vacuum-map > .tile-switch-state,
+    .tile.device.switch-bar.switch-tall.vacuum-map > .tile-vacuum-values {
+      position:absolute; transform:none; text-align:left;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .tile.device.switch-bar.switch-tall.vacuum-map > .tile-vacuum-values {
+      margin:0; padding:0; width:auto; max-width:none;
+      font-size:var(--compact-value-font, 10px); line-height:var(--compact-value-line, 12px);
+    }
     .tile-vacuum-map {
       position:absolute;
       display:flex; align-items:center; justify-content:center; box-sizing:border-box;

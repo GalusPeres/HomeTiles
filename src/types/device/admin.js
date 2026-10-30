@@ -25,7 +25,7 @@
   // device_detail::parse(): a missing state stays apart from a known one.
   function parseDevicePreviewPayload(value) {
     const out = {valid: false, available: false, state: '', features: 0, percentage: null,
-      step: null, preset: '', battery: null};
+      step: null, preset: '', battery: null, area: null, areaUnit: ''};
     const text = value === undefined || value === null ? '' : String(value).trim();
     if (!text.startsWith('{')) return out;
     try {
@@ -45,6 +45,13 @@
       // Vacuum (vacuum_detail::parse): the battery stays apart from 0.
       if (typeof obj.battery === 'number' && Number.isFinite(obj.battery)) {
         out.battery = Math.max(0, Math.min(100, Math.round(obj.battery)));
+      }
+      // The cleaned area needs its value and its unit.
+      const area = obj.cleaned_area;
+      if (area && typeof area.value === 'number' && Number.isFinite(area.value) && area.value >= 0 &&
+          typeof area.unit === 'string' && area.unit) {
+        out.area = area.value;
+        out.areaUnit = area.unit;
       }
     } catch (e) {}
     return out;
@@ -94,8 +101,9 @@
     }
     if (kind === 'vacuum') {
       // vacuum_visual::visual(): the vacuum's blue in every reported state,
-      // red on an error; the state and the battery.
+      // red on an error; the state and the battery, the state alone.
       out.label = words[state] || words.unknown || state;
+      out.state = out.label;
       if (!d.available) {
         out.icon = 'robot-vacuum-off';
         return out;
@@ -182,60 +190,108 @@
       (icon ? '<i class="mdi mdi-' + escapeHtml(icon) + '"></i>' : '') + '</span>';
   }
 
-  // render_vacuum_tile(): one column the main button across the box, two
-  // columns Dock, the main button and Stop, two columns and rows the map
-  // centred with Dock left and the main button as a circle right.
+  // vacuum_visual::values_line(): the battery and the cleaned area, only
+  // what the vacuum reports.
+  function vacuumValuesLine(d) {
+    if (!d.valid || !d.available) return '';
+    const parts = [];
+    if (d.battery !== null && d.battery !== undefined) parts.push(d.battery + ' %');
+    if (d.area !== null && d.area !== undefined) {
+      const number = localizeNumericText(d.area.toFixed(d.area < 10 ? 1 : 0));
+      parts.push(number + ' ' + d.areaUnit);
+    }
+    return parts.join(' \u00b7 ');
+  }
+
+  // render_vacuum_tile(): equal buttons with icon and text across the row,
+  // one column Clean, two Clean and Dock, from three Clean, Stop and Dock;
+  // two columns and rows the Media tile's arrangement: the title top right,
+  // the map in the cover's place, the state alone and the values line right
+  // of it (placeVacuumMapPreview).
   function applyVacuumPreview(tileElem, d, halfHeight, spans) {
     tileElem.classList.toggle('switch-bar', !halfHeight);
     const box = tileElem.querySelector('.tile-vacuum');
-    if (!box) return;
-    const words = typeof DEVICE_I18N === 'object' ? (DEVICE_I18N.vacuum || {}) : {};
     const w = Number(spans?.w) || 1;
     const h = Number(spans?.h) || 1;
-    const layout = w >= 2 && h >= 2 ? 'map' : (w >= 2 ? 'row' : 'pill');
+    const withMap = !!box && w >= 2 && h >= 2;
+    tileElem.classList.toggle('vacuum-map', withMap);
+    let mapEl = tileElem.querySelector(':scope > .tile-vacuum-map');
+    let values = tileElem.querySelector(':scope > .tile-vacuum-values');
+    if (!withMap) {
+      mapEl?.remove();
+      values?.remove();
+    }
+    if (!box) return;
+    const words = typeof DEVICE_I18N === 'object' ? (DEVICE_I18N.vacuum || {}) : {};
+    const count = w >= 3 ? 3 : (w >= 2 ? 2 : 1);
     const pauses = d.state === 'cleaning' && (d.features & 4);
     const ready = d.valid && d.available;
-    const glyph = '<i class="mdi mdi-' + (pauses ? 'pause' : 'play') + '"></i>';
-    const text = '<span>' + escapeHtml(pauses ? (words.pause || 'Pause') : (words.clean || 'Clean')) + '</span>';
-    const main = '<span class="tile-vacuum-main' + (ready && (pauses || (d.features & 8192)) ? '' : ' off') + '">' +
-      glyph + text + '</span>';
-    const side = (icon, bit) => '<span class="tile-vacuum-side' + (ready && (d.features & bit) ? '' : ' off') +
-      '"><i class="mdi mdi-' + icon + '"></i></span>';
-    box.dataset.layout = layout;
-    if (layout === 'map') {
-      box.innerHTML = '<span class="tile-vacuum-map"><i class="mdi mdi-map-outline"></i></span>' +
-        side('home-import-outline', 16) + main + side('stop', 8);
-      placeVacuumMapPreview(tileElem, box);
-      if (typeof ResizeObserver === 'function' && !box.__vacuumObserved) {
-        box.__vacuumObserved = true;
-        new ResizeObserver(() => placeVacuumMapPreview(tileElem, box)).observe(box);
-      }
-    } else if (layout === 'row') {
-      box.innerHTML = side('home-import-outline', 16) + main + side('stop', 8);
-    } else {
-      box.innerHTML = main;
+    const button = (icon, text, on) => '<span class="tile-vacuum-button' + (on ? '' : ' off') + '">' +
+      '<i class="mdi mdi-' + icon + '"></i><span>' + escapeHtml(text) + '</span></span>';
+    let html = button(pauses ? 'pause' : 'play', pauses ? (words.pause || 'Pause') : (words.clean || 'Clean'),
+      ready && (pauses || (d.features & 8192)));
+    if (count === 3) html += button('stop', words.stop || 'Stop', ready && (d.features & 8));
+    if (count >= 2) html += button('home-import-outline', words.dock || 'Dock', ready && (d.features & 16));
+    box.innerHTML = html;
+    box.dataset.count = String(count);
+    if (!withMap) return;
+    if (!mapEl) {
+      mapEl = document.createElement('span');
+      mapEl.className = 'tile-vacuum-map';
+      mapEl.innerHTML = '<i class="mdi mdi-map-outline"></i>';
+      tileElem.appendChild(mapEl);
+    }
+    if (!values) {
+      values = document.createElement('div');
+      values.className = 'tile-value tile-vacuum-values';
+      tileElem.appendChild(values);
+    }
+    const state = tileElem.querySelector(':scope > .tile-switch-state');
+    if (state) state.innerHTML = unitTextHtml(devicePreviewVisual('vacuum', d).state || '--');
+    const line = vacuumValuesLine(d);
+    values.innerHTML = unitTextHtml(line);
+    values.hidden = !line;
+    placeVacuumMapPreview(tileElem);
+    if (typeof ResizeObserver === 'function' && !tileElem.__vacuumObserved) {
+      tileElem.__vacuumObserved = true;
+      new ResizeObserver(() => {
+        if (tileElem.classList.contains('vacuum-map')) placeVacuumMapPreview(tileElem);
+      }).observe(tileElem);
     }
   }
 
-  // render_vacuum_tile's Map layout: the square from the content top down to
-  // one gap above the row (no wider than the card less two insets), centred;
-  // the row as in the Row layout. The map is placed from the row box, which
-  // starts one inset in from the card and one button above its bottom inset.
-  function placeVacuumMapPreview(tileElem, box) {
+  // render_vacuum_tile's Map layout: the map one inset in from the card,
+  // from the content top down to one gap above the row, at most 42 % of the
+  // card's width (the Media cover's share); state and values one Media
+  // text gap right of it, the two lines centred on the map. Positions from
+  // the card's edge less the preview's 3 px frame line.
+  function placeVacuumMapPreview(tileElem) {
     const style = getComputedStyle(tileElem);
     const value = name => parseFloat(style.getPropertyValue(name)) || 0;
     const inset = value('--climate-margin-x');
     const button = value('--switch-bar-height');
     const gap = value('--climate-grid-gap');
     const top = value('--climate-slots-top');
+    const textGap = value('--vacuum-text-gap');
+    const discInset = value('--compact-inset');
     const tileWidth = tileElem.offsetWidth;
     const tileHeight = tileElem.offsetHeight;
     if (!tileWidth || !tileHeight) return;
     const rowTop = tileHeight - inset - button;
-    const edge = Math.max(0, Math.min(rowTop - gap - top, tileWidth - 2 * inset));
-    const map = box.querySelector('.tile-vacuum-map');
-    if (map) Object.assign(map.style, {left: ((tileWidth - edge) / 2 - inset) + 'px', top: (top - rowTop) + 'px',
+    const edge = Math.max(0, Math.min(rowTop - gap - top, Math.floor(tileWidth * 42 / 100)));
+    const map = tileElem.querySelector(':scope > .tile-vacuum-map');
+    if (map) Object.assign(map.style, {left: (inset - 3) + 'px', top: (top - 3) + 'px',
       width: edge + 'px', height: edge + 'px'});
+    const textX = inset + edge + textGap;
+    const state = tileElem.querySelector(':scope > .tile-switch-state');
+    const values = tileElem.querySelector(':scope > .tile-vacuum-values');
+    const stateH = state ? state.offsetHeight : 0;
+    const valuesH = values && !values.hidden ? values.offsetHeight : 0;
+    const blockTop = top + edge / 2 - (stateH + valuesH) / 2;
+    const right = Math.max(0, 2 * discInset - 3) + 'px';
+    if (state) Object.assign(state.style, {left: (textX - 3) + 'px', right, top: (blockTop - 3) + 'px'});
+    if (values) Object.assign(values.style, {left: (textX - 3) + 'px', right,
+      top: (blockTop + stateH - 3) + 'px'});
   }
 
   // bar_model(): the bar the device draws for this state. `upright`: a

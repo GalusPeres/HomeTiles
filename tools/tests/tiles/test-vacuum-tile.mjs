@@ -98,15 +98,38 @@ assert.ok(map.includes('camera ? every : 0'));
 assert.ok(map.includes('if (seconds < bridge_images::kEveryMin) return bridge_images::kEveryMin;'));
 const deviceWeb = read('src/types/device/web.cpp');
 assert.ok(deviceWeb.includes('_vacuum_every\\" min=\\"3\\" max=\\"60\\"') && deviceWeb.includes('tile.image_slideshow_sec = static_cast<uint16_t>(every < 3 ? 3 : every > 60 ? 60 : every);'));
-// One row on every size (Dock, Clean, Stop); two rows: the map above it,
-// the header beside the disc; from 1.5 rows otherwise the state centred like
-// the Lock/Alarm/Fan tiles, in the panel and the preview alike.
+// User 2026-10-30 (mockup tiles-media.html): equal buttons with icon and
+// text across the row, by width one column Clean, two Clean and Dock, from
+// three Clean, Stop and Dock, Clean always left, the popup in the same
+// order. Two columns and rows: the Media tile's title top right, the map in
+// the cover's place one inset in from the card, the state alone and the
+// values line beside it. Panel and preview alike.
 const tileCpp = read('src/types/vacuum/vacuum_tile.cpp');
-assert.ok(tileCpp.includes('const bool tall = view->layout != Layout::Map && tile.span_h > 1.0f;'));
-assert.ok(tileCpp.includes('if (view->layout == Layout::Row || view->layout == Layout::Map) {'));
-assert.ok(tileCpp.includes('const int edge = std::min(row_top - view->gap - content_top, tile_w - 2 * inset);'));
-assert.ok(read('src/web/admin/tiles/layout.js').includes("const vacuumMap = Number(type) === 29 && Number(layout?.span_w) >= 2 && Number(layout?.span_h) >= 2;"));
-assert.ok(read('src/types/device/admin.js').includes('const edge = Math.max(0, Math.min(rowTop - gap - top, tileWidth - 2 * inset));'));
+assert.ok(tileCpp.includes('const int count = tile.span_w >= 3 ? 3 : tile.span_w >= 2 ? 2 : 1;'));
+assert.ok(tileCpp.includes('Button* slot = i == 0 ? &view->main : (i == count - 1 ? &view->dock : &view->stop);'),
+  'Clean left, Dock right, Stop between');
+assert.ok(tileCpp.includes('const int width = usable * (i + 1) / count - usable * i / count;'), 'equal widths');
+assert.ok(tileCpp.includes('const bool tall = view->layout == Layout::Map || tile.span_h > 1.0f;'), 'the Media title on the map tile');
+assert.ok(tileCpp.includes('const int edge = std::max<int>(0, std::min<int>(row_top - gap - content_top, tile_w * 42 / 100));'));
+assert.ok(tileCpp.includes('view->map = vacuum_map::create(card, inset - pad_x(), content_top - pad_y(), edge,'), 'the map one inset in');
+assert.ok(tileCpp.includes('const int text_x = inset + edge + media_tile::kTextAfterCover;'));
+assert.ok(tileCpp.includes('tile_header::set_state(view->state_label, v.state.c_str(), view->state_font, view->state_width, -1);'),
+  'the state alone beside the map');
+assert.ok(read('src/web/server/render/web_admin_styles.cpp').includes('emit_exact("vacuum-text-gap", tile_layout::scale(16));') &&
+  read('src/types/media/tile_layout.h').includes('constexpr lv_coord_t kTextAfterCover = tile_layout::scale(16);'),
+  'the preview gap is the Media text gap');
+const deviceAdmin = read('src/types/device/admin.js');
+assert.ok(deviceAdmin.includes("const count = w >= 3 ? 3 : (w >= 2 ? 2 : 1);"));
+assert.ok(/let html = button\(pauses \? 'pause' : 'play'[\s\S]*?if \(count === 3\) html \+= button\('stop'[\s\S]*?if \(count >= 2\) html \+= button\('home-import-outline'/.test(deviceAdmin),
+  'the preview row in the panel order');
+assert.ok(deviceAdmin.includes('const edge = Math.max(0, Math.min(rowTop - gap - top, Math.floor(tileWidth * 42 / 100)));'));
+assert.ok(!read('src/web/admin/tiles/layout.js').includes('vacuumMap'), 'the map tile takes the tall title');
+const visualH = read('src/types/vacuum/vacuum_visual.h');
+assert.ok(visualH.includes('inline String values_line(const vacuum_detail::Detail& d) {'));
+const popupRow = read('src/ui/popups/vacuum/vacuum_popup.cpp');
+assert.ok(popupRow.includes('pop.dock = text_button(pop.root, W / 2 + kRowStep, row,') &&
+  popupRow.includes('pop.stop = text_button(pop.root, W / 2, row,') &&
+  popupRow.includes('place_centered(pop.main, popup_layout::kCardWidth / 2 - kRowStep);'), 'the popup row: Clean, Stop, Dock');
 // User 2026-10-30 on b624: no black square before the popup's map. The
 // tile fetches the popup's picture ahead while it is on screen (like the
 // Media tile holds its cover) and the popup shows it in its first frame.
@@ -141,8 +164,9 @@ assert.ok(!popup.includes('lv_obj_set_style_border_width(pop.box'), 'no border i
 // Bridge its color, so transparent maps are not put on black.
 const tileSource = read('src/types/vacuum/vacuum_tile.cpp');
 assert.ok(!tileSource.includes('lv_arc_create'), 'no ring on the disc');
-assert.match(tileSource, /tile_icon_disc::mark_surface\(box\);\s*ui_surface_style::apply_radius\(box, climate_layout::kControlRadius, 0\);/);
-assert.ok(tileSource.includes('set_label_style(view->main_text, lv_color_hex(ui_theme::text()), FONT_TITLE);'));
+assert.match(tileSource, /tile_icon_disc::mark_surface\(b\.box\);\s*ui_surface_style::apply_radius\(b\.box, climate_layout::kControlRadius, 0\);/);
+assert.ok(tileSource.includes('set_label_style(b.text, lv_color_hex(ui_theme::text()), FONT_TITLE);') &&
+  tileSource.includes('set_label_style(b.glyph, lv_color_hex(ui_theme::text()), FONT_MDI_ICONS);'), 'white text and glyphs');
 assert.ok(tileSource.includes('haBridgeConfig.findEntityIcon(view->entity)'));
 const visual = read('src/types/vacuum/vacuum_visual.h');
 assert.ok(visual.includes('constexpr uint32_t kColor = 0x29B6F6;') && !visual.includes('on_accent'));

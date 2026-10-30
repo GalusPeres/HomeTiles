@@ -12,6 +12,7 @@
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/device/device_popup.h"
+#include "src/ui/popups/vacuum/vacuum_popup.h"
 #include "src/ui/popups/calendar/calendar_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/tiles/runtime/tile_icon_source.h"
@@ -80,7 +81,7 @@ bool popupSupported(const Tile& tile) {
     case TILE_WEATHER: case TILE_ENERGY: case TILE_MEDIA:
     case TILE_CLIMATE: case TILE_COVER:
     case TILE_CALENDAR:
-    case TILE_LOCK: case TILE_ALARM: case TILE_FAN: return true;
+    case TILE_LOCK: case TILE_ALARM: case TILE_FAN: case TILE_VACUUM: return true;
     // A Camera tile can show an image entity's picture (types/camera/
     // picture.h), which has no popup yet.
     case TILE_CAMERA: return !tile.sensor_entity.startsWith("image.");
@@ -358,6 +359,7 @@ void viewNavigationClosePopups() {
   hide_cover_popup();
   hide_calendar_popup();
   hide_device_popup();
+  hide_vacuum_popup();
 }
 
 void viewNavigationSource(lv_obj_t* source) {

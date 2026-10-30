@@ -60,7 +60,7 @@ const ListTile kListTiles[] = {
     {"switches", TILE_SWITCH},  {"media", TILE_MEDIA},                  {"climates", TILE_CLIMATE},
     {"covers", TILE_COVER},     {"cameras", TILE_CAMERA},               {"locks", TILE_LOCK},
     {"alarm_panels", TILE_ALARM}, {"fans", TILE_FAN},          {"scenes", TILE_SCENE},
-    {"calendars", TILE_CALENDAR},
+    {"calendars", TILE_CALENDAR}, {"vacuums", TILE_VACUUM},
 };
 
 const char* listOfType(TileType type) {
@@ -86,6 +86,8 @@ bool knownList(const String& list) {
   if (list == "scenes") return haBridgeConfig.supportsSceneSearch();
   // Calendars: a Bridge on level 5.
   if (list == "calendars") return haBridgeConfig.supportsCalendars();
+  // Vacuums: a Bridge on level 6.
+  if (list == "vacuums") return haBridgeConfig.supportsVacuums();
   for (const ListTile& entry : kListTiles) {
     if (list == entry.list) return true;
   }

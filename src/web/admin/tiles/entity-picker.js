@@ -16,12 +16,12 @@
     ['climate'], ['media_player'], ['weather'], ['camera'], ['lock'], ['alarm_control_panel'],
     ['number', 'input_number'], ['select', 'input_select'],
     ['datetime', 'date', 'time', 'input_datetime'], ['scene'], ['script'], ['button', 'input_button'],
-    ['automation'], ['humidifier'], ['siren'], ['remote'], ['calendar']
+    ['automation'], ['humidifier'], ['siren'], ['remote'], ['calendar'], ['vacuum']
   ];
   // Lists the Bridge searches (entity_search.py LIST_DOMAINS).
   const ENTITY_REMOTE_LISTS = new Set(['sensors', 'binary_sensors', 'numbers', 'selects', 'datetimes',
     'weathers', 'switches', 'media', 'climates', 'covers', 'cameras', 'images', 'locks', 'alarm_panels', 'fans',
-    'energy', 'scenes', 'calendars']);
+    'energy', 'scenes', 'calendars', 'vacuums']);
   const ENTITY_REMOTE_DELAY_MS = 250;
   const ENTITY_REMOTE_POLL_MS = 120;
   const ENTITY_REMOTE_TIMEOUT_MS = 5000;

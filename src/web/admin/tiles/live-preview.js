@@ -443,7 +443,10 @@
         span_w: tileSpan('span_w')});
     }
     if (previewKind === 'cover') applyCoverPreview(tileElem, coverPreviewState, halfHeight);
-    if (deviceKind) applyDevicePreview(tileElem, deviceKind, devicePreviewState, halfHeight, fanUpright);
+    if (deviceKind) {
+      applyDevicePreview(tileElem, deviceKind, devicePreviewState, halfHeight, fanUpright,
+        {w: tileSpan('span_w'), h: tileSpan('span_h')});
+    }
     if (wasActive) tileElem.classList.add('active');
     if (typeWas !== type && wasActive) {
       tileElem.classList.add('active');

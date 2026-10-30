@@ -2243,6 +2243,45 @@
     .tile-device-part.button { background:var(--device-button, rgba(255,255,255,0.18)); }
     .tile-device-part.lit { background:var(--switch-accent, #9E9E9E); color:var(--switch-card, #1A1A1A); }
     .tile-switch.is-unavailable > * { display:none !important; }
+    /* Vacuum (render_vacuum_tile): the buttons in the level bar's box; two
+       columns and rows: the map centred below the header with Dock left and
+       the main button as a circle right. */
+    .tile.device.switch-bar > .tile-vacuum {
+      position:absolute;
+      left:calc(var(--climate-margin-x, 5px) - 3px);
+      right:calc(var(--climate-margin-x, 5px) - 3px);
+      bottom:calc(var(--climate-slots-bottom, 3px) - 3px);
+      height:var(--switch-bar-height, 30px);
+      display:flex; align-items:center; justify-content:center; gap:var(--climate-margin-x, 5px);
+    }
+    .tile-vacuum-main {
+      height:100%; display:flex; align-items:center; justify-content:center; gap:4px; min-width:0;
+      padding:0 10px 0 6px; box-sizing:border-box; border-radius:999px;
+      background:var(--vacuum-accent, #00BCD4); color:var(--vacuum-ink, #0d2733);
+      font-size:var(--title-font, 12px); white-space:nowrap; overflow:hidden;
+    }
+    .tile-vacuum-main i { font-size:calc(var(--switch-bar-height, 30px) * .55); line-height:1; }
+    .tile-vacuum-main span { overflow:hidden; text-overflow:ellipsis; }
+    .tile-vacuum[data-layout="pill"] .tile-vacuum-main { flex:1 1 auto; }
+    .tile-vacuum-side {
+      width:var(--switch-bar-height, 30px); height:100%; flex:0 0 auto;
+      display:flex; align-items:center; justify-content:center;
+      color:var(--pv-text, #fff); font-size:calc(var(--switch-bar-height, 30px) * .55); line-height:1;
+    }
+    .tile-vacuum .off { opacity:.4; }
+    .tile.device.switch-bar > .tile-vacuum[data-layout="map"] {
+      top:calc(var(--climate-slots-top, 35px) - 3px); height:auto; align-items:flex-end;
+      justify-content:space-between;
+    }
+    .tile-vacuum[data-layout="map"] .tile-vacuum-side,
+    .tile-vacuum[data-layout="map"] .tile-vacuum-main { height:var(--switch-bar-height, 30px); }
+    .tile-vacuum[data-layout="map"] .tile-vacuum-main { width:var(--switch-bar-height, 30px); padding:0; }
+    .tile-vacuum-map {
+      height:100%; aspect-ratio:1; display:flex; align-items:center; justify-content:center;
+      border-radius:var(--climate-control-radius, 8px); background:var(--control-fill, rgba(255,255,255,0.12));
+      color:var(--pv-text, #fff); opacity:.9; font-size:calc(var(--switch-bar-height, 30px) * .8);
+    }
+    .tile-vacuum-map i { opacity:.6; }
     /* Upright (bar_orientation.h): the bar below the header over the rest
        of the tile; the fill rises from the bottom with the handle line
        across it, the switch is on at the top, a Fan's speeds stack from the

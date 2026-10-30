@@ -985,6 +985,11 @@ struct LocaleProfile {
   // The first day of the week the Calendar tile uses unless the tile sets
   // one (tm_wday: 0 Sunday, 1 Monday).
   uint8_t first_weekday;
+  // The Vacuum tile and popup (types/vacuum), VacuumLabel order.
+  const char* vacuum_labels[16];
+  // Vacuum states: cleaning, docked, idle, paused, returning, error,
+  // unavailable, unknown.
+  const char* vacuum_states[8];
   // The Power flow tile (types/power_flow), PowerFlowLabel order.
   const char* power_flow_labels[9];
 
@@ -998,8 +1003,8 @@ struct LocaleProfile {
   // cover, climate, media_player, weather, camera, lock,
   // alarm_control_panel, number/input_number, select/input_select,
   // datetime/date/time/input_datetime, scene, script, button/input_button,
-  // automation, humidifier, siren, remote, calendar.
-  const char* entity_kind_labels[23];
+  // automation, humidifier, siren, remote, calendar, vacuum.
+  const char* entity_kind_labels[24];
   // Icon picker of the tile head and the rules (tiles/tile-head.js). Order:
   // automatic, automatic hint, no icon, no icon hint, no match ({query}),
   // a rule's automatic hint (the tile's own icon stays).
@@ -1034,6 +1039,27 @@ struct LocaleProfile {
 // Index into LocaleProfile::energy_period_labels.
 enum class EnergyPeriodLabel : uint8_t { Year, Month, Week, Count };
 static_assert(static_cast<int>(EnergyPeriodLabel::Count) == 3, "LocaleProfile::energy_period_labels size");
+// Index into LocaleProfile::vacuum_labels.
+enum class VacuumLabel : uint8_t {
+  Type,
+  Entity,
+  Clean,
+  Pause,
+  Dock,
+  Stop,
+  FanSpeed,
+  Rooms,
+  Locate,
+  Spot,
+  SpotHint,
+  LocateHint,
+  CleanRooms,  // printf pattern with one %u (the number of rooms)
+  Layout,
+  MapLeft,
+  MapCentered,
+  Count,
+};
+static_assert(static_cast<int>(VacuumLabel::Count) == 16, "LocaleProfile::vacuum_labels size");
 // Index into LocaleProfile::power_flow_labels.
 enum class PowerFlowLabel : uint8_t {
   Type,
@@ -1163,6 +1189,10 @@ const char* weather_tomorrow_label(const char* language_code);
 // entity's value" option.
 const char* weather_sensor_label(const char* language_code, uint8_t index);
 const char* power_flow_label(const char* language_code, PowerFlowLabel label);
+const char* vacuum_label(const char* language_code, VacuumLabel label);
+// A Home Assistant vacuum state ("cleaning", ...) as shown; an unknown one as
+// "unknown".
+const char* vacuum_state_label(const char* language_code, const char* state);
 // The Energy popup's period buttons (EnergyPeriodLabel).
 const char* energy_period_label(const char* language_code, EnergyPeriodLabel label);
 const char* climate_tile_type_label(const char* language_code);

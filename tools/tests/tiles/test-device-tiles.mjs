@@ -20,12 +20,12 @@ for (const [name, id] of [['LOCK', 24], ['ALARM', 25], ['FAN', 26]]) {
   assert.match(types, new RegExp(`TILE_${name} = ${id}`), `TILE_${name} keeps ID ${id}`);
 }
 const policy = read('src/types/tile_type_policy.h');
-assert.match(policy, /tileTypeIsDeviceControl\(int type\) \{\s*return type == TILE_LOCK \|\| type == TILE_ALARM \|\| type == TILE_FAN;/);
+assert.match(policy, /tileTypeIsDeviceControl\(int type\) \{\s*return type == TILE_LOCK \|\| type == TILE_ALARM \|\| type == TILE_FAN \|\| type == TILE_VACUUM;/);
 
 // Security: Lock and Alarm leave the panel sealed; the body states the
 // password and a deadline of at most 15 s; the plaintext body is wiped.
-assert.match(read('src/network/secure/command_channel_core.h'), /"value", "fan", "lock", "alarm", "entities", "tiles"\}/);
-assert.match(read('docs-dev/command-encryption.md'), /`value`, `fan`, `lock`, `alarm`/);
+assert.match(read('src/network/secure/command_channel_core.h'), /"value", "fan", "vacuum", "lock", "alarm", "entities",\s*"tiles"\}/);
+assert.match(read('docs-dev/command-encryption.md'), /`value`, `fan`, `vacuum`, `lock`, `alarm`/);
 const control = read('src/types/device/device_control.cpp');
 for (const marker of [
   'command_channel::state() == command_channel::PairingState::Active && web_admin_auth::enabled()',
@@ -85,8 +85,8 @@ assert.match(read('src/network/mqtt/mqtt_topics.cpp'), /\{TopicKey::LOCK_STAT, T
 for (const type of ['camera', 'climate', 'cover', 'energy', 'light', 'media', 'sensor', 'weather', 'pin']) {
   assert.match(read(`src/ui/popups/${type}/${type}_popup.cpp`), /hide_device_popup\(\);/, `${type} hides the device popup`);
 }
-assert.match(read('src/ui/navigation/view_navigation.cpp'), /hide_device_popup\(\);\n\}/);
-assert.match(read('src/ui/navigation/view_navigation.cpp'), /case TILE_LOCK: case TILE_ALARM: case TILE_FAN: return true;/);
+assert.match(read('src/ui/navigation/view_navigation.cpp'), /hide_device_popup\(\);\n  hide_vacuum_popup\(\);\n\}/);
+assert.match(read('src/ui/navigation/view_navigation.cpp'), /case TILE_LOCK: case TILE_ALARM: case TILE_FAN: case TILE_VACUUM: return true;/);
 assert.match(read('src/ui/ui_manager.cpp'), /preload_device_popup\(\);/);
 assert.match(read('src/tiles/runtime/tile_icon_source.cpp'), /device_popup_follow_tile_color\(color\);/);
 assert.match(read('src/tiles/runtime/tile_update_service.h'), /process_device_updates\(drain_all \? 0 : 4\);/);
@@ -152,7 +152,7 @@ assert.match(read('src/types/switch/admin.js'), /if \(typeof bar\.__onResize ===
 assert.match(read('src/web/server/handlers/web_admin_tiles.cpp'), /\\"device_values\\"/);
 // The entity field is the shared picker of the Bridge's released list.
 assert.match(read('src/types/device/web.cpp'),
-  /appendEntityPickerField\(html, tab_id, entity_field\.c_str\(\), entity_label\(type\),\s*type == TILE_LOCK \? "locks" : type == TILE_ALARM \? "alarm_panels" : "fans"\);/);
+  /appendEntityPickerField\(html, tab_id, entity_field\.c_str\(\), entity_label\(type\),\s*type == TILE_LOCK\s*\? "locks"\s*: type == TILE_ALARM\s*\? "alarm_panels"\s*: type == TILE_VACUUM \? "vacuums"\s*: "fans"\);/);
 for (const key of ['locks', 'alarm_panels', 'fans']) {
   assert.ok(read('src/web/server/handlers/web_admin_tiles.cpp').includes(`appendList("${key}"`), key);
 }

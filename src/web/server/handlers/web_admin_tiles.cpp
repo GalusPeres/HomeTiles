@@ -1229,7 +1229,7 @@ void WebAdminServer::handleGetSensorValues() {
   // Lock, Alarm panel and Fan previews read the retained detail state.
   json += ",\"device_values\":{";
   bool first_device_value = true;
-  for (const String* list : {&ha.locks_text, &ha.alarm_panels_text, &ha.fans_text}) {
+  for (const String* list : {&ha.locks_text, &ha.alarm_panels_text, &ha.fans_text, &ha.vacuums_text}) {
     for (const auto& id : parseSensorList(*list)) {
       const String payload = haBridgeConfig.findDetailValue(id);
       if (!payload.length()) continue;
@@ -1475,6 +1475,7 @@ void WebAdminServer::handleGetEntityOptions() {
   appendList("locks", parseSensorList(ha.locks_text));
   appendList("alarm_panels", parseSensorList(ha.alarm_panels_text));
   appendList("fans", parseSensorList(ha.fans_text));
+  appendList("vacuums", parseSensorList(ha.vacuums_text));
   appendList("calendars", parseSensorList(ha.calendars_text));
   appendList("cameras", parseSensorList(ha.cameras_text));
   // The screensaver picture: released images, then cameras.

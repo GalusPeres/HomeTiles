@@ -3048,12 +3048,12 @@ async function saveGestureEdge(select) {
     ['climate'], ['media_player'], ['weather'], ['camera'], ['lock'], ['alarm_control_panel'],
     ['number', 'input_number'], ['select', 'input_select'],
     ['datetime', 'date', 'time', 'input_datetime'], ['scene'], ['script'], ['button', 'input_button'],
-    ['automation'], ['humidifier'], ['siren'], ['remote'], ['calendar']
+    ['automation'], ['humidifier'], ['siren'], ['remote'], ['calendar'], ['vacuum']
   ];
   // Lists the Bridge searches (entity_search.py LIST_DOMAINS).
   const ENTITY_REMOTE_LISTS = new Set(['sensors', 'binary_sensors', 'numbers', 'selects', 'datetimes',
     'weathers', 'switches', 'media', 'climates', 'covers', 'cameras', 'images', 'locks', 'alarm_panels', 'fans',
-    'energy', 'scenes', 'calendars']);
+    'energy', 'scenes', 'calendars', 'vacuums']);
   const ENTITY_REMOTE_DELAY_MS = 250;
   const ENTITY_REMOTE_POLL_MS = 120;
   const ENTITY_REMOTE_TIMEOUT_MS = 5000;
@@ -4615,12 +4615,12 @@ async function saveGestureEdge(select) {
   // (tileTypeHasFixedIconColorOnly / tileTypeRulesUseOwnEntity in
   // tile_type_policy.h).
   const ICON_COLOR_FIXED_TYPES = ['2', '4', '8', '9', '10', '18'];
-  const ICON_COLOR_OWN_TYPES = ['1', '5', '12', '14', '15', '17', '19', '20', '21', '22', '23', '24', '25', '26'];
+  const ICON_COLOR_OWN_TYPES = ['1', '5', '12', '14', '15', '17', '19', '20', '21', '22', '23', '24', '25', '26', '29'];
   // The own entity field of each type (pairs, not an object with numeric keys).
   const ICON_COLOR_ENTITY_FIELDS = [['1', '_sensor_entity'], ['5', '_switch_entity'], ['12', '_weather_entity'],
     ['14', '_energy_entity'], ['15', '_media_entity'], ['17', '_climate_entity'], ['19', '_cover_entity'],
     ['20', '_binary_sensor_entity'], ['21', '_number_entity'], ['22', '_select_entity'], ['23', '_datetime_entity'],
-    ['24', '_lock_entity'], ['25', '_alarm_entity'], ['26', '_fan_entity']];
+    ['24', '_lock_entity'], ['25', '_alarm_entity'], ['26', '_fan_entity'], ['29', '_vacuum_entity']];
   // Domains shown by the Switch tile (tile_icon_source.cpp switch_domain).
   const ICON_COLOR_SWITCH_DOMAINS = ['light', 'switch', 'input_boolean', 'automation', 'fan',
     'humidifier', 'remote', 'siren'];
@@ -6680,7 +6680,7 @@ async function saveGestureEdge(select) {
   // Switch and Cover show their state (tile_geometry::compact_switch,
   // compact_cover).
   function supportsHalfSize(type) {
-    return isCompactSensorType(type) || isEditableValueType(type) || [2, 4, 5, 7, 8, 9, 10, 17, 18, 19, 24, 25, 26, 27].includes(Number(type));
+    return isCompactSensorType(type) || isEditableValueType(type) || [2, 4, 5, 7, 8, 9, 10, 17, 18, 19, 24, 25, 26, 27, 29].includes(Number(type));
   }
   // Every type resizes in half steps from 1x1; only half-size types may be half
   // a row high (mirrors tile_geometry::supported).
@@ -6770,7 +6770,7 @@ async function saveGestureEdge(select) {
     const compactIconTitle = [2, 4, 7, 8, 18].includes(Number(type)) && halfHeight;
     // Half-height Switch: icon, title and state like a compact Sensor.
     // A half-height Calendar: the next event's time and title (compact_calendar).
-    const compactSwitch = [5, 17, 19, 24, 25, 26, 27].includes(Number(type)) && halfHeight;
+    const compactSwitch = [5, 17, 19, 24, 25, 26, 27, 29].includes(Number(type)) && halfHeight;
     // Number, Select and Date/Time like a compact Sensor.
     const compactEditable = isEditableValueType(type) && halfHeight;
     if (compactEditable) valueFont = editableCompactValueFont(valueFont);
@@ -6784,7 +6784,7 @@ async function saveGestureEdge(select) {
     // (switch_layout::sensor_look).
     // The Cover position bar uses the same header (tile_header.h).
     // Lock, Alarm panel and Fan too (types/device).
-    const switchHeader = [5, 19, 24, 25, 26].includes(Number(type)) && el.classList.contains('switch-bar');
+    const switchHeader = [5, 19, 24, 25, 26, 29].includes(Number(type)) && el.classList.contains('switch-bar');
     // An upright bar keeps the header beside the disc (bar_orientation.h).
     const switchTall = switchHeader && Number(layout?.span_h) > 1 && !el.classList.contains('switch-upright');
     el.classList.toggle('switch-tall', switchTall);
@@ -8627,7 +8627,10 @@ async function saveGestureEdge(select) {
         span_w: tileSpan('span_w')});
     }
     if (previewKind === 'cover') applyCoverPreview(tileElem, coverPreviewState, halfHeight);
-    if (deviceKind) applyDevicePreview(tileElem, deviceKind, devicePreviewState, halfHeight, fanUpright);
+    if (deviceKind) {
+      applyDevicePreview(tileElem, deviceKind, devicePreviewState, halfHeight, fanUpright,
+        {w: tileSpan('span_w'), h: tileSpan('span_h')});
+    }
     if (wasActive) tileElem.classList.add('active');
     if (typeWas !== type && wasActive) {
       tileElem.classList.add('active');
@@ -10308,10 +10311,11 @@ async function saveGestureEdge(select) {
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }
-    } else if (safeType === 24 || safeType === 25 || safeType === 26) {
+    } else if (safeType === 24 || safeType === 25 || safeType === 26 || safeType === 29) {
       const kind = devicePreviewKind(safeType);
       fd.append(kind + '_entity', tile.sensor_entity || tile[kind + '_entity'] || '');
       if (safeType === 26) fd.append('bar_orientation', Number(tile.bar_orientation) === 1 ? '1' : '0');
+      if (safeType === 29) fd.append('vacuum_layout', Number(tile.sensor_display_mode) === 1 ? '1' : '0');
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }
@@ -11475,7 +11479,7 @@ async function saveGestureEdge(select) {
       }
       if (deviceKind) {
         applyDevicePreview(el, deviceKind, devicePreviewState, Number(tile.span_h) === 0.5,
-          Number(tile.bar_orientation) === 1);
+          Number(tile.bar_orientation) === 1, {w: Number(tile.span_w) || 1, h: Number(tile.span_h) || 1});
         applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
       }
       if (typeValue === '9') {
@@ -19238,7 +19242,8 @@ function maybeFillTitleFromSwitch(tab) {
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
   // Lock (24), Alarm panel (25) and Fan (26): the Switch tile's header with
-  // a control bar (types/device/device_tile.cpp). The preview mirrors the
+  // a control bar (types/device/device_tile.cpp); Vacuum (29) with its
+  // buttons and map (types/vacuum/vacuum_tile.cpp). The preview mirrors the
   // device: the state colors and icons of device_visual.h, the bar of
   // bar_model() and the words of DEVICE_I18N (types/device/web.cpp).
   const DEVICE_COLORS = {green: '#4CAF50', red: '#F44336', orange: '#FF9800', grey: '#9E9E9E', cyan: '#00BCD4'};
@@ -19250,7 +19255,8 @@ function maybeFillTitleFromSwitch(tab) {
 
   function devicePreviewKind(type) {
     const value = String(type);
-    return value === '24' ? 'lock' : (value === '25' ? 'alarm' : (value === '26' ? 'fan' : ''));
+    return value === '24' ? 'lock' : (value === '25' ? 'alarm' : (value === '26' ? 'fan' :
+      (value === '29' ? 'vacuum' : '')));
   }
 
   // The retained detail state (/api/sensor_values device_values).
@@ -19261,7 +19267,7 @@ function maybeFillTitleFromSwitch(tab) {
   // device_detail::parse(): a missing state stays apart from a known one.
   function parseDevicePreviewPayload(value) {
     const out = {valid: false, available: false, state: '', features: 0, percentage: null,
-      step: null, preset: ''};
+      step: null, preset: '', battery: null};
     const text = value === undefined || value === null ? '' : String(value).trim();
     if (!text.startsWith('{')) return out;
     try {
@@ -19278,6 +19284,10 @@ function maybeFillTitleFromSwitch(tab) {
         out.step = obj.percentage_step;
       }
       out.preset = typeof obj.preset_mode === 'string' ? obj.preset_mode : '';
+      // Vacuum (vacuum_detail::parse): the battery stays apart from 0.
+      if (typeof obj.battery === 'number' && Number.isFinite(obj.battery)) {
+        out.battery = Math.max(0, Math.min(100, Math.round(obj.battery)));
+      }
     } catch (e) {}
     return out;
   }
@@ -19299,7 +19309,8 @@ function maybeFillTitleFromSwitch(tab) {
   // device_visual::visual(): label, icon and state color.
   function devicePreviewVisual(kind, d) {
     const words = typeof DEVICE_I18N === 'object' ? (DEVICE_I18N[kind] || {}) : {};
-    const out = {label: '--', icon: kind === 'lock' ? 'lock' : (kind === 'alarm' ? 'shield' : 'fan-off'),
+    const out = {label: '--', icon: kind === 'lock' ? 'lock' : (kind === 'alarm' ? 'shield' :
+      (kind === 'vacuum' ? 'robot-vacuum' : 'fan-off')),
       color: panelRoleHex('icon-inactive', DEVICE_COLORS.grey), waiting: false};
     if (!d.valid) return out;
     const state = d.available ? d.state : 'unavailable';
@@ -19321,6 +19332,22 @@ function maybeFillTitleFromSwitch(tab) {
         out.color = DEVICE_COLORS.red;
         out.waiting = true;
       }
+      return out;
+    }
+    if (kind === 'vacuum') {
+      // vacuum_visual::visual(): the state and the battery.
+      out.label = words[state] || words.unknown || state;
+      if (!d.available) {
+        out.icon = 'robot-vacuum-off';
+        return out;
+      }
+      if (state === 'error') {
+        out.icon = 'robot-vacuum-alert';
+        out.color = DEVICE_COLORS.red;
+      } else if (['cleaning', 'returning', 'paused'].includes(state)) {
+        out.color = DEVICE_COLORS.cyan;
+      }
+      if (d.battery !== null && d.battery !== undefined) out.label += ' · ' + d.battery + ' %';
       return out;
     }
     if (kind === 'alarm') {
@@ -19376,6 +19403,10 @@ function maybeFillTitleFromSwitch(tab) {
   // The state line beside the disc and, for full tiles, the bar.
   function devicePreviewExtraHtml(kind, d, halfHeight) {
     let html = '<div class="tile-value tile-switch-state">' + unitTextHtml(devicePreviewVisual(kind, d).label) + '</div>';
+    if (kind === 'vacuum') {
+      if (!halfHeight) html += '<div class="tile-vacuum"></div>';
+      return html;
+    }
     if (!halfHeight) {
       html += '<div class="tile-switch" data-bar="none">' +
         '<div class="tile-switch-fill"><span class="tile-switch-handle"></span></div>' +
@@ -19390,10 +19421,54 @@ function maybeFillTitleFromSwitch(tab) {
       (icon ? '<i class="mdi mdi-' + escapeHtml(icon) + '"></i>' : '') + '</span>';
   }
 
+  // render_vacuum_tile(): one column the main button across the box, two
+  // columns Dock, the main button and Stop, two columns and rows the map
+  // centred with Dock left and the main button as a circle right.
+  function applyVacuumPreview(tileElem, d, halfHeight, spans) {
+    tileElem.classList.toggle('switch-bar', !halfHeight);
+    const box = tileElem.querySelector('.tile-vacuum');
+    if (!box) return;
+    const words = typeof DEVICE_I18N === 'object' ? (DEVICE_I18N.vacuum || {}) : {};
+    const w = Number(spans?.w) || 1;
+    const h = Number(spans?.h) || 1;
+    const layout = w >= 2 && h >= 2 ? 'map' : (w >= 2 ? 'row' : 'pill');
+    const pauses = d.state === 'cleaning' && (d.features & 4);
+    const ready = d.valid && d.available;
+    const glyph = '<i class="mdi mdi-' + (pauses ? 'pause' : 'play') + '"></i>';
+    const text = layout === 'map' ? '' : '<span>' + escapeHtml(pauses ? (words.pause || 'Pause') :
+      (words.clean || 'Clean')) + '</span>';
+    const main = '<span class="tile-vacuum-main' + (ready && (pauses || (d.features & 8192)) ? '' : ' off') + '">' +
+      glyph + text + '</span>';
+    const side = (icon, bit) => '<span class="tile-vacuum-side' + (ready && (d.features & bit) ? '' : ' off') +
+      '"><i class="mdi mdi-' + icon + '"></i></span>';
+    box.dataset.layout = layout;
+    if (layout === 'map') {
+      box.innerHTML = side('home-import-outline', 16) +
+        '<span class="tile-vacuum-map"><i class="mdi mdi-map-outline"></i></span>' + main;
+    } else if (layout === 'row') {
+      box.innerHTML = side('home-import-outline', 16) + main + side('stop', 8);
+    } else {
+      box.innerHTML = main;
+    }
+    const iconEl = tileElem.querySelector('.tile-icon');
+    const accent = iconEl ? getComputedStyle(iconEl).color : DEVICE_COLORS.cyan;
+    box.style.setProperty('--vacuum-accent', accent);
+    const rgb = cssColorChannels(accent);
+    if (rgb) {
+      const c = toneOklch(rgb);
+      box.style.setProperty('--vacuum-ink', toneHex(toneRgb(0.25, Math.min(c.C, 0.06), c.h)));
+    }
+  }
+
   // bar_model(): the bar the device draws for this state. `upright`: a
-  // Fan's bar stands below the header (bar_orientation.h).
-  function applyDevicePreview(tileElem, kind, d, halfHeight, upright = false) {
+  // Fan's bar stands below the header (bar_orientation.h). `spans`: the
+  // tile's size ({w, h}), for the Vacuum's layouts.
+  function applyDevicePreview(tileElem, kind, d, halfHeight, upright = false, spans = null) {
     if (!tileElem) return;
+    if (kind === 'vacuum') {
+      applyVacuumPreview(tileElem, d, halfHeight, spans);
+      return;
+    }
     tileElem.classList.toggle('switch-bar', !halfHeight);
     tileElem.classList.toggle('switch-upright', !halfHeight && kind === 'fan' && !!upright);
     const bar = tileElem.querySelector('.tile-switch');
@@ -19498,6 +19573,9 @@ function maybeFillTitleFromSwitch(tab) {
     // A Fan's bar upright (bar_orientation.h).
     const orientation = document.getElementById(tab + '_' + prefix + '_orientation');
     if (orientation) orientation.value = Number(data.bar_orientation) === 1 ? '1' : '0';
+    // A Vacuum's popup layout (sensor_display_mode: 0 map left, 1 centred).
+    const layout = document.getElementById(tab + '_' + prefix + '_layout');
+    if (layout) layout.value = Number(data.sensor_display_mode) === 1 ? '1' : '0';
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromEntity(tab, '_' + prefix + '_entity');
   }
@@ -19513,6 +19591,8 @@ function maybeFillTitleFromSwitch(tab) {
     if (popup) formData.append('popup_open_mode', popup.value || '1');
     const orientation = document.getElementById(tab + '_' + prefix + '_orientation');
     if (orientation) formData.append('bar_orientation', orientation.value === '1' ? '1' : '0');
+    const layout = document.getElementById(tab + '_' + prefix + '_layout');
+    if (layout) formData.append('vacuum_layout', layout.value === '1' ? '1' : '0');
   }
 
   function resetDeviceFields(tab, prefix) {
@@ -19525,6 +19605,8 @@ function maybeFillTitleFromSwitch(tab) {
     if (popup) popup.value = '1';
     const orientation = document.getElementById(tab + '_' + prefix + '_orientation');
     if (orientation) orientation.value = '0';
+    const layout = document.getElementById(tab + '_' + prefix + '_layout');
+    if (layout) layout.value = '0';
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
 
@@ -19538,6 +19620,9 @@ function maybeFillTitleFromSwitch(tab) {
   function loadFanFields(tab, data) { loadDeviceFields(tab, data, 'fan'); }
   function saveFanFields(tab, formData) { saveDeviceFields(tab, formData, 'fan'); }
   function resetFanFields(tab) { resetDeviceFields(tab, 'fan'); }
+  function loadVacuumFields(tab, data) { loadDeviceFields(tab, data, 'vacuum'); }
+  function saveVacuumFields(tab, formData) { saveDeviceFields(tab, formData, 'vacuum'); }
+  function resetVacuumFields(tab) { resetDeviceFields(tab, 'vacuum'); }
   // Calendar (27): up to four Home Assistant calendars in their own colors
   // (types/calendar/calendar_tile.cpp). The preview mirrors the device: the
   // events payload of /api/sensor_values calendar_values (calendar_events.h),

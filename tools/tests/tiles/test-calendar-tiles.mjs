@@ -41,7 +41,7 @@ for (const type of ['pin', 'light', 'climate', 'cover', 'sensor', 'weather', 'en
 }
 assert.match(calendarPopup, /viewNavigationPopupShown\(pop\.card, pop\.target\.entities\.c_str\(\)\);/,
   'navigation compares the whole calendar list with the tile (viewNavigationService)');
-assert.match(read('src/ui/navigation/view_navigation.cpp'), /hide_calendar_popup\(\);\s*hide_device_popup\(\);\n\}/);
+assert.match(read('src/ui/navigation/view_navigation.cpp'), /hide_calendar_popup\(\);\s*hide_device_popup\(\);\s*hide_vacuum_popup\(\);\n\}/);
 assert.match(read('src/ui/navigation/view_navigation.cpp'), /case TILE_CALENDAR:\s*case TILE_LOCK:/);
 assert.match(read('src/ui/ui_manager.cpp'), /preload_calendar_popup\(\);/);
 assert.match(read('src/tiles/runtime/tile_icon_source.cpp'), /calendar_popup_follow_tile_color\(color\);/);
@@ -129,8 +129,8 @@ for (const name of ['loadCalendarFields', 'saveCalendarFields', 'resetCalendarFi
   assert.ok(adminSource.includes(`function ${name}(`), name);
   extractDeliveredFunction(name);
 }
-assert.match(read('src/web/admin/tiles/entity-picker.js'), /\['remote'\], \['calendar'\]\s*\];/);
-assert.match(read('src/web/admin/tiles/entity-picker.js'), /'energy', 'scenes', 'calendars'\]\);/);
+assert.match(read('src/web/admin/tiles/entity-picker.js'), /\['remote'\], \['calendar'\], \['vacuum'\]\s*\];/);
+assert.match(read('src/web/admin/tiles/entity-picker.js'), /'energy', 'scenes', 'calendars', 'vacuums'\]\);/);
 assert.match(read('src/web/admin/tiles/import-export.js'), /\} else if \(safeType === 27\) \{/);
 assert.match(read('src/web/admin/tiles/snapshots.js'), /if \(Number\(tile\.type\) === 27 && snapshot\) \{/);
 // The preview's styles (lost once in a merge): the shared Sensor header and the

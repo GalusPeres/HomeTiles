@@ -2243,6 +2243,8 @@ static const LocaleProfile kLocaleDe = {
     {"Januar", "Februar", "März", "April", "Mai", "Juni",
      "Juli", "August", "September", "Oktober", "November", "Dezember"},
     1,  // Monday
+    {"Staubsauger", "Staubsauger-Entität", "Reinigen", "Pausieren", "Dock", "Stopp", "Saugkraft", "Räume", "Finden", "Spot", "nur diese Stelle", "der Sauger piept", "%u saugen", "Popup", "Karte links", "Karte Mitte"},
+    {"Saugt", "Angedockt", "Bereit", "Pausiert", "Fährt zum Dock", "Fehler", "Nicht verfügbar", "Unbekannt"},
     {"Leistungsfluss", "Solarleistung", "Netzleistung", "Batterieleistung", "Batterieladung", "Hausverbrauch", "Titel und Icon anzeigen", "Karte anzeigen", "Vorzeichen umkehren"},
     {"Entität wählen", "Suchen", "Keine Entität passt zu „{query}“",
      "Die Entitäten konnten nicht geladen werden. Die gewählte Entität bleibt erhalten.",
@@ -2252,7 +2254,7 @@ static const LocaleProfile kLocaleDe = {
     {"Sensor", "Binärsensor", "Licht", "Schalter", "Ventilator", "Cover", "Klima",
      "Mediaplayer", "Wetter", "Kamera", "Schloss", "Alarmanlage", "Zahl", "Auswahl",
      "Datum/Uhrzeit", "Szene", "Skript", "Taste", "Automation", "Luftbefeuchter",
-     "Sirene", "Fernbedienung", "Kalender"},
+     "Sirene", "Fernbedienung", "Kalender", "Staubsauger"},
     {"Automatisch", "Icon der Entität", "Kein Icon", "Nur Titel und Wert", "Kein Icon passt zu „{query}“",
      "Das Icon der Kachel bleibt"},
     {"Januar", "Februar", "März", "April", "Mai", "Juni",
@@ -2374,6 +2376,8 @@ static const LocaleProfile kLocaleEn = {
     {"January", "February", "March", "April", "May", "June",
      "July", "August", "September", "October", "November", "December"},
     0,  // Sunday
+    {"Vacuum", "Vacuum entity", "Clean", "Pause", "Dock", "Stop", "Suction", "Rooms", "Locate", "Spot", "only this spot", "the vacuum beeps", "Clean %u", "Popup", "Map left", "Map centre"},
+    {"Cleaning", "Docked", "Idle", "Paused", "Returning", "Error", "Unavailable", "Unknown"},
     {"Power flow", "Solar power", "Grid power", "Battery power", "Battery charge", "Home power", "Show title and icon", "Show card", "Invert sign"},
     {"Choose an entity", "Search", "No entity matches “{query}”",
      "Could not load the entities. The chosen entity stays as it is.",
@@ -2383,7 +2387,7 @@ static const LocaleProfile kLocaleEn = {
     {"Sensor", "Binary sensor", "Light", "Switch", "Fan", "Cover", "Climate",
      "Media player", "Weather", "Camera", "Lock", "Alarm panel", "Number", "Select",
      "Date/time", "Scene", "Script", "Button", "Automation", "Humidifier", "Siren",
-     "Remote", "Calendar"},
+     "Remote", "Calendar", "Vacuum"},
     {"Automatic", "The entity's icon", "No icon", "Title and value only", "No icon matches “{query}”",
      "The tile's own icon stays"},
     {"January", "February", "March", "April", "May", "June",
@@ -2510,6 +2514,8 @@ static const LocaleProfile kLocaleFr = {
     {"Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
      "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"},
     1,  // Monday
+    {"Aspirateur", "Entité aspirateur", "Nettoyer", "Pause", "Base", "Arrêt", "Puissance", "Pièces", "Localiser", "Spot", "seulement cet endroit", "l'aspirateur émet un bip", "Nettoyer %u", "Popup", "Carte à gauche", "Carte au centre"},
+    {"Nettoie", "Sur la base", "Inactif", "En pause", "Retour à la base", "Erreur", "Indisponible", "Inconnu"},
     {"Flux de puissance", "Puissance solaire", "Puissance réseau", "Puissance batterie", "Charge batterie", "Consommation maison", "Afficher le titre et l’icône", "Afficher la carte", "Inverser le signe"},
     {"Choisir une entité", "Rechercher", "Aucune entité ne correspond à « {query} »",
      "Impossible de charger les entités. L’entité choisie reste inchangée.",
@@ -2519,7 +2525,7 @@ static const LocaleProfile kLocaleFr = {
     {"Capteur", "Capteur binaire", "Lumière", "Interrupteur", "Ventilateur", "Volet",
      "Climat", "Lecteur multimédia", "Météo", "Caméra", "Serrure", "Alarme", "Nombre",
      "Sélection", "Date/heure", "Scène", "Script", "Bouton", "Automatisation",
-     "Humidificateur", "Sirène", "Télécommande", "Calendrier"},
+     "Humidificateur", "Sirène", "Télécommande", "Calendrier", "Aspirateur"},
     {"Automatique", "Icône de l’entité", "Aucune icône", "Titre et valeur seulement",
      "Aucune icône ne correspond à « {query} »", "L’icône de la tuile reste"},
     {"janvier", "février", "mars", "avril", "mai", "juin",
@@ -6021,6 +6027,8 @@ static const LocaleProfile kLocalePl = {
     {"Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
      "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"},
     1,  // Monday
+    {"Odkurzacz", "Encja odkurzacza", "Sprzątaj", "Pauza", "Stacja", "Stop", "Moc ssania", "Pokoje", "Znajdź", "Punkt", "tylko to miejsce", "odkurzacz piszczy", "Sprzątaj %u", "Okno", "Mapa z lewej", "Mapa na środku"},
+    {"Sprząta", "W stacji", "Bezczynny", "Wstrzymany", "Wraca do stacji", "Błąd", "Niedostępny", "Nieznany"},
     {"Przepływ mocy", "Moc solarna", "Moc sieci", "Moc baterii", "Naładowanie baterii", "Zużycie domu", "Pokaż tytuł i ikonę", "Pokaż kartę", "Odwróć znak"},
     {"Wybierz encję", "Szukaj", "Żadna encja nie pasuje do „{query}”",
      "Nie udało się wczytać encji. Wybrana encja pozostaje bez zmian.",
@@ -6030,7 +6038,7 @@ static const LocaleProfile kLocalePl = {
     {"Czujnik", "Czujnik binarny", "Światło", "Przełącznik", "Wentylator", "Roleta",
      "Klimat", "Odtwarzacz multimediów", "Pogoda", "Kamera", "Zamek", "Panel alarmowy",
      "Liczba", "Wybór", "Data/czas", "Scena", "Skrypt", "Przycisk", "Automatyzacja",
-     "Nawilżacz", "Syrena", "Pilot", "Kalendarz"},
+     "Nawilżacz", "Syrena", "Pilot", "Kalendarz", "Odkurzacz"},
     {"Automatyczna", "Ikona encji", "Brak ikony", "Tylko tytuł i wartość", "Żadna ikona nie pasuje do „{query}”",
      "Zostaje ikona kafelka"},
     {"stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca",
@@ -6086,6 +6094,8 @@ static const LocaleProfile kLocaleCs = {
     {"Leden", "Únor", "Březen", "Duben", "Květen", "Červen",
      "Červenec", "Srpen", "Září", "Říjen", "Listopad", "Prosinec"},
     1,  // Monday
+    {"Vysavač", "Entita vysavače", "Uklidit", "Pozastavit", "Stanice", "Stop", "Sací výkon", "Místnosti", "Najít", "Bod", "jen toto místo", "vysavač pípá", "Uklidit %u", "Okno", "Mapa vlevo", "Mapa uprostřed"},
+    {"Uklízí", "V základně", "Nečinný", "Pozastaveno", "Vrací se", "Chyba", "Nedostupné", "Neznámé"},
     {"Tok výkonu", "Solární výkon", "Výkon sítě", "Výkon baterie", "Nabití baterie", "Spotřeba domu", "Zobrazit název a ikonu", "Zobrazit kartu", "Obrátit znaménko"},
     {"Vybrat entitu", "Hledat", "Žádná entita neodpovídá „{query}“",
      "Entity se nepodařilo načíst. Vybraná entita zůstane beze změny.",
@@ -6095,7 +6105,7 @@ static const LocaleProfile kLocaleCs = {
     {"Senzor", "Binární senzor", "Světlo", "Vypínač", "Ventilátor", "Roleta",
      "Klima", "Přehrávač médií", "Počasí", "Kamera", "Zámek", "Alarmový panel",
      "Číslo", "Výběr", "Datum/čas", "Scéna", "Skript", "Tlačítko", "Automatizace",
-     "Zvlhčovač", "Siréna", "Dálkový ovladač", "Kalendář"},
+     "Zvlhčovač", "Siréna", "Dálkový ovladač", "Kalendář", "Vysavač"},
     {"Automaticky", "Ikona entity", "Bez ikony", "Pouze název a hodnota", "Žádná ikona neodpovídá „{query}“",
      "Zůstane ikona dlaždice"},
     {"ledna", "února", "března", "dubna", "května", "června",
@@ -6217,6 +6227,8 @@ static const LocaleProfile kLocaleEs = {
     {"Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"},
     1,  // Monday
+    {"Aspiradora", "Entidad de aspiradora", "Limpiar", "Pausar", "Base", "Parar", "Potencia", "Habitaciones", "Localizar", "Punto", "solo este punto", "la aspiradora pita", "Limpiar %u", "Popup", "Mapa a la izquierda", "Mapa en el centro"},
+    {"Limpiando", "En la base", "Inactiva", "En pausa", "Volviendo", "Error", "No disponible", "Desconocido"},
     {"Flujo de potencia", "Potencia solar", "Potencia de red", "Potencia de batería", "Carga de batería", "Consumo de la casa", "Mostrar título e icono", "Mostrar tarjeta", "Invertir signo"},
     {"Elige una entidad", "Buscar", "Ninguna entidad coincide con “{query}”",
      "No se pudieron cargar las entidades. La entidad elegida no cambia.",
@@ -6226,7 +6238,7 @@ static const LocaleProfile kLocaleEs = {
     {"Sensor", "Sensor binario", "Luz", "Interruptor", "Ventilador", "Persiana", "Clima",
      "Reproductor", "Tiempo", "Cámara", "Cerradura", "Alarma", "Número", "Selección",
      "Fecha/hora", "Escena", "Script", "Botón", "Automatización", "Humidificador", "Sirena",
-     "Mando", "Calendario"},
+     "Mando", "Calendario", "Aspiradora"},
     {"Automático", "Icono de la entidad", "Sin icono", "Solo título y valor", "Ningún icono coincide con “{query}”",
      "Se mantiene el icono del mosaico"},
     {"enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -6358,6 +6370,8 @@ static const LocaleProfile kLocaleSk = {
     {"Január", "Február", "Marec", "Apríl", "Máj", "Jún",
      "Júl", "August", "September", "Október", "November", "December"},
     1,  // Monday
+    {"Vysávač", "Entita vysávača", "Upratať", "Pozastaviť", "Stanica", "Stop", "Sací výkon", "Miestnosti", "Nájsť", "Bod", "len toto miesto", "vysávač pípa", "Upratať %u", "Okno", "Mapa vľavo", "Mapa v strede"},
+    {"Upratuje", "V stanici", "Nečinný", "Pozastavené", "Vracia sa", "Chyba", "Nedostupné", "Neznáme"},
     {"Tok výkonu", "Solárny výkon", "Výkon siete", "Výkon batérie", "Nabitie batérie", "Spotreba domu", "Zobraziť názov a ikonu", "Zobraziť kartu", "Obrátiť znamienko"},
     {"Vyberte entitu", "Hľadať", "Žiadna entita sa nezhoduje s „{query}“",
      "Nepodarilo sa načítať entity. Zvolená entita zostáva nezmenená.",
@@ -6367,7 +6381,7 @@ static const LocaleProfile kLocaleSk = {
     {"Senzor", "Binárny senzor", "Svetlo", "Prepínač", "Ventilátor", "Roleta", "Klíma",
      "Prehrávač médií", "Počasie", "Kamera", "Zámok", "Panel alarmu", "Číslo", "Výber",
      "Dátum/čas", "Scéna", "Skript", "Tlačidlo", "Automatizácia", "Zvlhčovač", "Siréna",
-     "Ovládač", "Kalendár"},
+     "Ovládač", "Kalendár", "Vysávač"},
     {"Automaticky", "Ikona entity", "Bez ikony", "Iba názov a hodnota", "Žiadna ikona sa nezhoduje s „{query}“",
      "Zostane ikona dlaždice"},
     {"januára", "februára", "marca", "apríla", "mája", "júna",
@@ -6489,6 +6503,8 @@ static const LocaleProfile kLocaleRu = {
     {"Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
      "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"},
     1,  // Monday
+    {"Пылесос", "Сущность пылесоса", "Уборка", "Пауза", "База", "Стоп", "Мощность", "Комнаты", "Найти", "Точка", "только это место", "пылесос пищит", "Убрать %u", "Окно", "Карта слева", "Карта по центру"},
+    {"Убирает", "На базе", "Ожидает", "Пауза", "Возвращается", "Ошибка", "Недоступно", "Неизвестно"},
     {"Поток мощности", "Солнечная мощность", "Мощность сети", "Мощность батареи", "Заряд батареи", "Потребление дома", "Показывать название и иконку", "Показывать карточку", "Инвертировать знак"},
     {"Выберите сущность", "Поиск", "Ни одна сущность не соответствует «{query}»",
      "Не удалось загрузить сущности. Выбранная сущность не меняется.",
@@ -6498,7 +6514,7 @@ static const LocaleProfile kLocaleRu = {
     {"Датчик", "Бинарный датчик", "Свет", "Выключатель", "Вентилятор", "Штора", "Климат",
      "Медиаплеер", "Погода", "Камера", "Замок", "Панель сигнализации", "Число", "Выбор",
      "Дата/время", "Сцена", "Скрипт", "Кнопка", "Автоматизация", "Увлажнитель", "Сирена",
-     "Пульт", "Календарь"},
+     "Пульт", "Календарь", "Пылесос"},
     {"Авто", "Иконка сущности", "Без иконки", "Только имя и значение", "Ни одна иконка не соответствует «{query}»",
      "Остаётся иконка плитки"},
     {"января", "февраля", "марта", "апреля", "мая", "июня",
@@ -6707,6 +6723,21 @@ const char* weather_tomorrow_label(const char* language_code) {
 const char* weather_sensor_label(const char* language_code, uint8_t index) {
   if (index >= 3) index = 2;
   return locale(language_code).weather_sensor_labels[index];
+}
+
+const char* vacuum_label(const char* language_code, VacuumLabel label) {
+  const uint8_t index = static_cast<uint8_t>(label);
+  return locale(language_code).vacuum_labels[index < static_cast<uint8_t>(VacuumLabel::Count) ? index : 0];
+}
+
+const char* vacuum_state_label(const char* language_code, const char* state) {
+  static const char* const kStates[] = {"cleaning", "docked", "idle", "paused", "returning", "error",
+                                        "unavailable", "unknown"};
+  const LocaleProfile& profile = locale(language_code);
+  for (size_t i = 0; i < sizeof(kStates) / sizeof(kStates[0]); ++i) {
+    if (state && strcmp(state, kStates[i]) == 0) return profile.vacuum_states[i];
+  }
+  return profile.vacuum_states[7];
 }
 
 const char* power_flow_label(const char* language_code, PowerFlowLabel label) {

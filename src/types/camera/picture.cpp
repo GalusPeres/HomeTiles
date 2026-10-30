@@ -16,6 +16,7 @@
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
+#include "src/types/vacuum/vacuum_map.h"
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/ui/popups/popup_shell.h"
 #include "src/ui/screensaver/image_screensaver.h"
@@ -283,6 +284,8 @@ void update_topics() {
       suffixes.push_back(suffix);
     }
   }
+  // The Vacuum tiles' and popup's maps share the tile picture topics.
+  vacuum_map::collect_topics(entities, suffixes);
   mqttSetTilePictures(entities.data(), suffixes.data(), entities.size());
 }
 
@@ -378,6 +381,7 @@ void service() {
     free_dsc(g_parked.front().dsc);
     g_parked.erase(g_parked.begin());
   }
+  vacuum_map::service();
   if (g_topics_due || now - g_topics_ms >= kTopicsEveryMs) {
     g_topics_due = false;
     g_topics_ms = now;

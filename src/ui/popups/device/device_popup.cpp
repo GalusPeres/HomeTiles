@@ -1,4 +1,5 @@
 #include "src/ui/popups/device/device_popup.h"
+#include "src/ui/popups/vacuum/vacuum_popup.h"
 
 #include <algorithm>
 #include <cmath>
@@ -1357,6 +1358,7 @@ void show_device_popup(const DevicePopupTarget& target) {
   hide_media_popup();
   hide_camera_popup();
   hide_calendar_popup();
+  hide_vacuum_popup();
   if (pop.target.entity != target.entity) pop.notice_until = 0;
   open_for(target);
 }

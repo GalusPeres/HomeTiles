@@ -18,6 +18,7 @@
 #include "src/types/text/renderer.h"
 #include "src/types/energy/renderer.h"
 #include "src/types/power_flow/renderer.h"
+#include "src/types/vacuum/vacuum_tile.h"
 #include "src/types/weather/renderer.h"
 #include "src/types/media/renderer.h"
 #include "src/types/climate/renderer.h"
@@ -304,6 +305,14 @@ void append_alarm_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
 }
 void append_fan_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
   append_device_fields_html(html, safeString(ctx.tab_id), TILE_FAN);
+}
+// Vacuum: the device field set and runtime, its own tile (types/vacuum).
+lv_obj_t* render_vacuum_wrapper(lv_obj_t* parent, int col, int row, const Tile& tile, uint8_t index,
+                                GridType grid_type, scene_publish_cb_t) {
+  return render_vacuum_tile(parent, col, row, tile, index, grid_type);
+}
+void append_vacuum_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
+  append_device_fields_html(html, safeString(ctx.tab_id), TILE_VACUUM);
 }
 // DEVICE_I18N once for the three types.
 void append_no_scripts(String&) {}
@@ -820,6 +829,24 @@ const TileTypeDescriptor kTileTypes[] = {
     append_no_scripts
   },
   {
+    TILE_VACUUM,
+    "Staubsauger",
+    "device",
+    "vacuum",
+    "device",
+    nullptr,
+    "loadVacuumFields",
+    "saveVacuumFields",
+    "resetVacuumFields",
+    0x2A2A2A,
+    false,
+    render_vacuum_wrapper,
+    apply_device_wrapper,
+    append_vacuum_fields_wrapper,
+    append_no_scripts,
+    append_no_scripts
+  },
+  {
     TILE_CALENDAR,
     "Kalender",
     "calendar",
@@ -1044,6 +1071,7 @@ static const char* localized_tile_type_label(const TileTypeDescriptor& entry) {
     case TILE_LOCK: return i18n::device_label(language, i18n::DeviceLabel::TypeLock);
     case TILE_ALARM: return i18n::device_label(language, i18n::DeviceLabel::TypeAlarm);
     case TILE_FAN: return i18n::device_label(language, i18n::DeviceLabel::TypeFan);
+    case TILE_VACUUM: return i18n::vacuum_label(language, i18n::VacuumLabel::Type);
     case TILE_CALENDAR: return i18n::calendar_label(language, i18n::CalendarLabel::TypeCalendar);
     case TILE_CAMERA: return tr.camera_tile_type;
     case TILE_CLIMATE: return i18n::climate_tile_type_label(language);

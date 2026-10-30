@@ -243,7 +243,7 @@ Plaintext:
 | `hello` | panel → Bridge | `-` | 0 | fresh 32-hex challenge | empty |
 | `session` | Bridge → panel | new random session id | 0 | the challenge it answers | empty |
 | `rekey` | Bridge → panel | `-` | 0 | `-` | empty |
-| `cmd` | panel → Bridge | current session | 1, 2, … | `scene`, `light`, `switch`, `media`, `climate`, `cover`, `camera`, `value`, `fan`, `lock`, `alarm`, `entities`, `tiles` | the unchanged plain command payload |
+| `cmd` | panel → Bridge | current session | 1, 2, … | `scene`, `light`, `switch`, `media`, `climate`, `cover`, `camera`, `value`, `fan`, `vacuum`, `lock`, `alarm`, `entities`, `tiles` | the unchanged plain command payload |
 | `data` | Bridge → panel | current session | 1, 2, … | `camera`, `local_camera`, `entities` or `tiles` | the unchanged plain payload of `{base}/stat/camera` or `{base}/cmnd/local_camera`, a search answer part, or a declaration acknowledgement |
 | `unpair` | both | current session | next number of the sender (continues `cmd`/`data`) | `-` | empty |
 

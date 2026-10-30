@@ -9,6 +9,7 @@
 #include "src/ui/popups/media/media_popup_layout.h"
 #include "src/ui/popups/popup_layout.h"
 #include "src/types/camera/picture.h"
+#include "src/types/vacuum/vacuum_map.h"
 #include "src/ui/screensaver/image_screensaver.h"
 
 namespace bridge_images {
@@ -53,6 +54,7 @@ void announce(const char* entity) {
   } else {
     image_screensaver_picture_arrived(entity);
     camera_picture::arrived(entity);
+    vacuum_map::arrived(entity);
   }
 }
 

@@ -1,5 +1,6 @@
   // Lock (24), Alarm panel (25) and Fan (26): the Switch tile's header with
-  // a control bar (types/device/device_tile.cpp). The preview mirrors the
+  // a control bar (types/device/device_tile.cpp); Vacuum (29) with its
+  // buttons and map (types/vacuum/vacuum_tile.cpp). The preview mirrors the
   // device: the state colors and icons of device_visual.h, the bar of
   // bar_model() and the words of DEVICE_I18N (types/device/web.cpp).
   const DEVICE_COLORS = {green: '#4CAF50', red: '#F44336', orange: '#FF9800', grey: '#9E9E9E', cyan: '#00BCD4'};
@@ -11,7 +12,8 @@
 
   function devicePreviewKind(type) {
     const value = String(type);
-    return value === '24' ? 'lock' : (value === '25' ? 'alarm' : (value === '26' ? 'fan' : ''));
+    return value === '24' ? 'lock' : (value === '25' ? 'alarm' : (value === '26' ? 'fan' :
+      (value === '29' ? 'vacuum' : '')));
   }
 
   // The retained detail state (/api/sensor_values device_values).
@@ -22,7 +24,7 @@
   // device_detail::parse(): a missing state stays apart from a known one.
   function parseDevicePreviewPayload(value) {
     const out = {valid: false, available: false, state: '', features: 0, percentage: null,
-      step: null, preset: ''};
+      step: null, preset: '', battery: null};
     const text = value === undefined || value === null ? '' : String(value).trim();
     if (!text.startsWith('{')) return out;
     try {
@@ -39,6 +41,10 @@
         out.step = obj.percentage_step;
       }
       out.preset = typeof obj.preset_mode === 'string' ? obj.preset_mode : '';
+      // Vacuum (vacuum_detail::parse): the battery stays apart from 0.
+      if (typeof obj.battery === 'number' && Number.isFinite(obj.battery)) {
+        out.battery = Math.max(0, Math.min(100, Math.round(obj.battery)));
+      }
     } catch (e) {}
     return out;
   }
@@ -60,7 +66,8 @@
   // device_visual::visual(): label, icon and state color.
   function devicePreviewVisual(kind, d) {
     const words = typeof DEVICE_I18N === 'object' ? (DEVICE_I18N[kind] || {}) : {};
-    const out = {label: '--', icon: kind === 'lock' ? 'lock' : (kind === 'alarm' ? 'shield' : 'fan-off'),
+    const out = {label: '--', icon: kind === 'lock' ? 'lock' : (kind === 'alarm' ? 'shield' :
+      (kind === 'vacuum' ? 'robot-vacuum' : 'fan-off')),
       color: panelRoleHex('icon-inactive', DEVICE_COLORS.grey), waiting: false};
     if (!d.valid) return out;
     const state = d.available ? d.state : 'unavailable';
@@ -82,6 +89,22 @@
         out.color = DEVICE_COLORS.red;
         out.waiting = true;
       }
+      return out;
+    }
+    if (kind === 'vacuum') {
+      // vacuum_visual::visual(): the state and the battery.
+      out.label = words[state] || words.unknown || state;
+      if (!d.available) {
+        out.icon = 'robot-vacuum-off';
+        return out;
+      }
+      if (state === 'error') {
+        out.icon = 'robot-vacuum-alert';
+        out.color = DEVICE_COLORS.red;
+      } else if (['cleaning', 'returning', 'paused'].includes(state)) {
+        out.color = DEVICE_COLORS.cyan;
+      }
+      if (d.battery !== null && d.battery !== undefined) out.label += ' · ' + d.battery + ' %';
       return out;
     }
     if (kind === 'alarm') {
@@ -137,6 +160,10 @@
   // The state line beside the disc and, for full tiles, the bar.
   function devicePreviewExtraHtml(kind, d, halfHeight) {
     let html = '<div class="tile-value tile-switch-state">' + unitTextHtml(devicePreviewVisual(kind, d).label) + '</div>';
+    if (kind === 'vacuum') {
+      if (!halfHeight) html += '<div class="tile-vacuum"></div>';
+      return html;
+    }
     if (!halfHeight) {
       html += '<div class="tile-switch" data-bar="none">' +
         '<div class="tile-switch-fill"><span class="tile-switch-handle"></span></div>' +
@@ -151,10 +178,54 @@
       (icon ? '<i class="mdi mdi-' + escapeHtml(icon) + '"></i>' : '') + '</span>';
   }
 
+  // render_vacuum_tile(): one column the main button across the box, two
+  // columns Dock, the main button and Stop, two columns and rows the map
+  // centred with Dock left and the main button as a circle right.
+  function applyVacuumPreview(tileElem, d, halfHeight, spans) {
+    tileElem.classList.toggle('switch-bar', !halfHeight);
+    const box = tileElem.querySelector('.tile-vacuum');
+    if (!box) return;
+    const words = typeof DEVICE_I18N === 'object' ? (DEVICE_I18N.vacuum || {}) : {};
+    const w = Number(spans?.w) || 1;
+    const h = Number(spans?.h) || 1;
+    const layout = w >= 2 && h >= 2 ? 'map' : (w >= 2 ? 'row' : 'pill');
+    const pauses = d.state === 'cleaning' && (d.features & 4);
+    const ready = d.valid && d.available;
+    const glyph = '<i class="mdi mdi-' + (pauses ? 'pause' : 'play') + '"></i>';
+    const text = layout === 'map' ? '' : '<span>' + escapeHtml(pauses ? (words.pause || 'Pause') :
+      (words.clean || 'Clean')) + '</span>';
+    const main = '<span class="tile-vacuum-main' + (ready && (pauses || (d.features & 8192)) ? '' : ' off') + '">' +
+      glyph + text + '</span>';
+    const side = (icon, bit) => '<span class="tile-vacuum-side' + (ready && (d.features & bit) ? '' : ' off') +
+      '"><i class="mdi mdi-' + icon + '"></i></span>';
+    box.dataset.layout = layout;
+    if (layout === 'map') {
+      box.innerHTML = side('home-import-outline', 16) +
+        '<span class="tile-vacuum-map"><i class="mdi mdi-map-outline"></i></span>' + main;
+    } else if (layout === 'row') {
+      box.innerHTML = side('home-import-outline', 16) + main + side('stop', 8);
+    } else {
+      box.innerHTML = main;
+    }
+    const iconEl = tileElem.querySelector('.tile-icon');
+    const accent = iconEl ? getComputedStyle(iconEl).color : DEVICE_COLORS.cyan;
+    box.style.setProperty('--vacuum-accent', accent);
+    const rgb = cssColorChannels(accent);
+    if (rgb) {
+      const c = toneOklch(rgb);
+      box.style.setProperty('--vacuum-ink', toneHex(toneRgb(0.25, Math.min(c.C, 0.06), c.h)));
+    }
+  }
+
   // bar_model(): the bar the device draws for this state. `upright`: a
-  // Fan's bar stands below the header (bar_orientation.h).
-  function applyDevicePreview(tileElem, kind, d, halfHeight, upright = false) {
+  // Fan's bar stands below the header (bar_orientation.h). `spans`: the
+  // tile's size ({w, h}), for the Vacuum's layouts.
+  function applyDevicePreview(tileElem, kind, d, halfHeight, upright = false, spans = null) {
     if (!tileElem) return;
+    if (kind === 'vacuum') {
+      applyVacuumPreview(tileElem, d, halfHeight, spans);
+      return;
+    }
     tileElem.classList.toggle('switch-bar', !halfHeight);
     tileElem.classList.toggle('switch-upright', !halfHeight && kind === 'fan' && !!upright);
     const bar = tileElem.querySelector('.tile-switch');
@@ -259,6 +330,9 @@
     // A Fan's bar upright (bar_orientation.h).
     const orientation = document.getElementById(tab + '_' + prefix + '_orientation');
     if (orientation) orientation.value = Number(data.bar_orientation) === 1 ? '1' : '0';
+    // A Vacuum's popup layout (sensor_display_mode: 0 map left, 1 centred).
+    const layout = document.getElementById(tab + '_' + prefix + '_layout');
+    if (layout) layout.value = Number(data.sensor_display_mode) === 1 ? '1' : '0';
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromEntity(tab, '_' + prefix + '_entity');
   }
@@ -274,6 +348,8 @@
     if (popup) formData.append('popup_open_mode', popup.value || '1');
     const orientation = document.getElementById(tab + '_' + prefix + '_orientation');
     if (orientation) formData.append('bar_orientation', orientation.value === '1' ? '1' : '0');
+    const layout = document.getElementById(tab + '_' + prefix + '_layout');
+    if (layout) formData.append('vacuum_layout', layout.value === '1' ? '1' : '0');
   }
 
   function resetDeviceFields(tab, prefix) {
@@ -286,6 +362,8 @@
     if (popup) popup.value = '1';
     const orientation = document.getElementById(tab + '_' + prefix + '_orientation');
     if (orientation) orientation.value = '0';
+    const layout = document.getElementById(tab + '_' + prefix + '_layout');
+    if (layout) layout.value = '0';
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
 
@@ -299,3 +377,6 @@
   function loadFanFields(tab, data) { loadDeviceFields(tab, data, 'fan'); }
   function saveFanFields(tab, formData) { saveDeviceFields(tab, formData, 'fan'); }
   function resetFanFields(tab) { resetDeviceFields(tab, 'fan'); }
+  function loadVacuumFields(tab, data) { loadDeviceFields(tab, data, 'vacuum'); }
+  function saveVacuumFields(tab, formData) { saveDeviceFields(tab, formData, 'vacuum'); }
+  function resetVacuumFields(tab) { resetDeviceFields(tab, 'vacuum'); }

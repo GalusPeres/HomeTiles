@@ -14,10 +14,14 @@ namespace {
 const char* language() { return configManager.getConfig().language; }
 
 const char* entity_domain(TileType type) {
-  return type == TILE_LOCK ? "lock" : type == TILE_ALARM ? "alarm_control_panel" : "fan";
+  return type == TILE_LOCK    ? "lock"
+         : type == TILE_ALARM  ? "alarm_control_panel"
+         : type == TILE_VACUUM ? "vacuum"
+                               : "fan";
 }
 
 const char* entity_label(TileType type) {
+  if (type == TILE_VACUUM) return i18n::vacuum_label(language(), i18n::VacuumLabel::Entity);
   const i18n::DeviceLabel label = type == TILE_LOCK    ? i18n::DeviceLabel::EntityLock
                                   : type == TILE_ALARM ? i18n::DeviceLabel::EntityAlarm
                                                        : i18n::DeviceLabel::EntityFan;
@@ -27,7 +31,7 @@ const char* entity_label(TileType type) {
 }  // namespace
 
 const char* device_field_prefix(TileType type) {
-  return type == TILE_LOCK ? "lock" : type == TILE_ALARM ? "alarm" : "fan";
+  return type == TILE_LOCK ? "lock" : type == TILE_ALARM ? "alarm" : type == TILE_VACUUM ? "vacuum" : "fan";
 }
 
 bool device_entity_matches(TileType type, const String& entity) {
@@ -51,11 +55,23 @@ void append_device_fields_html(String& html, const String& tab_id, TileType type
   html += "_fields\" class=\"type-fields\">";
   const String entity_field = String(prefix) + "_entity";
   appendEntityPickerField(html, tab_id, entity_field.c_str(), entity_label(type),
-                          type == TILE_LOCK ? "locks" : type == TILE_ALARM ? "alarm_panels" : "fans");
+                          type == TILE_LOCK    ? "locks"
+                          : type == TILE_ALARM  ? "alarm_panels"
+                          : type == TILE_VACUUM ? "vacuums"
+                                                : "fans");
   // A Fan's bar upright like the Switch tile's (bar_orientation.h).
   if (type == TILE_FAN) {
     const SwitchChoice orientations[] = {{"0", tr.bar_horizontal}, {"1", tr.bar_upright}};
     append_switch_choice(html, tab_id, "fan_orientation", tr.bar_orientation, orientations, 2);
+  }
+  // A Vacuum's popup: the map left beside the values or centred above them
+  // (sensor_display_mode, like the Media popup's cover).
+  if (type == TILE_VACUUM) {
+    const char* lang = language();
+    const SwitchChoice layouts[] = {{"0", i18n::vacuum_label(lang, i18n::VacuumLabel::MapLeft)},
+                                    {"1", i18n::vacuum_label(lang, i18n::VacuumLabel::MapCentered)}};
+    append_switch_choice(html, tab_id, "vacuum_layout", i18n::vacuum_label(lang, i18n::VacuumLabel::Layout),
+                         layouts, 2);
   }
   // The state size like the Switch tile (tile_header.h): the half-height
   // Sensor value sizes beside the disc, the Sensor value sizes from 1.5 rows.
@@ -99,7 +115,9 @@ bool apply_device_fields_from_request(WebServer& server, Tile& tile) {
     const int font = server.arg("sensor_value_font").toInt();
     tile.sensor_value_font = font >= 1 && font <= SENSOR_VALUE_FONT_MAX ? static_cast<uint8_t>(font) : 0;
   }
-  tile.sensor_display_mode = 0;
+  // A Vacuum's popup layout: 1 = the map centred (vacuum_popup.h).
+  tile.sensor_display_mode =
+      type == TILE_VACUUM && server.hasArg("vacuum_layout") && server.arg("vacuum_layout").toInt() == 1 ? 1 : 0;
   tile.sensor_gauge_min = 0;
   tile.sensor_gauge_max = 100;
   tile.key_code = 0;
@@ -110,7 +128,7 @@ bool apply_device_fields_from_request(WebServer& server, Tile& tile) {
 void append_device_scripts(String& html) {
   // The preview's words from the central translations, as one JSON object
   // (escaped for a script element).
-  DynamicJsonDocument doc(4096);
+  DynamicJsonDocument doc(6144);
   const char* lang = language();
   const auto& tr = i18n::strings(lang);
   JsonObject lock = doc.createNestedObject("lock");
@@ -130,6 +148,12 @@ void append_device_scripts(String& html) {
   fan["speed"] = i18n::device_label(lang, i18n::DeviceLabel::FanSpeed);
   fan["unavailable"] = i18n::entity_state_label(lang, "unavailable");
   fan["unknown"] = i18n::entity_state_label(lang, "unknown");
+  JsonObject vacuum = doc.createNestedObject("vacuum");
+  for (const char* state : {"cleaning", "docked", "idle", "paused", "returning", "error", "unavailable", "unknown"}) {
+    vacuum[state] = i18n::vacuum_state_label(lang, state);
+  }
+  vacuum["clean"] = i18n::vacuum_label(lang, i18n::VacuumLabel::Clean);
+  vacuum["pause"] = i18n::vacuum_label(lang, i18n::VacuumLabel::Pause);
   String json;
   serializeJson(doc, json);
   json.replace("<", "\\u003c");

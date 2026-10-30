@@ -25,6 +25,7 @@
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/device/device_popup.h"
+#include "src/ui/popups/vacuum/vacuum_popup.h"
 #include "src/ui/popups/calendar/calendar_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
@@ -1651,6 +1652,7 @@ void show_energy_popup(const EnergyPopupInit& init) {
   hide_weather_popup();
   hide_media_popup();
   hide_device_popup();
+  hide_vacuum_popup();
   hide_calendar_popup();
 
   if (g_energy_popup_ctx && g_energy_popup_ctx->overlay && g_energy_popup_ctx->card) {

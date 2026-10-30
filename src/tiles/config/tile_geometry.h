@@ -15,8 +15,11 @@ inline bool icon_title(int type) {
 }
 // Number, Select and Date/Time render through the Sensor tile.
 inline bool editable(int type) { return type == TILE_NUMBER || type == TILE_SELECT || type == TILE_DATETIME; }
-// Lock, Alarm panel and Fan: the Switch tile's header with their control bar.
-inline bool device_control(int type) { return type == TILE_LOCK || type == TILE_ALARM || type == TILE_FAN; }
+// Lock, Alarm panel, Fan and Vacuum: the Switch tile's header with their
+// controls.
+inline bool device_control(int type) {
+  return type == TILE_LOCK || type == TILE_ALARM || type == TILE_FAN || type == TILE_VACUUM;
+}
 // Calendar: half height shows the next event like a Sensor chip.
 inline bool calendar(int type) { return type == TILE_CALENDAR; }
 // Types that may use half-cell sizes (mirrors supportsHalfSize in layout.js).

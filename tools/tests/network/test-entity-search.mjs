@@ -14,7 +14,7 @@ const read = file => readRepoFile(file).replace(/\r\n?/g, '\n');
 
 // ---- Sealed only ----
 const core = read('src/network/secure/command_channel_core.h');
-assert.match(core, /"alarm", "entities", "tiles"\};/, 'search and report are sealed commands');
+assert.match(core, /"alarm", "entities",\s*"tiles"\};/, 'search and report are sealed commands');
 const maxBody = Number(core.match(/kMaxBodyLength = (\d+)/)?.[1]);
 assert.ok(maxBody >= 2048, 'sealed body limit');
 const channel = read('src/network/secure/command_channel.cpp');
@@ -43,8 +43,10 @@ assert.match(search, /g_answer\.received = 0;\s*g_answer\.full = false;\s*g_answ
 // declarations; nothing it serves can change the next declaration (the loop
 // of b232-b235: a reported entity came back released, was dropped from the
 // next report, removed by the Bridge and reported again).
-assert.equal((search.match(/haBridgeConfig\./g) || []).length, 6,
-  'only the five capability checks and the own sensor slots read the Bridge configuration');
+assert.equal((search.match(/haBridgeConfig\./g) || []).length, 7,
+  'only the six capability checks and the own sensor slots read the Bridge configuration');
+assert.match(search, /if \(list == "vacuums"\) return haBridgeConfig\.supportsVacuums\(\);/,
+  'vacuums only from a Bridge that serves them (level 6)');
 assert.match(search, /if \(list == "calendars"\) return haBridgeConfig\.supportsCalendars\(\);/,
   'calendars only from a Bridge that serves them (level 5)');
 assert.match(search, /if \(list == "scenes"\) return haBridgeConfig\.supportsSceneSearch\(\);/,

@@ -19,6 +19,7 @@
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/device/device_popup.h"
+#include "src/ui/popups/vacuum/vacuum_popup.h"
 #include "src/ui/popups/energy/energy_popup.h"
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/media/media_popup.h"
@@ -841,6 +842,7 @@ void show_calendar_popup(const CalendarPopupTarget& target) {
   hide_media_popup();
   hide_camera_popup();
   hide_device_popup();
+  hide_vacuum_popup();
   const bool same = pop.target.entities == target.entities;
   pop.target = target;
   pop.entity_count = static_cast<uint8_t>(

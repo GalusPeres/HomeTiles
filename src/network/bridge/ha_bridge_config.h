@@ -54,6 +54,9 @@ struct HaBridgeConfigData {
   String locks_text;
   String alarm_panels_text;
   String fans_text;
+  // Vacuum tiles (Bridge key vacuums; their state on the additive `detail`
+  // topic, types/vacuum/vacuum_detail.h).
+  String vacuums_text;
   // Calendar tiles (Bridge key calendars; their events come on the
   // additive `events` topic, types/calendar/calendar_store.h).
   String calendars_text;
@@ -107,6 +110,8 @@ public:
   bool supportsEnergySearch() const { return entity_search_ >= 3; }
   bool supportsSceneSearch() const { return entity_search_ >= 4; }
   bool supportsCalendars() const { return entity_search_ >= 5; }
+  // Vacuums, their detail state and commands (Bridge level 6).
+  bool supportsVacuums() const { return entity_search_ >= 6; }
   // The live Bridge configuration announced "push": 1. Such a Bridge sends
   // name, unit and icon changes by itself, so the panel's periodic refresh is
   // only a slow safety net. Not stored: 0 until the configuration arrived.

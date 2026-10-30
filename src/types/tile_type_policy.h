@@ -6,10 +6,11 @@ static constexpr bool tileTypeIsEditableValue(int type) {
   return type == TILE_NUMBER || type == TILE_SELECT || type == TILE_DATETIME;
 }
 
-// Lock, Alarm panel and Fan read the Bridge's additive `detail` state topic
-// (src/types/device/device_state.h) instead of the plain state.
+// Lock, Alarm panel, Fan and Vacuum read the Bridge's additive `detail` state
+// topic (src/types/device/device_detail.h, src/types/vacuum/vacuum_detail.h)
+// instead of the plain state.
 static constexpr bool tileTypeIsDeviceControl(int type) {
-  return type == TILE_LOCK || type == TILE_ALARM || type == TILE_FAN;
+  return type == TILE_LOCK || type == TILE_ALARM || type == TILE_FAN || type == TILE_VACUUM;
 }
 
 // Calendar keeps up to four calendar entities in sensor_entity, separated by

@@ -59,7 +59,7 @@ assert.doesNotMatch(renderer, /schedule_live|g_live_timer|live_timer_cb/);
 assert.match(renderer, /if \(g_drag\.data == data\) \{[\s\S]*?g_drag = CoverDrag\{\};\s*\}\s*delete data;/);
 
 // Web Admin: half-size type, compact classes and the Switch preview's bar.
-assert.match(read('src/web/admin/tiles/layout.js'), /\[2, 4, 5, 7, 8, 9, 10, 17, 18, 19, 24, 25, 26, 27\]\.includes\(Number\(type\)\)/);
+assert.match(read('src/web/admin/tiles/layout.js'), /\[2, 4, 5, 7, 8, 9, 10, 17, 18, 19, 24, 25, 26, 27, 29\]\.includes\(Number\(type\)\)/);
 assert.ok(read('src/web/server/render/web_admin_html.cpp').includes('tile_geometry::compact_cover(tile.type, span_w, span_h)'));
 const admin = read('src/types/cover/admin.js');
 assert.ok(admin.includes("bar.style.setProperty('--switch-accent', coverPreviewColor(state));") &&

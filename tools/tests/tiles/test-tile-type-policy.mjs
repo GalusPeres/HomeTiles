@@ -20,15 +20,15 @@ const persistedIds = [
 // These expected sets characterize the pre-refactor consumers independently.
 const policies = [
   ['isRetiredTileType', [3, 6, 11, 13]],
-  // Lock, Alarm panel and Fan (24-26) store their entity and popup gesture
+  // Lock, Alarm panel, Fan (24-26) and Vacuum (29) store their entity and popup gesture
   // like the Cover and read their own detail state (not the cached payload).
   // The Scene tile (2) stores the scene, script or button id it runs.
-  ['entityTileStoresSensorEntity', [1, 2, 5, 12, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]],
+  ['entityTileStoresSensorEntity', [1, 2, 5, 12, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29]],
   ['tileTypeUsesCachedEntityState', [1, 5, 12, 14, 15, 17, 19, 20, 21, 22, 23]],
-  ['tileTypeStoresPopupMode', [1, 5, 12, 14, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27]],
-  ['tileTypeStoresPopupModeDirectly', [1, 12, 14, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27]],
-  ['tileTypeHasDynamicMqttRoute', [1, 5, 12, 15, 17, 19, 20, 21, 22, 23, 24, 25, 26]],
-  ['tileTypeSubscribesDynamicState', [1, 5, 14, 15, 17, 19, 20, 21, 22, 23, 24, 25, 26]],
+  ['tileTypeStoresPopupMode', [1, 5, 12, 14, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29]],
+  ['tileTypeStoresPopupModeDirectly', [1, 12, 14, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29]],
+  ['tileTypeHasDynamicMqttRoute', [1, 5, 12, 15, 17, 19, 20, 21, 22, 23, 24, 25, 26, 29]],
+  ['tileTypeSubscribesDynamicState', [1, 5, 14, 15, 17, 19, 20, 21, 22, 23, 24, 25, 26, 29]],
   ['tileTypeSubscribesScreensaverState', [1, 5, 14, 15, 19, 20, 21, 22, 23]],
   ['tileTypeAllowedInScreensaver', [0, 1, 2, 5, 14, 15, 19, 20, 21, 22, 23]],
   ['tileTypeRefreshesEntityIcon', [1, 2, 5, 14, 15, 17, 19, 20, 21, 22, 23]],

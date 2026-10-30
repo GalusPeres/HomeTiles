@@ -17,7 +17,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
 
 // Stable ID, registry and its type module.
-assert.match(read('src/types/tile_type.h'), /TILE_POWER_FLOW = 28\n\};/);
+assert.match(read('src/types/tile_type.h'), /TILE_POWER_FLOW = 28,\n/);
 const registry = read('src/types/types_registry.cpp');
 assert.match(registry, /TILE_POWER_FLOW,\s*"Leistungsfluss",\s*"power-flow",\s*"power_flow",\s*"power_flow",\s*nullptr,\s*"loadPowerFlowFields",\s*"savePowerFlowFields",\s*"resetPowerFlowFields",\s*0x2A2A2A,\s*false,\s*render_power_flow_wrapper,\s*apply_power_flow_wrapper,\s*append_power_flow_fields_wrapper,\s*append_power_flow_styles,\s*append_power_flow_scripts/);
 assert.ok(registry.includes('case TILE_POWER_FLOW: return i18n::power_flow_label(language, i18n::PowerFlowLabel::Type);'));

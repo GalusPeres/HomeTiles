@@ -100,6 +100,10 @@ eye-off
 factory
 fan
 fan-off
+fan-plus
+fan-speed-1
+fan-speed-2
+fan-speed-3
 file
 fire
 folder
@@ -123,6 +127,7 @@ hexagon
 history
 home
 home-analytics
+home-import-outline
 home-lightning-bolt
 home-outline
 icon-name
@@ -151,6 +156,9 @@ lock-open-variant
 lock-outline
 login-variant
 magnify
+map
+map-marker
+map-outline
 microphone
 minus
 mirror
@@ -202,6 +210,8 @@ repeat
 repeat-once
 resize
 restart
+robot-vacuum-alert
+robot-vacuum-off
 rocket-launch
 rocket-launch-outline
 roller-shade
@@ -253,6 +263,7 @@ switch
 tab
 tag
 target
+target-variant
 television
 television-play
 temperature-kelvin
@@ -271,6 +282,7 @@ tray-arrow-down
 tune-variant
 update
 usb
+vacuum
 vibrate
 video
 view-grid-plus-outline

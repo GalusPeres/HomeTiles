@@ -1551,6 +1551,7 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
   } offered[] = {{&cfg.numbers_text, "control"}, {&cfg.selects_text, "control"},
                  {&cfg.datetimes_text, "control"}, {&cfg.locks_text, "detail"},
                  {&cfg.alarm_panels_text, "detail"}, {&cfg.fans_text, "detail"},
+                 {&cfg.vacuums_text, "detail"},
                  // Calendar tiles read the events of every offered calendar.
                  {&cfg.calendars_text, "events"}};
   // Events of calendars the Bridge stopped offering go.

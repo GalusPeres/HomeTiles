@@ -14,7 +14,10 @@
 #include "src/network/network_manager.h"
 #include "src/network/secure/command_channel.h"
 #include "src/types/device/device_tile.h"
+#include "src/types/vacuum/vacuum_control.h"
+#include "src/types/vacuum/vacuum_tile.h"
 #include "src/ui/popups/device/device_popup.h"
+#include "src/ui/popups/vacuum/vacuum_popup.h"
 #include "src/web/server/auth/web_admin_auth.h"
 
 namespace device_control {
@@ -163,6 +166,14 @@ Detail detail(const String& entity) {
 }
 
 void queue_detail(const String& entity, const char* payload, size_t length) {
+  // A vacuum's detail is larger (rooms, fan speeds) and parsed into its own
+  // cache (vacuum_control.h).
+  if (entity.startsWith("vacuum.")) {
+    if (!payload || !vacuum_control::accept_detail(entity, payload, length)) return;
+    haBridgeConfig.updateDetailValue(entity, String(payload).substring(0, length));
+    mark_changed(entity);
+    return;
+  }
   if (!entity.length() || !payload || length > device_detail::kMaxPayload) return;
   const Detail parsed = device_detail::parse(payload, length);
   if (!parsed.valid) {
@@ -227,6 +238,8 @@ void process(uint8_t budget) {
     g_changed[g_changed_count] = "";
     device_tiles_refresh(entity);
     device_popup_refresh(entity);
+    vacuum_tiles_refresh(entity);
+    vacuum_popup_refresh(entity);
   }
   for (uint8_t i = 0; i < g_answer_count; ++i) deliver(g_answers[i]);
   for (uint8_t i = 0; i < g_answer_count; ++i) g_answers[i] = Answer{};

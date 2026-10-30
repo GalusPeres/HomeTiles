@@ -226,7 +226,7 @@ struct Manager { Config cfg; const Config& getConfig() { return cfg; } } configM
 ${surfaceStyleHost(root)}
 enum : int { TILE_SENSOR = 1, TILE_BINARY_SENSOR, TILE_ENERGY, TILE_SCENE, TILE_FOLDER, TILE_BACK, TILE_CAMERA, TILE_SETTINGS,
   TILE_NUMBER, TILE_SELECT, TILE_DATETIME, TILE_LOCK, TILE_ALARM, TILE_FAN, TILE_CLOCK, TILE_SWITCH, TILE_COVER, TILE_CLIMATE,
-  TILE_TEXT, TILE_CALENDAR };
+  TILE_TEXT, TILE_CALENDAR, TILE_VACUUM };
 // PSRAM tables (psram_static.h) come from the host's heap.
 #include <new>
 #define MALLOC_CAP_SPIRAM 0

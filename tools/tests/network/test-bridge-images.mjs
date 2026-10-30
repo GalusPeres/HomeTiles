@@ -122,7 +122,7 @@ assert.match(images, /if \(length == 0\) \{\s*for \(Picture& picture : g_picture
 assert.match(images, /return picture\.jpeg && strcmp\(picture\.entity_id, entity_id\) == 0 && picture\.width == width &&\s*picture\.height == height && picture\.fit == fit;/);
 assert.match(images, /if \(!parseHeader\(payload, length, header\) \|\| header\.width != width \|\| header\.height != height\) \{[\s\S]*?return true;\s*\}/,
   'a malformed picture is dropped');
-assert.match(images, /if \(strncmp\(entity, "media_player\.", 13\) == 0\) \{\s*tile_renderer_media_picture_arrived\(entity\);\s*\} else \{\s*image_screensaver_picture_arrived\(entity\);\s*camera_picture::arrived\(entity\);\s*\}/,
+assert.match(images, /if \(strncmp\(entity, "media_player\.", 13\) == 0\) \{\s*tile_renderer_media_picture_arrived\(entity\);\s*\} else \{\s*image_screensaver_picture_arrived\(entity\);\s*camera_picture::arrived\(entity\);\s*vacuum_map::arrived\(entity\);\s*\}/,
   'a cover goes to the tiles, an image or camera picture to the screensaver and the Camera tiles');
 assert.match(readRepoFile('src/ui/screensaver/image_screensaver.cpp'),
   /picture = bridge_images::find\(config\.picture_entity\.c_str\(\),\s*static_cast<uint16_t>\(grid_layout::screen_w\(\)\),\s*static_cast<uint16_t>\(grid_layout::screen_h\(\)\), config\.picture_fit\);/,

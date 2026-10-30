@@ -127,15 +127,22 @@ assert.ok(!read('src/web/admin/tiles/layout.js').includes('vacuumMap'), 'the map
 const visualH = read('src/types/vacuum/vacuum_visual.h');
 assert.ok(visualH.includes('inline String values_line(const vacuum_detail::Detail& d) {'));
 const popupRow = read('src/ui/popups/vacuum/vacuum_popup.cpp');
-// User 2026-10-30: the popup's Clean, Stop and Dock are the tile's buttons,
-// three equal surfaces from the card's left edge to the menu button.
+// User 2026-10-30 (mockups vacuum/popup-row.html, popup-row-languages.html):
+// Clean, Stop and Dock without a surface at rest (a surface reads as a
+// state), each as wide as its icon and text, the group in the card's middle
+// in every language; Clean as wide as the longer of Clean and Pause.
 assert.ok(/pop\.main = row_button\(pop\.root, 0, "play"[\s\S]*?pop\.stop = row_button\(pop\.root, 1, "stop"[\s\S]*?pop\.dock = row_button\(pop\.root, 2, "home-import-outline"/.test(popupRow),
   'the popup row: Clean, Stop, Dock');
-assert.ok(popupRow.includes('ui_surface_style::apply_radius(btn, climate_layout::kControlRadius, 0);') &&
-  popupRow.includes('filled(btn, c);'), 'surfaces with the tile buttons\' radius');
-assert.ok(popupRow.includes('const int width = usable * (i + 1) / 3 - usable * i / 3;') &&
-  popupRow.includes('right = lv_obj_get_style_x(pop.menu_button, LV_PART_MAIN) - kRowGap;'), 'equal widths up to the menu button');
+assert.match(popupRow, /lv_obj_set_style_radius\(btn, LV_RADIUS_CIRCLE, 0\);\s*press_fill\(btn, c\);/,
+  'no surface at rest, the round fill while pressed');
+assert.ok(popupRow.includes('std::max(text_width(text(i18n::VacuumLabel::Clean), font), text_width(text(i18n::VacuumLabel::Pause), font))'),
+  'Clean keeps its width when it turns to Pause');
+assert.ok(popupRow.includes('widths[i] = glyphs[i] + kRowGlyphGap + words[i] + 2 * kRowPad;'), 'each as wide as it needs');
+assert.ok(popupRow.includes('int x = popup_layout::kCardWidth / 2 - total / 2;') &&
+  popupRow.includes('if (x + total > right) x = right - total;'), 'the group in the middle, left of the menu button');
 assert.match(popupRow, /set_shown\(pop\.menu_button, menu\);\s*place_row\(\);/);
+assert.ok(popupRow.includes('lv_obj_set_style_text_color(pop.main_glyph, lv_color_hex(c.icon), 0);') &&
+  popupRow.includes('lv_obj_set_style_text_color(pop.main_text, lv_color_hex(c.icon), 0);'), "Clean in the vacuum's color");
 assert.ok(!popupRow.includes('text_button(') && !popupRow.includes('kRowStep'), 'no spread text buttons');
 // User 2026-10-30: the map still came after the popup. Like the Media tile
 // keeps its popup cover decoded (MediaCoverRef::popup_dsc), the wish is
@@ -188,7 +195,7 @@ assert.ok(tileSource.includes('haBridgeConfig.findEntityIcon(view->entity)'));
 const visual = read('src/types/vacuum/vacuum_visual.h');
 assert.ok(visual.includes('constexpr uint32_t kColor = 0x29B6F6;') && !visual.includes('on_accent'));
 assert.ok(!/grey\(\)[^;]*;\s*\}\s*if \(vacuum_detail::is\(d, "error"\)\)/.test(visual));
-assert.ok(popup.includes('filled(btn, c);') && popup.includes('pop.row_texts[slot] = add_text(btn, popup_layout::font20(), c.text, label);'));
+assert.ok(popup.includes('filled(pop.go, c);') && popup.includes('pop.row_texts[slot] = add_text(btn, popup_layout::font24(), c.text, label);'));
 assert.ok(popup.includes('value.text = add_text(value.box, popup_layout::font20(), c.text, "");'), 'values in the Media times size');
 assert.ok(map.includes('lv_obj_remove_style_all(box);'), 'no white default style');
 // User 2026-10-30 on b622: no tinted map (black like the map's own

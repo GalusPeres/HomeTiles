@@ -15,7 +15,6 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
-#include "src/types/climate/layout.h"
 #include "src/types/vacuum/vacuum_control.h"
 #include "src/types/vacuum/vacuum_map.h"
 #include "src/types/vacuum/vacuum_visual.h"
@@ -39,7 +38,6 @@
 #include "src/ui/popups/weather/weather_popup.h"
 #include "src/ui/shared/title_label.h"
 #include "src/ui/shared/tone_color.h"
-#include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/shared/ui_theme.h"
 #include "src/ui/tabs/settings/settings_style.h"
 
@@ -48,11 +46,16 @@ namespace {
 namespace ml = media_popup_layout;
 using vacuum_detail::Detail;
 
-// The row (user 2026-10-30): Clean, Stop and Dock as the tile's buttons
-// (vacuum_tile.cpp row_button), three equal surfaces one tile gap apart from
-// the card's left edge to one gap before the menu button in the corner (the
-// Media popup's), or to the right edge without a menu.
-constexpr int kRowGap = climate_layout::kGap;
+// The row (user 2026-10-30, mockup vacuum/popup-row.html): Clean, Stop and
+// Dock without a surface at rest (a surface reads as a state; the fill shows
+// only while pressed, like the Media popup's buttons), the menu button's
+// height, each as wide as its icon and text, one gap apart, the group in the
+// card's middle in every language (it moves left only where it would reach
+// the menu button). Clean takes the width of the longer of Clean and Pause,
+// so the row does not move when the vacuum starts.
+constexpr int kRowGap = popup_layout::scale(16);
+constexpr int kRowPad = popup_layout::scale(16);
+constexpr int kRowGlyphGap = popup_layout::scale(10);
 constexpr int kListRowHeight = popup_layout::scale(72);
 constexpr int kOptionGap = 2;
 // The values beside the map: one card edge apart; under the centred map in
@@ -211,56 +214,65 @@ lv_obj_t* round_button(lv_obj_t* parent, int x, int y, const char* icon, const C
   return btn;
 }
 
-// A row button like the tile's: the controls' fill with the tile buttons'
-// radius, one control step up while pressed, glyph and text centred; its
-// place and width come from place_row.
+// A row button: no surface at rest, the control fill (round) while pressed,
+// glyph and text centred; its place and width come from place_row.
 lv_obj_t* row_button(lv_obj_t* parent, int slot, const char* icon, const char* label, const Colors& c) {
   lv_obj_t* btn = plain(parent);
   lv_obj_add_flag(btn, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_size(btn, ml::kButton, ml::kButton);
-  ui_surface_style::apply_radius(btn, climate_layout::kControlRadius, 0);
-  filled(btn, c);
+  lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
+  press_fill(btn, c);
   lv_obj_set_style_opa(btn, LV_OPA_30, LV_PART_MAIN | LV_STATE_DISABLED);
   lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(btn, popup_layout::scale(8), 0);
+  lv_obj_set_style_pad_column(btn, kRowGlyphGap, 0);
   pop.row_glyphs[slot] = add_icon(btn, icon, c.control_icon);
-  pop.row_texts[slot] = add_text(btn, popup_layout::font20(), c.text, label);
+  pop.row_texts[slot] = add_text(btn, popup_layout::font24(), c.text, label);
   lv_label_set_long_mode(pop.row_texts[slot], LV_LABEL_LONG_DOT);
   return btn;
 }
 
-// Clean, Stop and Dock: equal widths from the card's left edge to one gap
-// before the menu button (to the right edge while it is hidden); a text
-// gives way (dots) before it would leave its button.
+int text_width(const char* text, const lv_font_t* font) {
+  if (!text || !font) return 0;
+  lv_point_t size;
+  lv_text_get_size(&size, text, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  return size.x;
+}
+
+// Clean, Stop and Dock as one group in the card's middle; see kRowGap.
 void place_row() {
   lv_obj_t* const buttons[3] = {pop.main, pop.stop, pop.dock};
-  if (!pop.main || !pop.stop || !pop.dock) return;
-  const int L = ml::kEdge;
-  int right = popup_layout::kCardWidth - L;
+  if (!pop.main || !pop.stop || !pop.dock || !pop.row_texts[0]) return;
+  const lv_font_t* font = lv_obj_get_style_text_font(pop.row_texts[0], LV_PART_MAIN);
+  const int words[3] = {
+      std::max(text_width(text(i18n::VacuumLabel::Clean), font), text_width(text(i18n::VacuumLabel::Pause), font)),
+      text_width(text(i18n::VacuumLabel::Stop), font), text_width(text(i18n::VacuumLabel::Dock), font)};
+  int glyphs[3] = {};
+  int widths[3] = {};
+  int total = 2 * kRowGap;
+  for (int i = 0; i < 3; ++i) {
+    lv_obj_t* glyph = pop.row_glyphs[i];
+    glyphs[i] = glyph ? text_width(lv_label_get_text(glyph), lv_obj_get_style_text_font(glyph, LV_PART_MAIN)) : 0;
+    widths[i] = glyphs[i] + kRowGlyphGap + words[i] + 2 * kRowPad;
+    total += widths[i];
+  }
+  const int left = ml::kEdge;
+  int right = popup_layout::kCardWidth - left;
   if (pop.menu_button && !lv_obj_has_flag(pop.menu_button, LV_OBJ_FLAG_HIDDEN)) {
     right = lv_obj_get_style_x(pop.menu_button, LV_PART_MAIN) - kRowGap;
   }
-  const int usable = std::max<int>(3, right - L - 2 * kRowGap);
-  const int pad = popup_layout::scale(12);
-  int x = L;
+  int x = popup_layout::kCardWidth / 2 - total / 2;
+  if (x + total > right) x = right - total;
+  if (x < left) x = left;
   for (int i = 0; i < 3; ++i) {
-    const int width = usable * (i + 1) / 3 - usable * i / 3;
     lv_obj_set_pos(buttons[i], x, ml::kVolumeTop);
-    lv_obj_set_width(buttons[i], width);
-    int glyph = 0;
-    if (pop.row_glyphs[i]) {
-      lv_point_t size;
-      lv_text_get_size(&size, lv_label_get_text(pop.row_glyphs[i]),
-                       lv_obj_get_style_text_font(pop.row_glyphs[i], LV_PART_MAIN), 0, 0, LV_COORD_MAX,
-                       LV_TEXT_FLAG_NONE);
-      glyph = size.x;
-    }
+    lv_obj_set_width(buttons[i], widths[i]);
+    // Dots only where a word could not fit before the menu button.
     if (pop.row_texts[i]) {
       lv_obj_set_style_max_width(pop.row_texts[i],
-                                 std::max<int>(1, width - glyph - popup_layout::scale(8) - 2 * pad), 0);
+                                 std::max<int>(1, std::min(widths[i], right - x) - glyphs[i] - kRowGlyphGap), 0);
     }
-    x += width + kRowGap;
+    x += widths[i] + kRowGap;
   }
 }
 
@@ -730,6 +742,10 @@ void build_body(bool centered) {
   pop.main = row_button(pop.root, 0, "play", text(i18n::VacuumLabel::Clean), c);
   pop.main_glyph = pop.row_glyphs[0];
   pop.main_text = pop.row_texts[0];
+  // The most important button in the vacuum's color (user 2026-10-30), still
+  // without a surface: glyph and text, not a state.
+  lv_obj_set_style_text_color(pop.main_glyph, lv_color_hex(c.icon), 0);
+  lv_obj_set_style_text_color(pop.main_text, lv_color_hex(c.icon), 0);
   lv_obj_add_event_cb(pop.main, on_main, LV_EVENT_CLICKED, nullptr);
   pop.stop = row_button(pop.root, 1, "stop", text(i18n::VacuumLabel::Stop), c);
   lv_obj_add_event_cb(pop.stop, on_stop, LV_EVENT_CLICKED, nullptr);

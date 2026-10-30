@@ -44,7 +44,7 @@
     {
       "key": "waveshare_touch_lcd_8",
       "buildProfile": "waveshare_8",
-      "label": "Waveshare Touch LCD 8 inch",
+      "label": "Waveshare Touch LCD 8 inch (ESP32-P4 before v3.0)",
       "chipFamily": "ESP32-P4",
       "siliconVariant": "pre_v3",
       "minimumRevision": 1,
@@ -52,7 +52,7 @@
       "acceptsLegacyDescriptor": true,
       "flashSize": 33554432,
       "status": "supported",
-      "hardwareCheck": "The device is the 8-inch ESP32-P4-WIFI6-Touch-LCD model."
+      "hardwareCheck": "The device is the 8-inch ESP32-P4-WIFI6-Touch-LCD model with an ESP32-P4 revision before v3.0."
     },
     {
       "key": "guition_jc8012p4a1",

@@ -49,7 +49,7 @@ Last reviewed: 2026-10-29
 - LCD-4 Rev 4.0 contributor-tested (display/touch/Wi-Fi/MQTT/OTA); older revisions and SD unsupported.
 - JC4880P443 (PR #46): portrait 480x800, contributor-tested; landscape later. Open: SD DEINIT_ARG, P4 DSI groups.
 - JC1060 V2 rotation pair 0/2 (b478, #108); `test-rotation-profiles` checks every profile.
-- P4 v3 images (post_v3 301-399): WS 10.1 (PR #48, tested v3.2), WS 7B `_rev3` (#41; 30 s Wi-Fi join, PR #120), JC8012 V3 = V2 code (#44), WS 4.3 `_rev3` (#135); HW pending.
+- P4 v3 images (post_v3 301-399): WS 10.1 (PR #48, v3.2 ok), WS 7B `_rev3` (#41; 30 s Wi-Fi join, PR #120), JC8012 V3 = V2 code (#44), WS 4.3/8 `_rev3` (#135/#140); HW pending.
 - New in v0.9.3, HW pending by the reporters: GS-T3E v2 (#93, S3, relays GPIO45/46/44 at once), Waveshare 5-inch (#76, HX8394, own `dsi_driver`, pre-v3 + `_rev3`).
 - Voice (b477) HW ok 2026-10-16 on V2, Tab5, 8-inch, 4B; per-board `kVolumeLimit` (Guition 0.6, Tab5 0.9); none on S3 and JC1060 V1.
 

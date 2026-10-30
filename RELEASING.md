@@ -36,12 +36,13 @@ git push --atomic origin main refs/tags/vX.Y.Z
 
 That's it. The action then:
 
-1. Builds 22 explicit installer/release profiles for seventeen physical device
+1. Builds 23 explicit installer/release profiles for seventeen physical device
    profiles with the pinned toolchain (ESP32 core + libraries, see workflow
-   `env`). Five boards have a pre-v3 build (revisions 1–199) and a separate,
+   `env`). Six boards have a pre-v3 build (revisions 1–199) and a separate,
    experimental v3.1-or-newer build (revisions 301–399): Waveshare 4.3-inch
    (`waveshare_4_3_rev3`, assets containing `waveshare_touch_lcd_4_3_rev3`,
-   #135), Waveshare 5-inch
+   #135), Waveshare 8-inch (`waveshare_8_rev3`, assets containing
+   `waveshare_touch_lcd_8_rev3`, #140), Waveshare 5-inch
    (`waveshare_5_rev3`, assets containing `waveshare_touch_lcd_5_rev3`),
    Waveshare 7B/7B-C
    (`waveshare_7b_rev3`, assets containing `waveshare_touch_lcd_7b_rev3`),
@@ -58,16 +59,16 @@ That's it. The action then:
    in each binary. The v3 HomeTiles contract must be 301–399, identical to the
    Arduino `v3.00 or newer` ESP image header.
 4. Creates the GitHub release with auto-generated notes and uploads all
-   44 binaries (`<device>.bin` for OTA + `<device>_factory.bin` for first flash).
+   46 binaries (`<device>.bin` for OTA + `<device>_factory.bin` for first flash).
    The factory image also holds the device's icon file in its LittleFS
    partition (`release-helper/factory-icon-file.js`), so a freshly flashed
    panel shows every icon without downloading it.
 
-After all 44 assets were uploaded successfully, the release job explicitly
+After all 46 assets were uploaded successfully, the release job explicitly
 dispatches the documentation workflow for the release tag. This explicit
 `workflow_dispatch` is required because GitHub suppresses ordinary follow-up
 workflow events created with `GITHUB_TOKEN`. The documentation workflow
-validates the installer device/asset contract, downloads the same 44 published
+validates the installer device/asset contract, downloads the same 46 published
 release assets, verifies their GitHub SHA-256 digests, and places them in the
 generated documentation site under `firmware/latest/`. Normal documentation
 changes pushed to `main` still deploy through the workflow's filtered `push`

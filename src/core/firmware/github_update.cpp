@@ -330,6 +330,13 @@ bool releaseAssetDeviceKey(String& key_out, String& error_out) {
     error_out = String("unknown firmware silicon variant ") + silicon.variant;
     return false;
   }
+#elif defined(DEVICE_WAVESHARE_TOUCH_LCD_8)
+  if (strcmp(silicon.variant, "post_v3") == 0) {
+    key_out = "waveshare_touch_lcd_8_rev3";
+  } else if (strcmp(silicon.variant, "pre_v3") != 0) {
+    error_out = String("unknown firmware silicon variant ") + silicon.variant;
+    return false;
+  }
 #elif defined(DEVICE_WAVESHARE_TOUCH_LCD_5)
   if (strcmp(silicon.variant, "post_v3") == 0) {
     key_out = "waveshare_touch_lcd_5_rev3";

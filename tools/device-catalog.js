@@ -13,6 +13,7 @@ const POST_V3_TARGETS = Object.freeze({
   guition_jc8012p4a1_v3: { metadataDeviceKey: 'guition_jc8012p4a1_v2', define: 'DEVICE_GUITION_JC8012P4A1_V2' },
   waveshare_touch_lcd_5_rev3: { metadataDeviceKey: 'waveshare_touch_lcd_5', define: 'DEVICE_WAVESHARE_TOUCH_LCD_5' },
   waveshare_touch_lcd_4_3_rev3: { metadataDeviceKey: 'waveshare_touch_lcd_4_3', define: 'DEVICE_WAVESHARE_TOUCH_LCD_4_3' },
+  waveshare_touch_lcd_8_rev3: { metadataDeviceKey: 'waveshare_touch_lcd_8', define: 'DEVICE_WAVESHARE_TOUCH_LCD_8' },
 });
 
 function validateCatalog(catalog) {

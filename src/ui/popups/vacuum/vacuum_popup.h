@@ -33,6 +33,8 @@ void preload_vacuum_popup();
 void vacuum_popup_follow_tile_color(uint32_t color);
 // The detail state of `entity` changed.
 void vacuum_popup_refresh(const String& entity);
-// The side of the popup's map square in either layout (the tiles fetch its
-// picture ahead, vacuum_map::want).
+// The side of the popup's map square in either layout.
 int vacuum_popup_map_edge(bool centered);
+// The side of the one map picture per vacuum: the larger square (map left);
+// the centred popup and the tiles take smaller copies of it.
+int vacuum_popup_source_edge();

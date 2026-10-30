@@ -921,6 +921,8 @@ void vacuum_popup_follow_tile_color(uint32_t color) {
 
 int vacuum_popup_map_edge(bool centered) { return map_edge(centered); }
 
+int vacuum_popup_source_edge() { return std::max(map_edge(false), map_edge(true)); }
+
 void vacuum_popup_refresh(const String& entity) {
   const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
   if (!pop.open || (entity != "*" && pop.target.entity != entity)) return;

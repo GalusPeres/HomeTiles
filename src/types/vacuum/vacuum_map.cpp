@@ -13,7 +13,9 @@
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/types/camera/picture_layout.h"
 #include "src/types/media/artwork_scale.h"
+#include "src/types/vacuum/vacuum_control.h"
 #include "src/ui/popups/camera/camera_popup.h"
+#include "src/ui/popups/vacuum/vacuum_popup.h"
 #include "src/ui/screensaver/image_screensaver.h"
 #include "src/ui/screensaver/wallpaper_cover.h"
 #include "src/ui/shared/ui_surface_style.h"
@@ -62,6 +64,13 @@ struct Want {
   uint8_t every = 5;
 };
 std::vector<Want> g_wants;
+
+// The Vacuum tiles of every folder (prefetch).
+struct Prefetch {
+  String vacuum;
+  String map;  // the tile's choice, "" the Bridge's
+};
+std::vector<Prefetch> g_prefetch;
 
 // The popup's picture decoded ahead while its tile is on screen, as the
 // Media tile keeps its popup cover decoded (MediaCoverRef::popup_dsc): the
@@ -450,6 +459,21 @@ void arrived(const char* entity_id) {
   }
 }
 
+void prefetch_clear() { g_prefetch.clear(); }
+
+void prefetch(const char* vacuum_entity, const char* chosen_map) {
+  if (!vacuum_entity || !*vacuum_entity) return;
+  // The first line of the tile's map record.
+  String map = chosen_map ? String(chosen_map) : String();
+  const int line = map.indexOf('\n');
+  if (line >= 0) map = map.substring(0, line);
+  map.trim();
+  for (const Prefetch& known : g_prefetch) {
+    if (known.vacuum.equalsIgnoreCase(vacuum_entity) && known.map.equalsIgnoreCase(map)) return;
+  }
+  g_prefetch.push_back(Prefetch{String(vacuum_entity), map});
+}
+
 void collect_topics(std::vector<String>& entities, std::vector<String>& suffixes) {
   if (!networkManager.linkConfigured()) return;
   const bool awake = !powerManager.isInSleep() && !image_screensaver_covers_ui() && !camera_popup_is_busy();
@@ -476,6 +500,26 @@ void collect_topics(std::vector<String>& entities, std::vector<String>& suffixes
     if (!wanted(view->entity)) add(view->entity, view->edge, view->every, view->box);
   }
   for (const Want& wish : g_wants) add(wish.entity, wish.edge, wish.every, wish.card);
+  // Every configured tile's map in the popup's size, unless a shown square or
+  // tile already asks for it; a camera's still once a minute meanwhile.
+  const uint16_t fetch = fetch_edge(static_cast<uint16_t>(vacuum_popup_source_edge()));
+  char base[40];
+  if (!bridge_images::pictureSuffix(base, sizeof(base), fetch, fetch, bridge_images::kContain, 0)) return;
+  for (const Prefetch& wish : g_prefetch) {
+    const String map = wish.map.length() ? wish.map : String(vacuum_control::detail(wish.vacuum).map);
+    if (!map.length()) continue;
+    bool asked = false;
+    for (size_t i = 0; i < entities.size() && !asked; ++i) {
+      asked = entities[i].equalsIgnoreCase(map) && suffixes[i].startsWith(base);
+    }
+    if (asked) continue;
+    if (!bridge_images::pictureSuffix(suffix, sizeof(suffix), fetch, fetch, bridge_images::kContain,
+                                      is_camera(map) ? bridge_images::kEveryMax : 0)) {
+      continue;
+    }
+    entities.push_back(map);
+    suffixes.push_back(suffix);
+  }
 }
 
 void service() {

@@ -33,6 +33,7 @@
 #include "src/io/hardware_io.h"
 #include "src/network/bridge/entity_search.h"
 #include "src/network/bridge/bridge_images.h"
+#include "src/types/vacuum/vacuum_map.h"
 #include "src/web/server/web_admin.h"
 #include "src/video/local_camera/local_camera.h"
 #include "src/audio/speaker.h"
@@ -1505,6 +1506,7 @@ void mqttSetTilePictures(const String* entities, const String* suffixes, size_t 
 
 static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
   routes.clear();
+  vacuum_map::prefetch_clear();
 
   auto add_route = [&](const String& entity, int slot_index, const char* suffix = "state") {
     String ent = entity;
@@ -1597,6 +1599,8 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
                   : tileTypeIsDeviceControl(slot.type) ? "detail"
                                                        : "state");
         if (tileTypeIsEditableValue(slot.type)) has_media_tiles = true;
+        // A Vacuum's map picture from the start, like a player's cover.
+        if (slot.type == TILE_VACUUM) vacuum_map::prefetch(slot.entity, slot.extra_entities);
         if (slot.type == TILE_MEDIA) {
           has_media_tiles = true;
           // New bridges publish cover-free state changes here first. Keep the

@@ -222,8 +222,7 @@ void show(View* view) {
   // tile's square shows its copy in its first frame.
   const char* map = view->map_entity.length() ? view->map_entity.c_str() : d.map;
   if (view->interactive) {
-    vacuum_map::want(view, view->card, map, static_cast<uint16_t>(vacuum_popup_map_edge(view->map_centered)),
-                     view->map_every);
+    vacuum_map::want(view, view->card, map, static_cast<uint16_t>(vacuum_popup_source_edge()), view->map_every);
   }
   if (view->map) {
     vacuum_map::set_entity(view->map, map, view->map_every);

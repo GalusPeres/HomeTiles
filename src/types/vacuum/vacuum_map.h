@@ -44,6 +44,14 @@ void show_now(lv_obj_t* view);
 
 // A picture of `entity_id` arrived or was cleared (bridge_images.cpp).
 void arrived(const char* entity_id);
+// Every Vacuum tile of every folder (the MQTT route scan, like the Media
+// covers of every player): its map picture is subscribed in the popup's size
+// from the start, so a page opened for the first time shows it at once (user
+// 2026-10-30: the map came later only the first time). `chosen_map` is the
+// tile's Web Admin choice ("" the Bridge's, detail.map).
+void prefetch_clear();
+void prefetch(const char* vacuum_entity, const char* chosen_map);
+
 // The picture topics the map views want now (camera_picture::update_topics
 // owns the subscription and adds these).
 void collect_topics(std::vector<String>& entities, std::vector<String>& suffixes);

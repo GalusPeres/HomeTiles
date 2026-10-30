@@ -168,7 +168,19 @@ assert.ok(mapSource.includes('constexpr size_t kSourcesMax = 2;') && !mapSource.
 // User 2026-10-30 on b624: no black square before the popup's map. The
 // tile fetches the popup's picture ahead while it is on screen (like the
 // Media tile holds its cover) and the popup shows it in its first frame.
-assert.ok(read('src/types/vacuum/vacuum_tile.cpp').includes('vacuum_map::want(view, view->card, map, static_cast<uint16_t>(vacuum_popup_map_edge(view->map_centered)),'));
+assert.ok(read('src/types/vacuum/vacuum_tile.cpp').includes('vacuum_map::want(view, view->card, map, static_cast<uint16_t>(vacuum_popup_source_edge()), view->map_every);'),
+  'one picture per vacuum in the larger popup size');
+assert.ok(read('src/ui/popups/vacuum/vacuum_popup.cpp').includes('int vacuum_popup_source_edge() { return std::max(map_edge(false), map_edge(true)); }'));
+// User 2026-10-30: the map came later only the first time a page opened.
+// Like the Media covers of every player (rebuildDynamicRoutes), every Vacuum
+// tile of every folder subscribes its map picture from the start; a camera
+// still once a minute while no square shows it.
+const routes = read('src/network/mqtt/mqtt_handlers.cpp');
+assert.match(routes, /static void rebuildDynamicRoutes\(std::vector<DynamicSensorRoute>& routes\) \{\s*routes\.clear\(\);\s*vacuum_map::prefetch_clear\(\);/);
+assert.ok(routes.includes('if (slot.type == TILE_VACUUM) vacuum_map::prefetch(slot.entity, slot.extra_entities);'));
+const prefetchMap = read('src/types/vacuum/vacuum_map.cpp');
+assert.ok(prefetchMap.includes('const String map = wish.map.length() ? wish.map : String(vacuum_control::detail(wish.vacuum).map);'));
+assert.ok(prefetchMap.includes('is_camera(map) ? bridge_images::kEveryMax : 0'), 'a camera once a minute meanwhile');
 assert.ok(read('src/types/vacuum/vacuum_tile.cpp').includes('vacuum_map::unwant(view);'));
 assert.ok(read('src/ui/popups/vacuum/vacuum_popup.cpp').includes('if (show) vacuum_map::show_now(pop.map);'));
 assert.ok(map.includes('for (const Want& wish : g_wants) add(wish.entity, wish.edge, wish.every, wish.card);'));

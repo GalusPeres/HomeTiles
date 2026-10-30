@@ -56,6 +56,8 @@ constexpr int kOptionGap = 2;
 // one line, this far apart.
 constexpr int kValueLineGap = popup_layout::scale(48);
 constexpr int kMenuRows = 5;
+// The map's corners: the Media popup's cover radius.
+constexpr int kMapRadius = popup_layout::scale480(18);
 
 enum class Tab : uint8_t { None, Speed, Rooms, Locate };
 constexpr Tab kTabs[] = {Tab::Speed, Tab::Rooms, Tab::Locate};
@@ -448,7 +450,7 @@ lv_obj_t* list_row(const char* label, const char* icon, int mark, lv_event_cb_t 
   lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(row, Device::kGridGap, 0);
-  if (icon) add_icon(row, icon, c.icon);
+  if (icon) add_icon(row, icon, c.secondary);
   lv_obj_t* name = add_text(row, settings_style::row_font(), c.text, label);
   lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
   lv_obj_set_flex_grow(name, 1);
@@ -630,7 +632,7 @@ Value make_value(lv_obj_t* parent, const char* icon, const Colors& c) {
   lv_obj_set_flex_flow(value.box, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(value.box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(value.box, popup_layout::scale(12), 0);
-  add_icon(value.box, icon, c.icon);
+  add_icon(value.box, icon, c.control_icon);
   // The size of the Media popup's times and volume.
   value.text = add_text(value.box, popup_layout::font20(), c.text, "");
   return value;
@@ -657,8 +659,7 @@ void build_body(bool centered) {
     // The map left (the Media cover's place over the seek and volume rows),
     // the values in a column beside it.
     const int edge = row - L - top;
-    pop.map = vacuum_map::create(pop.root, L, top, edge, popup_layout::scale(28));
-    vacuum_map::set_fill(pop.map, c.control, c.control_opa);
+    pop.map = vacuum_map::create(pop.root, L, top, edge, kMapRadius);
     lv_obj_t* column = plain(pop.root);
     lv_obj_set_pos(column, L + edge + L, top);
     lv_obj_set_size(column, W - (L + edge + L) - L, edge);
@@ -672,8 +673,7 @@ void build_body(bool centered) {
     const int line = std::max<int>(lv_font_get_line_height(popup_layout::font20()),
                                    lv_font_get_line_height(FONT_MDI_ICONS));
     const int edge = row - L - top - line - L;
-    pop.map = vacuum_map::create(pop.root, (W - edge) / 2, top, edge, popup_layout::scale(28));
-    vacuum_map::set_fill(pop.map, c.control, c.control_opa);
+    pop.map = vacuum_map::create(pop.root, (W - edge) / 2, top, edge, kMapRadius);
     lv_obj_t* line_box = plain(pop.root);
     lv_obj_set_pos(line_box, 0, top + edge + L);
     lv_obj_set_size(line_box, W, line);

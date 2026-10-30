@@ -130,9 +130,20 @@ assert.ok(visual.includes('constexpr uint32_t kColor = 0x29B6F6;') && !visual.in
 assert.ok(!/grey\(\)[^;]*;\s*\}\s*if \(vacuum_detail::is\(d, "error"\)\)/.test(visual));
 assert.ok(popup.includes('filled(pop.main, c);') && popup.includes('add_text(pop.main, popup_layout::font20(), c.text'));
 assert.ok(popup.includes('value.text = add_text(value.box, popup_layout::font20(), c.text, "");'), 'values in the Media times size');
-assert.ok(popup.includes('vacuum_map::set_fill(pop.map, c.control, c.control_opa);'));
 assert.ok(map.includes('lv_obj_remove_style_all(box);'), 'no white default style');
-assert.ok(map.includes('static_cast<int32_t>(backdrop_of(view->box))'), 'the Bridge gets the square color');
+// User 2026-10-30 on b622: no tinted map (black like the map's own
+// background); loaded like the Media cover: the hardware decoder's steps of
+// 16, an averaged copy in the square's size, the resolved surface radius;
+// kept across a rebuild; icons white like Media's, only the header colored.
+assert.ok(!map.includes('backdrop_of') && !popup.includes('set_fill'), 'the map is not tinted');
+assert.ok(map.includes('return static_cast<uint16_t>((edge + 15) / 16 * 16);'), 'P4 fetches in steps of 16');
+assert.ok(map.includes('make_media_popup_cover_dsc(dsc, view.edge)'), 'the averaged copy of the Media cover');
+assert.ok(map.includes('ui_surface_style::apply_radius(box, radius, 0);') &&
+  map.includes('lv_obj_get_style_radius(box, LV_PART_MAIN)'), 'the picture is rounded with the resolved radius');
+assert.ok(map.includes('park(*view);') && map.includes('if (next.length()) adopt_parked(*view);'), 'a rebuilt square keeps its picture');
+assert.ok(popup.includes('constexpr int kMapRadius = popup_layout::scale480(18);'), 'the Media cover radius');
+assert.ok(popup.includes('add_icon(value.box, icon, c.control_icon);') && popup.includes('if (icon) add_icon(row, icon, c.secondary);'),
+  'icons like the Media popup');
 assert.ok(read('src/network/mqtt/mqtt_handlers.cpp').includes('device_control::refresh_all();'), 'icon updates reach the vacuum');
 
 // Map pictures share the tile picture topics and arrivals.

@@ -2254,10 +2254,12 @@
       height:var(--switch-bar-height, 30px);
       display:flex; align-items:center; justify-content:center; gap:var(--climate-margin-x, 5px);
     }
+    /* The main button: the controls' fill with the level bar's radius
+       (concentric with the card), text in the text color. */
     .tile-vacuum-main {
       height:100%; display:flex; align-items:center; justify-content:center; gap:4px; min-width:0;
-      padding:0 10px 0 6px; box-sizing:border-box; border-radius:999px;
-      background:var(--vacuum-accent, #00BCD4); color:var(--vacuum-ink, #0d2733);
+      padding:0 10px 0 6px; box-sizing:border-box; border-radius:var(--climate-control-radius, 8px);
+      background:var(--control-fill, rgba(255,255,255,0.12)); color:var(--pv-text, #fff);
       font-size:var(--title-font, 12px); white-space:nowrap; overflow:hidden;
     }
     .tile-vacuum-main i { font-size:calc(var(--switch-bar-height, 30px) * .55); line-height:1; }

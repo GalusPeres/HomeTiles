@@ -63,7 +63,11 @@ int main() {
   CHECK(strcmp(entity, "camera.tuer") == 0);
   CHECK(entityFromTopic("ha/statestream/camera/tuer/image/800x480/3s", "ha/statestream", entity, sizeof(entity), &w, &hh, &fit) && fit == kFill);
   CHECK(entityFromTopic("ha/statestream/camera/tuer/image/800x480/60s", "ha/statestream", entity, sizeof(entity), &w, &hh, &fit));
-  const char* bad[] = {"/2s", "/61s", "/05s", "/fill", "/5s/fit", "/fit/", "/fitx", "/originals", "/5", "/5s/", "/fit/fit"};
+  // The color behind the picture (a vacuum map's surface).
+  CHECK(entityFromTopic("ha/statestream/camera/robo_map/image/400x400/fit/on-1a2b3c/3s", "ha/statestream", entity, sizeof(entity), &w, &hh, &fit) && fit == kContain);
+  CHECK(entityFromTopic("ha/statestream/image/robo_map/image/400x400/on-ffffff", "ha/statestream", entity, sizeof(entity), &w, &hh, &fit) && fit == kFill);
+  const char* bad[] = {"/2s", "/61s", "/05s", "/fill", "/5s/fit", "/fit/", "/fitx", "/originals", "/5", "/5s/", "/fit/fit",
+                       "/on-FFFFFF", "/on-12345", "/3s/on-123456", "/on-123456/fit", "/on-1234567"};
   for (const char* option : bad) {
     char topic[96];
     std::snprintf(topic, sizeof(topic), "ha/statestream/camera/tuer/image/800x480%s", option);
@@ -76,6 +80,9 @@ int main() {
   CHECK(pictureSuffix(suffix, sizeof(suffix), 480, 480, kOriginal, 5) && strcmp(suffix, "image/480x480/original/5s") == 0);
   CHECK(pictureSuffix(suffix, sizeof(suffix), 480, 480, kFill, 3) && strcmp(suffix, "image/480x480/3s") == 0);
   CHECK(!pictureSuffix(suffix, 12, 1280, 800, kOriginal, 5));
+  CHECK(pictureSuffix(suffix, sizeof(suffix), 400, 400, kContain, 3, 0x1A2B3C) && strcmp(suffix, "image/400x400/fit/on-1a2b3c/3s") == 0);
+  CHECK(pictureSuffix(suffix, sizeof(suffix), 400, 400, kFill, 0, 0) && strcmp(suffix, "image/400x400/on-000000") == 0);
+  CHECK(pictureSuffix(suffix, sizeof(suffix), 400, 400, kFill, 0, kNoBackdrop) && strcmp(suffix, "image/400x400") == 0);
   CHECK(!entityFromTopic("ha/statestream/image/garten/image/2000x800", "ha/statestream", entity, sizeof(entity), &w, &hh));
   CHECK(!entityFromTopic("ha/statestreamimage/garten/image/240x240", "ha/statestream", entity, sizeof(entity), &w, &hh));
   CHECK(!entityFromTopic("ha/statestream/media_player/tv/state", "ha/statestream", entity, sizeof(entity), &w, &hh));

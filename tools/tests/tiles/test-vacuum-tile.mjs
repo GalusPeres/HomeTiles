@@ -113,9 +113,27 @@ for (const marker of ['lv_snapshot_take(probe, LV_COLOR_FORMAT_A8)', 'if (!pop.m
   assert.ok(popup.includes(marker), `vacuum popup: ${marker}`);
 }
 assert.ok(!popup.includes('lv_obj_set_style_border_width(pop.box'), 'no border instead of the shadow');
-// The battery ring on the disc.
+// User 2026-10-30 on b621: no ring on the disc (a circle never follows the
+// disc's corners); the main button is a surface in the controls' fill with
+// the level bar's radius (concentric with the card) and the text color, no
+// colored fill with dark text; the vacuum's blue in every reported state,
+// no grey while docked; the automatic icon is Home Assistant's (as the Web
+// Admin shows it); the map square has no white theme style and tells the
+// Bridge its color, so transparent maps are not put on black.
 const tileSource = read('src/types/vacuum/vacuum_tile.cpp');
-assert.ok(tileSource.includes('view->ring = battery_ring(disc);') && tileSource.includes('lv_arc_set_value(view->ring, d.battery);'));
+assert.ok(!tileSource.includes('lv_arc_create'), 'no ring on the disc');
+assert.match(tileSource, /tile_icon_disc::mark_surface\(box\);\s*ui_surface_style::apply_radius\(box, climate_layout::kControlRadius, 0\);/);
+assert.ok(tileSource.includes('set_label_style(view->main_text, lv_color_hex(ui_theme::text()), FONT_TITLE);'));
+assert.ok(tileSource.includes('haBridgeConfig.findEntityIcon(view->entity)'));
+const visual = read('src/types/vacuum/vacuum_visual.h');
+assert.ok(visual.includes('constexpr uint32_t kColor = 0x29B6F6;') && !visual.includes('on_accent'));
+assert.ok(!/grey\(\)[^;]*;\s*\}\s*if \(vacuum_detail::is\(d, "error"\)\)/.test(visual));
+assert.ok(popup.includes('filled(pop.main, c);') && popup.includes('add_text(pop.main, popup_layout::font20(), c.text'));
+assert.ok(popup.includes('value.text = add_text(value.box, popup_layout::font20(), c.text, "");'), 'values in the Media times size');
+assert.ok(popup.includes('vacuum_map::set_fill(pop.map, c.control, c.control_opa);'));
+assert.ok(map.includes('lv_obj_remove_style_all(box);'), 'no white default style');
+assert.ok(map.includes('static_cast<int32_t>(backdrop_of(view->box))'), 'the Bridge gets the square color');
+assert.ok(read('src/network/mqtt/mqtt_handlers.cpp').includes('device_control::refresh_all();'), 'icon updates reach the vacuum');
 
 // Map pictures share the tile picture topics and arrivals.
 assert.ok(read('src/types/camera/picture.cpp').includes('vacuum_map::collect_topics(entities, suffixes);'));

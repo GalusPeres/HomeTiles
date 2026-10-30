@@ -2171,6 +2171,7 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
     if (haBridgeConfig.applyIconUpdate(large_buf)) {
       tiles_request_icon_refresh();
       queue_sensor_popup_icon_refresh();
+      device_control::refresh_all();
     }
     return;
   }

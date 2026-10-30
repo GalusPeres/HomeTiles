@@ -270,6 +270,8 @@ void process(uint8_t budget) {
   }
 }
 
+void refresh_all() { mark_changed("*"); }
+
 const char* pending_target(const String& entity) {
   const Pending* pending = find_pending(entity);
   if (!pending || static_cast<int32_t>(millis() - pending->until_ms) >= 0) return "";

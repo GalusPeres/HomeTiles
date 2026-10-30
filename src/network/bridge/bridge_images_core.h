@@ -77,8 +77,9 @@ inline bool parseHeader(const uint8_t* data, size_t length, Header& out) {
 }
 
 // The options after a picture topic's size, exactly: "", "/fit",
-// "/original", each optionally followed by "/<n>s" (3..60). `every` is 0
-// without an interval.
+// "/original", each optionally followed by "/on-rrggbb" (the color shown
+// behind the picture: the Bridge puts transparent parts and the bars of fit
+// on it) and "/<n>s" (3..60). `every` is 0 without an interval.
 inline bool readOptions(const char* p, const char* end, uint8_t& fit, uint8_t& every) {
   fit = kFill;
   every = 0;
@@ -89,6 +90,13 @@ inline bool readOptions(const char* p, const char* end, uint8_t& fit, uint8_t& e
              (p + 9 == end || p[9] == '/')) {
     fit = kOriginal;
     p += 9;
+  }
+  if (end - p >= 10 && strncmp(p, "/on-", 4) == 0 && (p + 10 == end || p[10] == '/')) {
+    for (int i = 4; i < 10; ++i) {
+      const char c = p[i];
+      if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return false;
+    }
+    p += 10;
   }
   if (p == end) return true;
   if (*p++ != '/' || p >= end || *p < '1' || *p > '9') return false;
@@ -151,16 +159,21 @@ inline bool entityFromTopic(const char* topic, const char* prefix, char* entity,
   return true;
 }
 
-// The route suffix of a picture: "image/<w>x<h>" with its placement and a
-// camera's interval (`every` 0 or the default: none). False when `out` is
-// too small.
+// No backdrop: the Bridge's black.
+constexpr int32_t kNoBackdrop = -1;
+
+// The route suffix of a picture: "image/<w>x<h>" with its placement, the
+// color behind it (`backdrop` 0xRRGGBB, kNoBackdrop: none) and a camera's
+// interval (`every` 0 or the default: none). False when `out` is too small.
 inline bool pictureSuffix(char* out, size_t out_size, uint16_t width, uint16_t height, uint8_t fit,
-                          uint8_t every) {
+                          uint8_t every, int32_t backdrop = kNoBackdrop) {
   const char* placement = fit == kContain ? "/fit" : fit == kOriginal ? "/original" : "";
+  char on[12] = "";
+  if (backdrop >= 0) snprintf(on, sizeof(on), "/on-%06lx", static_cast<unsigned long>(backdrop & 0xFFFFFF));
   char interval[8] = "";
   if (every && every != kEveryDefault) snprintf(interval, sizeof(interval), "/%us", static_cast<unsigned>(every));
-  const int n = snprintf(out, out_size, "image/%ux%u%s%s", static_cast<unsigned>(width),
-                         static_cast<unsigned>(height), placement, interval);
+  const int n = snprintf(out, out_size, "image/%ux%u%s%s%s", static_cast<unsigned>(width),
+                         static_cast<unsigned>(height), placement, on, interval);
   return n > 0 && static_cast<size_t>(n) < out_size;
 }
 

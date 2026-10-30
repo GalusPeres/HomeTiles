@@ -16,6 +16,7 @@
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/ui/screensaver/image_screensaver.h"
 #include "src/ui/screensaver/wallpaper_cover.h"
+#include "src/ui/shared/tone_color.h"
 #include "src/ui/shared/ui_theme.h"
 
 namespace vacuum_map {
@@ -72,6 +73,14 @@ uint32_t color_behind(lv_obj_t* box) {
   while (host && lv_obj_get_style_bg_opa(host, LV_PART_MAIN) < LV_OPA_COVER) host = lv_obj_get_parent(host);
   if (!host) host = lv_screen_active();
   return host ? lv_color_to_u32(lv_obj_get_style_bg_color(host, LV_PART_MAIN)) & 0xFFFFFF : 0;
+}
+
+// The color the square shows: its fill over what is behind it.
+uint32_t backdrop_of(lv_obj_t* box) {
+  const uint32_t under = color_behind(box);
+  const lv_opa_t opa = lv_obj_get_style_bg_opa(box, LV_PART_MAIN);
+  const uint32_t fill = lv_color_to_u32(lv_obj_get_style_bg_color(box, LV_PART_MAIN)) & 0xFFFFFF;
+  return tone_color::blend(under, fill, opa);
 }
 
 bool on_screen(lv_obj_t* box) {
@@ -149,12 +158,12 @@ void follow_corners(View& view) {
 lv_obj_t* create(lv_obj_t* parent, int x, int y, int edge, int radius) {
   if (!parent || edge < 16) return nullptr;
   lv_obj_t* box = lv_obj_create(parent);
-  // The placeholder sits on the card's control surface (the disc's fill,
-  // tile_icon_source::refresh_controls), like the level bar's track.
+  // No theme style: LVGL's default object is white, which showed until the
+  // picture came (user 2026-10-30). On a tile the card's control surface
+  // fills it (the disc's fill, tile_icon_source::refresh_controls), like the
+  // level bar's track; the popup sets its fill (set_fill).
+  lv_obj_remove_style_all(box);
   tile_icon_disc::mark_surface(box);
-  lv_obj_set_style_border_width(box, 0, 0);
-  lv_obj_set_style_shadow_width(box, 0, 0);
-  lv_obj_set_style_pad_all(box, 0, 0);
   lv_obj_set_style_radius(box, radius, 0);
   lv_obj_set_style_clip_corner(box, false, 0);
   lv_obj_remove_flag(box, LV_OBJ_FLAG_SCROLLABLE);
@@ -176,6 +185,12 @@ lv_obj_t* create(lv_obj_t* parent, int x, int y, int edge, int radius) {
   g_views.push_back(view);
   lv_obj_add_event_cb(box, delete_cb, LV_EVENT_DELETE, view);
   return box;
+}
+
+void set_fill(lv_obj_t* box, lv_color_t color, lv_opa_t opa) {
+  if (!box) return;
+  lv_obj_set_style_bg_color(box, color, 0);
+  lv_obj_set_style_bg_opa(box, opa, 0);
 }
 
 void set_entity(lv_obj_t* box, const char* entity, bool moving) {
@@ -205,7 +220,8 @@ void collect_topics(std::vector<String>& entities, std::vector<String>& suffixes
     const bool camera = is_camera(view->entity);
     if (camera && !(awake && on_screen(view->box))) continue;
     if (!bridge_images::pictureSuffix(suffix, sizeof(suffix), view->edge, view->edge, bridge_images::kContain,
-                                      camera ? (view->moving ? kCameraEveryMoving : kCameraEveryResting) : 0)) {
+                                      camera ? (view->moving ? kCameraEveryMoving : kCameraEveryResting) : 0,
+                                      static_cast<int32_t>(backdrop_of(view->box)))) {
       continue;
     }
     entities.push_back(view->entity);

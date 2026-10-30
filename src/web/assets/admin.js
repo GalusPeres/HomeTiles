@@ -8364,7 +8364,7 @@ async function saveGestureEdge(select) {
     if (deviceKind) {
       devicePreviewState = parseDevicePreviewPayload(deviceDetailPayload(iconEntity));
       if (!normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) {
-        iconName = devicePreviewIcon(deviceKind, devicePreviewState);
+        iconName = devicePreviewIcon(deviceKind, devicePreviewState, '', iconName);
       }
     }
     if (calendarTile && !normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) iconName = 'calendar';
@@ -11328,7 +11328,7 @@ async function saveGestureEdge(select) {
       if (deviceKind) {
         devicePreviewState = parseDevicePreviewPayload(deviceDetailPayload(tile.sensor_entity || '', sensorMeta));
         if (!normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) {
-          iconName = devicePreviewIcon(deviceKind, devicePreviewState);
+          iconName = devicePreviewIcon(deviceKind, devicePreviewState, '', iconName);
         }
       }
       if (previewKind === 'calendar' && !normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) {
@@ -19261,7 +19261,8 @@ function maybeFillTitleFromSwitch(tab) {
   // buttons and map (types/vacuum/vacuum_tile.cpp). The preview mirrors the
   // device: the state colors and icons of device_visual.h, the bar of
   // bar_model() and the words of DEVICE_I18N (types/device/web.cpp).
-  const DEVICE_COLORS = {green: '#4CAF50', red: '#F44336', orange: '#FF9800', grey: '#9E9E9E', cyan: '#00BCD4'};
+  const DEVICE_COLORS = {green: '#4CAF50', red: '#F44336', orange: '#FF9800', grey: '#9E9E9E', cyan: '#00BCD4',
+    vacuum: '#29B6F6'};
   // Home Assistant's alarm modes: state, feature bit, icon.
   const DEVICE_ALARM_MODES = [
     ['armed_home', 1, 'home'], ['armed_away', 2, 'lock'], ['armed_night', 4, 'moon-waning-crescent'],
@@ -19350,17 +19351,17 @@ function maybeFillTitleFromSwitch(tab) {
       return out;
     }
     if (kind === 'vacuum') {
-      // vacuum_visual::visual(): the state and the battery.
+      // vacuum_visual::visual(): the vacuum's blue in every reported state,
+      // red on an error; the state and the battery.
       out.label = words[state] || words.unknown || state;
       if (!d.available) {
         out.icon = 'robot-vacuum-off';
         return out;
       }
+      out.color = DEVICE_COLORS.vacuum;
       if (state === 'error') {
         out.icon = 'robot-vacuum-alert';
         out.color = DEVICE_COLORS.red;
-      } else if (['cleaning', 'returning', 'paused'].includes(state)) {
-        out.color = DEVICE_COLORS.cyan;
       }
       if (d.battery !== null && d.battery !== undefined) out.label += ' · ' + d.battery + ' %';
       return out;
@@ -19407,7 +19408,10 @@ function maybeFillTitleFromSwitch(tab) {
     return out;
   }
 
-  function devicePreviewIcon(kind, d, fallback = '') {
+  // The Vacuum's automatic icon is Home Assistant's icon of the entity
+  // (vacuum_visual::icon_name): `entityIcon` when known.
+  function devicePreviewIcon(kind, d, fallback = '', entityIcon = '') {
+    if (kind === 'vacuum' && entityIcon) return entityIcon;
     return fallback || devicePreviewVisual(kind, d).icon;
   }
 
@@ -19464,14 +19468,6 @@ function maybeFillTitleFromSwitch(tab) {
       box.innerHTML = side('home-import-outline', 16) + main + side('stop', 8);
     } else {
       box.innerHTML = main;
-    }
-    const iconEl = tileElem.querySelector('.tile-icon');
-    const accent = iconEl ? getComputedStyle(iconEl).color : DEVICE_COLORS.cyan;
-    box.style.setProperty('--vacuum-accent', accent);
-    const rgb = cssColorChannels(accent);
-    if (rgb) {
-      const c = toneOklch(rgb);
-      box.style.setProperty('--vacuum-ink', toneHex(toneRgb(0.25, Math.min(c.C, 0.06), c.h)));
     }
   }
 

@@ -10,6 +10,7 @@
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
 #include "src/devices/device.h"
+#include "src/network/bridge/ha_bridge_config.h"
 #include "src/fonts/ui_fonts.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_source.h"
@@ -178,6 +179,16 @@ void set_enabled(lv_obj_t* obj, bool enabled) {
 // A press shows the control fill, like the Media popup's buttons.
 void press_fill(lv_obj_t* btn, const Colors& c) {
   popup_nav_style::style_press_fill(btn, c.control, c.control_opa);
+  disable_pressed_button_animation(btn);
+}
+
+// A filled button (the main button, "Clean N"): the controls' fill at rest
+// (popup_shell_control_fill, like the Climate and Light popups' pills), one
+// control step up while pressed, glyph and text in the theme's colors.
+void filled(lv_obj_t* btn, const Colors& c) {
+  popup_nav_style::set_bg(btn, c.control, c.control_opa, LV_PART_MAIN);
+  popup_nav_style::set_bg(btn, c.raised, c.raised_opa, LV_PART_MAIN | LV_STATE_PRESSED);
+  popup_nav_style::no_press_filter(btn, LV_PART_MAIN | LV_STATE_PRESSED);
   disable_pressed_button_animation(btn);
 }
 
@@ -567,16 +578,14 @@ void build_menu() {
   lv_obj_set_height(pop.go, popup_layout::scale(56));
   lv_obj_set_width(pop.go, LV_SIZE_CONTENT);
   lv_obj_set_style_radius(pop.go, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_bg_color(pop.go, lv_color_hex(c.icon), 0);
-  lv_obj_set_style_bg_opa(pop.go, LV_OPA_COVER, 0);
+  filled(pop.go, c);
   lv_obj_set_style_pad_left(pop.go, popup_layout::scale(16), 0);
   lv_obj_set_style_pad_right(pop.go, popup_layout::scale(22), 0);
   lv_obj_set_flex_flow(pop.go, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(pop.go, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(pop.go, popup_layout::scale(8), 0);
-  const uint32_t ink = vacuum_visual::on_accent(c.icon);
-  add_icon(pop.go, "play", ink);
-  pop.go_text = add_text(pop.go, popup_layout::font20(), ink, "");
+  add_icon(pop.go, "play", c.control_icon);
+  pop.go_text = add_text(pop.go, popup_layout::font20(), c.text, "");
   lv_obj_align(pop.go, LV_ALIGN_TOP_RIGHT, -m.box_pad, m.box_pad + (m.head_height - popup_layout::scale(56)) / 2);
   lv_obj_add_event_cb(pop.go, on_go, LV_EVENT_CLICKED, nullptr);
   lv_obj_add_flag(pop.go, LV_OBJ_FLAG_HIDDEN);
@@ -622,7 +631,8 @@ Value make_value(lv_obj_t* parent, const char* icon, const Colors& c) {
   lv_obj_set_flex_align(value.box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(value.box, popup_layout::scale(12), 0);
   add_icon(value.box, icon, c.icon);
-  value.text = add_text(value.box, popup_layout::font28(), c.text, "");
+  // The size of the Media popup's times and volume.
+  value.text = add_text(value.box, popup_layout::font20(), c.text, "");
   return value;
 }
 
@@ -648,6 +658,7 @@ void build_body(bool centered) {
     // the values in a column beside it.
     const int edge = row - L - top;
     pop.map = vacuum_map::create(pop.root, L, top, edge, popup_layout::scale(28));
+    vacuum_map::set_fill(pop.map, c.control, c.control_opa);
     lv_obj_t* column = plain(pop.root);
     lv_obj_set_pos(column, L + edge + L, top);
     lv_obj_set_size(column, W - (L + edge + L) - L, edge);
@@ -658,9 +669,11 @@ void build_body(bool centered) {
   } else {
     // The map centred, one value line and one edge less high, the values in
     // that line below it.
-    const int line = lv_font_get_line_height(popup_layout::font28());
+    const int line = std::max<int>(lv_font_get_line_height(popup_layout::font20()),
+                                   lv_font_get_line_height(FONT_MDI_ICONS));
     const int edge = row - L - top - line - L;
     pop.map = vacuum_map::create(pop.root, (W - edge) / 2, top, edge, popup_layout::scale(28));
+    vacuum_map::set_fill(pop.map, c.control, c.control_opa);
     lv_obj_t* line_box = plain(pop.root);
     lv_obj_set_pos(line_box, 0, top + edge + L);
     lv_obj_set_size(line_box, W, line);
@@ -679,20 +692,15 @@ void build_body(bool centered) {
   lv_obj_set_height(pop.main, ml::kButton);
   lv_obj_set_width(pop.main, LV_SIZE_CONTENT);
   lv_obj_set_style_radius(pop.main, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_bg_color(pop.main, lv_color_hex(c.icon), 0);
-  lv_obj_set_style_bg_opa(pop.main, LV_OPA_COVER, 0);
-  lv_obj_set_style_bg_color(pop.main, lv_color_hex(tone_color::lifted(c.icon, c.icon, false, 0.06f)),
-                            LV_PART_MAIN | LV_STATE_PRESSED);
+  filled(pop.main, c);
   lv_obj_set_style_opa(pop.main, LV_OPA_30, LV_PART_MAIN | LV_STATE_DISABLED);
   lv_obj_set_style_pad_left(pop.main, popup_layout::scale(22), 0);
   lv_obj_set_style_pad_right(pop.main, popup_layout::scale(28), 0);
   lv_obj_set_flex_flow(pop.main, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(pop.main, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(pop.main, popup_layout::scale(10), 0);
-  disable_pressed_button_animation(pop.main);
-  const uint32_t ink = vacuum_visual::on_accent(c.icon);
-  pop.main_glyph = add_icon(pop.main, "play", ink);
-  pop.main_text = add_text(pop.main, popup_layout::font20(), ink, text(i18n::VacuumLabel::Clean));
+  pop.main_glyph = add_icon(pop.main, "play", c.control_icon);
+  pop.main_text = add_text(pop.main, popup_layout::font20(), c.text, text(i18n::VacuumLabel::Clean));
   lv_obj_set_y(pop.main, row);
   lv_obj_add_event_cb(pop.main, on_main, LV_EVENT_CLICKED, nullptr);
   pop.menu_button = round_button(pop.root, W - L - ml::kButton, row, "dots-horizontal", c);
@@ -760,7 +768,9 @@ void refresh(bool show) {
   const vacuum_visual::Visual v = vacuum_visual::visual(d);
   pop.icon_rgb = v.color;
   lv_obj_set_style_bg_color(pop.card, lv_color_hex(pop.card_rgb), 0);
-  const String icon = pop.target.icon_name.length() ? pop.target.icon_name : String(v.icon);
+  const String icon = pop.target.icon_name.length()
+                          ? pop.target.icon_name
+                          : vacuum_visual::icon_name(haBridgeConfig.findEntityIcon(pop.target.entity), v);
   lv_label_set_text(pop.icon, pop.target.icon_visible ? getMdiChar(icon).c_str() : "");
   lv_obj_set_style_text_color(pop.icon, lv_color_hex(v.color), 0);
   hometiles_title::set(pop.title, pop.target.title.c_str());

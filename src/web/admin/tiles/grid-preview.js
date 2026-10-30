@@ -961,7 +961,7 @@
       if (deviceKind) {
         devicePreviewState = parseDevicePreviewPayload(deviceDetailPayload(tile.sensor_entity || '', sensorMeta));
         if (!normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) {
-          iconName = devicePreviewIcon(deviceKind, devicePreviewState);
+          iconName = devicePreviewIcon(deviceKind, devicePreviewState, '', iconName);
         }
       }
       if (previewKind === 'calendar' && !normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) {

@@ -98,9 +98,19 @@
     return name.slice(prefix.length).trim() || name;
   }
 
+  // Home Assistant puts the device name in front of an entity's own name.
+  // An entity named after its device reads it twice (Dreame vacuums are
+  // " L10s Ultra" with a leading space: "L10s Ultra  L10s Ultra"); the
+  // whole name then takes the device name once.
+  function entityPickerFullName(name, device) {
+    const whole = String(name || '').replace(/\s+/g, ' ').trim();
+    const own = entityPickerShortName(whole, device);
+    return own !== whole && own.toLowerCase() === String(device || '').trim().toLowerCase() ? own : whole;
+  }
+
   function entityPickerFromRemote(item) {
     const value = String(item?.v || '');
-    const name = String(item.t || '') || titleFromEntity(value) || value;
+    const name = entityPickerFullName(item.t, item.d) || titleFromEntity(value) || value;
     const entry = {
       value,
       name,

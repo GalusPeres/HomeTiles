@@ -35,7 +35,7 @@ for (const file of ['src/web/admin/tiles/grid-preview.js', 'src/web/admin/tiles/
 assert.match(read('src/web/admin/tiles/grid-preview.js'),
   /tileBgToHex\(tile\.bg_color, meta\.defaultBg \|\| '#353535'\), opacity\);\n\s*el\.dataset\.bgOpacity = String\(opacity\);/);
 assert.match(read('src/web/admin/tiles/live-preview.js'),
-  /isDefaultBg \? defaultBg : \(color \|\| defaultBg\), opacity\);\n\s*tileElem\.dataset\.bgOpacity = String\(opacity\);/);
+  /card \|\| \(isDefaultBg \? defaultBg : \(color \|\| defaultBg\)\), opacity\);\n\s*tileElem\.dataset\.bgOpacity = String\(opacity\);/);
 assert.match(read('src/web/admin/tiles/live-preview.js'), /tileElem\.style\.background = '';\n\s*delete tileElem\.dataset\.bgOpacity;/);
 // The slider shows no text-field ring when clicked (it drew a box around it).
 const css = read('src/web/assets/admin.css');

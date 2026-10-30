@@ -48,6 +48,7 @@
     const meta = getTileTypeMeta(typeValue);
     callTypeHandler(meta, 'load', prefix, data);
     syncIconDiscFields(prefix);
+    loadScreensaverLookFields(prefix, data);
     refreshEntityOptionLists(prefix);
     syncGaugeUi(tab);
   }

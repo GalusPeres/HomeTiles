@@ -27,7 +27,7 @@ assert.ok(load.indexOf('if (!tile_opacity_stored_)') > load.indexOf('tileConfig.
 
 // Panel: every card takes the global value; a new value rebuilds the cards.
 const screensaver = read('src/ui/screensaver/image_screensaver.cpp');
-assert.match(fn(screensaver, 'build_slot_tile'), /const lv_opa_t opacity = screensaverConfig\.get\(\)\.tile_opacity;/);
+assert.match(fn(screensaver, 'build_slot_tile'), /const lv_opa_t opacity =\s*screensaver_tile_look::fill_opacity\(screensaverConfig\.get\(\)\.tile_opacity, tile\);/);
 assert.doesNotMatch(screensaver, /tile\.background_opacity/);
 assert.match(fn(screensaver, 'refresh_live_background_and_clock'),
   /if \(st->built_opacity != screensaverConfig\.get\(\)\.tile_opacity\) \{\n\s*rebuild_slot_grid\(st\);\n\s*refresh_slot_values\(st\);/);
@@ -37,12 +37,12 @@ assert.match(fn(screensaver, 'remember_shown_grid'), /st->built_opacity = screen
 const html = read('src/web/server/render/web_admin_html.cpp');
 assert.match(html, /<span class=\\"screensaver-opacity-control\\"><input id=\\"screensaverTileOpacity\\" type=\\"range\\" "\s*"min=\\"0\\" max=\\"255\\" step=\\"1\\" value=\\""/);
 assert.doesNotMatch(html, /screensaver_tile_opacity|has-opacity/);
-assert.match(html, /String\(screensaverConfig\.get\(\)\.tile_opacity \* 100\.0f \/ 255\.0f, 2\)/);
+assert.match(html, /String\(screensaver_tile_look::fill_opacity\(\s*screensaverConfig\.get\(\)\.tile_opacity, tile\) \* 100\.0f \/ 255\.0f, 2\)/);
 for (const file of ['autosave', 'clipboard', 'drafts', 'editor', 'grid-preview', 'live-preview', 'snapshots', 'type-selection']) {
   assert.doesNotMatch(read(`src/web/admin/tiles/${file}.js`), /screensaver_tile_opacity/, file + ' still reads a per-tile opacity');
 }
 for (const file of ['grid-preview', 'live-preview']) {
-  assert.match(read(`src/web/admin/tiles/${file}.js`), /const opacity = screensaverTileOpacity\(\);/, file);
+  assert.match(read(`src/web/admin/tiles/${file}.js`), /const opacity = screensaverLookFilled\((?:look|tile)\) \? screensaverTileFillOpacity\((?:look|tile)\.ss_opacity\) : 0;/, file);
 }
 const editor = read('src/web/admin/screensaver/editor.js');
 assert.match(editor, /tile_opacity: Math\.round\(ssClamp\(d\.tile_opacity \?\? SCREENSAVER_TILE_DEFAULT_OPACITY, 0, 255\)\),/);
@@ -51,7 +51,8 @@ assert.match(editor, /bind\('screensaverTileOpacity', 'change', el => \{ screens
 
 // Its label in every language.
 const i18n = read('src/core/i18n/i18n.cpp');
-for (const label of ['"Kachel-Deckkraft",', '"Tile opacity",', '"Opacité des tuiles",']) assert.ok(i18n.includes(label), label);
+for (const label of ['"Füll-Deckkraft",', '"Fill opacity",', '"Opacité du fond",', '"Krycie wypełnienia",',
+                     '"Neprůhlednost výplně",', '"Opacidad del relleno",', '"Nepriehľadnosť výplne",']) assert.ok(i18n.includes(label), label);
 console.log('Screensaver tile opacity: one global value, taken over from the tiles, used by panel and previews');
 
 // The screensaver's Global tab (user 2026-10-11: Tile | Slideshow | Global):

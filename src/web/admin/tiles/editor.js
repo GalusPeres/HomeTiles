@@ -249,6 +249,20 @@
       updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
     });
     bindLive(iconInput, 'input', 'tileIcon', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    // Per-tile screensaver look (screensaver tile editor only).
+    for (const [suffix, event, key] of [['_tile_ss_fill', 'change', 'tileSsFill'],
+                                        ['_tile_ss_icon', 'change', 'tileSsIcon'],
+                                        ['_tile_ss_opacity', 'input', 'tileSsOpacity'],
+                                        ['_tile_ss_text_color_on', 'change', 'tileSsTextColorOn'],
+                                        ['_tile_ss_text_color', 'input', 'tileSsTextColor']]) {
+      bindLive(document.getElementById(prefix + suffix), event, key, () => {
+        syncScreensaverLookFields(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
+      });
+    }
+    // Background Custom of a screensaver tile: its own card color.
+    bindLive(document.getElementById(prefix + '_tile_ss_card_color'), 'input', 'tileSsCardColor', () => {
+      updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
+    });
     bindLive(colorInput, 'input', 'tileColor', () => { markTileColorInputExplicit(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(colInput, 'input', 'tileCol', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(rowInput, 'input', 'tileRow', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });

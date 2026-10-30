@@ -185,6 +185,7 @@ ${strip(read('src/ui/shared/tabular_digits.h'))}
 ${strip(read('src/ui/shared/tabular_digits.cpp'))}
 ${strip(read('src/types/clock/clock_face.h'))}
 ${strip(read('src/types/text/text_options.h'))}
+${strip(read('src/types/timer/renderer.h'))}
 ${strip(read('src/web/server/render/web_admin_styles.cpp').split('void appendAdminStyles(')[0])}
 bool pressed=false;lv_point_t pointer{};bool measuring=false;int covered_draws=0;uint64_t flushed_pixels=0;
 int tile_draws=0, tile_style_changes=0;

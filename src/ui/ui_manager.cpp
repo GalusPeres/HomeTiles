@@ -16,6 +16,7 @@
 #include "src/ui/popups/vacuum/vacuum_popup.h"
 #include "src/ui/popups/calendar/calendar_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
+#include "src/ui/timers/timer_ui.h"
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/core/display/display_manager.h"
 #include "src/core/config/config_manager.h"
@@ -244,6 +245,7 @@ void UIManager::processThemeChange() {
   settings_screen::close_overlays();
   popup_shell_delete_popups();
   preloadPopups();
+  timer_ui::theme_changed();
   // The screen behind everything.
   const lv_color_t screen = lv_color_hex(ui_theme::screen());
   lv_obj_set_style_bg_color(lv_screen_active(), screen, 0);
@@ -586,6 +588,7 @@ void UIManager::lockProtectedAccess() {
     tiles_cancel_folder_switch(pending_access_folder_id);
   }
   hide_pin_popup();
+  timer_ui::hide_popup();
   pending_access_kind = PendingAccessKind::None;
   pending_access_folder_id = 0;
   access_gesture_eligible = false;
@@ -659,6 +662,7 @@ void UIManager::finishFolderSwitch(uint16_t folder_id, bool success) {
   pending_access_kind = PendingAccessKind::None;
   pending_access_folder_id = 0;
   hide_pin_popup();
+  timer_ui::hide_popup();
 }
 
 void UIManager::createSettingsGestureZone() {

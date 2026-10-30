@@ -22,11 +22,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONVERTER = 'lv_font_conv@1.5.3';
 const MDI = '@mdi/font@7.4.47';
 
-// Lock thumb (locked, unlocked, running), Alarm modes and Disarm, Fan thumb.
+// Lock thumb (locked, unlocked, running), Alarm modes and Disarm, Fan thumb,
+// the Timer tile's pause, resume and cancel buttons.
 export const BAR_ICONS = [
   'lock', 'lock-open-variant', 'lock-clock',
   'home', 'lock', 'moon-waning-crescent', 'airplane', 'shield', 'shield-off',
   'fan', 'fan-off',
+  'pause', 'play', 'close',
 ].filter((name, i, all) => all.indexOf(name) === i);
 export const SIZES = [15, 18, 22, 26, 34];
 

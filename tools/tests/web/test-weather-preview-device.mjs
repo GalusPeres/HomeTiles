@@ -185,6 +185,7 @@ ${strip(read('src/ui/shared/tabular_digits.h'))}
 ${strip(read('src/ui/shared/tabular_digits.cpp'))}
 ${strip(read('src/types/clock/clock_face.h'))}
 ${strip(read('src/types/text/text_options.h'))}
+${strip(read('src/types/timer/renderer.h'))}
 ${strip(read('src/web/server/render/web_admin_styles.cpp').split('void appendAdminStyles(')[0])}
 ${strip(read('src/types/weather/web_scripts.cpp'))}
 ${strip(read('src/types/sensor/web_scripts.cpp'))}

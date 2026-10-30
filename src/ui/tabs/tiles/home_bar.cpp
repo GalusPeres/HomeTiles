@@ -21,6 +21,7 @@
 #include "src/ui/shared/ui_theme.h"
 #include "src/ui/shared/tabular_digits.h"
 #include "src/ui/shared/touch_rules.h"
+#include "src/ui/timers/timer_ui.h"
 #include "src/video/local_camera/local_camera.h"
 
 // grid_layout.h sizes the bar's grid with the head's frame; it must be the
@@ -446,7 +447,7 @@ bool is_button(const lv_obj_t* obj) {
   return false;
 }
 
-static void add_camera_circle(lv_obj_t* bar, const Geometry& g, bool gear_hidden);
+static void add_camera_circle(lv_obj_t* bar, const Geometry& g, int right);
 
 void build(lv_obj_t* grid, uint16_t folder_id) {
   if (!grid || !grid_layout::head_bar()) return;
@@ -533,7 +534,19 @@ void build(lv_obj_t* grid, uint16_t folder_id) {
   // stays empty.
   if (!config.head_clock) lv_obj_add_flag(time_label, LV_OBJ_FLAG_HIDDEN);
   if (!g_time_timer) g_time_timer = lv_timer_create(time_tick, 5000, nullptr);
-  add_camera_circle(bar, g, gear_hidden);
+  // A voice timer's pill right before the time (timer_ui.h), in the time's
+  // place without it; the camera circle and the title make room. A tap on
+  // the time opens the Timers popup too, for its presets.
+  const int time_left = gear_hidden ? g.time_x_alone : g.time_x;
+  const int pill_right = config.head_clock ? time_left - g.disc / 5 : time_left + g.time_w;
+  const int pill_left = timer_ui::add_head_pill(bar, pill_right, g.center_y, g.disc, head_base());
+  const bool pill = pill_left != pill_right;
+  if (config.head_clock && timer_ui::head_time_opens_popup()) {
+    lv_obj_add_flag(time_label, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(time_label, (g.disc - g.time_line) / 2);
+    lv_obj_add_event_cb(time_label, [](lv_event_t*) { timer_ui::open_popup(); }, LV_EVENT_CLICKED, nullptr);
+  }
+  add_camera_circle(bar, g, (pill ? pill_left : time_left) - g.disc / 5);
 
   // The dots in the middle of the head, Home's first.
   int title_end = g.title_x + (gear_hidden ? g.title_w_alone : g.title_w);
@@ -589,6 +602,8 @@ void build(lv_obj_t* grid, uint16_t folder_id) {
     // The title ends a gap before them.
     if (row_x - g.disc / 5 < title_end) title_end = row_x - g.disc / 5;
   }
+
+  if (pill && pill_left - g.disc / 5 < title_end) title_end = pill_left - g.disc / 5;
 
   // Home or the folder's name, one line between the circle and the time
   // (or the dots).
@@ -672,13 +687,12 @@ bool is_dots(const lv_obj_t* obj) { return obj && lv_obj_get_user_data(const_cas
 // time (user 2026-10-12). The page circle's grey with the webcam icon in the
 // camera's red (user 2026-10-11: "Grauer Kreis"). A tap ends the stream.
 static void camera_circle_event(lv_event_t*) { local_camera::endStream(); }
-static void add_camera_circle(lv_obj_t* bar, const Geometry& g, bool gear_hidden) {
+static void add_camera_circle(lv_obj_t* bar, const Geometry& g, int right) {
   if (local_camera::indicatorStyle() != local_camera::IndicatorStyle::Pill ||
       !local_camera::indicatorActive())
     return;
   uint16_t pages[tile_layouts::kMaxPages];
-  const int x = tile_layouts::pages(pages) ? (gear_hidden ? g.time_x_alone : g.time_x) - g.disc / 5 - g.disc
-                                           : (grid_layout::screen_w() - g.disc) / 2;
+  const int x = tile_layouts::pages(pages) ? right - g.disc : (grid_layout::screen_w() - g.disc) / 2;
   lv_obj_t* circle = lv_button_create(bar);
   lv_obj_remove_style_all(circle);
   lv_obj_remove_flag(circle, LV_OBJ_FLAG_SCROLLABLE);

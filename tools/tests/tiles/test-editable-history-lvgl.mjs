@@ -36,7 +36,7 @@ const rangeBuild = popup.slice(popup.indexOf('  lv_obj_t* range_row = lv_obj_cre
 const readoutFunctions = ['get_value_font', 'set_label_text_if_changed', 'numeric_fraction_digits', 'popup_digits', 'apply_decimals',
   'sensor_value_display', 'readout_target', 'invalidate_readout_cursor', 'on_readout_cursor_draw', 'show_readout_band',
   'clear_sensor_readout', 'move_readout_cursor', 'append_readout_time', 'binary_state_identifier_text', 'write_state_history_label',
-  'apply_chart_readout', 'apply_timeline_readout', 'on_sensor_readout_apply', 'sensor_readout_graph',
+  'apply_chart_readout', 'apply_timeline_readout', 'apply_sensor_readout', 'on_sensor_readout_apply', 'sensor_readout_graph',
   'sensor_readout_is_latest', 'on_sensor_readout_end', 'refresh_sensor_readout',
   'build_readout_band', 'keep_chart_history', 'attach_chart_readout', 'attach_timeline_readout',
   // The graph's picture: area, grid lines and line (mockups sensor-graph-2 and -3).
@@ -403,9 +403,11 @@ int main(int argc,char**argv){
   assert(ctx.readout_kind==kReadoutChart&&ctx.readout_point==3&&ctx.readout_latest&&shown(ctx.readout_value_label)&&strcmp(ctx.readout_value_text,"1234.56")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"C")==0&&"New history shows the newest point without a touch");
   lv_obj_update_layout(card);lv_refr_now(display);
   lv_area_t content,wrap;lv_obj_get_content_coords(ctx.chart,&content);lv_obj_get_coords(ctx.chart_wrap,&wrap);const int width=lv_area_get_width(&content);
-  assert(white_at(pixels,wrap.x1+ctx.readout_x,content.y2-2)&&"The newest point shows the cursor");
+  // Issue #139: before a touch only the newest point's dot, no cursor line.
+  assert(!ctx.readout_touched&&!white_at(pixels,wrap.x1+ctx.readout_x,content.y2-2)&&"No cursor line before the graph is touched");
   touch_at(content.x2-1,content.y1+4);lv_refr_now(display);
   assert(ctx.readout_point==3&&strcmp(ctx.readout_value_text,"1234.56")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"C")==0&&"Readouts use exact history values");
+  assert(ctx.readout_touched&&white_at(pixels,wrap.x1+ctx.readout_x,content.y2-2)&&"A touch on the point already shown brings the cursor line");
   assert(shown(ctx.value_box)&&lv_obj_get_style_bg_opa(ctx.value_box,LV_PART_MAIN)==LV_OPA_TRANSP&&lv_obj_get_style_y(ctx.value_box,LV_PART_MAIN)==popup_layout::kValueY-kContentLiftY);
   touch_at(content.x1+width/3,content.y1+4);lv_refr_now(display);
   assert(ctx.readout_point==1&&strcmp(ctx.readout_value_text,"21.50")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"C")==0);

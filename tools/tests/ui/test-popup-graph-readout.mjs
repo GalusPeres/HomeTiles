@@ -120,7 +120,20 @@ for (const name of ['on_close_click', 'hide_sensor_popup', 'show_sensor_popup', 
 // Sensors keep it after release; editors keep their controls.
 const sensorEnd = code(fn(sensor, 'on_sensor_readout_end'));
 assert.match(sensorEnd, /if \(keep && graph && readout_target\(ctx\) == graph\) \{\s*ctx->readout_pin_x = ctx->readout_x;\s*ctx->readout_latest = sensor_readout_is_latest\(ctx\);\s*return;/);
-assert.match(sensorEnd, /if \(!keep\) ctx->readout_latest = true;/);
+assert.match(sensorEnd, /if \(!keep\) \{\s*ctx->readout_latest = true;\s*ctx->readout_touched = false;/);
+// Issue #139: the popup opens with the newest point as a dot in the line's
+// color and its value above; the cursor line comes with the first touch.
+const untouched = cursor.slice(0, cursor.indexOf('lv_draw_rect_dsc_t line;'));
+assert.match(untouched, /if \(!ctx->readout_touched\) \{[\s\S]*if \(ctx->readout_kind != kReadoutChart\) return;/,
+  'Before a touch no cursor line, on the timeline nothing');
+assert.ok(untouched.includes('dot.bg_color = ctx->icon_label ? lv_obj_get_style_text_color(ctx->icon_label, LV_PART_MAIN)'),
+  "The untouched dot takes the line's color");
+assert.match(code(fn(sensor, 'on_sensor_readout_apply')),
+  /if \(!ctx->readout_touched\) \{\s*ctx->readout_touched = true;\s*invalidate_readout_cursor\(ctx\);\s*\}\s*apply_sensor_readout\(ctx, target, point\);/,
+  'A finger turns the line on, also on the point already shown');
+assert.ok(code(fn(sensor, 'refresh_sensor_readout')).includes('apply_sensor_readout(ctx, graph, point);') &&
+  !code(fn(sensor, 'refresh_sensor_readout')).includes('on_sensor_readout_apply'),
+  'Opening and new data do not count as a touch');
 assert.match(code(fn(sensor, 'sensor_readout_graph')), /if \(!ctx \|\| ctx->editable\) return nullptr;/);
 const sensorRefresh = code(fn(sensor, 'refresh_sensor_readout'));
 assert.match(sensorRefresh, /ctx->readout\.active\(\)/, 'A finger on the graph reads new data itself');

@@ -141,7 +141,8 @@ constexpr int kContentLiftY = 6;
 constexpr int kContentLiftY = 0;
 #endif
 // Graph readout cursor: a thin white line and, on the numeric chart, a white
-// dot with a ring in the card color. The short state timeline also accepts
+// dot with a ring in the card color; before the first touch only the dot, in
+// the line's color (issue #139). The short state timeline also accepts
 // touches slightly above and below its bar.
 constexpr int kReadoutLineWidth = std::max(1, popup_layout::scale(2));
 constexpr int kReadoutDotSize = popup_layout::scale(16);
@@ -288,6 +289,11 @@ struct SensorPopupContext {
   // on opening, after a range change and while new data arrives.
   bool readout_latest = true;
   int32_t readout_pin_x = 0;
+  // Issue #139: until a finger reads the graph, the newest point shows only
+  // as a dot in the line's color with its value above; the cursor line comes
+  // with the first touch and stays until the readout is reset (opening,
+  // range change, hiding).
+  bool readout_touched = false;
   // A warm opening with retained history shows the newest point after its
   // first frame, when the graph has its layout.
   bool readout_refresh_pending = false;
@@ -1982,7 +1988,8 @@ static void apply_sensor_header_value(SensorPopupContext* ctx,
 // ---------------------------------------------------------------------------
 // Graph readout. The old value row shows the time and value under the cursor
 // on the numeric chart or the state timeline. Sensors open on the newest
-// point and keep the cursor where the finger leaves it; editors show it only
+// point (a dot in the line's color, no cursor line until a finger reads the
+// graph, issue #139) and keep the cursor where the finger leaves it; editors show it only
 // while touching. Only the cursor and two static labels change; chart,
 // timeline and Activity stay.
 
@@ -2092,6 +2099,25 @@ static void on_readout_cursor_draw(lv_event_t* event) {
   lv_area_t coords;
   lv_obj_get_coords(target, &coords);
   const int32_t x = coords.x1 + ctx->readout_x;
+  if (!ctx->readout_touched) {
+    // Untouched: no line; the chart's newest point as a dot in its color.
+    if (ctx->readout_kind != kReadoutChart) return;
+    lv_draw_rect_dsc_t dot;
+    lv_draw_rect_dsc_init(&dot);
+    dot.base.layer = layer;
+    dot.bg_color = ctx->icon_label ? lv_obj_get_style_text_color(ctx->icon_label, LV_PART_MAIN)
+                                   : lv_color_hex(ui_theme::text());
+    dot.bg_opa = LV_OPA_COVER;
+    dot.radius = LV_RADIUS_CIRCLE;
+    dot.border_color = lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN);
+    dot.border_width = kReadoutDotRing;
+    dot.border_opa = LV_OPA_COVER;
+    const int32_t dot_x = x - kReadoutDotSize / 2;
+    const int32_t dot_y = coords.y1 + ctx->readout_y - kReadoutDotSize / 2;
+    lv_area_t dot_area = {dot_x, dot_y, dot_x + kReadoutDotSize - 1, dot_y + kReadoutDotSize - 1};
+    lv_draw_rect(layer, &dot, &dot_area);
+    return;
+  }
 
   lv_draw_rect_dsc_t line;
   lv_draw_rect_dsc_init(&line);
@@ -2375,16 +2401,27 @@ static void apply_timeline_readout(SensorPopupContext* ctx, const lv_point_t& po
   show_readout_band(ctx);
 }
 
-static void on_sensor_readout_apply(void* owner, lv_obj_t* target,
-                                    const lv_point_t& point) {
-  auto* ctx = static_cast<SensorPopupContext*>(owner);
-  if (!ctx) return;
+static void apply_sensor_readout(SensorPopupContext* ctx, lv_obj_t* target,
+                                 const lv_point_t& point) {
   if (!is_popup_visible(ctx) || !ctx->readout_time_label || !ctx->readout_value_label) {
     clear_sensor_readout(ctx);
     return;
   }
   if (target == ctx->chart_wrap) apply_chart_readout(ctx, point);
   else if (target == ctx->binary_timeline) apply_timeline_readout(ctx, point);
+}
+
+// A finger on the graph: from now on the cursor line shows (issue #139),
+// also where the finger rests on the point already shown.
+static void on_sensor_readout_apply(void* owner, lv_obj_t* target,
+                                    const lv_point_t& point) {
+  auto* ctx = static_cast<SensorPopupContext*>(owner);
+  if (!ctx) return;
+  if (!ctx->readout_touched) {
+    ctx->readout_touched = true;
+    invalidate_readout_cursor(ctx);
+  }
+  apply_sensor_readout(ctx, target, point);
 }
 
 // The graph whose readout stays after release: the numeric chart or the state
@@ -2422,7 +2459,10 @@ static void on_sensor_readout_end(void* owner, bool keep) {
     return;
   }
   clear_sensor_readout(ctx);
-  if (!keep) ctx->readout_latest = true;
+  if (!keep) {
+    ctx->readout_latest = true;
+    ctx->readout_touched = false;
+  }
 }
 
 // Show the kept readout again after its data changed or the popup opened:
@@ -2440,7 +2480,7 @@ static void refresh_sensor_readout(SensorPopupContext* ctx) {
                             area.y1};
   ctx->readout_point = -1;
   ctx->readout_from = ctx->readout_to = 0;
-  on_sensor_readout_apply(ctx, graph, point);
+  apply_sensor_readout(ctx, graph, point);
 }
 
 // The old value row becomes the readout band: a small time line above the

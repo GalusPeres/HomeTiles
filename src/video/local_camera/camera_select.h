@@ -68,6 +68,11 @@
 #define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/guition_jc4880p443_portrait/local_camera_board.h"
 #endif
 
+#if defined(DEVICE_ELECROW_CROWPANEL_10_1)
+#define HOMETILES_CAMERA_SENSOR_SC2336 1
+#define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/elecrow_crowpanel_10_1/local_camera_board.h"
+#endif
+
 #if !defined(HOMETILES_LOCAL_CAMERA_BOARD)
 #error "HOMETILES_LOCAL_CAMERA is set but no camera board file is selected"
 #endif

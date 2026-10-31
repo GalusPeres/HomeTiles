@@ -9,6 +9,14 @@ namespace DeviceElecrowCrowPanel10Profile {
 inline constexpr uint32_t kFlashSizeBytes = 16U * 1024U * 1024U;
 inline constexpr uint32_t kPsramSizeBytes = 32U * 1024U * 1024U;
 
+// SC2336 on the CSI connector ("With 2MP Camera" variant),
+// HOMETILES_LOCAL_CAMERA in device_select.h; off until the user enables it.
+#if defined(HOMETILES_LOCAL_CAMERA)
+inline constexpr bool kBuiltinCamera = true;
+#else
+inline constexpr bool kBuiltinCamera = false;
+#endif
+
 inline constexpr Device::Profile kProfile{
     "elecrow_crowpanel_10_1",
     "Elecrow CrowPanel Advanced 10.1",
@@ -25,7 +33,7 @@ inline constexpr Device::Profile kProfile{
     Device::RotationStepMode::FlipOnly,
     2,
     0,
-    Device::Capabilities{false, false, false, false, true, false, false},
+    Device::Capabilities{false, false, false, false, true, false, kBuiltinCamera},
     kHardwareIoProfile,
 };
 

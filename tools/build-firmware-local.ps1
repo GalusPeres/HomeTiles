@@ -17,6 +17,11 @@ param(
     # Skip the host suite only when it passed right before this build.
     [switch]$SkipTests,
 
+    # Skip Node-based profile, generated-asset, and test checks. Useful when Node
+    # is unavailable on the build host; the profile is then read from the
+    # committed tools/device-profiles.json.
+    [switch]$SkipChecks,
+
     [switch]$Clean,
 
     # Reuse the last arduino-cli build in $BuildPath (tools/fast-build.mjs):
@@ -55,26 +60,37 @@ if (Test-Path -LiteralPath $hiddenSketchProfiles) {
     throw "Temporary profile file already exists: $hiddenSketchProfiles"
 }
 
-$node = Get-Command node -ErrorAction Stop
+$node = Get-Command node -ErrorAction SilentlyContinue
 # Preserve the case-insensitive profile names accepted by PowerShell ValidateSet.
 $Profile = $Profile.ToLowerInvariant()
-$profileJson = & $node.Source (Join-Path $PSScriptRoot 'device-catalog.js') --profile $Profile
-if ($LASTEXITCODE -ne 0) {
-    throw "Unknown or invalid build profile: $Profile"
-}
-$buildProfile = $profileJson | ConvertFrom-Json
-& $node.Source (Join-Path $PSScriptRoot 'generate-device-profiles.mjs') --check
-if ($LASTEXITCODE -ne 0) {
-    throw 'Generated device profiles are stale. Run tools/generate-device-profiles.mjs.'
-}
-& $node.Source (Join-Path $PSScriptRoot 'generate-web-assets.mjs') --check
-if ($LASTEXITCODE -ne 0) {
-    throw 'WebUI asset verification failed. Install host dependencies with npm ci --ignore-scripts, then run node tools/generate-web-assets.mjs.'
-}
-if (-not $SkipTests) {
-    & $node.Source (Join-Path $PSScriptRoot 'run-tests.mjs')
+if ($SkipChecks) {
+    $catalog = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'device-profiles.json') -Raw | ConvertFrom-Json
+    $buildProfile = $catalog.profiles | Where-Object { $_.buildProfile -eq $Profile } | Select-Object -First 1
+    if (-not $buildProfile) {
+        throw "Unknown or invalid build profile: $Profile"
+    }
+} else {
+    if (-not $node) {
+        throw 'Node.js is required unless -SkipChecks is used.'
+    }
+    $profileJson = & $node.Source (Join-Path $PSScriptRoot 'device-catalog.js') --profile $Profile
     if ($LASTEXITCODE -ne 0) {
-        throw 'Host regression suite failed.'
+        throw "Unknown or invalid build profile: $Profile"
+    }
+    $buildProfile = $profileJson | ConvertFrom-Json
+    & $node.Source (Join-Path $PSScriptRoot 'generate-device-profiles.mjs') --check
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Generated device profiles are stale. Run tools/generate-device-profiles.mjs.'
+    }
+    & $node.Source (Join-Path $PSScriptRoot 'generate-web-assets.mjs') --check
+    if ($LASTEXITCODE -ne 0) {
+        throw 'WebUI asset verification failed. Install host dependencies with npm ci --ignore-scripts, then run node tools/generate-web-assets.mjs.'
+    }
+    if (-not $SkipTests) {
+        & $node.Source (Join-Path $PSScriptRoot 'run-tests.mjs')
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Host regression suite failed.'
+        }
     }
 }
 
@@ -105,6 +121,7 @@ Write-LvglMarker
 Write-Host "Build cache: $BuildPath"
 
 $isNativeS3 = $buildProfile.chipFamily -eq 'ESP32-S3'
+if (-not $node) { $Fast = $false; Write-Host 'Node.js not found; fast build disabled.' }
 
 $profileLines = Get-Content -LiteralPath $sketchProfiles
 $insideProfile = $false

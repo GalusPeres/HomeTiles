@@ -7,6 +7,7 @@
 #include "src/core/diagnostics/popup_timing.h"
 #include "src/tiles/config/grid_layout.h"
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || \
+    defined(DEVICE_ELECROW_CROWPANEL_10_1) || \
     defined(DEVICE_GUITION_JC1060P470C_FAMILY)
 #include "src/devices/active_device.h"
 #endif
@@ -189,6 +190,7 @@ static constexpr size_t kLargeDrawPsramReserveBytes = 8 * 1024 * 1024;
 
 static inline void commit_display_if_last(lv_display_t* lv_disp) {
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || \
+    defined(DEVICE_ELECROW_CROWPANEL_10_1) || \
     defined(DEVICE_GUITION_JC1060P470C_FAMILY)
   if (lv_display_flush_is_last(lv_disp)) {
     DeviceImpl::displayCommit();
@@ -842,6 +844,7 @@ void IRAM_ATTR DisplayManager::touch_cb(lv_indev_t* indev_drv, lv_indev_data_t *
     int16_t mapped_y = tp.y;
 #if !defined(DEVICE_M5STACKS_TAB5) && \
     !defined(DEVICE_WAVESHARE_TOUCH_LCD_X) && \
+    !defined(DEVICE_ELECROW_CROWPANEL_10_1) && \
     !defined(DEVICE_GUITION_JC8012P4A1_FAMILY) && \
     !defined(DEVICE_GUITION_JC1060P470C_FAMILY) && \
     !defined(DEVICE_GUITION_JC4880P443_PORTRAIT) && \
@@ -897,6 +900,7 @@ bool DisplayManager::init() {
   BoardHAL::displayFillScreen(0x0000);  // black
 #if !defined(DEVICE_M5STACKS_TAB5) && \
     !defined(DEVICE_WAVESHARE_TOUCH_LCD_X) && \
+    !defined(DEVICE_ELECROW_CROWPANEL_10_1) && \
     !defined(DEVICE_GUITION_JC8012P4A1_FAMILY) && \
     !defined(DEVICE_GUITION_JC1060P470C_FAMILY) && \
     !defined(DEVICE_ESP32_S3_RGB_480)
@@ -992,6 +996,7 @@ bool DisplayManager::init() {
                         nullptr);
 #endif
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || \
+    defined(DEVICE_ELECROW_CROWPANEL_10_1) || \
     defined(DEVICE_GUITION_JC8012P4A1_FAMILY) || \
     defined(DEVICE_GUITION_JC1060P470C_FAMILY) || \
     defined(DEVICE_ESP32_S3_RGB_480)

@@ -7,7 +7,8 @@
 // The Waveshare Touch LCD X devices only have USB host Ethernet, so the RTL8156
 // path has to be part of their CI and release builds as well. Local development
 // builds keep it on every USB-host-capable profile for hardware tests.
-#if !defined(HOMETILES_CI_TARGET) || defined(DEVICE_WAVESHARE_TOUCH_LCD_X)
+#if !defined(HOMETILES_CI_TARGET) || defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || \
+    defined(DEVICE_ELECROW_CROWPANEL_10_1)
 #define HOMETILES_USB_ETHERNET_DEV 1
 #endif
 

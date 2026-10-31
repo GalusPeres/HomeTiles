@@ -36,9 +36,22 @@ assert.match(read('src/core/firmware/firmware_metadata.cpp'),
   /#elif defined\(DEVICE_ELECROW_CROWPANEL_10_1\)\n#define FW_META_TARGET_DEVICE_KEY "elecrow_crowpanel_10_1"/);
 assert.match(read('src/web/setup/web_config.cpp'), /return "CrowPanel_10_1_Config";/);
 const select = read('src/devices/device_select.h');
-for (const group of ['DEVICE_P4_IDF_DSI', 'DEVICE_LAYOUT_1024X600', 'DEVICE_WAVESHARE_TOUCH_LCD_X']) {
-  const block = select.match(new RegExp(`#if ([^#]*)#define ${group}\\n`))?.[1] ?? '';
-  assert.ok(block.includes('defined(DEVICE_ELECROW_CROWPANEL_10_1)'), `the CrowPanel belongs to ${group}`);
+const groupBlock = group => select.match(new RegExp(`#if ([^#]*)#define ${group}\\n`))?.[1] ?? '';
+for (const group of ['DEVICE_P4_IDF_DSI', 'DEVICE_LAYOUT_1024X600']) {
+  assert.ok(groupBlock(group).includes('defined(DEVICE_ELECROW_CROWPANEL_10_1)'), `the CrowPanel belongs to ${group}`);
+}
+// Its own device (user 2026-10-31): not in the Waveshare switch, named on its
+// own wherever shared code asks for that switch.
+assert.ok(!groupBlock('DEVICE_WAVESHARE_TOUCH_LCD_X').includes('ELECROW'), 'the CrowPanel is no Waveshare board');
+for (const file of ['HomeTiles.ino', 'src/core/display/display_manager.cpp', 'src/devices/device.cpp',
+  'src/types/pixelanim/renderer.cpp', 'src/network/transport/network_transport.h']) {
+  const text = read(file);
+  const sites = [...text.matchAll(/^#if(?:[^\n]*\\\n)*[^\n]*/gm)].map(m => m[0])
+    .filter(condition => condition.includes('DEVICE_WAVESHARE_TOUCH_LCD_X'));
+  assert.ok(sites.length > 0, file);
+  for (const condition of sites) {
+    assert.ok(condition.includes('DEVICE_ELECROW_CROWPANEL_10_1'), `${file}: ${condition.split('\n')[0]} names the CrowPanel`);
+  }
 }
 // Local I/O: only the UART1 header (Elecrow wiki: RX 48, TX 47); the I2C
 // header is the touch bus and UART3-IN the power input.

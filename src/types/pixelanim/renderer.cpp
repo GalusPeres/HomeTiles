@@ -11,7 +11,7 @@
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/devices/device.h"
-#if defined(DEVICE_WAVESHARE_TOUCH_LCD_X)
+#if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || defined(DEVICE_ELECROW_CROWPANEL_10_1)
 #include "src/devices/active_device.h"
 #endif
 
@@ -70,7 +70,7 @@ void pixelanim_timer_cb(lv_timer_t* t) {
   uint32_t now_ms = millis();
   uint32_t gap_ms = s_last_tick_ms ? (now_ms - s_last_tick_ms) : 0;
   s_last_tick_ms = now_ms;
-#if defined(DEVICE_WAVESHARE_TOUCH_LCD_X)
+#if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || defined(DEVICE_ELECROW_CROWPANEL_10_1)
   // A media-tile update briefly forces every flush onto the slow CPU-rotate
   // path (see pausePpaFor in tile_renderer.cpp). Swapping our frame into that
   // window would visibly hitch and adds more work to an already-loaded

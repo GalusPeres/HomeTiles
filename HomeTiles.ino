@@ -95,6 +95,7 @@ static uint32_t tab5_brightness_cap_wait_since = 0;
 // Keep the device/version splash readable even when the remaining boot is fast.
 static constexpr uint32_t kBootSplashMinVisibleMs = 2500;
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || \
+    defined(DEVICE_ELECROW_CROWPANEL_10_1) || \
     defined(DEVICE_M5STACKS_TAB5) || \
     defined(DEVICE_GUITION_JC8012P4A1_FAMILY) || \
     defined(DEVICE_ESP32_S3_RGB_480)
@@ -153,6 +154,7 @@ static void log_memory_status(const char* tag) {
 }
 
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || \
+    defined(DEVICE_ELECROW_CROWPANEL_10_1) || \
     defined(DEVICE_M5STACKS_TAB5) || \
     defined(DEVICE_GUITION_JC8012P4A1_FAMILY) || \
     defined(DEVICE_ESP32_S3_RGB_480)
@@ -848,6 +850,7 @@ void setup() {
   log_memory_status("after-display");
   Serial.flush();
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || \
+    defined(DEVICE_ELECROW_CROWPANEL_10_1) || \
     defined(DEVICE_M5STACKS_TAB5) || \
     defined(DEVICE_GUITION_JC8012P4A1_FAMILY) || \
     defined(DEVICE_ESP32_S3_RGB_480)
@@ -917,6 +920,7 @@ void setup() {
   // Large DSI/DPI panels expose the live framebuffer, so initial strip flushes
   // can appear as a stepped flash. Render the splash with the panel dark first.
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || \
+    defined(DEVICE_ELECROW_CROWPANEL_10_1) || \
     defined(DEVICE_M5STACKS_TAB5) || \
     defined(DEVICE_GUITION_JC8012P4A1_FAMILY) || \
     defined(DEVICE_ESP32_S3_RGB_480)
@@ -930,6 +934,7 @@ void setup() {
   // Otherwise that frame can show distorted intermediate geometry until redraw.
   lv_obj_update_layout(lv_screen_active());
 #if !defined(DEVICE_WAVESHARE_TOUCH_LCD_X) && \
+    !defined(DEVICE_ELECROW_CROWPANEL_10_1) && \
     !defined(DEVICE_M5STACKS_TAB5) && \
     !defined(DEVICE_GUITION_JC8012P4A1_FAMILY) && \
     !defined(DEVICE_ESP32_S3_RGB_480)
@@ -953,6 +958,7 @@ void setup() {
   BoardHAL::displayWaitDisplay();
 #endif
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || \
+    defined(DEVICE_ELECROW_CROWPANEL_10_1) || \
     defined(DEVICE_M5STACKS_TAB5) || \
     defined(DEVICE_GUITION_JC8012P4A1_FAMILY) || \
     defined(DEVICE_ESP32_S3_RGB_480)

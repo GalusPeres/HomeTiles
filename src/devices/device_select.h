@@ -117,9 +117,7 @@
 
 // These Waveshare P4 products share the same I2C/touch, backlight, SDMMC and
 // ESP-Hosted pin contracts. Each exact panel keeps its own controller, timing,
-// layout and device driver or board description. The Elecrow CrowPanel
-// Advanced 10.1 driver derives from the 7B driver and shares its board API
-// (boot warmup, sleep, framebuffer access) with its own pins.
+// layout and device driver or board description.
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_4_3) || \
     defined(DEVICE_WAVESHARE_TOUCH_LCD_5) || \
     defined(DEVICE_WAVESHARE_TOUCH_LCD_7) || \
@@ -127,8 +125,7 @@
     defined(DEVICE_WAVESHARE_TOUCH_LCD_8) || \
     defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1) || \
     defined(DEVICE_LAYOUT_TEST_1024X600) || \
-    defined(DEVICE_LAYOUT_TEST_480X480) || \
-    defined(DEVICE_ELECROW_CROWPANEL_10_1)
+    defined(DEVICE_LAYOUT_TEST_480X480)
 #define DEVICE_WAVESHARE_TOUCH_LCD_X
 #endif
 

@@ -535,6 +535,29 @@
       }
     },
     {
+      "buildProfile": "elecrow_crowpanel_10_1",
+      "key": "elecrow_crowpanel_10_1",
+      "metadataDeviceKey": "elecrow_crowpanel_10_1",
+      "define": "DEVICE_ELECROW_CROWPANEL_10_1",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 16777216,
+      "siliconVariant": "pre_v3",
+      "minimumRevision": 1,
+      "maximumRevision": 199,
+      "rxVariant": "repo-a8204",
+      "elfFlags": "",
+      "publish": true,
+      "ciOrder": 24,
+      "ciLabel": "Elecrow CrowPanel Advanced 10.1",
+      "legacySlug": "elecrow-crowpanel-10-1",
+      "installer": {
+        "label": "Elecrow CrowPanel Advanced 10.1 (V1.2)",
+        "status": "validation-pending",
+        "hardwareCheck": "The device is an Elecrow CrowPanel Advanced 10.1-inch ESP32-P4 HMI display (1024x600, model DHE04310D) with an ESP32-P4 below revision v3.0 and board version V1.2.",
+        "acceptsLegacyDescriptor": true
+      }
+    },
+    {
       "buildProfile": "layout_test_1024x600",
       "key": "layout_test_1024x600",
       "metadataDeviceKey": "layout_test_1024x600",

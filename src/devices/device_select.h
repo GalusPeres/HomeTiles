@@ -24,6 +24,7 @@
 // #define DEVICE_GUITION_JC4880P443_PORTRAIT
 // #define DEVICE_GUITION_ESP32_4848S040
 // #define DEVICE_GOLDEN_SECURITY_GS_T3E_V2
+// #define DEVICE_ELECROW_CROWPANEL_10_1
 #endif
 //
 // If nothing is selected, the project defaults to Waveshare 4B.
@@ -54,7 +55,8 @@
      defined(DEVICE_GUITION_JC1060P470C_V2) + \
      defined(DEVICE_GUITION_JC4880P443_PORTRAIT) + \
      defined(DEVICE_GUITION_ESP32_4848S040) + \
-     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)) > 1
+     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) + \
+     defined(DEVICE_ELECROW_CROWPANEL_10_1)) > 1
 #error "Select only one device target."
 #endif
 
@@ -77,6 +79,7 @@
     !defined(DEVICE_GUITION_JC4880P443_PORTRAIT) && \
     !defined(DEVICE_GUITION_ESP32_4848S040) && \
     !defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) && \
+    !defined(DEVICE_ELECROW_CROWPANEL_10_1) && \
     defined(HOMETILES_CI_TARGET)
 #error "HOMETILES_CI_TARGET requires one DEVICE_* build flag."
 #endif
@@ -100,6 +103,7 @@
     !defined(DEVICE_GUITION_JC4880P443_PORTRAIT) && \
     !defined(DEVICE_GUITION_ESP32_4848S040) && \
     !defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) && \
+    !defined(DEVICE_ELECROW_CROWPANEL_10_1) && \
     !defined(HOMETILES_CI_TARGET)
 #define DEVICE_WAVESHARE_4B
 #endif
@@ -113,7 +117,9 @@
 
 // These Waveshare P4 products share the same I2C/touch, backlight, SDMMC and
 // ESP-Hosted pin contracts. Each exact panel keeps its own controller, timing,
-// layout and device driver or board description.
+// layout and device driver or board description. The Elecrow CrowPanel
+// Advanced 10.1 driver derives from the 7B driver and shares its board API
+// (boot warmup, sleep, framebuffer access) with its own pins.
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_4_3) || \
     defined(DEVICE_WAVESHARE_TOUCH_LCD_5) || \
     defined(DEVICE_WAVESHARE_TOUCH_LCD_7) || \
@@ -121,7 +127,8 @@
     defined(DEVICE_WAVESHARE_TOUCH_LCD_8) || \
     defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1) || \
     defined(DEVICE_LAYOUT_TEST_1024X600) || \
-    defined(DEVICE_LAYOUT_TEST_480X480)
+    defined(DEVICE_LAYOUT_TEST_480X480) || \
+    defined(DEVICE_ELECROW_CROWPANEL_10_1)
 #define DEVICE_WAVESHARE_TOUCH_LCD_X
 #endif
 
@@ -176,7 +183,8 @@
     defined(DEVICE_GUITION_JC8012P4A1_V2) || \
     defined(DEVICE_GUITION_JC1060P470C) || \
     defined(DEVICE_GUITION_JC1060P470C_V2) || \
-    defined(DEVICE_GUITION_JC4880P443_PORTRAIT)
+    defined(DEVICE_GUITION_JC4880P443_PORTRAIT) || \
+    defined(DEVICE_ELECROW_CROWPANEL_10_1)
 #define DEVICE_P4_IDF_DSI
 #endif
 
@@ -202,7 +210,8 @@
 #if defined(DEVICE_LAYOUT_TEST_1024X600) || \
     defined(DEVICE_WAVESHARE_TOUCH_LCD_7B) || \
     defined(DEVICE_GUITION_JC1060P470C) || \
-    defined(DEVICE_GUITION_JC1060P470C_V2)
+    defined(DEVICE_GUITION_JC1060P470C_V2) || \
+    defined(DEVICE_ELECROW_CROWPANEL_10_1)
 #define DEVICE_LAYOUT_1024X600
 #endif
 

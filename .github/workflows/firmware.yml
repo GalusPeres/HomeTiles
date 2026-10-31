@@ -277,6 +277,13 @@ jobs:
             silicon_variant: post_v3
             rx_variant: repo-a8204
             publish: true
+          - label: Elecrow CrowPanel Advanced 10.1
+            profile: elecrow_crowpanel_10_1
+            key: elecrow_crowpanel_10_1
+            define: DEVICE_ELECROW_CROWPANEL_10_1
+            silicon_variant: pre_v3
+            rx_variant: repo-a8204
+            publish: true
         # END GENERATED DEVICE MATRIX
 
     steps:

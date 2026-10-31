@@ -291,4 +291,17 @@ export const DEVICE_PROFILES = Object.freeze([
     "status": "validation-pending",
     "hardwareCheck": "The board is a GS-T3E (Tuya T3E) 4-inch 480x480 wall panel with an ESP32-S3-WROOM-1 module and PCB revision v2.3. The discontinued v1.23 board and the Zigbee-only T3E Pro use different hardware."
   }),
+  Object.freeze({
+    "key": "elecrow_crowpanel_10_1",
+    "buildProfile": "elecrow_crowpanel_10_1",
+    "label": "Elecrow CrowPanel Advanced 10.1 (V1.2)",
+    "chipFamily": "ESP32-P4",
+    "flashSize": 16777216,
+    "status": "validation-pending",
+    "hardwareCheck": "The device is an Elecrow CrowPanel Advanced 10.1-inch ESP32-P4 HMI display (1024x600, model DHE04310D) with an ESP32-P4 below revision v3.0 and board version V1.2.",
+    "siliconVariant": "pre_v3",
+    "minimumRevision": 1,
+    "maximumRevision": 199,
+    "acceptsLegacyDescriptor": true
+  }),
 ]);

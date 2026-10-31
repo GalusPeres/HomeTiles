@@ -45,6 +45,8 @@ const WITHOUT_VOICE = [
   'DEVICE_GUITION_ESP32_4848S040', 'DEVICE_GOLDEN_SECURITY_GS_T3E_V2',
   'DEVICE_LAYOUT_TEST_1024X600', 'DEVICE_LAYOUT_TEST_480X480',
   'DEVICE_GUITION_JC1060P470C',
+  // Until the audio core drives its codec-less I2S amplifier and PDM microphone.
+  'DEVICE_ELECROW_CROWPANEL_10_1',
 ];
 
 const deviceSelect = read('src/devices/device_select.h');

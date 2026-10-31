@@ -1538,7 +1538,7 @@ lv_obj_t* render_climate_tile(lv_obj_t* parent,
     tile_icon_source::refresh_controls(card);
   }
 
-  if (grid_type != GridType::SCREENSAVER && tile.sensor_entity.length()) {
+  if (tile.sensor_entity.length()) {
     ClimateEventData* data = new ClimateEventData{grid_type, index};
     const lv_event_code_t popup_event =
         getTilePopupOpenMode(tile) == TILE_POPUP_OPEN_SHORT_PRESS

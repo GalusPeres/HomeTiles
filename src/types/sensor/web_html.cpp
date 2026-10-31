@@ -45,96 +45,91 @@ void append_sensor_fields_html(String& html, const String& tab_id) {
   html += tab_id;
   html += R"html(_sensor_decimals" min="0" max="6" step="1" placeholder="1">
 )html";
-  // Screensaver tiles never receive graph history (and gauges would turn the
-  // compact overlay tile into a different presentation). Keep sensors there
-  // as the normal value tile instead of offering controls that cannot work.
-  if (tab_id != "screensaver") {
-    // The stored display mode; the choices below set it.
-    html += R"html(                <select class="hidden" id=")html";
-    html += tab_id;
-    html += R"html(_sensor_display_mode">)html";
-    for (int mode = 0; mode <= sensor_look::kLastMode; ++mode) {
-      html += "<option value=\"";
-      html += String(mode);
-      html += "\">";
-      html += String(mode);
-      html += "</option>";
-    }
-    html += "</select>\n";
-    const SwitchChoice layouts[] = {{"0", tr.sensor_layout_value},
-                                    {"1", tr.sensor_display_graph},
-                                    {"2", tr.sensor_layout_bar},
-                                    {"3", tr.sensor_layout_ring},
-                                    {"4", tr.sensor_display_gauge}};
-    append_switch_choice(html, tab_id, "sensor_layout", tr.switch_display, layouts, 5);
-    // The first form is a bar's fill or a ring's line (syncGaugeUi).
-    String form_attrs = " data-level=\"";
-    appendHtmlEscaped(form_attrs, tr.sensor_form_level);
-    form_attrs += "\" data-line=\"";
-    appendHtmlEscaped(form_attrs, tr.sensor_form_line);
-    form_attrs += '"';
-    const SwitchChoice forms[] = {{"0", tr.sensor_form_level}, {"1", tr.sensor_form_stripes}};
-    append_switch_choice(html, tab_id, "sensor_form", tr.sensor_form, forms, 2, form_attrs);
-    const SwitchChoice orientations[] = {{"0", tr.bar_horizontal}, {"1", tr.bar_upright}};
-    append_switch_choice(html, tab_id, "sensor_orientation", tr.bar_orientation, orientations, 2);
-    const SwitchChoice rings[] = {{"0", tr.sensor_ring_open}, {"1", tr.sensor_ring_closed}};
-    append_switch_choice(html, tab_id, "sensor_ring", tr.sensor_layout_ring, rings, 2);
-    const SwitchChoice places[] = {{"0", tr.sensor_value_top}, {"1", tr.sensor_value_inside}};
-    append_switch_choice(html, tab_id, "sensor_place", tr.sensor_layout_value, places, 2);
-    // The range of the gauge and of every look, both fields in one row; the
-    // old gauge's own shape below it.
-    html += R"html(                <div id=")html";
-    html += tab_id;
-    html += R"html(_sensor_gauge_fields" class="gauge-fields hidden">
+  // The stored display mode; the choices below set it.
+  html += R"html(                <select class="hidden" id=")html";
+  html += tab_id;
+  html += R"html(_sensor_display_mode">)html";
+  for (int mode = 0; mode <= sensor_look::kLastMode; ++mode) {
+    html += "<option value=\"";
+    html += String(mode);
+    html += "\">";
+    html += String(mode);
+    html += "</option>";
+  }
+  html += "</select>\n";
+  const SwitchChoice layouts[] = {{"0", tr.sensor_layout_value},
+                                  {"1", tr.sensor_display_graph},
+                                  {"2", tr.sensor_layout_bar},
+                                  {"3", tr.sensor_layout_ring},
+                                  {"4", tr.sensor_display_gauge}};
+  append_switch_choice(html, tab_id, "sensor_layout", tr.switch_display, layouts, 5);
+  // The first form is a bar's fill or a ring's line (syncGaugeUi).
+  String form_attrs = " data-level=\"";
+  appendHtmlEscaped(form_attrs, tr.sensor_form_level);
+  form_attrs += "\" data-line=\"";
+  appendHtmlEscaped(form_attrs, tr.sensor_form_line);
+  form_attrs += '"';
+  const SwitchChoice forms[] = {{"0", tr.sensor_form_level}, {"1", tr.sensor_form_stripes}};
+  append_switch_choice(html, tab_id, "sensor_form", tr.sensor_form, forms, 2, form_attrs);
+  const SwitchChoice orientations[] = {{"0", tr.bar_horizontal}, {"1", tr.bar_upright}};
+  append_switch_choice(html, tab_id, "sensor_orientation", tr.bar_orientation, orientations, 2);
+  const SwitchChoice rings[] = {{"0", tr.sensor_ring_open}, {"1", tr.sensor_ring_closed}};
+  append_switch_choice(html, tab_id, "sensor_ring", tr.sensor_layout_ring, rings, 2);
+  const SwitchChoice places[] = {{"0", tr.sensor_value_top}, {"1", tr.sensor_value_inside}};
+  append_switch_choice(html, tab_id, "sensor_place", tr.sensor_layout_value, places, 2);
+  // The range of the gauge and of every look, both fields in one row; the
+  // old gauge's own shape below it.
+  html += R"html(                <div id=")html";
+  html += tab_id;
+  html += R"html(_sensor_gauge_fields" class="gauge-fields hidden">
                   <label for=")html";
-    html += tab_id;
-    html += R"html(_sensor_gauge_min">)html";
-    html += tr.sensor_gauge_range;
-    html += R"html(</label>
+  html += tab_id;
+  html += R"html(_sensor_gauge_min">)html";
+  html += tr.sensor_gauge_range;
+  html += R"html(</label>
                   <div class="sensor-range">
                     <input type="number" id=")html";
-    html += tab_id;
-    html += R"html(_sensor_gauge_min" step="any" placeholder="0" aria-label="Min">
+  html += tab_id;
+  html += R"html(_sensor_gauge_min" step="any" placeholder="0" aria-label="Min">
                     <input type="number" id=")html";
-    html += tab_id;
-    html += R"html(_sensor_gauge_max" step="any" placeholder="100" aria-label="Max">
+  html += tab_id;
+  html += R"html(_sensor_gauge_max" step="any" placeholder="100" aria-label="Max">
                   </div>
                   <div id=")html";
-    html += tab_id;
-    html += R"html(_sensor_gauge_shape_fields" class="gauge-shape-fields">
+  html += tab_id;
+  html += R"html(_sensor_gauge_shape_fields" class="gauge-shape-fields">
                   <label>)html";
-    html += tr.sensor_arc_degree;
-    html += R"html(</label>
+  html += tr.sensor_arc_degree;
+  html += R"html(</label>
                   <input type="number" id=")html";
-    html += tab_id;
-    html += R"html(_sensor_gauge_arc" min="90" max="359" step="1" placeholder="100">
+  html += tab_id;
+  html += R"html(_sensor_gauge_arc" min="90" max="359" step="1" placeholder="100">
                   <label>)html";
-    html += tr.sensor_gauge_size;
-    html += R"html(</label>
+  html += tr.sensor_gauge_size;
+  html += R"html(</label>
                   <input type="number" id=")html";
-    html += tab_id;
-    html += R"html(_sensor_gauge_size" min="100" max="800" step="1" placeholder="350">
+  html += tab_id;
+  html += R"html(_sensor_gauge_size" min="100" max="800" step="1" placeholder="350">
                   <label>)html";
-    html += tr.sensor_y_offset;
-    html += R"html(</label>
+  html += tr.sensor_y_offset;
+  html += R"html(</label>
                   <input type="number" id=")html";
-    html += tab_id;
-    html += R"html(_sensor_gauge_y_offset" min="-100" max="200" step="1" placeholder="12">
+  html += tab_id;
+  html += R"html(_sensor_gauge_y_offset" min="-100" max="200" step="1" placeholder="12">
                   </div>
                 </div>
                 <div id=")html";
-    html += tab_id;
-    // The graph fills its box (sensor renderer); its old height stays stored.
-    html += R"html(_sensor_graph_fields" class="graph-fields hidden">
+  html += tab_id;
+  // The graph fills its box (sensor renderer); its old height stays stored.
+  html += R"html(_sensor_graph_fields" class="graph-fields hidden">
                   <label>)html";
-    html += tr.sensor_graph_height;
-    html += R"html(</label>
+  html += tr.sensor_graph_height;
+  html += R"html(</label>
                   <input type="number" id=")html";
-    html += tab_id;
-    html += R"html(_sensor_graph_height" min="20" max="200" step="1" placeholder="60">
+  html += tab_id;
+  html += R"html(_sensor_graph_height" min="20" max="200" step="1" placeholder="60">
                 </div>
 )html";
-  }
   html += R"html(                <label for=")html";
   html += tab_id;
   html += R"html(_sensor_value_y_offset">)html";
@@ -144,10 +139,8 @@ void append_sensor_fields_html(String& html, const String& tab_id) {
   html += tab_id;
   html += R"html(_sensor_value_y_offset" min="-100" max="200" step="1" placeholder="0">
 )html";
-  if (tab_id != "screensaver") {
-    const SwitchChoice presses[] = {{"0", tr.long_press}, {"1", tr.short_press}};
-    append_switch_choice(html, tab_id, "sensor_popup_open_mode", tr.popup_open, presses, 2);
-  }
+  const SwitchChoice presses[] = {{"0", tr.long_press}, {"1", tr.short_press}};
+  append_switch_choice(html, tab_id, "sensor_popup_open_mode", tr.popup_open, presses, 2);
   html += R"html(            </div>
 )html";
 }

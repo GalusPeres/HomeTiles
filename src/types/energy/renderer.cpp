@@ -319,12 +319,11 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
     title_text = haBridgeConfig.findSensorName(tile.sensor_entity);
   }
 
-  // The bars on whole-height tiles outside the screensaver: the Switch
+  // The bars on whole-height tiles, also on the screensaver: the Switch
   // header beside the disc and the bars in the box below, like the Sensor
   // graph tile; else the title right and the value in the middle.
   const bool compact = tile_geometry::compact(tile.type, tile.span_w, tile.span_h);
-  const bool bars_shown = tile.sensor_display_mode == kEnergyBarsMode && tile.span_h >= 1 && !compact &&
-                          grid_type != GridType::SCREENSAVER;
+  const bool bars_shown = tile.sensor_display_mode == kEnergyBarsMode && tile.span_h >= 1 && !compact;
   lv_obj_t* title_label = nullptr;
   lv_obj_t* value_label = nullptr;
   lv_obj_t* bars_frame = nullptr;
@@ -392,7 +391,7 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
     target[index].look = nullptr;
   }
 
-  if (tile.sensor_entity.length() && grid_type != GridType::SCREENSAVER) {
+  if (tile.sensor_entity.length()) {
     bool icon_override = false;
     if (tile.icon_name.length() && !isMdiIconDisabled(tile.icon_name)) {
       icon_override = true;

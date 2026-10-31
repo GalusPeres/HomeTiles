@@ -53,6 +53,12 @@ struct { TileGridConfig grid; const TileGridConfig& getActiveGrid() const { retu
 struct SensorTileWidgets { void* chart = nullptr; bool day = false; };
 SensorTileWidgets sensors[TILES_PER_GRID];
 SensorTileWidgets* g_tab0_sensors = sensors;
+// An open screensaver's tiles (image_screensaver_tile_grid).
+TileGridConfig saver;
+bool saver_open = false;
+SensorTileWidgets saver_sensors[TILES_PER_GRID];
+SensorTileWidgets* g_screensaver_sensors = saver_sensors;
+const TileGridConfig* image_screensaver_tile_grid() { return saver_open ? &saver : nullptr; }
 bool online = false;
 struct { bool isMqttConnected() const { return online; } } networkManager;
 uint32_t now_ms = 1000;
@@ -66,7 +72,7 @@ ${slice('struct TileGraphHistoryUpdate {', 'static size_t g_tile_graph_next = 0;
 ${fn('queue_tile_graph_history')}
 ${fn('process_tile_graph_queue')}
 ${slice('constexpr uint32_t kTileGraphRefreshMs', 'static bool g_tile_graph_page_shown = false;')}
-${fn('tile_graph_shown')}
+${fn('tile_graph_slot')}
 ${fn('tile_graph_request_soon')}
 ${fn('tile_graph_service_periodic')}
 
@@ -161,6 +167,22 @@ int main() {
   now_ms += 300;
   tile_graph_service_periodic();
   std::printf("late %zu %zu\n", late_first, requests.size());
+  // A graph tile on the open screensaver asks for its day like the page's,
+  // and none once the screensaver is closed.
+  for (int i : {0, 1, 3}) sensors[i].day = true;
+  saver.tiles[2] = {TILE_SENSOR, 2, "sensor.saver"};
+  saver_sensors[2].chart = &chart;
+  requests.clear();
+  saver_open = true;
+  now_ms += 1000;
+  tile_graph_request_soon();
+  tile_graph_service_periodic();
+  std::printf("saver %zu %s\n", requests.size(), requests.empty() ? "" : requests.back().c_str());
+  saver_open = false;
+  saver_sensors[2].day = false;
+  now_ms += 20000;
+  tile_graph_service_periodic();
+  std::printf("closed %zu\n", requests.size());
   // Two answers in one loop pass: both applied, oldest first; then empty.
   queue_tile_graph_history("sensor.a", "first", 5);
   queue_tile_graph_history("sensor.b", "second", 6);
@@ -198,7 +220,9 @@ if (output !== null) {
   assert.deepEqual(rows.missing, ['1'], 'tiles without their day: one at a time');
   assert.deepEqual(rows.caught, ['3'], 'the others 0.3 s apart');
   assert.deepEqual(rows.late, ['1', '3'], 'a round far too late: every graph catches up 0.3 s apart');
-  assert.ok(renderer.includes('if (late || !tile_graph_has_day(g_tab0_sensors[i])) g_tile_graph_due[i] = kTileGraphMissing;'),
+  assert.deepEqual(rows.saver, ['1', 'sensor.saver'], 'a graph tile on the open screensaver asks for its day');
+  assert.deepEqual(rows.closed, ['1'], 'a closed screensaver asks nothing');
+  assert.ok(renderer.includes('if (late || !tile_graph_has_day(*widgets)) g_tile_graph_due[i] = kTileGraphMissing;'),
     'only tiles without their day (or a late round) catch up');
   assert.ok(readRepoFile('src/ui/tabs/tiles/tab_tiles_unified.cpp').includes('tile_graph_request_soon();'),
     'a shown cached page asks for missing days');

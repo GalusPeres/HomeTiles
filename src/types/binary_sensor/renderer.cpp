@@ -609,7 +609,7 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
     tile_icon_disc::add_round(card, widgets.icon_label);
   }
 
-  if (grid_type != GridType::SCREENSAVER && tile.sensor_entity.length()) {
+  if (tile.sensor_entity.length()) {
     BinarySensorEventData* data =
         new BinarySensorEventData{grid_type, index};
     const lv_event_code_t event_code =

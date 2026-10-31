@@ -749,7 +749,7 @@ lv_obj_t* render_calendar_tile(lv_obj_t* parent, int col, int row, const Tile& t
   if (!g_clock_timer) g_clock_timer = lv_timer_create(clock_timer_cb, 15000, nullptr);
   show(view);
 
-  if (view->entity_count && grid_type != GridType::SCREENSAVER) {
+  if (view->entity_count) {
     const lv_event_code_t popup_event =
         getTilePopupOpenMode(tile) == TILE_POPUP_OPEN_SHORT_PRESS ? LV_EVENT_SHORT_CLICKED : LV_EVENT_LONG_PRESSED;
     lv_obj_add_event_cb(card, on_card_event, popup_event, view);

@@ -951,11 +951,7 @@
       if (tile.sensor_value_font !== undefined && tile.sensor_value_font !== null) {
         fd.append('sensor_value_font', tile.sensor_value_font);
       }
-      const isScreensaverTile =
-        Number(folderId) === Number(SCREENSAVER_FOLDER_ID);
-      const displayMode = isScreensaverTile
-        ? 0
-        : ((tile.sensor_display_mode !== undefined) ? tile.sensor_display_mode : (tile.sensor_gauge ? 1 : 0));
+      const displayMode = (tile.sensor_display_mode !== undefined) ? tile.sensor_display_mode : (tile.sensor_gauge ? 1 : 0);
       fd.append('sensor_display_mode', String(displayMode));
       if (tile.sensor_gauge_min !== undefined && tile.sensor_gauge_min !== null && String(tile.sensor_gauge_min).length > 0) {
         fd.append('sensor_gauge_min', tile.sensor_gauge_min);
@@ -1054,9 +1050,8 @@
       if (tile.sensor_value_y_offset !== undefined && tile.sensor_value_y_offset !== null && String(tile.sensor_value_y_offset).length > 0) {
         fd.append('sensor_value_y_offset', tile.sensor_value_y_offset);
       }
-      // The bars below the header (2); the screensaver shows the value alone.
-      const screensaverEnergy = Number(folderId) === Number(SCREENSAVER_FOLDER_ID);
-      fd.append('sensor_display_mode', !screensaverEnergy && Number(tile.sensor_display_mode) === 2 ? '2' : '0');
+      // The bars below the header (2), also on the screensaver.
+      fd.append('sensor_display_mode', Number(tile.sensor_display_mode) === 2 ? '2' : '0');
     } else if (safeType === 28) {
       fd.append('flow_entities', tile.flow_entities || '');
       const bits = Number(tile.key_code) || 0;

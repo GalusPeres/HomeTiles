@@ -305,7 +305,7 @@ assert.doesNotMatch(indicator, /overlayOpen|lv_obj_get_child_count\(layer\);[\s\
   'No guess from the top-layer children');
 const shellSource = read('src/ui/popups/popup_shell.cpp');
 assert.match(shellSource, /bool popup_shell_active\(\) \{ return shell\.active != nullptr; \}/);
-assert.match(shellSource, /shell\.active = binding;\s*lv_obj_set_parent\(owner, lv_layer_top\(\)\);[\s\S]*?lv_obj_set_parent\(shell\.overlay, lv_screen_active\(\)\);/,
+assert.match(shellSource, /shell\.active = binding;\s*lv_obj_set_parent\(owner, lv_layer_top\(\)\);[\s\S]*?lv_obj_set_parent\(shell\.overlay, g_screensaver_open \? lv_layer_top\(\) : lv_screen_active\(\)\);/,
   'The shell is active before it leaves the top layer, whose change event refreshes the pill');
 assert.match(shellSource, /void hide_popup_shell\(lv_obj_t\* body\) \{[\s\S]*?detach\(\);\s*lv_obj_add_flag\(shell\.overlay, LV_OBJ_FLAG_HIDDEN\);\s*lv_obj_set_parent\(shell\.overlay, lv_layer_top\(\)\);/);
 for (const popup of ['camera', 'climate', 'cover', 'energy', 'light', 'media', 'pin', 'sensor', 'weather']) {

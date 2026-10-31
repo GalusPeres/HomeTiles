@@ -93,19 +93,17 @@ void append_device_fields_html(String& html, const String& tab_id, TileType type
   String size_attrs;
   append_value_size_attrs(size_attrs, FONT_VALUE, tr.sensor_value_size_default);
   append_switch_choice(html, tab_id, field.c_str(), tr.sensor_value_size, sizes, 6, size_attrs);
-  if (tab_id != "screensaver") {
-    html += "<label>";
-    html += tr.popup_open;
-    html += "</label><select id=\"";
-    html += tab_id;
-    html += "_";
-    html += prefix;
-    html += "_popup_open_mode\"><option value=\"1\">";
-    html += tr.short_press;
-    html += "</option><option value=\"0\">";
-    html += tr.long_press;
-    html += "</option></select>";
-  }
+  html += "<label>";
+  html += tr.popup_open;
+  html += "</label><select id=\"";
+  html += tab_id;
+  html += "_";
+  html += prefix;
+  html += "_popup_open_mode\"><option value=\"1\">";
+  html += tr.short_press;
+  html += "</option><option value=\"0\">";
+  html += tr.long_press;
+  html += "</option></select>";
   html += "</div>\n";
 }
 

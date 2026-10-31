@@ -80,10 +80,8 @@ void append_switch_fields_html(String& html, const String& tab_id) {
   String size_attrs;
   append_value_size_attrs(size_attrs, FONT_VALUE, tr.sensor_value_size_default);
   append_switch_choice(html, tab_id, "switch_value_font", tr.sensor_value_size, sizes, 6, size_attrs);
-  if (tab_id != "screensaver") {
-    const SwitchChoice presses[] = {{"0", tr.long_press}, {"1", tr.short_press}};
-    append_switch_choice(html, tab_id, "switch_popup_open_mode", tr.popup_open, presses, 2);
-  }
+  const SwitchChoice presses[] = {{"0", tr.long_press}, {"1", tr.short_press}};
+  append_switch_choice(html, tab_id, "switch_popup_open_mode", tr.popup_open, presses, 2);
   html += R"html(            </div>
 )html";
 }

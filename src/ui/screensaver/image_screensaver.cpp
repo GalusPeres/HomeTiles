@@ -2,6 +2,7 @@
 #include "src/ui/screensaver/image_screensaver.h"
 #include "src/ui/screensaver/screensaver_tile_shadow.h"
 #include "src/ui/popups/pin/pin_popup.h"
+#include "src/ui/popups/popup_shell.h"
 #include "src/ui/ui_manager.h"
 
 #include <Arduino.h>
@@ -2051,6 +2052,11 @@ void global_screensaver_timer_cb(lv_timer_t* timer) {
     refresh_slot_values(st);
     st->next_slot_refresh_ms = now + 1000U;
   }
+  // A popup opened from a screensaver tile pauses the slides, the pixel
+  // shift and new Home Assistant pictures (user 2026-10-31): no full-screen
+  // frame is composed under it. Its values above keep updating; after it
+  // closes the slides wait for the touch to settle as after any touch.
+  if (popup_shell_over_screensaver()) return;
   const auto& config = screensaverConfig.get();
   if (g_ha_retry_at_ms && static_cast<int32_t>(now - g_ha_retry_at_ms) >= 0) {
     g_ha_retry_at_ms = 0;
@@ -2139,6 +2145,7 @@ void on_global_overlay_delete(lv_event_t* e) {
     reset_binary_sensor_widgets(GridType::SCREENSAVER);
     reset_media_widgets(GridType::SCREENSAVER);
     g_state = nullptr;
+    popup_shell_screensaver_open(false);
     restore_configured_display_brightness();
   }
   if (st->timer) lv_timer_delete(st->timer);
@@ -2254,6 +2261,8 @@ void show_image_screensaver() {
   // Covers the UI from the overlay's creation on, before g_state is set after
   // the ~0.5 s setup: the camera pill leaves as soon as the overlay appears.
   g_opening = true;
+  // A popup opened from one of its tiles lies above its overlay.
+  popup_shell_screensaver_open(true);
 
 #if defined(DEVICE_ESP32_S3_RGB_480)
   // Everything created below becomes visible in one completed RGB frame.
@@ -2340,6 +2349,7 @@ void hide_image_screensaver() {
   g_ha_picture_arrived = false;
   g_ha_retry_at_ms = 0;
   ahead_release();
+  popup_shell_screensaver_open(false);
   reset_sensor_widgets(GridType::SCREENSAVER);
   reset_switch_widgets(GridType::SCREENSAVER);
   reset_cover_widgets(GridType::SCREENSAVER);
@@ -2437,6 +2447,10 @@ void image_screensaver_tiles_changed() {
 }
 
 void image_screensaver_icons_changed() { g_live_icon_refresh_requested = true; }
+
+const TileGridConfig* image_screensaver_tile_grid() {
+  return g_state && g_state->slot_grid ? g_state->shown_grid : nullptr;
+}
 
 bool image_screensaver_show_tiles_now() {
   ScreensaverState* st = g_state;

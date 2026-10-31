@@ -90,17 +90,15 @@ void append_calendar_fields_html(String& html, const String& tab_id) {
   append_option(html, "0", loc.weekday_names[0]);
   append_option(html, "6", loc.weekday_names[6]);
   html += "</select>";
-  if (tab_id != "screensaver") {
-    html += "<label>";
-    html += tr.popup_open;
-    html += "</label><select id=\"";
-    html += tab_id;
-    html += "_calendar_popup_open_mode\"><option value=\"1\">";
-    html += tr.short_press;
-    html += "</option><option value=\"0\">";
-    html += tr.long_press;
-    html += "</option></select>";
-  }
+  html += "<label>";
+  html += tr.popup_open;
+  html += "</label><select id=\"";
+  html += tab_id;
+  html += "_calendar_popup_open_mode\"><option value=\"1\">";
+  html += tr.short_press;
+  html += "</option><option value=\"0\">";
+  html += tr.long_press;
+  html += "</option></select>";
   html += "</div>\n";
 }
 

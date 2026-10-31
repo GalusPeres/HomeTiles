@@ -50,6 +50,11 @@ uint16_t* image_screensaver_decode_picture(const uint8_t* data, size_t len, uint
 // grid, preserving the image and clock.
 void image_screensaver_tiles_changed();
 
+// The open screensaver's tiles as they are shown (their slots are the
+// GridType::SCREENSAVER widget indices), else nullptr: Sensor graph tiles
+// there take their day like the page's (tile_graph_service_periodic).
+const TileGridConfig* image_screensaver_tile_grid();
+
 // Home Assistant's entity icons came or changed (tiles_request_icon_refresh,
 // any task: it only sets a flag). The open screensaver builds its tiles with
 // the automatic icon again on its next tick.

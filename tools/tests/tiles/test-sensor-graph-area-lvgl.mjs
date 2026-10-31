@@ -68,7 +68,7 @@ assert.ok(renderer.includes('!lv_color_eq(lv_chart_get_series_color(chart, serie
 assert.ok(renderer.includes('constexpr uint32_t kTileGraphRefreshMs = 5UL * 60UL * 1000UL + 5UL * 1000UL;') &&
   renderer.includes('if (!networkManager.isMqttConnected()) {') &&
   renderer.includes('constexpr size_t kTileGraphQueueSlots = 4;') &&
-  renderer.includes('request_tile_graph_history(grid.tiles[pick].sensor_entity.c_str());'),
+  renderer.includes('request_tile_graph_history(tile->sensor_entity.c_str());'),
   'graph tile: asks again after connecting and every five minutes, queue for several answers');
 assert.ok(read('src/types/sensor/renderer.cpp').includes('if (graph_enabled && tile.sensor_entity.length()) tile_graph_request_soon();'),
   'a new graph tile asks through the service, not every graph of a page at once');

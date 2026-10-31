@@ -308,7 +308,7 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
     target[index] = widgets;
   }
 
-  if (tile.sensor_entity.length() && grid_type != GridType::SCREENSAVER) {
+  if (tile.sensor_entity.length()) {
     WeatherEventData* data = new WeatherEventData{
       tile.sensor_entity,
       location,

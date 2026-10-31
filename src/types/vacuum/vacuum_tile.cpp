@@ -336,7 +336,7 @@ lv_obj_t* render_vacuum_tile(lv_obj_t* parent, int col, int row, const Tile& til
   view->state_font = header.state_font;
   view->state_width = header.state_width;
   view->state_center = header.state_center;
-  const bool interactive = view->entity.length() && grid_type != GridType::SCREENSAVER;
+  const bool interactive = view->entity.length() > 0;
   view->interactive = interactive;
 
   if (view->layout == Layout::Compact) {

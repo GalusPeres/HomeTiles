@@ -51,6 +51,8 @@ constexpr size_t kMaxPopupOverlays = 16;
 lv_obj_t* g_popup_overlays[kMaxPopupOverlays] = {};
 // popup_shell_hold_close_fill: a drag holds the close button's press color.
 bool g_hold_close_fill = false;
+// popup_shell_screensaver_open: the screensaver's overlay is on the top layer.
+bool g_screensaver_open = false;
 struct Shell {
   HeaderDisc disc;
   lv_obj_t* overlay = nullptr;
@@ -703,7 +705,9 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
     lv_obj_set_parent(owner, lv_layer_top());
     lv_obj_add_flag(owner, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(owner, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_parent(shell.overlay, lv_screen_active());
+    // Over an open screensaver (a tapped screensaver tile) the shell lies on
+    // the top layer above the screensaver's overlay; else on the screen.
+    lv_obj_set_parent(shell.overlay, g_screensaver_open ? lv_layer_top() : lv_screen_active());
     lv_obj_set_style_pad_all(shell.overlay, lv_obj_get_style_pad_top(owner, LV_PART_MAIN), 0);
     lv_obj_set_style_bg_color(shell.overlay, lv_obj_get_style_bg_color(owner, LV_PART_MAIN), 0);
     lv_obj_set_style_bg_opa(shell.overlay, lv_obj_get_style_bg_opa(owner, LV_PART_MAIN), 0);
@@ -746,6 +750,12 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
 }
 
 bool popup_shell_active() { return shell.active != nullptr; }
+
+void popup_shell_screensaver_open(bool open) { g_screensaver_open = open; }
+
+bool popup_shell_over_screensaver() {
+  return shell.active && shell.overlay && lv_obj_get_parent(shell.overlay) == lv_layer_top();
+}
 
 lv_obj_t* popup_shell_body() { return shell.active ? shell.active->body : nullptr; }
 

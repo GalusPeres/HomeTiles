@@ -29,6 +29,12 @@ void sync_popup_shell();
 // True from show_popup_shell() until the popup is hidden again. Every tile
 // popup and the PIN pad open through the shell.
 bool popup_shell_active();
+// The screensaver tells while its overlay is on the top layer
+// (image_screensaver.cpp): a popup opened meanwhile joins it there.
+void popup_shell_screensaver_open(bool open);
+// A popup opened over the screensaver (the shell on the top layer above
+// its overlay, show_popup_shell); a page popup left open under it is not.
+bool popup_shell_over_screensaver();
 // The open popup's body (its card), nullptr without one.
 lv_obj_t* popup_shell_body();
 // Sets the active popup body's background; the frame copies it on the next

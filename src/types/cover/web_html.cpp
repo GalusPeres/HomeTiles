@@ -20,16 +20,14 @@ void append_cover_fields_html(String& html, const String& tab_id) {
   String size_attrs;
   append_value_size_attrs(size_attrs, FONT_VALUE, tr.sensor_value_size_default);
   append_switch_choice(html, tab_id, "cover_value_font", tr.sensor_value_size, sizes, 6, size_attrs);
-  if (tab_id != "screensaver") {
-    html += "<label>";
-    html += tr.popup_open;
-    html += "</label><select id=\"";
-    html += tab_id;
-    html += "_cover_popup_open_mode\"><option value=\"1\">";
-    html += tr.short_press;
-    html += "</option><option value=\"0\">";
-    html += tr.long_press;
-    html += "</option></select>";
-  }
+  html += "<label>";
+  html += tr.popup_open;
+  html += "</label><select id=\"";
+  html += tab_id;
+  html += "_cover_popup_open_mode\"><option value=\"1\">";
+  html += tr.short_press;
+  html += "</option><option value=\"0\">";
+  html += tr.long_press;
+  html += "</option></select>";
   html += "</div>\n";
 }

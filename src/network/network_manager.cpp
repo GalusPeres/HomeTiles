@@ -811,6 +811,12 @@ void HomeTilesNetworkManager::connectWifi() {
     // about one to two seconds per connection attempt.
     WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
     WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
+#if defined(DEVICE_ELECROW_CROWPANEL_10_1)
+    // Elecrow routes the C6 over the standard P4 SDIO pins and resets it on
+    // GPIO 54. Make those explicit because the Arduino core defaults do not
+    // match this board.
+    WiFi.setPins(18, 19, 17, 16, 15, 14, 54);
+#endif
     WiFi.begin(cfg.wifi_ssid, cfg.wifi_pass);
 
     // A slow call can signal a stuck transport even without a formal error.

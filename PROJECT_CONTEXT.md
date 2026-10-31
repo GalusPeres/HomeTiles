@@ -44,7 +44,7 @@ Last reviewed: 2026-10-17
 - JC4880P443 (PR #46, damianeek): portrait 480x800/4x6, contributor-tested; landscape later. Open: SD DEINIT_ARG, P4 DSI groups.
 - P4 v3 images (post_v3 301-399, v3 DSI clock): WS 10.1 (PR #48, tested v3.2), WS 7B (`_rev3`, replaces exact-v3.1, #41), JC8012 V3 = V2 code (#44); HW pending.
 - New boards in v0.9.3 (HW pending by the reporters): GS-T3E v2 (#93, S3 480x480, own driver derived from the Guition one, relays GPIO45/46) and Waveshare 5-inch (#76, 720x1280 HX8394, own `dsi_driver`, pre-v3 + `_rev3`, voice full volume, OV5647 camera, SD 20 MHz). Rule: a new board never changes another board; shared files only get list entries.
-- Elecrow CrowPanel Advanced 10.1 (new fork work, 2026-10-31): `feature/elecrow-crowpanel-10-1` on fork `rogierg/HomeTiles`; 1024x600 EK79007, GT911, backlight 31, 1-bit SD 39/43/44, no local I/O, 16 MB flash / 32 MB PSRAM, pre-v3. Device folder rebuilt from the Waveshare 7B profile; docs and catalog entries added. Compile/runtime validation on V1.2 hardware is still pending.
+- Elecrow CrowPanel Advanced 10.1 (new fork work, 2026-10-31): `feature/elecrow-crowpanel-10-1` on fork `rogierg/HomeTiles`; 1024x600 EK79007, GT911, backlight 31, 1-bit SD 39/43/44, no local I/O, 16 MB flash / 32 MB PSRAM, pre-v3. Device folder rebuilt from the Waveshare 7B profile; docs and catalog entries added. Factory log reports host 2.7.0, C6 2.12.0, ESP-Hosted slot 1, GPIOs CLK 18/CMD 19/D0-D3 17/16/15/14, reset GPIO32. HomeTiles now configures these pins before network startup; hardware test confirms Wi-Fi scans and connects. Board-revision discrepancy with Elecrow's V1.2 GPIO54 documentation remains unresolved.
 
 ## Issue #30 (closed by fix b6, shipped v0.6.10)
 

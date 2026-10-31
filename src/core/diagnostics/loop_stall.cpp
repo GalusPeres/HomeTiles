@@ -189,6 +189,10 @@ void onWifiEvent(void*, esp_event_base_t, int32_t id, void* data) {
 
 }  // namespace
 
+const char* currentStepName() {
+  return g_step_seq == 0 ? "setup" : stepName(g_step);
+}
+
 void begin() {
   if (g_timer) return;
   esp_err_t err = esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_BEACON_TIMEOUT,
@@ -330,11 +334,16 @@ namespace {
 // its name when it ends (V2 b301 boot: the loop stood still for 0.7 s twice
 // after the Bridge link came up while [LoopGap] stayed silent).
 constexpr uint32_t kSlowStepMs = 300;
-uint8_t g_step = 0;
+// Written by the loop task; the DPI underrun watch reads the step.
+volatile uint8_t g_step = 0;
 uint32_t g_step_since_ms = 0;
-bool g_stepping = false;
+volatile bool g_stepping = false;
 
 }  // namespace
+
+const char* currentStepName() {
+  return g_stepping ? stepName(g_step) : "setup";
+}
 
 void enter(Step step) {
   const uint32_t now = millis();

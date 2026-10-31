@@ -47,6 +47,10 @@ enum class Step : uint8_t {
   Status,          // memory logs, status bar and NTP
 };
 
+// The step the loop is in, "setup" before its first step. Safe from other
+// tasks (the DPI underrun watch reads it on the esp_timer task).
+const char* currentStepName();
+
 #if HOMETILES_LOOP_STALL_DIAGNOSTICS
 
 // Starts the stall check and the Wi-Fi event counters. Call once after the

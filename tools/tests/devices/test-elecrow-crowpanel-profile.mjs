@@ -40,4 +40,9 @@ for (const group of ['DEVICE_P4_IDF_DSI', 'DEVICE_LAYOUT_1024X600', 'DEVICE_WAVE
   const block = select.match(new RegExp(`#if ([^#]*)#define ${group}\\n`))?.[1] ?? '';
   assert.ok(block.includes('defined(DEVICE_ELECROW_CROWPANEL_10_1)'), `the CrowPanel belongs to ${group}`);
 }
-console.log('Elecrow CrowPanel 10.1: C6 pins in its own init, shared network code untouched, published pre-v3 profile with its own identity');
+// Local I/O: only the UART1 header (Elecrow wiki: RX 48, TX 47); the I2C
+// header is the touch bus and UART3-IN the power input.
+const io = read('src/devices/elecrow_crowpanel_10_1/hardware_io_profile.h');
+const pins = [...io.matchAll(/\{(\d+), Device::kHardwareIoPinSwitch \| Device::kHardwareIoPinTemperature,/g)].map(m => Number(m[1]));
+assert.deepEqual(pins, [47, 48], 'the UART1 header pins, nothing on the touch bus or the power input');
+console.log('Elecrow CrowPanel 10.1: C6 pins in its own init, shared network code untouched, published pre-v3 profile with its own identity, UART1 header I/O');

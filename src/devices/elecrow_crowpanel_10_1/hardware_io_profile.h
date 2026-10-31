@@ -4,10 +4,19 @@
 
 namespace DeviceElecrowCrowPanel10Profile {
 
-// Elecrow documents the panel, touch, backlight and SDMMC signals, but does
-// not identify any header GPIO as a general-purpose HomeTiles I/O. Keep every
-// known signal reserved instead of exposing an unverified pin.
+// The UART1 header (PH2.0-4P, Elecrow wiki: RX IO48, TX IO47, 3.3 V) carries
+// nothing else on the board. The I2C header shares the touch bus (SDA 45,
+// SCL 46) and UART3-IN is the power input (RX 33, TX 34); both stay reserved,
+// as do the panel, touch, backlight, audio, microphone, camera, SD, ESP-Hosted
+// and wireless-module socket signals.
+inline constexpr Device::HardwareIoPinOption kHardwareIoPins[] = {
+    {47, Device::kHardwareIoPinSwitch | Device::kHardwareIoPinTemperature,
+     "UART1 header GPIO 47"},
+    {48, Device::kHardwareIoPinSwitch | Device::kHardwareIoPinTemperature,
+     "UART1 header GPIO 48"},
+};
+
 inline constexpr Device::HardwareIoProfile kHardwareIoProfile =
-    Device::kNoHardwareIoProfile;
+    Device::makeHardwareIoProfile(kHardwareIoPins);
 
 }  // namespace DeviceElecrowCrowPanel10Profile

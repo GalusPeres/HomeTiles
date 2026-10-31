@@ -1008,13 +1008,15 @@ bool draw_turned_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t
 }  // namespace
 
 bool DeviceElecrowCrowPanel10::init() {
-  // Elecrow's V1.2 IDF configuration resets the ESP32-C6 through GPIO 54,
-  // active high, with a 1500 ms delay before ESP-Hosted starts.
+  // Elecrow resets the ESP32-C6 through GPIO 54. ESP-Hosted 3.x uses an
+  // active-low reset waveform; use the fixed HIGH -> LOW -> HIGH sequence.
   gpio_reset_pin(GPIO_NUM_54);
   gpio_set_direction(GPIO_NUM_54, GPIO_MODE_OUTPUT);
   gpio_set_level(GPIO_NUM_54, 1);
-  delay(1500);
+  delay(10);
   gpio_set_level(GPIO_NUM_54, 0);
+  delay(1500);
+  gpio_set_level(GPIO_NUM_54, 1);
   delay(50);
 
   Serial.println("[Device/Elecrow CrowPanel 10.1] Initialising board...");

@@ -2070,6 +2070,8 @@ void tiles_request_icon_refresh() {
   if (g_tiles_icon_generation == 0) g_tiles_icon_generation = 1;
   if (!g_tiles_first_icon_generation) g_tiles_first_icon_generation = g_tiles_icon_generation;
   g_tiles_icon_refresh_requested = true;
+  // The screensaver's tiles are no grid of their own here.
+  image_screensaver_icons_changed();
 }
 
 void tiles_request_release(GridType grid_type) {

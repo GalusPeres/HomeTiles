@@ -50,6 +50,11 @@ uint16_t* image_screensaver_decode_picture(const uint8_t* data, size_t len, uint
 // grid, preserving the image and clock.
 void image_screensaver_tiles_changed();
 
+// Home Assistant's entity icons came or changed (tiles_request_icon_refresh,
+// any task: it only sets a flag). The open screensaver builds its tiles with
+// the automatic icon again on its next tick.
+void image_screensaver_icons_changed();
+
 // A Web Admin tile edit or move (loopTask, like LVGL): an open screensaver
 // rebuilds only the changed slots and draws them at once, before the flash
 // write. False when no screensaver is open.

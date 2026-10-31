@@ -74,7 +74,7 @@ assert.match(fn(read('src/ui/screensaver/screensaver_config.cpp'), 'ScreensaverC
 
 const screensaver = read('src/ui/screensaver/image_screensaver.cpp');
 const update = fn(screensaver, 'update_slot_grid');
-assert.match(update, /if \(visible\(after\) && st->slot_objs\[i\] &&\n        tileContentEquals\(before, after\) && before\.col == after\.col &&\n        before\.row == after\.row\) \{\n      \+\+position;\n      continue;/,
+assert.match(update, /if \(visible\(after\) && st->slot_objs\[i\] &&\n        tileContentEquals\(before, after\) && before\.col == after\.col &&\n        before\.row == after\.row && !\(icons_changed && follows_entity_icon\(after\)\)\) \{\n      \+\+position;\n      continue;/,
   'unchanged slots stay');
 for (const reset of ['sensor', 'switch', 'cover', 'binary_sensor', 'media']) {
   assert.ok(update.includes('reset_' + reset + '_widget(GridType::SCREENSAVER, slot);'), 'a rebuilt slot drops its ' + reset + ' widgets');

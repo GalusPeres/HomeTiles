@@ -40,6 +40,8 @@
 #include "src/types/clock/clock_format.h"
 #include "src/types/clock/renderer.h"
 #include "src/types/energy/energy_data.h"
+#include "src/types/tile_type_policy.h"
+#include "src/tiles/icons/mdi_icons.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/ui/screensaver/screensaver_places.h"
 #include "src/ui/screensaver/screensaver_pixel_shift.h"
@@ -134,6 +136,8 @@ bool g_opening = false;
 // lifetimes directly, and the visible overlay state is never recreated.
 bool g_live_config_refresh_requested = false;
 bool g_live_grid_refresh_requested = false;
+// image_screensaver_icons_changed(): tiles with the automatic icon rebuild.
+bool g_live_icon_refresh_requested = false;
 String g_live_preview_wallpaper;
 // A new Home Assistant picture arrived for the open screensaver; its timer
 // shows it in the LVGL context.
@@ -1713,7 +1717,17 @@ void rebuild_slot_grid(ScreensaverState* st) {
 // them with their shadows over the wallpaper made each screensaver edit slow
 // (user 2026-10-02), as on the Home grid before b187. False, with nothing
 // changed, when the shown grid is unknown; the caller then rebuilds.
-bool update_slot_grid(ScreensaverState* st) {
+// A tile showing Home Assistant's icon for its entity (no icon of its own).
+bool follows_entity_icon(const Tile& tile) {
+  return tileTypeRefreshesEntityIcon(static_cast<TileType>(tile.type)) && !isMdiIconDisabled(tile.icon_name) &&
+         !normalizeMdiIconName(tile.icon_name).length();
+}
+
+// Rebuilds the changed slots; with icons_changed also every tile with the
+// automatic icon, like the pages do (tiles_refresh_icons_for_grid): a
+// screensaver opened before Home Assistant's icons arrived (right after a
+// start) showed those tiles without icon and circle (user 2026-10-31).
+bool update_slot_grid(ScreensaverState* st, bool icons_changed = false) {
   if (!st || !st->slot_grid || !st->shown_grid) return false;
   uint32_t cards = 0;
   for (lv_obj_t* obj : st->slot_objs) {
@@ -1740,7 +1754,7 @@ bool update_slot_grid(ScreensaverState* st) {
     if (!visible(before) && !visible(after)) continue;
     if (visible(after) && st->slot_objs[i] &&
         tileContentEquals(before, after) && before.col == after.col &&
-        before.row == after.row) {
+        before.row == after.row && !(icons_changed && follows_entity_icon(after))) {
       ++position;
       continue;
     }
@@ -1885,6 +1899,13 @@ void global_screensaver_timer_cb(lv_timer_t* timer) {
     rebuild_slot_grid(st);
     refresh_slot_values(st);
     Serial.println("[Screensaver] Tiles updated live");
+  }
+  if (g_live_icon_refresh_requested) {
+    g_live_icon_refresh_requested = false;
+    if (!update_slot_grid(st, true)) {
+      rebuild_slot_grid(st);
+      refresh_slot_values(st);
+    }
   }
   const uint32_t now = millis();
   if (static_cast<int32_t>(now - st->next_slot_refresh_ms) >= 0) {
@@ -2129,6 +2150,7 @@ void show_image_screensaver() {
   g_opening = false;
   g_live_config_refresh_requested = false;
   g_live_grid_refresh_requested = false;
+  g_live_icon_refresh_requested = false;
   g_live_preview_wallpaper = String();
   g_ha_picture_arrived = false;
   // Apply known entity values to newly created widgets before the first
@@ -2167,6 +2189,7 @@ void hide_image_screensaver() {
   g_state = nullptr;
   g_live_config_refresh_requested = false;
   g_live_grid_refresh_requested = false;
+  g_live_icon_refresh_requested = false;
   g_live_preview_wallpaper = String();
   g_ha_picture_arrived = false;
   g_ha_retry_at_ms = 0;
@@ -2265,6 +2288,8 @@ void image_screensaver_tiles_changed() {
   g_live_grid_refresh_requested = true;
   if (g_state->timer) lv_timer_ready(g_state->timer);
 }
+
+void image_screensaver_icons_changed() { g_live_icon_refresh_requested = true; }
 
 bool image_screensaver_show_tiles_now() {
   ScreensaverState* st = g_state;

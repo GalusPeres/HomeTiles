@@ -381,7 +381,7 @@
   }
 
   // New tiles start as 1x1. The 1x0.5 slot is offered only where 1x1 does not
-  // fit; choosing a type that needs more grows it (grownNewTileLayout).
+  // fit; choosing a type that needs more grows it (grownTileLayout).
   const FREE_SLOT_SIZES = [[1, 1], [1, 0.5]];
 
   // Spot of the new (still empty) tile open in the editor: {tab, index, layout}.
@@ -395,12 +395,16 @@
     return [1, supportsHalfSize(type) ? 0.5 : 1];
   }
 
-  // Layout a new half-height tile grows to for a type that needs more room:
-  // downwards first, then upwards, then left. Null when it does not fit.
-  function grownNewTileLayout(tab, type) {
-    if (!newTileSpot || newTileSpot.tab !== tab || newTileSpot.index !== currentTileIndex ||
-        !newTileSpot.layout) return null;
-    const base = newTileSpot.layout;
+  // Layout the shown tile takes for a type that needs more room
+  // (minimumTileSize): it grows from its place downwards first, then upwards,
+  // then left; a new tile from its free slot. Null when it does not fit: the
+  // type cannot be chosen there (a Media tile without a free 2x2 spot was
+  // stretched over its neighbours and could not be moved, user 2026-10-31).
+  function grownTileLayout(tab, type) {
+    const spot = newTileSpot && newTileSpot.tab === tab && newTileSpot.index === currentTileIndex
+      ? newTileSpot.layout : null;
+    const base = spot || getTileElementLayout(tab, currentTileIndex);
+    if (!base) return null;
     const [minW, minH] = minimumTileSize(type);
     if (base.span_w >= minW && base.span_h >= minH) return base;
     const spanW = Math.max(base.span_w, minW), spanH = Math.max(base.span_h, minH);

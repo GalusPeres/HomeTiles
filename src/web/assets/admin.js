@@ -7043,7 +7043,7 @@ async function saveGestureEdge(select) {
   }
 
   // New tiles start as 1x1. The 1x0.5 slot is offered only where 1x1 does not
-  // fit; choosing a type that needs more grows it (grownNewTileLayout).
+  // fit; choosing a type that needs more grows it (grownTileLayout).
   const FREE_SLOT_SIZES = [[1, 1], [1, 0.5]];
 
   // Spot of the new (still empty) tile open in the editor: {tab, index, layout}.
@@ -7057,12 +7057,16 @@ async function saveGestureEdge(select) {
     return [1, supportsHalfSize(type) ? 0.5 : 1];
   }
 
-  // Layout a new half-height tile grows to for a type that needs more room:
-  // downwards first, then upwards, then left. Null when it does not fit.
-  function grownNewTileLayout(tab, type) {
-    if (!newTileSpot || newTileSpot.tab !== tab || newTileSpot.index !== currentTileIndex ||
-        !newTileSpot.layout) return null;
-    const base = newTileSpot.layout;
+  // Layout the shown tile takes for a type that needs more room
+  // (minimumTileSize): it grows from its place downwards first, then upwards,
+  // then left; a new tile from its free slot. Null when it does not fit: the
+  // type cannot be chosen there (a Media tile without a free 2x2 spot was
+  // stretched over its neighbours and could not be moved, user 2026-10-31).
+  function grownTileLayout(tab, type) {
+    const spot = newTileSpot && newTileSpot.tab === tab && newTileSpot.index === currentTileIndex
+      ? newTileSpot.layout : null;
+    const base = spot || getTileElementLayout(tab, currentTileIndex);
+    if (!base) return null;
     const [minW, minH] = minimumTileSize(type);
     if (base.span_w >= minW && base.span_h >= minH) return base;
     const spanW = Math.max(base.span_w, minW), spanH = Math.max(base.span_h, minH);
@@ -7791,11 +7795,19 @@ async function saveGestureEdge(select) {
       const previousType = Number(tileEl?.dataset.type ?? 0);
       const nextType = Number(typeSelect.value);
       let currentLayout = getTileElementLayout(tab, currentTileIndex);
-      // A new tile grows from 1x0.5 to the smallest size the chosen type needs.
-      const grown = previousType === 0 && nextType !== 0 ? grownNewTileLayout(tab, nextType) : null;
-      if (grown && currentLayout && (grown.span_w !== currentLayout.span_w || grown.span_h !== currentLayout.span_h)) {
+      // The tile grows to the smallest size the chosen type needs. Without
+      // room for it the type is refused instead of stretching the tile over
+      // its neighbours (grownTileLayout).
+      const grown = nextType !== 0 && currentLayout ? grownTileLayout(tab, nextType) : null;
+      if (nextType !== 0 && currentLayout && !grown) {
+        typeSelect.value = String(previousType);
+        showNotification(t('pasteNoSpace'), false);
+        return;
+      }
+      if (grown && currentLayout && (grown.col !== currentLayout.col || grown.row !== currentLayout.row ||
+          grown.span_w !== currentLayout.span_w || grown.span_h !== currentLayout.span_h)) {
         applyLayoutInputsFromLayout(tab, grown, false);
-        newTileSpot.layout = grown;
+        if (newTileSpot && newTileSpot.tab === tab && newTileSpot.index === currentTileIndex) newTileSpot.layout = grown;
         if (tileEl) setTileGridPosition(tileEl, grown.col, grown.row, grown.span_w, grown.span_h);
         currentLayout = grown;
       }
@@ -8914,13 +8926,12 @@ async function saveGestureEdge(select) {
       ? 1 : Number(document.getElementById(tab + '_tile_span_h')?.value || 1);
     // Half a row high only suits the half-size types.
     const halfHeight = h < 1;
-    // A new half-height tile may still take a larger type when it can grow.
-    const isNewTile = Number(getTilesData(tab)?.[currentTileIndex]?.type || 0) === 0;
     for (const option of typeEl.options) {
       if (option.dataset.sizeDisabled === '1') { option.disabled = false; delete option.dataset.sizeDisabled; }
       const type = Number(option.value);
-      const grows = isNewTile && type !== 0 && !!grownNewTileLayout(tab, type);
-      const blocked = type !== 0 && !grows && halfHeight && !supportsHalfSize(type);
+      // A type whose smallest size has no room here (Media 2x2, a whole cell
+      // on a half-height tile) cannot be chosen (grownTileLayout).
+      const blocked = type !== 0 && !grownTileLayout(tab, type);
       if (blocked && !option.disabled) {
         option.disabled = true; option.dataset.sizeDisabled = '1';
       }

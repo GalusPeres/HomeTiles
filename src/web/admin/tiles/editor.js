@@ -261,11 +261,19 @@
       const previousType = Number(tileEl?.dataset.type ?? 0);
       const nextType = Number(typeSelect.value);
       let currentLayout = getTileElementLayout(tab, currentTileIndex);
-      // A new tile grows from 1x0.5 to the smallest size the chosen type needs.
-      const grown = previousType === 0 && nextType !== 0 ? grownNewTileLayout(tab, nextType) : null;
-      if (grown && currentLayout && (grown.span_w !== currentLayout.span_w || grown.span_h !== currentLayout.span_h)) {
+      // The tile grows to the smallest size the chosen type needs. Without
+      // room for it the type is refused instead of stretching the tile over
+      // its neighbours (grownTileLayout).
+      const grown = nextType !== 0 && currentLayout ? grownTileLayout(tab, nextType) : null;
+      if (nextType !== 0 && currentLayout && !grown) {
+        typeSelect.value = String(previousType);
+        showNotification(t('pasteNoSpace'), false);
+        return;
+      }
+      if (grown && currentLayout && (grown.col !== currentLayout.col || grown.row !== currentLayout.row ||
+          grown.span_w !== currentLayout.span_w || grown.span_h !== currentLayout.span_h)) {
         applyLayoutInputsFromLayout(tab, grown, false);
-        newTileSpot.layout = grown;
+        if (newTileSpot && newTileSpot.tab === tab && newTileSpot.index === currentTileIndex) newTileSpot.layout = grown;
         if (tileEl) setTileGridPosition(tileEl, grown.col, grown.row, grown.span_w, grown.span_h);
         currentLayout = grown;
       }

@@ -12,7 +12,7 @@ const helpers=[
  'normalizeLayoutForTileType','normalizeTileLayout','constrainLayoutToTab','setGridItemPosition','setTileGridPosition',
  'getTileElementLayout','layoutTiles','normalizeLayoutInputs','applyLayoutInputsFromLayout','updateLayoutFromInputs',
  'rectsOverlap','canPlaceGridLayout','canPlaceTileLayout','cloneLayout','simulateGridReorderLayouts','manhattanDistance','buildGridPlacementCandidates',
- 'normalizeSnapshotLayout','syncTileSizePolicy','buildResizeCandidate','parseGridTrackSizes','getGridElementMetrics',
+ 'normalizeSnapshotLayout','minimumTileSize','grownTileLayout','syncTileSizePolicy','buildResizeCandidate','parseGridTrackSizes','getGridElementMetrics',
  'getTileGrid','getTileGridMetrics','getRawGridCellFromPointer'
 ].map(extractDeliveredFunction).join('\n');
 const html=`<!doctype html><html><head><style>${readRepoFile('src/web/assets/admin.css')}
@@ -24,7 +24,7 @@ ${['col','row','span_w','span_h'].map(n=>`<input type="number" id="test_tile_${n
 ${noteOpening}Hint</p><pre id="result"></pre><script>
 ${inlineScriptSafe(helpers)}
 const GRID_COLS=7,GRID_ROWS=5,MEDIA_TILE_TYPE=15,MEDIA_TILE_MIN_SPAN=2,MEDIA_TILE_MAX_SPAN=3;
-let currentTileTab='test',currentTileIndex=0,dragSource=null;
+let currentTileTab='test',currentTileIndex=0,dragSource=null,newTileSpot=null;
 const tiles=[{type:1,col:0,row:0,span_w:2,span_h:.5},{type:20,col:0,row:.5,span_w:2,span_h:.5},{type:1,col:2,row:0,span_w:2,span_h:1},{type:0,col:4,row:0,span_w:1,span_h:1}];
 function getTilesData(){return tiles;}function firstAllowedGridRow(){return 0;}
 const drafts={};function persistDrafts(){}

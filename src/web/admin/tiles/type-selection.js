@@ -211,13 +211,12 @@
       ? 1 : Number(document.getElementById(tab + '_tile_span_h')?.value || 1);
     // Half a row high only suits the half-size types.
     const halfHeight = h < 1;
-    // A new half-height tile may still take a larger type when it can grow.
-    const isNewTile = Number(getTilesData(tab)?.[currentTileIndex]?.type || 0) === 0;
     for (const option of typeEl.options) {
       if (option.dataset.sizeDisabled === '1') { option.disabled = false; delete option.dataset.sizeDisabled; }
       const type = Number(option.value);
-      const grows = isNewTile && type !== 0 && !!grownNewTileLayout(tab, type);
-      const blocked = type !== 0 && !grows && halfHeight && !supportsHalfSize(type);
+      // A type whose smallest size has no room here (Media 2x2, a whole cell
+      // on a half-height tile) cannot be chosen (grownTileLayout).
+      const blocked = type !== 0 && !grownTileLayout(tab, type);
       if (blocked && !option.disabled) {
         option.disabled = true; option.dataset.sizeDisabled = '1';
       }

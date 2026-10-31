@@ -5003,22 +5003,40 @@ static bool tile_graph_has_day(const SensorTileWidgets& widgets) {
   return false;
 }
 
-// Graph tiles ask for their day when they are built; offline that request
-// is dropped (mqttPublishHistoryRequest), so a tile built at boot stayed
-// empty until its popup asked (user log 2026-10-26). The shown grid's graph
-// tiles ask again once the connection is up and every five minutes after
-// (the Bridge's day comes in 5-minute steps), so the graph follows the day.
-// A tile still without its day asks again every 15 s, and at once when its
-// page is shown (tile_graph_request_soon): the first request after
-// connecting timed out while the Bridge was not ready yet, and its late
-// answer came while another page was shown, where apply_tile_graph_history
-// finds no tile for it (user log 2026-10-28: graphs empty until pressed).
-constexpr uint32_t kTileGraphRefreshMs = 5UL * 60UL * 1000UL;
+// The shown grid's graph tiles ask for their day once the connection is up
+// and every five minutes after (the Bridge's day comes in 5-minute steps),
+// so the graph follows the day also while the value stays the same (a PV
+// sensor at 0 at night has no new state). A round asks one tile at a time,
+// spread evenly over the five minutes, never all at once (user 2026-10-31:
+// sparing, nothing may stall). A round starts a few seconds after the last
+// one's answers stopped being replayed (mqtt_handlers.cpp keeps an answer
+// for one step), so every turn gets a new day.
+// A tile without its day asks at once, one every 0.3 s: when it is built
+// (tile_graph_request_soon), every 15 s while it has none, and when its page
+// is shown; so does every graph when a round comes far too late. Offline a request is dropped (mqttPublishHistoryRequest), so a
+// tile built at boot stayed empty until its popup asked (user log
+// 2026-10-26); the first request after connecting timed out while the Bridge
+// was not ready yet, and its late answer came while another page was shown,
+// where apply_tile_graph_history finds no tile for it (user log 2026-10-28:
+// graphs empty until pressed).
+constexpr uint32_t kTileGraphRefreshMs = 5UL * 60UL * 1000UL + 5UL * 1000UL;
 constexpr uint32_t kTileGraphRetryMs = 15UL * 1000UL;
+constexpr uint32_t kTileGraphCatchUpGapMs = 300UL;
+enum : uint8_t { kTileGraphNotDue = 0, kTileGraphDue = 1, kTileGraphMissing = 2 };
+static uint8_t g_tile_graph_due[TILES_PER_GRID] = {};
 static bool g_tile_graph_online = false;
 static uint32_t g_tile_graph_asked_ms = 0;
 static uint32_t g_tile_graph_retried_ms = 0;
+// The last request (0 = the round's first turn may go at once) and the gap
+// between the turns of this round.
+static uint32_t g_tile_graph_sent_ms = 0;
+static uint32_t g_tile_graph_turn_ms = 0;
 static bool g_tile_graph_page_shown = false;
+
+static bool tile_graph_shown(const Tile& tile, uint8_t index) {
+  return tile.type == TILE_SENSOR && tile.sensor_display_mode == 2 && g_tab0_sensors[index].chart &&
+         tile.sensor_entity.length();
+}
 
 void tile_graph_request_soon() { g_tile_graph_page_shown = true; }
 
@@ -5030,20 +5048,50 @@ void tile_graph_service_periodic() {
   const uint32_t now = millis();
   const bool refresh = !g_tile_graph_online || (uint32_t)(now - g_tile_graph_asked_ms) >= kTileGraphRefreshMs;
   const bool retry = g_tile_graph_page_shown || (uint32_t)(now - g_tile_graph_retried_ms) >= kTileGraphRetryMs;
-  if (!refresh && !retry) return;
-  g_tile_graph_page_shown = false;
-  g_tile_graph_retried_ms = now;
-  if (refresh) {
-    g_tile_graph_online = true;
-    g_tile_graph_asked_ms = now;
-  }
   const TileGridConfig& grid = tileConfig.getActiveGrid();
-  for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
-    const Tile& tile = grid.tiles[i];
-    if (tile.type != TILE_SENSOR || tile.sensor_display_mode != 2 || !g_tab0_sensors[i].chart) continue;
-    if (!refresh && tile_graph_has_day(g_tab0_sensors[i])) continue;
-    if (tile.sensor_entity.length()) request_tile_graph_history(tile.sensor_entity.c_str());
+  if (refresh || retry) {
+    // A round far too late (display sleep, a reconnect) catches every graph
+    // up like a missing day instead of spreading old graphs over minutes.
+    const bool late = refresh && (!g_tile_graph_online ||
+                                  (uint32_t)(now - g_tile_graph_asked_ms) >= 2 * kTileGraphRefreshMs);
+    uint8_t graphs = 0;
+    for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
+      if (!tile_graph_shown(grid.tiles[i], i)) {
+        g_tile_graph_due[i] = kTileGraphNotDue;
+        continue;
+      }
+      ++graphs;
+      if (late || !tile_graph_has_day(g_tab0_sensors[i])) g_tile_graph_due[i] = kTileGraphMissing;
+      else if (refresh && g_tile_graph_due[i] == kTileGraphNotDue) g_tile_graph_due[i] = kTileGraphDue;
+    }
+    if (refresh) {
+      g_tile_graph_online = true;
+      g_tile_graph_asked_ms = now;
+      g_tile_graph_turn_ms = graphs ? kTileGraphRefreshMs / graphs : 0;
+      g_tile_graph_sent_ms = 0;
+    }
+    g_tile_graph_page_shown = false;
+    g_tile_graph_retried_ms = now;
   }
+  // A missing day first, then the round's next turn.
+  int pick = -1;
+  for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
+    if (g_tile_graph_due[i] == kTileGraphMissing) {
+      pick = i;
+      break;
+    }
+    if (pick < 0 && g_tile_graph_due[i] == kTileGraphDue) pick = i;
+  }
+  if (pick < 0) return;
+  if (!tile_graph_shown(grid.tiles[pick], static_cast<uint8_t>(pick))) {
+    g_tile_graph_due[pick] = kTileGraphNotDue;
+    return;
+  }
+  const uint32_t gap = g_tile_graph_due[pick] == kTileGraphMissing ? kTileGraphCatchUpGapMs : g_tile_graph_turn_ms;
+  if (g_tile_graph_sent_ms != 0 && (uint32_t)(now - g_tile_graph_sent_ms) < gap) return;
+  g_tile_graph_due[pick] = kTileGraphNotDue;
+  g_tile_graph_sent_ms = now ? now : 1;
+  request_tile_graph_history(grid.tiles[pick].sensor_entity.c_str());
 }
 
 void request_tile_graph_history(const char* entity_id) {

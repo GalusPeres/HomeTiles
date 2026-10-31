@@ -63,12 +63,15 @@ assert.ok(renderer.includes('const size_t target = graph_w > 8 ? static_cast<siz
 assert.ok(renderer.includes('!lv_color_eq(lv_chart_get_series_color(chart, series), lv_obj_get_style_text_color(icon, LV_PART_MAIN))'),
   'graph tile: a new icon color redraws the line');
 // A tile built offline (at boot) asks again once the connection is up and
-// every five minutes; several answers wait in a bounded queue.
-assert.ok(renderer.includes('constexpr uint32_t kTileGraphRefreshMs = 5UL * 60UL * 1000UL;') &&
+// every five minutes, one tile at a time (test-tile-graph-history-retry);
+// several answers wait in a bounded queue.
+assert.ok(renderer.includes('constexpr uint32_t kTileGraphRefreshMs = 5UL * 60UL * 1000UL + 5UL * 1000UL;') &&
   renderer.includes('if (!networkManager.isMqttConnected()) {') &&
   renderer.includes('constexpr size_t kTileGraphQueueSlots = 4;') &&
-  renderer.includes('if (tile.sensor_entity.length()) request_tile_graph_history(tile.sensor_entity.c_str());'),
+  renderer.includes('request_tile_graph_history(grid.tiles[pick].sensor_entity.c_str());'),
   'graph tile: asks again after connecting and every five minutes, queue for several answers');
+assert.ok(read('src/types/sensor/renderer.cpp').includes('if (graph_enabled && tile.sensor_entity.length()) tile_graph_request_soon();'),
+  'a new graph tile asks through the service, not every graph of a page at once');
 assert.ok(read('HomeTiles.ino').includes('    process_tile_graph_queue();\n    tile_graph_service_periodic();'),
   'the main loop runs the graph tile service');
 

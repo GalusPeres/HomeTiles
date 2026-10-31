@@ -66,6 +66,7 @@ ${slice('struct TileGraphHistoryUpdate {', 'static size_t g_tile_graph_next = 0;
 ${fn('queue_tile_graph_history')}
 ${fn('process_tile_graph_queue')}
 ${slice('constexpr uint32_t kTileGraphRefreshMs', 'static bool g_tile_graph_page_shown = false;')}
+${fn('tile_graph_shown')}
 ${fn('tile_graph_request_soon')}
 ${fn('tile_graph_service_periodic')}
 
@@ -112,6 +113,54 @@ int main() {
   online = true;
   tile_graph_service_periodic();
   std::printf("reconnect %zu\n", requests.size());
+  // A page of three graphs with their day: a round asks one tile at a time,
+  // spread over the five minutes, never all at once (user 2026-10-31).
+  tileConfig.grid.tiles[1] = {TILE_SENSOR, 2, "sensor.b"};
+  sensors[1].day = true;
+  tileConfig.grid.tiles[3] = {TILE_SENSOR, 2, "sensor.c"};
+  sensors[3].chart = &chart;
+  sensors[3].day = true;
+  requests.clear();
+  now_ms += 306000;
+  tile_graph_service_periodic();
+  tile_graph_service_periodic();
+  std::printf("round %zu\n", requests.size());
+  now_ms += 60000;
+  tile_graph_service_periodic();
+  std::printf("between %zu\n", requests.size());
+  now_ms += 45000;
+  tile_graph_service_periodic();
+  std::printf("turn %zu\n", requests.size());
+  now_ms += 105000;
+  tile_graph_service_periodic();
+  std::printf("last %zu %s %s %s\n", requests.size(), requests.size() > 0 ? requests[0].c_str() : "",
+              requests.size() > 1 ? requests[1].c_str() : "", requests.size() > 2 ? requests[2].c_str() : "");
+  // Three graphs without their day (built, page shown): one every 0.3 s.
+  for (int i : {0, 1, 3}) sensors[i].day = false;
+  requests.clear();
+  now_ms += 1000;
+  tile_graph_request_soon();
+  tile_graph_service_periodic();
+  tile_graph_service_periodic();
+  std::printf("missing %zu\n", requests.size());
+  now_ms += 300;
+  tile_graph_service_periodic();
+  now_ms += 300;
+  tile_graph_service_periodic();
+  std::printf("caught %zu\n", requests.size());
+  // A round far too late (after a night of display sleep): every graph
+  // catches up 0.3 s apart instead of over five minutes.
+  for (int i : {0, 1, 3}) sensors[i].day = true;
+  requests.clear();
+  now_ms += 700000;
+  tile_graph_service_periodic();
+  tile_graph_service_periodic();
+  const size_t late_first = requests.size();
+  now_ms += 300;
+  tile_graph_service_periodic();
+  now_ms += 300;
+  tile_graph_service_periodic();
+  std::printf("late %zu %zu\n", late_first, requests.size());
   // Two answers in one loop pass: both applied, oldest first; then empty.
   queue_tile_graph_history("sensor.a", "first", 5);
   queue_tile_graph_history("sensor.b", "second", 6);
@@ -142,8 +191,15 @@ if (output !== null) {
   assert.deepEqual(rows.online, ['3', 'sensor.hauslast'], 'with its day: no retry, also not on showing');
   assert.deepEqual(rows.refresh, ['4'], 'five minutes after: again');
   assert.deepEqual(rows.reconnect, ['5'], 'a reconnect asks at once');
-  assert.ok(renderer.includes('if (!refresh && tile_graph_has_day(g_tab0_sensors[i])) continue;'),
-    'only tiles without their day retry');
+  assert.deepEqual(rows.round, ['1'], 'a round: the first tile at once, not the others with it');
+  assert.deepEqual(rows.between, ['1'], 'the next turn not before a third of the round');
+  assert.deepEqual(rows.turn, ['2'], 'the second tile one turn later');
+  assert.deepEqual(rows.last, ['3', 'sensor.hauslast', 'sensor.b', 'sensor.c'], 'every tile once per round, in turn');
+  assert.deepEqual(rows.missing, ['1'], 'tiles without their day: one at a time');
+  assert.deepEqual(rows.caught, ['3'], 'the others 0.3 s apart');
+  assert.deepEqual(rows.late, ['1', '3'], 'a round far too late: every graph catches up 0.3 s apart');
+  assert.ok(renderer.includes('if (late || !tile_graph_has_day(g_tab0_sensors[i])) g_tile_graph_due[i] = kTileGraphMissing;'),
+    'only tiles without their day (or a late round) catch up');
   assert.ok(readRepoFile('src/ui/tabs/tiles/tab_tiles_unified.cpp').includes('tile_graph_request_soon();'),
     'a shown cached page asks for missing days');
   assert.deepEqual(rows.applied, ['2', 'first', 'second'], 'two answers in one pass: both, oldest first');

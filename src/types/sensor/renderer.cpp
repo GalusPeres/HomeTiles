@@ -680,10 +680,9 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
         data);
   }
 
-  // Request history for graph tiles
-  if (graph_enabled && tile.sensor_entity.length()) {
-    request_tile_graph_history(tile.sensor_entity.c_str());
-  }
+  // A new graph asks for its day through tile_graph_service_periodic, one
+  // tile after another instead of every graph of a page at once.
+  if (graph_enabled && tile.sensor_entity.length()) tile_graph_request_soon();
 
   return card;
 }

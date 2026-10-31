@@ -21,10 +21,6 @@
 // lvgl.h no longer exports lv_image_cache_drop() in 9.5; its declaration
 // is available only in the instance header (see tile_renderer.cpp).
 #include <misc/cache/instance/lv_image_cache.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/idf_additions.h>
-#include <freertos/queue.h>
-#include <freertos/task.h>
 
 #include "src/core/display/dma2d_arbiter.h"
 #include "src/core/display/jpeg_padded_output.h"
@@ -1093,135 +1089,6 @@ lv_image_dsc_t* decode_wallpaper_to_size(const String& file_name,
                              pipeline_started_ms, millis() - pipeline_started_ms);
 }
 
-// ---- The next slide decoded ahead ----------------------------------------
-// Reading the next slide from the microSD card, decoding and fitting it took
-// 310-345 ms inside the slide change, so the loop stood about 550 ms and the
-// Media tile's marquee and bars froze at every slide (user log b635). A
-// worker decodes the next slide while the current one shows; the slide
-// change then only takes it (get_or_decode_cached). The media cover
-// worker's pattern: one request, one result, plain malloc buffers and no
-// LVGL on the worker (the HW decoder waits for its 2D DMA arbiter); the LVGL
-// side frees.
-struct AheadJob {
-  char name[128] = {};  // screensaver_config.cpp allows 120 bytes
-  uint16_t w = 0, h = 0, focus_x = 0, focus_y = 0, zoom = 0, radius = 0;
-};
-struct AheadResult {
-  AheadJob job;
-  lv_image_dsc_t* dsc = nullptr;
-};
-QueueHandle_t g_ahead_requests = nullptr;
-QueueHandle_t g_ahead_results = nullptr;
-TaskHandle_t g_ahead_task = nullptr;
-// False while no screensaver shows: a late result is freed by the worker
-// instead of holding about 2 MB of PSRAM for the pages.
-volatile bool g_ahead_wanted = false;
-// LVGL side: the job on its way (since g_ahead_asked_ms) and a result taken
-// from the queue, not yet used.
-bool g_ahead_busy = false;
-uint32_t g_ahead_asked_ms = 0;
-AheadJob g_ahead_asked;
-AheadResult g_ahead_ready;
-// A job that has not come back after this no longer holds the slide back.
-constexpr uint32_t kAheadMaxWaitMs = 5000;
-
-// Frees a picture that never was an image source (no LVGL cache entry).
-void free_unshown_dsc(lv_image_dsc_t*& dsc) {
-  if (!dsc) return;
-  if (dsc->data) free(const_cast<uint8_t*>(dsc->data));
-  free(dsc);
-  dsc = nullptr;
-}
-
-void ahead_worker_task(void*) {
-  for (;;) {
-    AheadResult result;
-    if (xQueueReceive(g_ahead_requests, &result.job, portMAX_DELAY) != pdTRUE) continue;
-    const AheadJob& job = result.job;
-    result.dsc = decode_wallpaper_to_size(String(job.name), job.w, job.h, job.focus_x, job.focus_y,
-                                          job.zoom, job.radius);
-    // Always answer, also empty: the LVGL side waits for an answer before
-    // it asks again.
-    if (!g_ahead_wanted) free_unshown_dsc(result.dsc);
-    if (xQueueSend(g_ahead_results, &result, 0) != pdTRUE) free_unshown_dsc(result.dsc);
-  }
-}
-
-bool ensure_ahead_worker() {
-  if (!g_ahead_requests) g_ahead_requests = xQueueCreate(1, sizeof(AheadJob));
-  if (!g_ahead_results) g_ahead_results = xQueueCreate(1, sizeof(AheadResult));
-  if (!g_ahead_requests || !g_ahead_results) return false;
-  if (!g_ahead_task &&
-      xTaskCreateWithCaps(ahead_worker_task, "ss_ahead", 8192, nullptr, 1, &g_ahead_task, MALLOC_CAP_SPIRAM) !=
-          pdPASS) {
-    g_ahead_task = nullptr;
-    return false;
-  }
-  return true;
-}
-
-bool ahead_job_for(const AheadJob& job, const ScreensaverWallpaperConfig& wallpaper, uint16_t w, uint16_t h) {
-  return wallpaper.file_name == job.name && job.w == w && job.h == h && job.focus_x == wallpaper.focus_x &&
-         job.focus_y == wallpaper.focus_y && job.zoom == wallpaper.zoom && job.radius == image_radius();
-}
-
-// Takes a finished result from the worker; a newer one replaces an unused one.
-void ahead_collect() {
-  AheadResult result;
-  if (!g_ahead_results || xQueueReceive(g_ahead_results, &result, 0) != pdTRUE) return;
-  free_unshown_dsc(g_ahead_ready.dsc);
-  g_ahead_ready = result;
-  g_ahead_busy = false;
-}
-
-// Asks the worker for the slide that comes next, unless it is on its way or
-// done already.
-void ahead_request(const ScreensaverWallpaperConfig& wallpaper) {
-  const uint16_t w = grid_layout::screen_w(), h = grid_layout::screen_h();
-  if (wallpaper.file_name.length() >= sizeof(AheadJob::name) || !ensure_ahead_worker()) return;
-  g_ahead_wanted = true;
-  ahead_collect();
-  const bool waiting = g_ahead_busy && static_cast<uint32_t>(millis() - g_ahead_asked_ms) < kAheadMaxWaitMs;
-  if (waiting || (g_ahead_ready.dsc && ahead_job_for(g_ahead_ready.job, wallpaper, w, h))) return;
-  free_unshown_dsc(g_ahead_ready.dsc);
-  AheadJob job;
-  strncpy(job.name, wallpaper.file_name.c_str(), sizeof(job.name) - 1);
-  job.w = w;
-  job.h = h;
-  job.focus_x = wallpaper.focus_x;
-  job.focus_y = wallpaper.focus_y;
-  job.zoom = wallpaper.zoom;
-  job.radius = image_radius();
-  if (xQueueSend(g_ahead_requests, &job, 0) != pdTRUE) return;
-  g_ahead_asked = job;
-  g_ahead_busy = true;
-  g_ahead_asked_ms = millis();
-}
-
-// The decoded slide when it is the one asked for, now owned by the caller.
-lv_image_dsc_t* ahead_take(const ScreensaverWallpaperConfig& wallpaper, uint16_t w, uint16_t h) {
-  ahead_collect();
-  if (!g_ahead_ready.dsc || !ahead_job_for(g_ahead_ready.job, wallpaper, w, h)) return nullptr;
-  lv_image_dsc_t* dsc = g_ahead_ready.dsc;
-  g_ahead_ready.dsc = nullptr;
-  return dsc;
-}
-
-// The worker is still decoding this slide (and not stuck).
-bool ahead_decoding(const ScreensaverWallpaperConfig& wallpaper) {
-  ahead_collect();
-  return g_ahead_busy && static_cast<uint32_t>(millis() - g_ahead_asked_ms) < kAheadMaxWaitMs &&
-         ahead_job_for(g_ahead_asked, wallpaper, grid_layout::screen_w(), grid_layout::screen_h());
-}
-
-// The screensaver closed: an unused result goes, a running one is freed by
-// the worker when it ends.
-void ahead_release() {
-  g_ahead_wanted = false;
-  ahead_collect();
-  free_unshown_dsc(g_ahead_ready.dsc);
-}
-
 // The cache holds this picture in the screen's size and corners.
 bool cache_holds(const ScreensaverWallpaperConfig& wallpaper) {
   return g_cache_dsc && g_cache_name == wallpaper.file_name &&
@@ -1245,15 +1112,12 @@ lv_image_dsc_t* get_or_decode_cached(const ScreensaverWallpaperConfig& wallpaper
     return g_cache_dsc;
   }
   const uint16_t corner_radius = image_radius();
-  // A slide the worker decoded ahead, else decoded here.
-  lv_image_dsc_t* dsc = picture ? nullptr : ahead_take(wallpaper, w, h);
-  if (!dsc) {
-    dsc = picture ? decode_jpeg_to_size(name.c_str(), picture->jpeg, picture->length, false, w, h,
-                                        wallpaper.focus_x, wallpaper.focus_y, wallpaper.zoom,
-                                        corner_radius, millis(), 0)
-                  : decode_wallpaper_to_size(name, w, h, wallpaper.focus_x, wallpaper.focus_y,
-                                             wallpaper.zoom, corner_radius);
-  }
+  lv_image_dsc_t* dsc =
+      picture ? decode_jpeg_to_size(name.c_str(), picture->jpeg, picture->length, false, w, h,
+                                    wallpaper.focus_x, wallpaper.focus_y, wallpaper.zoom,
+                                    corner_radius, millis(), 0)
+              : decode_wallpaper_to_size(name, w, h, wallpaper.focus_x, wallpaper.focus_y,
+                                         wallpaper.zoom, corner_radius);
   if (!dsc) return nullptr;
   // Detach the old source from the visible LVGL object only now, immediately
   // before swapping caches. The previous slide stays visible during decoding
@@ -1585,9 +1449,6 @@ bool apply_wallpaper(ScreensaverState* st, int index, bool allow_fallback,
   st->next_wallpaper_ms = millis() +
       static_cast<uint32_t>(screensaverConfig.get().duration_seconds) * 1000U;
   present_picture(st, dsc, wallpaper.file_name, cache_hit);
-  // The slide after this one is decoded while this one shows.
-  const int next = next_enabled_wallpaper(index);
-  if (next >= 0 && next != index) ahead_request(config.wallpapers[static_cast<size_t>(next)]);
   return true;
 }
 
@@ -2104,13 +1965,6 @@ void global_screensaver_timer_cb(lv_timer_t* timer) {
       return;
     }
     const int next = next_enabled_wallpaper(st->active_wallpaper);
-    // The worker is still decoding the next slide: it comes with a later
-    // tick instead of being decoded here a second time.
-    if (next >= 0 && next != st->active_wallpaper &&
-        ahead_decoding(config.wallpapers[static_cast<size_t>(next)])) {
-      st->next_wallpaper_ms = now + 200U;
-      return;
-    }
     if (next >= 0 && next != st->active_wallpaper) {
       if (!apply_wallpaper(st, next, false)) {
         // For a deleted or corrupt file, advance the slideshow pointer anyway
@@ -2380,7 +2234,6 @@ void hide_image_screensaver() {
   g_live_preview_wallpaper = String();
   g_ha_picture_arrived = false;
   g_ha_retry_at_ms = 0;
-  ahead_release();
   popup_shell_screensaver_open(false);
   reset_sensor_widgets(GridType::SCREENSAVER);
   reset_switch_widgets(GridType::SCREENSAVER);

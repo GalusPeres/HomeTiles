@@ -267,12 +267,14 @@ Important:
 - Backlight uses GPIO 31 at 30 kHz, active high.
 - LCD reset is GPIO 41.
 - The microSD interface uses 1-bit SDMMC slot 0 on CLK 43, CMD 44, D0 39.
-- The profile exposes no configurable local I/O GPIOs.
 - The working factory firmware log from the tested panel reports ESP-Hosted
   on slot 1: CLK 18, CMD 19, D0-D3 17/16/15/14, reset GPIO 32. HomeTiles
-  configures these pins before starting the driver. This differs from the
-  GPIO 54 reset listed for V1.2; confirm the board revision before applying
-  this setting to other revisions. HomeTiles does not use LoRa.
+  configures these pins before starting the driver.
+- The profile exposes no configurable local I/O GPIOs.
+- Elecrow's V1.2 documentation lists GPIO 54 for the C6 reset, which differs
+  from the working factory log on the tested panel. Confirm the board revision
+  before applying the GPIO 32 setting to other revisions. HomeTiles does not
+  use LoRa.
 - Use the repository's `partitions.csv`; HomeTiles needs two 6.5MB OTA slots.
 
 Arduino IDE:

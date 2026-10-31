@@ -247,6 +247,8 @@ struct SensorPopupContext {
   uint64_t binary_range_end = 0;
   uint32_t state_history_last_request_ms = 0;
   bool state_history_refresh_pending = false;
+  // millis() of the numeric graph's last request (numeric_history_refresh_due).
+  uint32_t numeric_history_asked_ms = 0;
   // The history stays with the resident popup until the next response, so its
   // buffers (up to 96 segments and 96 activity rows, several KB) live in PSRAM:
   // in the internal heap they fragmented the S3's 44 KB after a few openings.
@@ -3528,7 +3530,27 @@ static void request_history_for_context(SensorPopupContext* ctx) {
     }
     return;
   }
+  ctx->numeric_history_asked_ms = millis();
   mqttPublishHistoryRequest(ctx->entity_id.c_str(), cfg.hours, cfg.period_minutes, cfg.points);
+}
+
+// While the popup is open its numeric graph follows the time: it asks for
+// its range again once per step of that range, at least every minute (1H
+// and 6H every minute, 24H every five minutes, 7D hourly; user 2026-10-31),
+// also when the value stays the same and no new state comes. A few seconds
+// later than the step: the last answer is replayed for one step after it
+// came (mqtt_handlers.cpp). Never while a finger reads the graph; a kept
+// cursor stays where it is (refresh_sensor_readout).
+constexpr uint32_t kNumericHistoryRefreshSlackMs = 5UL * 1000UL;
+
+static bool numeric_history_refresh_due(const SensorPopupContext* ctx, uint32_t now_ms) {
+  if (!ctx || ctx->editable || ctx->binary_mode || ctx->state_history_mode || ctx->readout.active() ||
+      editable_control_is_interacting(ctx->control)) {
+    return false;
+  }
+  const HistoryRangeConfig cfg = get_history_range_config(ctx->history_range);
+  const uint32_t step = std::max<uint32_t>(static_cast<uint32_t>(cfg.period_minutes) * 60UL * 1000UL, 60UL * 1000UL);
+  return static_cast<uint32_t>(now_ms - ctx->numeric_history_asked_ms) >= step + kNumericHistoryRefreshSlackMs;
 }
 
 // A numeric graph asks for its 24 h history with the popup's first frame:
@@ -4093,6 +4115,9 @@ static void finish_sensor_popup_open() {
   set_range_buttons_visible(g_sensor_popup_ctx,
                             g_sensor_popup_ctx->state_history_mode);
   g_sensor_popup_ctx->state_history_refresh_pending = false;
+  // The opening asked (request_history_early or below): the next turn one
+  // step from now.
+  g_sensor_popup_ctx->numeric_history_asked_ms = millis();
   g_sensor_popup_ctx->readout_refresh_pending = reuse_history;
   // The early request's answer, when it is already here, goes into the
   // controls' frame: applied in the pass after it, the graph came one frame
@@ -4373,6 +4398,11 @@ void process_sensor_popup_queue() {
       static_cast<uint32_t>(millis() -
                             g_sensor_popup_ctx->state_history_last_request_ms) >=
           state_history_refresh_interval_ms(g_sensor_popup_ctx)) {
+    request_history_for_context(g_sensor_popup_ctx);
+  }
+
+  if (!g_pending_history.valid && !g_sensor_first_frame.pending() && is_popup_visible(g_sensor_popup_ctx) &&
+      numeric_history_refresh_due(g_sensor_popup_ctx, millis())) {
     request_history_for_context(g_sensor_popup_ctx);
   }
 }

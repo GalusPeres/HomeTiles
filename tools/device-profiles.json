@@ -487,6 +487,20 @@
       }
     },
     {
+      "buildProfile": "elecrow_crowpanel_10_1",
+      "key": "elecrow_crowpanel_10_1",
+      "metadataDeviceKey": "elecrow_crowpanel_10_1",
+      "define": "DEVICE_ELECROW_CROWPANEL_10_1",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 16777216,
+      "siliconVariant": "pre_v3",
+      "minimumRevision": 1,
+      "maximumRevision": 199,
+      "rxVariant": "repo-a8204",
+      "elfFlags": "",
+      "publish": false
+    },
+    {
       "buildProfile": "layout_test_1024x600",
       "key": "layout_test_1024x600",
       "metadataDeviceKey": "layout_test_1024x600",

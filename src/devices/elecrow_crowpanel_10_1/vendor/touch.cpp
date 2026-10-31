@@ -1,6 +1,6 @@
 #include "src/devices/device_select.h"
 
-#if defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1)
+#if defined(DEVICE_ELECROW_CROWPANEL_10_1)
 
 #include <stdlib.h>
 #include "freertos/FreeRTOS.h"
@@ -275,4 +275,4 @@ esp_err_t esp_lcd_touch_register_interrupt_callback_with_data(esp_lcd_touch_hand
     return esp_lcd_touch_register_interrupt_callback(tp, callback);
 }
 
-#endif  // defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1)
+#endif  // defined(DEVICE_ELECROW_CROWPANEL_10_1)

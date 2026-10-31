@@ -5,7 +5,7 @@
  * @file
  * @brief ESP LCD touch
  */
- 
+
 #include <stdbool.h>
 #include "sdkconfig.h"
 #include "esp_err.h"

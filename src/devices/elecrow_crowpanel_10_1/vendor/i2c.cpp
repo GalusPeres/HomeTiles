@@ -13,7 +13,7 @@
 
 #include "src/devices/device_select.h"
 
-#if defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1)
+#if defined(DEVICE_ELECROW_CROWPANEL_10_1)
 
 #include "i2c.h"  // Include I2C driver header for I2C functions
 static const char *TAG = "i2c";  // Define a tag for logging
@@ -23,10 +23,10 @@ static const char *TAG = "i2c";  // Define a tag for logging
 DEV_I2C_Port handle;
 /**
  * @brief Initialize the I2C master interface.
- * 
+ *
  * This function configures the I2C master bus and adds a device with the specified address.
  * The I2C clock source, frequency, SCL/SDA pins, and other settings are configured here.
- * 
+ *
  * @param Addr The I2C address of the device to be initialized.
  * @return The device handle if initialization is successful, NULL otherwise.
  */
@@ -64,9 +64,9 @@ DEV_I2C_Port DEV_I2C_Init()
 
 /**
  * @brief Set a new I2C slave address for the device.
- * 
+ *
  * This function allows changing the I2C slave address for the specified device.
- * 
+ *
  * @param dev_handle The handle to the I2C device.
  * @param Addr The new I2C address for the device.
  */
@@ -83,7 +83,7 @@ esp_err_t DEV_I2C_Set_Slave_Addr(i2c_master_dev_handle_t *dev_handle, uint8_t Ad
         .device_address = Addr,                        // Set new device address
         .scl_speed_hz = scl_speed_hz,                   // I2C frequency
     };
-    
+
     // Update the device with the new address
     esp_err_t err = i2c_master_bus_add_device(handle.bus, &i2c_dev_conf, dev_handle);
     if (err != ESP_OK) {
@@ -94,9 +94,9 @@ esp_err_t DEV_I2C_Set_Slave_Addr(i2c_master_dev_handle_t *dev_handle, uint8_t Ad
 
 /**
  * @brief Write a single byte to the I2C device.
- * 
+ *
  * This function sends a command byte and a value byte to the I2C device.
- * 
+ *
  * @param dev_handle The handle to the I2C device.
  * @param Cmd The command byte to send.
  * @param value The value byte to send.
@@ -116,9 +116,9 @@ esp_err_t DEV_I2C_Write_Byte(i2c_master_dev_handle_t dev_handle, uint8_t Cmd, ui
 
 /**
  * @brief Read a single byte from the I2C device.
- * 
+ *
  * This function reads a byte of data from the I2C device.
- * 
+ *
  * @param dev_handle The handle to the I2C device.
  * @return The byte read from the device.
  */
@@ -138,10 +138,10 @@ uint8_t DEV_I2C_Read_Byte(i2c_master_dev_handle_t dev_handle)
 
 /**
  * @brief Read a word (2 bytes) from the I2C device.
- * 
+ *
  * This function reads two bytes (a word) from the I2C device.
  * The data is received by sending a command byte and receiving the data.
- * 
+ *
  * @param dev_handle The handle to the I2C device.
  * @param Cmd The command byte to send.
  * @return The word read from the device (combined two bytes).
@@ -162,9 +162,9 @@ uint16_t DEV_I2C_Read_Word(i2c_master_dev_handle_t dev_handle, uint8_t Cmd)
 
 /**
  * @brief Write multiple bytes to the I2C device.
- * 
+ *
  * This function sends a block of data to the I2C device.
- * 
+ *
  * @param dev_handle The handle to the I2C device.
  * @param pdata Pointer to the data to send.
  * @param len The number of bytes to send.
@@ -182,10 +182,10 @@ void DEV_I2C_Write_Nbyte(i2c_master_dev_handle_t dev_handle, uint8_t *pdata, uin
 
 /**
  * @brief Read multiple bytes from the I2C device.
- * 
+ *
  * This function reads multiple bytes from the I2C device.
  * The function sends a command byte and receives the specified number of bytes.
- * 
+ *
  * @param dev_handle The handle to the I2C device.
  * @param Cmd The command byte to send.
  * @param pdata Pointer to the buffer where received data will be stored.
@@ -202,4 +202,4 @@ void DEV_I2C_Read_Nbyte(i2c_master_dev_handle_t dev_handle, uint8_t Cmd, uint8_t
     }
 }
 
-#endif  // defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1)
+#endif  // defined(DEVICE_ELECROW_CROWPANEL_10_1)

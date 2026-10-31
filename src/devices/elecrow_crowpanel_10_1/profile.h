@@ -6,6 +6,9 @@
 
 namespace DeviceElecrowCrowPanel10Profile {
 
+inline constexpr uint32_t kFlashSizeBytes = 16U * 1024U * 1024U;
+inline constexpr uint32_t kPsramSizeBytes = 32U * 1024U * 1024U;
+
 inline constexpr Device::Profile kProfile{
     "elecrow_crowpanel_10_1",
     "Elecrow CrowPanel Advanced 10.1",
@@ -18,7 +21,7 @@ inline constexpr Device::Profile kProfile{
     156,
     136,
     5,
-    121,
+    1,
     Device::RotationStepMode::FlipOnly,
     2,
     0,

@@ -55,8 +55,8 @@
      defined(DEVICE_GUITION_JC1060P470C_V2) + \
      defined(DEVICE_GUITION_JC4880P443_PORTRAIT) + \
      defined(DEVICE_GUITION_ESP32_4848S040) + \
+     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) + \
      defined(DEVICE_ELECROW_CROWPANEL_10_1)) > 1
-     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)) > 1
 #error "Select only one device target."
 #endif
 

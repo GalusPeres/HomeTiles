@@ -6,7 +6,7 @@
 
 #include "src/devices/device_select.h"
 
-#if defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1)
+#if defined(DEVICE_ELECROW_CROWPANEL_10_1)
 
 #include <stdio.h>
 #include <string.h>
@@ -72,7 +72,7 @@ esp_err_t esp_lcd_touch_new_i2c_gt911(const esp_lcd_panel_io_handle_t io, const 
     }
 
     // Dynamically allocate memory for the touch controller handle
-    esp_lcd_touch_handle_t esp_lcd_touch_gt911 = 
+    esp_lcd_touch_handle_t esp_lcd_touch_gt911 =
         (esp_lcd_touch_handle_t)heap_caps_calloc(1, sizeof(esp_lcd_touch_t), MALLOC_CAP_DEFAULT);
     if (!esp_lcd_touch_gt911) {
         ESP_LOGE(TAG, "Memory allocation failed for GT911 controller");
@@ -407,8 +407,8 @@ esp_lcd_touch_handle_t touch_gt911_init(DEV_I2C_Port port)
         },
         .flags = {
             .swap_xy = 0,  // No swap of X and Y coordinates
-            .mirror_x = 0,  // No mirroring of X axis
-            .mirror_y = 0,  // No mirroring of Y axis
+            .mirror_x = 0,  // Elecrow's board configuration uses no mirroring.
+            .mirror_y = 0,
         },
     };
 
@@ -468,7 +468,7 @@ static esp_err_t touch_gt911_read_cfg(esp_lcd_touch_handle_t tp)
 
     ESP_LOGI(TAG, "TouchPad_ID:0x%02x,0x%02x,0x%02x", buf[0], buf[1], buf[2]);
     ESP_LOGI(TAG, "TouchPad_Config_Version:%d", buf[3]);
-    Serial.printf("[Device/WaveshareTouchLCD10] TouchPad_ID:%02X%02X%02X cfg=%u\n",
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] TouchPad_ID:%02X%02X%02X cfg=%u\n",
                   static_cast<unsigned>(buf[0]),
                   static_cast<unsigned>(buf[1]),
                   static_cast<unsigned>(buf[2]),
@@ -499,4 +499,4 @@ static esp_err_t touch_gt911_i2c_write(esp_lcd_touch_handle_t tp, uint16_t reg, 
     // *INDENT-ON*
 }
 
-#endif  // defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1)
+#endif  // defined(DEVICE_ELECROW_CROWPANEL_10_1)

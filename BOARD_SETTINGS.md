@@ -252,6 +252,44 @@ Arduino IDE:
 - Upload Speed: `921600`
 - USB Mode: `USB-OTG (TinyUSB)`
 
+## Elecrow CrowPanel Advanced 10.1
+
+Used for:
+- `src/devices/elecrow_crowpanel_10_1`
+- build profile `elecrow_crowpanel_10_1` for ESP32-P4 before v3.0 (revisions 1-199)
+
+Important:
+- This is the `1024x600` EK79007 profile for the Elecrow CrowPanel Advanced
+  10.1-inch ESP32-P4 HMI AI Display. It is not interchangeable with the
+  1280x800 Waveshare Touch LCD 10.1 profile.
+- ESP32-P4 with `16MB` flash and `32MB` PSRAM.
+- Touch uses SDA 45 and SCL 46, reset 40, and interrupt 42.
+- Backlight uses GPIO 31 at 30 kHz, active high.
+- LCD reset is GPIO 41.
+- The microSD interface uses 1-bit SDMMC slot 0 on CLK 43, CMD 44, D0 39.
+- The profile exposes no configurable local I/O GPIOs.
+- V1.2 boards differ from V1.1 only in LoRa pins and the ESP32-C6 reset pin
+  (GPIO 54). HomeTiles does not use LoRa and does not drive that reset.
+- Use the repository's `partitions.csv`; HomeTiles needs two 6.5MB OTA slots.
+
+Arduino IDE:
+- Board: `ESP32P4 Dev Module`
+- USB CDC On Boot: `Disabled`
+- Chip Variant: `Before v3.00`
+- Core Debug Level: `None`
+- USB DFU On Boot: `Disabled`
+- Erase All Flash Before Sketch Upload: `Disabled`
+- Flash Frequency: `80MHz`
+- Flash Mode: `QIO`
+- Flash Size: `16MB (128Mb)`
+- JTAG Adapter: `Disabled`
+- USB Firmware MSC On Boot: `Disabled`
+- Partition Scheme: `Custom`
+- PSRAM: `Enabled`
+- Upload Mode: `UART0 / Hardware CDC`
+- Upload Speed: `921600`
+- USB Mode: `USB-OTG (TinyUSB)`
+
 ## Guition JC8012P4A1
 
 Used for:

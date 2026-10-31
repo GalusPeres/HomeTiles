@@ -1,9 +1,9 @@
-#ifndef WAVESHARE_SDMMC_H
-#define WAVESHARE_SDMMC_H
+#ifndef ELECROW_CROWPANEL_10_1_SDMMC_H
+#define ELECROW_CROWPANEL_10_1_SDMMC_H
 
 #include "src/devices/device_select.h"
 
-#if defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1)
+#if defined(DEVICE_ELECROW_CROWPANEL_10_1)
 
 #include <FS.h>
 #include <vfs_api.h>
@@ -27,7 +27,7 @@ public:
   bool begin(
       const char* mountpoint = "/sdcard",
       bool format_if_mount_failed = false,
-      int sdmmc_frequency = SDMMC_FREQ_DEFAULT,
+      int sdmmc_frequency = SDMMC_FREQ_HIGHSPEED,
       uint8_t maxOpenFiles = 5);
   void end();
 
@@ -42,6 +42,6 @@ private:
 
 extern fs::ElecrowSDMMCFS ElecrowSDMMC;
 
-#endif  // defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1)
+#endif  // defined(DEVICE_ELECROW_CROWPANEL_10_1)
 
 #endif

@@ -25,26 +25,28 @@
 #include "src/core/display/dma2d_arbiter.h"
 #include "src/devices/common/p4_dsi_camera_presenter.h"
 #include "src/devices/common/p4_dsi_cpu_rotate.h"
-#include "src/devices/elecrow_crowpanel_10_1/sdmmc.h"
+#include "src/devices/common/p4_dsi_ui_ppa.h"
 #include "src/devices/elecrow_crowpanel_10_1/vendor/displays_config.h"
+#include "src/devices/elecrow_crowpanel_10_1/vendor/ek79007/esp_lcd_ek79007.h"
 #include "src/devices/elecrow_crowpanel_10_1/vendor/gt911.h"
+#include "src/devices/elecrow_crowpanel_10_1/sdmmc.h"
 #include "src/devices/elecrow_crowpanel_10_1/vendor/i2c.h"
-#include "src/devices/elecrow_crowpanel_10_1/vendor/jd9365/esp_lcd_jd9365_10_1.h"
-#include "src/devices/elecrow_crowpanel_10_1/vendor/panel_init_cmds.h"
 
 namespace {
 
-constexpr gpio_num_t kBacklightPin = GPIO_NUM_26;
+constexpr gpio_num_t kBacklightPin = GPIO_NUM_31;
 constexpr ledc_channel_t kBacklightChannel = LEDC_CHANNEL_0;
 constexpr ledc_timer_t kBacklightTimer = LEDC_TIMER_1;
-constexpr uint32_t kBacklightFreq = 5000;
+constexpr uint32_t kBacklightFreq = 30000;
 constexpr ledc_timer_bit_t kBacklightBits = LEDC_TIMER_10_BIT;
 constexpr bool kBacklightActiveLow = false;
-constexpr uint8_t kBacklightInputMin = 121;
+constexpr uint8_t kBacklightInputMin = 1;
 constexpr uint8_t kBacklightInputMax = 255;
 constexpr uint32_t kBootBlackWarmupMs = 90;
 constexpr uint32_t kBootBlackGapMs = 60;
 constexpr uint32_t kPanelLaneCount = 2;
+constexpr int kMipiPhyLdoChannel = 3;
+constexpr int kMipiPhyLdoVoltageMv = 2500;
 constexpr uint32_t kPanelFrameBufferCount = 2;
 constexpr size_t kFillChunkRows = 40;
 constexpr uintptr_t kCacheLineSize = 64;
@@ -66,10 +68,10 @@ constexpr uint8_t kPpaFaultsBeforeReset = 2;
 // the engine's single pending slot ("ppa_srm: exceed maximum pending transactions");
 // note_ppa_fault() now heals that, but it still costs a cooldown, so we keep the
 // known jammer off the PPA entirely. That jammer is the scrolling media-title band:
-// a media tile is capped to 3x3 cells, so its widest possible title is 3*168 + 2*16
-// = 536 px (see MEDIA_TILE_MAX_SPAN). The popup interaction bands that DO want the
+// a media tile is capped to 3x3 cells, so its widest possible title is 3*156 + 2*16
+// = 500 px (see MEDIA_TILE_MAX_SPAN). The popup interaction bands that DO want the
 // PPA are wider — forecast/energy charts are 752 px, popup cards 792 px, full-screen
-// repaints 1280 px. So the gate sits between them: above the 536 px capped title
+// repaints 1024 px. So the gate sits between them: above the 500 px capped title
 // (keep it on the CPU, it rotates in <1 ms there) and below the 752 px charts (keep
 // those on the PPA so popups stay snappy). 600 leaves margin on both sides. History:
 // 256 let the title jam the engine (display slow forever); 768 over-corrected and
@@ -97,7 +99,6 @@ bool g_ppa_reset_pending = false;          // true while a wedged client is bein
 
 DEV_I2C_Port g_i2c = {};
 bool g_i2c_ready = false;
-bool g_pmic_ready = false;
 uint16_t* g_rotate_buf = nullptr;
 size_t g_rotate_buf_pixels = 0;
 uint16_t* g_panel_fbs[kPanelFrameBufferCount] = {nullptr};
@@ -139,7 +140,7 @@ void pause_ppa_for(uint32_t duration_ms) {
 }
 
 void log_step(const char* message) {
-  Serial.print("[Device/WaveshareTouchLCD10] ");
+  Serial.print("[Device/Elecrow CrowPanel 10.1] ");
   Serial.println(message);
   Serial.flush();
 }
@@ -195,7 +196,7 @@ void reset_ppa_client() {
       g_ppa_handle = old;
       g_ppa_reinit_at_ms = millis() + kPpaReinitRetryMs;
       if (!g_ppa_reinit_at_ms) g_ppa_reinit_at_ms = 1;
-      Serial.printf("[Device/WaveshareTouchLCD10] PPA client busy err=%d, retry reset in %lu ms\n",
+      Serial.printf("[Device/Elecrow CrowPanel 10.1] PPA client busy err=%d, retry reset in %lu ms\n",
                     static_cast<int>(unregister_err),
                     static_cast<unsigned long>(kPpaReinitRetryMs));
       return;
@@ -210,7 +211,7 @@ void reset_ppa_client() {
   if (reg_err != ESP_OK || !fresh) {
     g_ppa_reinit_at_ms = millis() + kPpaReinitRetryMs;
     if (!g_ppa_reinit_at_ms) g_ppa_reinit_at_ms = 1;
-    Serial.printf("[Device/WaveshareTouchLCD10] PPA reset failed err=%d (int free=%u KB, largest=%u KB), retry in %lu ms\n",
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] PPA reset failed err=%d (int free=%u KB, largest=%u KB), retry in %lu ms\n",
                   static_cast<int>(reg_err),
                   static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
                   static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024),
@@ -232,12 +233,12 @@ void reset_ppa_client() {
   if (!g_ppa_async_ready) {
     g_ppa_reinit_at_ms = millis() + kPpaReinitRetryMs;
     if (!g_ppa_reinit_at_ms) g_ppa_reinit_at_ms = 1;
-    Serial.println("[Device/WaveshareTouchLCD10] PPA timeout callback unavailable, retrying client reset");
+    Serial.println("[Device/Elecrow CrowPanel 10.1] PPA timeout callback unavailable, retrying client reset");
     return;
   }
   g_ppa_reinit_at_ms = 0;
   g_ppa_reset_pending = false;
-  Serial.println("[Device/WaveshareTouchLCD10] PPA client reset after fault");
+  Serial.println("[Device/Elecrow CrowPanel 10.1] PPA client reset after fault");
 }
 
 // Called when a PPA rotate stalls or is rejected. The first stray fault only cools
@@ -267,7 +268,7 @@ void wait_transfer_done(size_t pixels) {
 
   const TickType_t timeout = pdMS_TO_TICKS(pixels >= 32768 ? 250 : 50);
   if (xSemaphoreTake(g_transfer_done, timeout) != pdTRUE) {
-    Serial.printf("[Device/WaveshareTouchLCD10] draw transfer timeout (%u px)\n",
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] draw transfer timeout (%u px)\n",
                   static_cast<unsigned>(pixels));
   }
 }
@@ -286,7 +287,7 @@ void wait_refresh_done() {
   }
 
   if (xSemaphoreTake(g_refresh_done, pdMS_TO_TICKS(50)) != pdTRUE) {
-    Serial.println("[Device/WaveshareTouchLCD10] refresh timeout");
+    Serial.println("[Device/Elecrow CrowPanel 10.1] refresh timeout");
   }
 }
 
@@ -328,7 +329,7 @@ bool ensure_rotate_buffer(size_t pixels) {
         heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA));
   }
   if (!g_rotate_buf) {
-    Serial.printf("[Device/WaveshareTouchLCD10] Rotate buffer allocation failed (%u bytes)\n",
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] Rotate buffer allocation failed (%u bytes)\n",
                   static_cast<unsigned>(bytes));
     return false;
   }
@@ -345,7 +346,7 @@ bool draw_physical(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t* d
   const int32_t panel_w = display_cfg.width;
   const int32_t panel_h = display_cfg.height;
   if (x < 0 || y < 0 || (x + w) > panel_w || (y + h) > panel_h) {
-    Serial.printf("[Device/WaveshareTouchLCD10] Reject out-of-range draw x=%ld y=%ld w=%ld h=%ld\n",
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] Reject out-of-range draw x=%ld y=%ld w=%ld h=%ld\n",
                   static_cast<long>(x), static_cast<long>(y),
                   static_cast<long>(w), static_cast<long>(h));
     return false;
@@ -355,7 +356,7 @@ bool draw_physical(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t* d
   flush_cache_for_dma(data, static_cast<size_t>(w) * static_cast<size_t>(h) * sizeof(uint16_t));
   const esp_err_t err = esp_lcd_panel_draw_bitmap(g_panel, x, y, x + w, y + h, data);
   if (err != ESP_OK) {
-    Serial.printf("[Device/WaveshareTouchLCD10] draw_bitmap failed: %d\n", static_cast<int>(err));
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] draw_bitmap failed: %d\n", static_cast<int>(err));
     return false;
   }
   wait_transfer_done(static_cast<size_t>(w) * static_cast<size_t>(h));
@@ -486,7 +487,7 @@ bool init_panel_framebuffer() {
                                                            kPanelFrameBufferCount,
                                                            &fb0, &fb1);
   if (err != ESP_OK || !fb0 || !fb1) {
-    Serial.printf("[Device/WaveshareTouchLCD10] Panel framebuffers unavailable err=%d fb0=%p fb1=%p\n",
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] Panel framebuffers unavailable err=%d fb0=%p fb1=%p\n",
                   static_cast<int>(err), fb0, fb1);
     g_panel_fb_ready = false;
     return false;
@@ -497,21 +498,21 @@ bool init_panel_framebuffer() {
   const p4_dsi_camera_presenter::Config presenter_config{
       display_cfg.width,
       display_cfg.height,
-      p4_dsi_camera_presenter::Transform::Portrait90Or270,
+      p4_dsi_camera_presenter::Transform::Native0Or180,
       kPpaRotateTimeoutMs,
       kPpaPreviewGraceMs,
-      "WaveshareTouchLCD10",
+      "ElecrowCrowPanel10",
   };
   g_panel_fb_ready = g_camera_presenter.init(
       presenter_config, g_panel, g_refresh_done, g_panel_fbs[0],
       g_panel_fbs[1]);
   if (!g_panel_fb_ready) {
     Serial.println(
-        "[Device/WaveshareTouchLCD10] Shared camera presenter init failed");
+        "[Device/Elecrow CrowPanel 10.1] Shared camera presenter init failed");
     return false;
   }
   reset_dirty_rect();
-  Serial.printf("[Device/WaveshareTouchLCD10] Panel framebuffers OK fb0=%p fb1=%p\n",
+  Serial.printf("[Device/Elecrow CrowPanel 10.1] Panel framebuffers OK fb0=%p fb1=%p\n",
                 fb0, fb1);
   return true;
 }
@@ -524,7 +525,7 @@ bool write_physical_to_panel(int32_t x, int32_t y, int32_t w, int32_t h, const u
   const int32_t panel_w = display_cfg.width;
   const int32_t panel_h = display_cfg.height;
   if (x < 0 || y < 0 || (x + w) > panel_w || (y + h) > panel_h) {
-    Serial.printf("[Device/WaveshareTouchLCD10] Reject out-of-range framebuffer draw x=%ld y=%ld w=%ld h=%ld\n",
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] Reject out-of-range framebuffer draw x=%ld y=%ld w=%ld h=%ld\n",
                   static_cast<long>(x), static_cast<long>(y),
                   static_cast<long>(w), static_cast<long>(h));
     return false;
@@ -546,26 +547,28 @@ bool draw_landscape_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint1
     return false;
   }
 
-  const int32_t logical_w = display_cfg.height;
-  const int32_t logical_h = display_cfg.width;
+  const int32_t logical_w = display_cfg.width;
+  const int32_t logical_h = display_cfg.height;
   if (x < 0 || y < 0 || (x + w) > logical_w || (y + h) > logical_h) {
-    Serial.printf("[Device/WaveshareTouchLCD10] Reject out-of-range landscape draw x=%ld y=%ld w=%ld h=%ld\n",
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] Reject out-of-range landscape draw x=%ld y=%ld w=%ld h=%ld\n",
                   static_cast<long>(x), static_cast<long>(y),
                   static_cast<long>(w), static_cast<long>(h));
     return false;
   }
 
-  int32_t dst_x = 0;
-  int32_t dst_y = 0;
-  const int32_t dst_w = h;
-  const int32_t dst_h = w;
-  if (g_rotation & 0x02) {
-    dst_x = y;
-    dst_y = logical_w - x - w;
-  } else {
-    dst_x = logical_h - y - h;
-    dst_y = x;
+  // This panel is natively landscape. The default orientation therefore needs
+  // no rotate buffer and can be copied straight into the DPI framebuffer.
+  if (!(g_rotation & 0x02)) {
+    if (write_physical_to_panel(x, y, w, h, data)) {
+      return true;
+    }
+    return draw_physical(x, y, w, h, data);
   }
+
+  const int32_t dst_x = logical_w - x - w;
+  const int32_t dst_y = logical_h - y - h;
+  const int32_t dst_w = w;
+  const int32_t dst_h = h;
 
   if (g_ppa_reinit_at_ms &&
       static_cast<int32_t>(millis() - g_ppa_reinit_at_ms) >= 0) {
@@ -597,8 +600,7 @@ bool draw_landscape_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint1
       oper.out.block_offset_y = dst_y;
       oper.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
 
-      oper.rotation_angle = (g_rotation & 0x02) ? PPA_SRM_ROTATION_ANGLE_90
-                                                : PPA_SRM_ROTATION_ANGLE_270;
+      oper.rotation_angle = PPA_SRM_ROTATION_ANGLE_180;
       oper.scale_x = 1.0f;
       oper.scale_y = 1.0f;
       oper.rgb_swap = false;
@@ -624,11 +626,11 @@ bool draw_landscape_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint1
           } else {
             dma2d_guard.detach();
             p4_dsi_camera_presenter::restartAfterPpaTimeout(
-                "WaveshareTouchLCD10", "LVGL PPA rotation", x, y, w, h, w,
+                "ElecrowCrowPanel10", "LVGL PPA rotation", x, y, w, h, w,
                 g_rotation, kPpaRotateTimeoutMs + kPpaPreviewGraceMs);
           }
         } else {
-          Serial.printf("[Device/WaveshareTouchLCD10] PPA rotate submit failed err=%d -> CPU cooldown\n",
+          Serial.printf("[Device/Elecrow CrowPanel 10.1] PPA rotate submit failed err=%d -> CPU cooldown\n",
                         static_cast<int>(err));
           note_ppa_fault();
         }
@@ -638,7 +640,7 @@ bool draw_landscape_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint1
         if (!g_camera_presenter.noteUiWrite(
                 dst_x, dst_y, dst_w, dst_h, true)) {
           Serial.println(
-              "[Device/WaveshareTouchLCD10] UI framebuffer cache sync failed");
+              "[Device/Elecrow CrowPanel 10.1] UI framebuffer cache sync failed");
           return false;
         }
         mark_dirty_rect(dst_x, dst_y, dst_w, dst_h);
@@ -647,37 +649,17 @@ bool draw_landscape_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint1
     }
   }
 
-  // Small regions: rotate straight into the panel framebuffer
-  // (p4_dsi_cpu_rotate.h) instead of through the PSRAM rotate buffer.
-  if (g_panel_fb_ready) {
-    if (uint16_t* fb = panel_fb()) {
-      p4_dsi_cpu_rotate::rotate_into(fb, display_cfg.width, dst_x, dst_y, w, h,
-                                     data, (g_rotation & 0x02) != 0);
-      flush_framebuffer_rect(fb, dst_x, dst_y, dst_w, dst_h);
-      mark_dirty_rect(dst_x, dst_y, dst_w, dst_h);
-      g_camera_presenter.noteUiWrite(dst_x, dst_y, dst_w, dst_h, false);
-      return true;
-    }
-  }
-
   const size_t pixel_count = static_cast<size_t>(w) * static_cast<size_t>(h);
   if (!ensure_rotate_buffer(pixel_count)) {
     return false;
   }
 
-  if (g_rotation & 0x02) {
-    for (int32_t sy = 0; sy < h; ++sy) {
-      const uint16_t* src_row = data + static_cast<size_t>(sy) * w;
-      for (int32_t sx = 0; sx < w; ++sx) {
-        g_rotate_buf[static_cast<size_t>(w - 1 - sx) * h + sy] = src_row[sx];
-      }
-    }
-  } else {
-    for (int32_t sy = 0; sy < h; ++sy) {
-      const uint16_t* src_row = data + static_cast<size_t>(sy) * w;
-      for (int32_t sx = 0; sx < w; ++sx) {
-        g_rotate_buf[static_cast<size_t>(sx) * h + (h - 1 - sy)] = src_row[sx];
-      }
+  for (int32_t sy = 0; sy < h; ++sy) {
+    const uint16_t* src_row = data + static_cast<size_t>(sy) * w;
+    uint16_t* dst_row =
+        g_rotate_buf + static_cast<size_t>(h - 1 - sy) * static_cast<size_t>(w);
+    for (int32_t sx = 0; sx < w; ++sx) {
+      dst_row[w - 1 - sx] = src_row[sx];
     }
   }
 
@@ -743,7 +725,7 @@ bool init_backlight() {
   timer_cfg.freq_hz = kBacklightFreq;
   timer_cfg.clk_cfg = LEDC_AUTO_CLK;
   if (ledc_timer_config(&timer_cfg) != ESP_OK) {
-    Serial.println("[Device/WaveshareTouchLCD10] Backlight timer init failed");
+    Serial.println("[Device/Elecrow CrowPanel 10.1] Backlight timer init failed");
     return false;
   }
 
@@ -755,7 +737,7 @@ bool init_backlight() {
   ch_cfg.duty = kBacklightActiveLow ? ((1u << 10) - 1u) : 0;
   ch_cfg.hpoint = 0;
   if (ledc_channel_config(&ch_cfg) != ESP_OK) {
-    Serial.println("[Device/WaveshareTouchLCD10] Backlight channel init failed");
+    Serial.println("[Device/Elecrow CrowPanel 10.1] Backlight channel init failed");
     return false;
   }
 
@@ -771,26 +753,10 @@ bool init_i2c() {
 
   g_i2c = DEV_I2C_Init();
   if (!g_i2c.bus) {
-    Serial.println("[Device/WaveshareTouchLCD10] I2C init failed");
+    Serial.println("[Device/Elecrow CrowPanel 10.1] I2C init failed");
     return false;
   }
   g_i2c_ready = true;
-  return true;
-}
-
-bool init_pmic() {
-  if (g_pmic_ready) {
-    return true;
-  }
-
-  // The standalone 8-DSI-TOUCH-A panel wiki documents I2C addr 0x45 for
-  // backlight control when paired with an ESP32-P4-NANO carrier.
-  // The integrated ESP32-P4-WIFI6-Touch-LCD-X BSP instead exposes a dedicated
-  // backlight GPIO (GPIO26) and shares I2C with touch/audio devices.
-  // Probing 0x45 on this board only adds noise and can send us down the wrong
-  // hardware path, so keep PMIC init as a no-op here unless Waveshare publish
-  // board-specific proof that the WIFI6 8" variant really needs it.
-  g_pmic_ready = true;
   return true;
 }
 
@@ -800,13 +766,13 @@ bool init_mipi_phy_power() {
   }
 
   esp_ldo_channel_config_t ldo_cfg = {};
-  ldo_cfg.chan_id = 3;
-  ldo_cfg.voltage_mv = 2500;
+  ldo_cfg.chan_id = kMipiPhyLdoChannel;
+  ldo_cfg.voltage_mv = kMipiPhyLdoVoltageMv;
 
   log_step("MIPI PHY LDO init start");
   const esp_err_t err = esp_ldo_acquire_channel(&ldo_cfg, &g_mipi_phy_ldo);
   if (err != ESP_OK) {
-    Serial.printf("[Device/WaveshareTouchLCD10] MIPI PHY LDO init failed err=%d\n",
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] MIPI PHY LDO init failed err=%d\n",
                   static_cast<int>(err));
     return false;
   }
@@ -818,9 +784,6 @@ bool init_display() {
   if (g_panel) {
     return true;
   }
-  if (!init_pmic()) {
-    return false;
-  }
   if (!init_mipi_phy_power()) {
     return false;
   }
@@ -829,7 +792,7 @@ bool init_display() {
   g_transfer_done = xSemaphoreCreateBinary();
   g_refresh_done = xSemaphoreCreateBinary();
   if (!g_transfer_done || !g_refresh_done) {
-    Serial.println("[Device/WaveshareTouchLCD10] Transfer semaphore allocation failed");
+    Serial.println("[Device/Elecrow CrowPanel 10.1] Transfer semaphore allocation failed");
     return false;
   }
   log_step("Transfer semaphore OK");
@@ -837,22 +800,13 @@ bool init_display() {
   esp_lcd_dsi_bus_config_t bus_cfg = {};
   bus_cfg.bus_id = 0;
   bus_cfg.num_data_lanes = kPanelLaneCount;
-#if CONFIG_ESP_REV_MIN_FULL >= 300
-  // ESP32-P4 v3.x builds ("v3.00 or newer") accept XTAL/APLL/CPLL/SPLL/MPLL
-  // only; PLL_F20M aborts in the low-level MIPI DSI clock-source switch.
-  bus_cfg.phy_clk_src = MIPI_DSI_PHY_PLLREF_CLK_SRC_DEFAULT;
-#else
-  // Pre-v3 builds ("Before v3.00") accept PLL_F20M/RC_FAST/PLL_F25M only;
-  // XTAL/default aborts in the low-level MIPI DSI clock-source switch.
-  bus_cfg.phy_clk_src = MIPI_DSI_PHY_PLLREF_CLK_SRC_PLL_F20M;
-#endif
   bus_cfg.lane_bit_rate_mbps = static_cast<float>(display_cfg.lane_bit_rate);
-  Serial.printf("[Device/WaveshareTouchLCD10] DSI bus init start lane=%u Mbps\n",
+  Serial.printf("[Device/Elecrow CrowPanel 10.1] DSI bus init start lane=%u Mbps\n",
                 static_cast<unsigned>(display_cfg.lane_bit_rate));
   Serial.flush();
   esp_err_t err = esp_lcd_new_dsi_bus(&bus_cfg, &g_dsi_bus);
   if (err != ESP_OK) {
-    Serial.printf("[Device/WaveshareTouchLCD10] DSI bus init failed err=%d\n", static_cast<int>(err));
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] DSI bus init failed err=%d\n", static_cast<int>(err));
     return false;
   }
   log_step("DSI bus init OK");
@@ -864,7 +818,7 @@ bool init_display() {
   log_step("DSI DBI IO init start");
   err = esp_lcd_new_panel_io_dbi(g_dsi_bus, &dbi_cfg, &g_panel_io);
   if (err != ESP_OK) {
-    Serial.printf("[Device/WaveshareTouchLCD10] DSI DBI IO init failed err=%d\n", static_cast<int>(err));
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] DSI DBI IO init failed err=%d\n", static_cast<int>(err));
     return false;
   }
   log_step("DSI DBI IO init OK");
@@ -889,10 +843,9 @@ bool init_display() {
   // reserved for atomic camera and full-frame preview swaps.
   dpi_cfg.flags.use_dma2d = true;
 
-  jd9365_vendor_config_t vendor_cfg = {};
-  vendor_cfg.init_cmds = kWaveshareJd9365Init10_1;
-  vendor_cfg.init_cmds_size =
-      static_cast<uint16_t>(kWaveshareJd9365Init10_1Count);
+  ek79007_vendor_config_t vendor_cfg = {};
+  vendor_cfg.init_cmds = nullptr;
+  vendor_cfg.init_cmds_size = 0;
   vendor_cfg.mipi_config.dsi_bus = g_dsi_bus;
   vendor_cfg.mipi_config.dpi_config = &dpi_cfg;
   vendor_cfg.mipi_config.lane_num = kPanelLaneCount;
@@ -905,14 +858,13 @@ bool init_display() {
   panel_cfg.flags.reset_active_high = false;
   panel_cfg.vendor_config = &vendor_cfg;
 
-  log_step("JD9365 panel create start");
-  err = esp_lcd_new_panel_jd9365_10_1(g_panel_io, &panel_cfg, &g_panel);
+  log_step("EK79007 panel create start");
+  err = esp_lcd_new_panel_ek79007(g_panel_io, &panel_cfg, &g_panel);
   if (err != ESP_OK) {
-    Serial.printf("[Device/WaveshareTouchLCD10] Panel create failed err=%d\n",
-                  static_cast<int>(err));
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] EK79007 panel create failed err=%d\n", static_cast<int>(err));
     return false;
   }
-  log_step("Panel create OK");
+  log_step("EK79007 panel create OK");
 
   if (init_panel_framebuffer()) {
     clear_panel_framebuffer(0x0000);
@@ -924,7 +876,7 @@ bool init_display() {
   log_step("DPI callback register start");
   err = esp_lcd_dpi_panel_register_event_callbacks(g_panel, &cbs, g_transfer_done);
   if (err != ESP_OK) {
-    Serial.printf("[Device/WaveshareTouchLCD10] DPI callback register failed err=%d\n", static_cast<int>(err));
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] DPI callback register failed err=%d\n", static_cast<int>(err));
     return false;
   }
   log_step("DPI callback register OK");
@@ -932,7 +884,7 @@ bool init_display() {
   log_step("Panel reset start");
   err = esp_lcd_panel_reset(g_panel);
   if (err != ESP_OK) {
-    Serial.printf("[Device/WaveshareTouchLCD10] Panel reset failed err=%d\n", static_cast<int>(err));
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] Panel reset failed err=%d\n", static_cast<int>(err));
     return false;
   }
   log_step("Panel reset OK");
@@ -940,24 +892,16 @@ bool init_display() {
   log_step("Panel init start");
   err = esp_lcd_panel_init(g_panel);
   if (err != ESP_OK) {
-    Serial.printf("[Device/WaveshareTouchLCD10] Panel init failed err=%d\n", static_cast<int>(err));
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] Panel init failed err=%d\n", static_cast<int>(err));
     return false;
   }
   log_step("Panel init OK");
-
-  log_step("Panel display on start");
-  err = esp_lcd_panel_disp_on_off(g_panel, true);
-  if (err != ESP_OK) {
-    Serial.printf("[Device/WaveshareTouchLCD10] Panel display on failed err=%d\n", static_cast<int>(err));
-    return false;
-  }
-  log_step("Panel display on OK");
 
   ppa_client_config_t ppa_cfg = {};
   ppa_cfg.oper_type = PPA_OPERATION_SRM;
   const esp_err_t ppa_err = ppa_register_client(&ppa_cfg, &g_ppa_handle);
   if (ppa_err != ESP_OK) {
-    Serial.printf("[Device/WaveshareTouchLCD10] PPA client register failed err=%d, falling back to CPU rotate\n",
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] PPA client register failed err=%d, falling back to CPU rotate\n",
                   static_cast<int>(ppa_err));
     g_ppa_handle = nullptr;
     g_ppa_reset_pending = true;
@@ -977,7 +921,7 @@ bool init_display() {
         g_ppa_async_ready = true;
         log_step("PPA timeout-safe mode ready");
       } else {
-        Serial.println("[Device/WaveshareTouchLCD10] PPA event cb register failed, retrying safely");
+        Serial.println("[Device/Elecrow CrowPanel 10.1] PPA event cb register failed, retrying safely");
       }
     }
     if (!g_ppa_async_ready) {
@@ -1003,13 +947,13 @@ bool init_touch() {
     if (g_touch) {
       return true;
     }
-    Serial.printf("[Device/WaveshareTouchLCD10] Touch init attempt %u failed\n",
+    Serial.printf("[Device/Elecrow CrowPanel 10.1] Touch init attempt %u failed\n",
                   static_cast<unsigned>(attempt));
     delay(150);
   }
 
   if (!g_touch) {
-    Serial.println("[Device/WaveshareTouchLCD10] Touch init failed");
+    Serial.println("[Device/Elecrow CrowPanel 10.1] Touch init failed");
     return false;
   }
 
@@ -1022,13 +966,49 @@ void ensure_storage_layout() {
   }
   LittleFS.mkdir("/_tile_grids");
   LittleFS.mkdir("/_tile_links");
-  LittleFS.mkdir("/icons");
+}
+
+// The turned layout (grid_layout::turned(), user 2026-10-11): the UI shown
+// upright, a quarter turned against this panel. The same quarter turn as the
+// panels upright by themselves (the V2's landscape UI, p4_dsi_ui_ppa and
+// p4_dsi_cpu_rotate), the other way round, so DisplayManager's shared touch
+// turn maps this panel's points onto it: UI (x, y) at panel (y, h - 1 - x),
+// with 180 the mirrored place.
+bool g_turned = false;
+p4_dsi_ui_ppa::Client g_turn_ppa("ElecrowCrowPanel10");
+bool g_turn_ppa_started = false;
+
+uint8_t turn_rotation() { return g_rotation ^ 0x02; }
+// The camera popup's frames turn with the UI.
+uint8_t frame_rotation() { return g_turned ? turn_rotation() : g_rotation; }
+
+bool draw_turned_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t* data) {
+  if (!data || w <= 0 || h <= 0) return false;
+  const uint8_t turn = turn_rotation();
+  const int32_t panel_w = static_cast<int32_t>(display_cfg.width);
+  const int32_t panel_h = static_cast<int32_t>(display_cfg.height);
+  const int32_t dst_x = (turn & 0x02) ? y : panel_w - y - h;
+  const int32_t dst_y = (turn & 0x02) ? panel_h - x - w : x;
+  const auto ppa_result = g_turn_ppa.rotate(g_camera_presenter, panel_w, panel_h, x, y, w, h, data, turn);
+  if (ppa_result == p4_dsi_ui_ppa::Result::Drawn) {
+    mark_dirty_rect(dst_x, dst_y, h, w);
+    return true;
+  }
+  if (ppa_result == p4_dsi_ui_ppa::Result::Failed) return false;
+  // Small regions: the CPU turn straight into the panel framebuffer.
+  uint16_t* fb = panel_fb();
+  if (!fb) return false;
+  p4_dsi_cpu_rotate::rotate_into(fb, panel_w, dst_x, dst_y, w, h, data, (turn & 0x02) != 0);
+  flush_framebuffer_rect(fb, dst_x, dst_y, h, w);
+  mark_dirty_rect(dst_x, dst_y, h, w);
+  g_camera_presenter.noteUiWrite(dst_x, dst_y, h, w, false);
+  return true;
 }
 
 }  // namespace
 
 bool DeviceElecrowCrowPanel10::init() {
-  Serial.println("[Device/WaveshareTouchLCD10] Initialising board...");
+  Serial.println("[Device/Elecrow CrowPanel 10.1] Initialising board...");
 
   if (!init_backlight()) {
     return false;
@@ -1038,12 +1018,12 @@ bool DeviceElecrowCrowPanel10::init() {
   if (!init_display()) {
     return false;
   }
-  Serial.println("[Device/WaveshareTouchLCD10] Display OK");
+  Serial.println("[Device/Elecrow CrowPanel 10.1] Display OK");
 
   if (!init_touch()) {
-    Serial.println("[Device/WaveshareTouchLCD10] Touch init failed, continuing without touch");
+    Serial.println("[Device/Elecrow CrowPanel 10.1] Touch init failed, continuing without touch");
   } else {
-    Serial.println("[Device/WaveshareTouchLCD10] Touch OK");
+    Serial.println("[Device/Elecrow CrowPanel 10.1] Touch OK");
   }
 
   // Keep the boot path dark until HomeTiles has rendered the first complete
@@ -1056,7 +1036,7 @@ bool DeviceElecrowCrowPanel10::init() {
   delay(kBootBlackGapMs);
   displayFillScreen(0x0000);
   apply_backlight(0);
-  Serial.println("[Device/WaveshareTouchLCD10] Init complete");
+  Serial.println("[Device/Elecrow CrowPanel 10.1] Init complete");
   return true;
 }
 
@@ -1073,9 +1053,8 @@ bool DeviceElecrowCrowPanel10::ppaCooldownActive() {
 
 void DeviceElecrowCrowPanel10::displayPushPixels(int32_t x, int32_t y, int32_t w, int32_t h,
                                                  const uint16_t* data) {
-  // The upright layout: straight into the panel (the shared way).
-  if (g_camera_presenter.upright()) {
-    g_camera_presenter.drawUpright(x, y, w, h, data, g_rotation);
+  if (g_turned) {
+    draw_turned_area(x, y, w, h, data);
     return;
   }
   draw_landscape_area(x, y, w, h, data);
@@ -1083,7 +1062,11 @@ void DeviceElecrowCrowPanel10::displayPushPixels(int32_t x, int32_t y, int32_t w
 
 void DeviceElecrowCrowPanel10::displayPushPixelsDMA(int32_t x, int32_t y, int32_t w, int32_t h,
                                                     const uint16_t* data) {
-  displayPushPixels(x, y, w, h, data);
+  if (g_turned) {
+    draw_turned_area(x, y, w, h, data);
+    return;
+  }
+  draw_landscape_area(x, y, w, h, data);
 }
 
 bool DeviceElecrowCrowPanel10::displayTryFullFramePreview(
@@ -1100,7 +1083,7 @@ bool DeviceElecrowCrowPanel10::displayTryFullFramePreview(
       nullptr,
   };
   const bool presented = g_camera_presenter.present(
-      x, y, w, h, source_stride, data, data_size, byte_swap, g_rotation,
+      x, y, w, h, source_stride, data, data_size, byte_swap, frame_rotation(),
       runtime);
   if (presented) g_ppa_consecutive_faults = 0;
   return presented;
@@ -1113,7 +1096,7 @@ void DeviceElecrowCrowPanel10::displayEndFullFramePreview() {
 bool DeviceElecrowCrowPanel10::displayFullFrameInfo(uint16_t& width, uint16_t& height,
                                                      uint16_t& turn_cw) {
   return g_panel_fb_ready &&
-         g_camera_presenter.fullFrameInfo(g_rotation, width, height, turn_cw);
+         g_camera_presenter.fullFrameInfo(frame_rotation(), width, height, turn_cw);
 }
 
 bool DeviceElecrowCrowPanel10::displayBeginFullFrames() {
@@ -1189,7 +1172,12 @@ void DeviceElecrowCrowPanel10::displaySetRotation(uint8_t rotation) {
 }
 
 void DeviceElecrowCrowPanel10::displaySetUpright(bool upright) {
-  // The UI and the camera popup's frames without the quarter turn.
+  // The turned layout: the UI and the camera popup's frames a quarter turned.
+  g_turned = upright;
+  if (upright && !g_turn_ppa_started) {
+    g_turn_ppa_started = true;
+    g_turn_ppa.init();
+  }
   g_camera_presenter.setUpright(upright);
 }
 
@@ -1253,11 +1241,11 @@ bool DeviceElecrowCrowPanel10::getTouch(int16_t& x, int16_t& y) {
       int32_t candidate_x = 0;
       int32_t candidate_y = 0;
       if (g_rotation & 0x02) {
-        candidate_x = static_cast<int32_t>(display_cfg.height) - 1 - static_cast<int32_t>(py[i]);
-        candidate_y = static_cast<int32_t>(px[i]);
+        candidate_x = static_cast<int32_t>(display_cfg.width) - 1 - static_cast<int32_t>(px[i]);
+        candidate_y = static_cast<int32_t>(display_cfg.height) - 1 - static_cast<int32_t>(py[i]);
       } else {
-        candidate_x = static_cast<int32_t>(py[i]);
-        candidate_y = static_cast<int32_t>(display_cfg.width) - 1 - static_cast<int32_t>(px[i]);
+        candidate_x = static_cast<int32_t>(px[i]);
+        candidate_y = static_cast<int32_t>(py[i]);
       }
       const int32_t dx = candidate_x - g_touch_stable_x;
       const int32_t dy = candidate_y - g_touch_stable_y;
@@ -1286,20 +1274,28 @@ bool DeviceElecrowCrowPanel10::getTouch(int16_t& x, int16_t& y) {
   int32_t mapped_y = 0;
 
   if (g_rotation & 0x02) {
-    mapped_x = static_cast<int32_t>(display_cfg.height) - 1 - static_cast<int32_t>(py[selected]);
-    mapped_y = static_cast<int32_t>(px[selected]);
+    mapped_x = static_cast<int32_t>(display_cfg.width) - 1 - static_cast<int32_t>(px[selected]);
+    mapped_y = static_cast<int32_t>(display_cfg.height) - 1 - static_cast<int32_t>(py[selected]);
   } else {
-    mapped_x = static_cast<int32_t>(py[selected]);
-    mapped_y = static_cast<int32_t>(display_cfg.width) - 1 - static_cast<int32_t>(px[selected]);
+    mapped_x = static_cast<int32_t>(px[selected]);
+    mapped_y = static_cast<int32_t>(py[selected]);
   }
 
-  const int32_t logical_w = static_cast<int32_t>(display_cfg.height);
-  const int32_t logical_h = static_cast<int32_t>(display_cfg.width);
+  const int32_t logical_w = static_cast<int32_t>(display_cfg.width);
+  const int32_t logical_h = static_cast<int32_t>(display_cfg.height);
 
   if (mapped_x < 0) mapped_x = 0;
   if (mapped_y < 0) mapped_y = 0;
   if (mapped_x >= logical_w) mapped_x = logical_w - 1;
   if (mapped_y >= logical_h) mapped_y = logical_h - 1;
+
+  if (mapped_x >= static_cast<int32_t>(kProfile.screen_width) ||
+      mapped_y >= static_cast<int32_t>(kProfile.screen_height)) {
+    g_touch_active = false;
+    g_touch_release_reads = 0;
+    g_touch_active_track_id = kInvalidTouchTrackId;
+    return false;
+  }
 
   if (!g_touch_active) {
     g_touch_stable_x = mapped_x;
@@ -1314,7 +1310,7 @@ bool DeviceElecrowCrowPanel10::getTouch(int16_t& x, int16_t& y) {
     if (adx <= kTouchJitterThresholdPx && ady <= kTouchJitterThresholdPx) {
       // Ignore tiny GT9xx wobble so taps feel more deterministic.
     } else {
-      // GT9271 already applies its own controller-side debounce/filtering.
+      // GT911 already applies its own controller-side debounce/filtering.
       // Keep the software path direct so the UI does not feel delayed.
       g_touch_stable_x = mapped_x;
       g_touch_stable_y = mapped_y;
@@ -1327,23 +1323,16 @@ bool DeviceElecrowCrowPanel10::getTouch(int16_t& x, int16_t& y) {
 }
 
 void DeviceElecrowCrowPanel10::displaySleep() {
-  if (g_panel) {
-    esp_lcd_panel_disp_on_off(g_panel, false);
-  }
+  // The EK79007 panel driver has no display-on/off operation. Elecrow's
+  // board support package controls sleep and wake through the backlight.
   apply_backlight(0);
 }
 
 void DeviceElecrowCrowPanel10::displayWake() {
-  if (g_panel) {
-    esp_lcd_panel_disp_on_off(g_panel, true);
-  }
   apply_backlight(g_brightness);
 }
 
 void DeviceElecrowCrowPanel10::displayWakeDark() {
-  if (g_panel) {
-    esp_lcd_panel_disp_on_off(g_panel, true);
-  }
   apply_backlight(0);
 }
 
@@ -1361,7 +1350,6 @@ void DeviceElecrowCrowPanel10::displayWaitDisplay() {
 void DeviceElecrowCrowPanel10::prepareForRestart() {
   if (g_panel) {
     displayFillScreen(0x0000);
-    esp_lcd_panel_disp_on_off(g_panel, false);
   }
 
   hold_panel_reset_low();
@@ -1376,7 +1364,7 @@ i2c_master_bus_handle_t DeviceElecrowCrowPanel10::sharedI2cBus() {
 }
 
 bool DeviceElecrowCrowPanel10::initSDCard() {
-  if (g_sd_available && WaveshareSDMMC.cardType() != CARD_NONE) {
+  if (g_sd_available && ElecrowSDMMC.cardType() != CARD_NONE) {
     return true;
   }
 
@@ -1387,26 +1375,27 @@ bool DeviceElecrowCrowPanel10::initSDCard() {
   g_sd_init_attempted = true;
   g_sd_retry_tick_ms = now;
 
-  WaveshareSDMMC.end();
+  ElecrowSDMMC.end();
 
-  if (!WaveshareSDMMC.begin("/sdcard", false, SDMMC_FREQ_DEFAULT, 5)) {
+  if (!ElecrowSDMMC.begin("/sdcard", false, 10000, 5)) {
     g_sd_available = false;
-    Serial.println("[Device/WaveshareTouchLCD10] SD card mount failed");
+    Serial.println("[Device/Elecrow CrowPanel 10.1] SD card mount failed at 10 MHz");
     return false;
   }
 
-  const uint8_t card_type = WaveshareSDMMC.cardType();
+  const sdcard_type_t card_type = ElecrowSDMMC.cardType();
   if (card_type == CARD_NONE) {
     g_sd_available = false;
-    Serial.println("[Device/WaveshareTouchLCD10] SD card absent after mount");
-    WaveshareSDMMC.end();
+    Serial.println("[Device/Elecrow CrowPanel 10.1] SD card absent after mount");
+    ElecrowSDMMC.end();
     return false;
   }
 
   g_sd_available = true;
-  Serial.printf("[Device/WaveshareTouchLCD10] SD card OK, type=%u, size=%llu MB\n",
+  Serial.printf("[Device/Elecrow CrowPanel 10.1] SD card OK, type=%u, size=%llu MB, freq=10000 kHz\n",
                 static_cast<unsigned>(card_type),
-                static_cast<unsigned long long>(WaveshareSDMMC.cardSize() / (1024ULL * 1024ULL)));
+                static_cast<unsigned long long>(ElecrowSDMMC.cardSize() /
+                                                (1024ULL * 1024ULL)));
   return true;
 }
 
@@ -1423,18 +1412,18 @@ bool DeviceElecrowCrowPanel10::sdReady() {
 }
 
 fs::FS& DeviceElecrowCrowPanel10::sdFS() {
-  return WaveshareSDMMC;
+  return ElecrowSDMMC;
 }
 
 bool DeviceElecrowCrowPanel10::suspendSDCardForNetworkTransition() {
   const bool was_mounted =
-      g_sd_available && WaveshareSDMMC.cardType() != CARD_NONE;
+      g_sd_available && ElecrowSDMMC.cardType() != CARD_NONE;
   if (!was_mounted) return false;
 
-  WaveshareSDMMC.end();
+  ElecrowSDMMC.end();
   g_sd_available = false;
   g_sd_init_attempted = false;
-  Serial.println("[Device/WaveshareTouchLCD10] SD card suspended for network transition");
+  Serial.println("[Device/Elecrow CrowPanel 10.1] SD card suspended for network transition");
   return true;
 }
 
@@ -1442,7 +1431,7 @@ bool DeviceElecrowCrowPanel10::resumeSDCardAfterNetworkTransition() {
   g_sd_available = false;
   g_sd_init_attempted = false;
   const bool mounted = initSDCard();
-  Serial.printf("[Device/WaveshareTouchLCD10] SD card remount after network transition: %s\n",
+  Serial.printf("[Device/Elecrow CrowPanel 10.1] SD card remount after network transition: %s\n",
                 mounted ? "OK" : "failed");
   return mounted;
 }
@@ -1452,11 +1441,11 @@ bool DeviceElecrowCrowPanel10::initLittleFS() {
     return true;
   }
   if (!LittleFS.begin(true, "/littlefs", 10, "spiffs")) {
-    Serial.println("[Device/WaveshareTouchLCD10] LittleFS mount failed");
+    Serial.println("[Device/Elecrow CrowPanel 10.1] LittleFS mount failed");
     return false;
   }
   g_littlefs_ready = true;
-  Serial.printf("[Device/WaveshareTouchLCD10] LittleFS ready, total=%u, used=%u\n",
+  Serial.printf("[Device/Elecrow CrowPanel 10.1] LittleFS ready, total=%u, used=%u\n",
                 static_cast<unsigned>(LittleFS.totalBytes()),
                 static_cast<unsigned>(LittleFS.usedBytes()));
   ensure_storage_layout();
@@ -1514,13 +1503,11 @@ void DeviceElecrowCrowPanel10::migrateStorageFromSD() {
 
   LittleFS.mkdir("/_tile_grids");
   LittleFS.mkdir("/_tile_links");
-  LittleFS.mkdir("/icons");
 
   if (initSDCard()) {
     Serial.println("[Storage] Migrating data from SD to LittleFS...");
-    copyDirectory(WaveshareSDMMC, LittleFS, "/_tile_grids");
-    copyDirectory(WaveshareSDMMC, LittleFS, "/_tile_links");
-    copyDirectory(WaveshareSDMMC, LittleFS, "/icons");
+    copyDirectory(ElecrowSDMMC, LittleFS, "/_tile_grids");
+    copyDirectory(ElecrowSDMMC, LittleFS, "/_tile_links");
     Serial.println("[Storage] Migration complete");
   } else {
     Serial.println("[Storage] No SD card, starting fresh");

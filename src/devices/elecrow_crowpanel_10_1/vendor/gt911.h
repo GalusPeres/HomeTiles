@@ -9,7 +9,7 @@
  * @brief ESP LCD touch: GT911
  *
  * This file contains the necessary functions and configurations to interact with
- * the GT911 touch controller via I2C. It provides initialization and touch data 
+ * the GT911 touch controller via I2C. It provides initialization and touch data
  * reading functions.
  */
 #include "touch.h"
@@ -26,8 +26,8 @@
 #define ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS          (0x5D)   // Default I2C address
 #define ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS_BACKUP   (0x14)   // Backup I2C address when interrupt GPIO is high
 
-#define EXAMPLE_PIN_NUM_TOUCH_RST       (GPIO_NUM_NC)
-#define EXAMPLE_PIN_NUM_TOUCH_INT       (GPIO_NUM_NC)
+#define EXAMPLE_PIN_NUM_TOUCH_RST       (GPIO_NUM_40)
+#define EXAMPLE_PIN_NUM_TOUCH_INT       (GPIO_NUM_42)
 
 
 /**
@@ -72,7 +72,7 @@ esp_err_t esp_lcd_touch_new_i2c_gt911(const esp_lcd_panel_io_handle_t io, const 
 /**
  * @brief Initialize the GT911 touch controller
  *
- * This function initializes the GT911 touch controller by configuring the I2C 
+ * This function initializes the GT911 touch controller by configuring the I2C
  * interface and touch settings.
  *
  * @return Touch handle for the initialized controller
@@ -93,7 +93,7 @@ touch_gt911_point_t touch_gt911_read_point(uint8_t max_touch_cnt);
 /**
  * @brief Touch IO configuration structure for GT911
  *
- * This macro initializes the configuration structure for the GT911 touch controller's 
+ * This macro initializes the configuration structure for the GT911 touch controller's
  * I2C interface with specific settings like the device address, SCL frequency, etc.
  */
 #define ESP_LCD_TOUCH_IO_I2C_GT911_CONFIG()           \
@@ -108,4 +108,3 @@ touch_gt911_point_t touch_gt911_read_point(uint8_t max_touch_cnt);
         },                                                \
         .scl_speed_hz = 400 * 1000,     /*!< Set the I2C master clock frequency */  \
     }
-

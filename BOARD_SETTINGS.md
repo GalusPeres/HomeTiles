@@ -267,9 +267,10 @@ Important:
 - Backlight uses GPIO 31 at 30 kHz, active high.
 - LCD reset is GPIO 41.
 - The microSD interface uses 1-bit SDMMC slot 0 on CLK 43, CMD 44, D0 39.
+- The ESP32-C6 Wi-Fi co-processor uses CLK 18, CMD 19, D0 17, D1 16, D2 15,
+  D3 14, reset GPIO32.
 - The profile exposes no configurable local I/O GPIOs.
-- V1.2 boards differ from V1.1 only in LoRa pins and the ESP32-C6 reset pin
-  (GPIO 54). HomeTiles does not use LoRa and does not drive that reset.
+- V1.2 boards differ from V1.1 in LoRa pins. HomeTiles does not use LoRa.
 - Use the repository's `partitions.csv`; HomeTiles needs two 6.5MB OTA slots.
 
 Arduino IDE:

@@ -52,6 +52,9 @@ esp_err_t startOutput();
 esp_err_t setOutputVolumeRegister(uint8_t value);
 esp_err_t setOutputMute(bool mute);
 const char* outputName();
+// Codec-less outputs (Output::I2sAmp): the volume and mute the samples get,
+// in Q15 (32768 = full scale, 0 = muted). Codec boards: always 32768.
+int32_t outputGainQ15();
 
 // Microphone: true when the board has one and it answered. Logs.
 bool probeInput(uint32_t rate, uint8_t gain_step);

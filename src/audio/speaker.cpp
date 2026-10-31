@@ -15,6 +15,7 @@
 #include <NetworkClientSecure.h>
 #include <Preferences.h>
 #include <driver/gpio.h>
+#include <driver/i2s_pdm.h>
 #include <driver/i2s_std.h>
 #include <esp_heap_caps.h>
 #include <freertos/FreeRTOS.h>
@@ -383,6 +384,12 @@ void closeOutput() {
   g_tx_rate = 0;
 }
 
+// A PDM microphone needs I2S0, the P4's only PDM receiver: the output then
+// takes I2S1. Codec boards let the driver pick.
+constexpr bool kPdmInput = speaker_board::kInput == audio_chips::Input::Pdm;
+constexpr i2s_port_t kTxPort = kPdmInput ? I2S_NUM_1 : I2S_NUM_AUTO;
+constexpr i2s_port_t kRxPort = kPdmInput ? I2S_NUM_0 : I2S_NUM_AUTO;
+
 i2s_std_clk_config_t clockConfig(uint32_t rate) {
   i2s_std_clk_config_t clk = I2S_STD_CLK_DEFAULT_CONFIG(rate);
   clk.mclk_multiple = I2S_MCLK_MULTIPLE_256;
@@ -414,7 +421,7 @@ ErrorCode openOutput(uint32_t rate, bool live = false) {
     }
     g_tx_rate = rate;
   } else {
-    i2s_chan_config_t chan = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
+    i2s_chan_config_t chan = I2S_CHANNEL_DEFAULT_CONFIG(kTxPort, I2S_ROLE_MASTER);
     chan.dma_desc_num = live ? kLiveDmaDescriptors : kDmaDescriptors;
     chan.dma_frame_num = live ? kLiveDmaFrames : kDmaFrames;
     // An underrun (flash write, busy core) plays silence, not an old buffer.
@@ -457,6 +464,24 @@ ErrorCode openOutput(uint32_t rate, bool live = false) {
 
 bool writeFrames(const int16_t* samples, size_t frames) {
   size_t written = 0;
+  if constexpr (speaker_board::kOutput == audio_chips::Output::I2sAmp) {
+    // No codec: the volume and mute scale the samples here.
+    const int32_t gain = audio_board::outputGainQ15();
+    int16_t scaled[256];
+    while (frames > 0) {
+      const size_t now = frames < 256 ? frames : 256;
+      for (size_t i = 0; i < now; ++i) {
+        scaled[i] = static_cast<int16_t>((static_cast<int32_t>(samples[i]) * gain) >> 15);
+      }
+      if (i2s_channel_write(g_tx, scaled, now * sizeof(int16_t), &written,
+                            kI2sWriteTimeoutMs) != ESP_OK) {
+        return false;
+      }
+      samples += now;
+      frames -= now;
+    }
+    return true;
+  }
   return i2s_channel_write(g_tx, samples, frames * sizeof(int16_t), &written,
                            kI2sWriteTimeoutMs) == ESP_OK;
 }
@@ -1306,7 +1331,7 @@ bool allocateCaptureBuffers() {
 // and LRCK; an ES7210 sends MIC1/MIC2 as the left/right slot on din, an
 // ES8311 its one ADC on the left slot.
 assist::ErrorCode openInput() {
-  i2s_chan_config_t chan = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
+  i2s_chan_config_t chan = I2S_CHANNEL_DEFAULT_CONFIG(kRxPort, I2S_ROLE_MASTER);
   chan.dma_desc_num = kRxDmaDescriptors;
   chan.dma_frame_num = kRxDmaFrames;
   const esp_err_t created = i2s_new_channel(&chan, nullptr, &g_rx);
@@ -1316,6 +1341,16 @@ assist::ErrorCode openInput() {
                   esp_err_to_name(created));
     return created == ESP_ERR_NO_MEM ? assist::ErrorCode::OutOfMemory : assist::ErrorCode::Busy;
   }
+#if defined(HOMETILES_SPEAKER_PDM_MIC)
+  // A PDM microphone on its own clock and data pins: mono, the driver's
+  // decimation and 35.5 Hz high-pass (the board makers' example values).
+  i2s_pdm_rx_config_t config = {};
+  config.clk_cfg = I2S_PDM_RX_CLK_DEFAULT_CONFIG(assist::kSampleRate);
+  config.slot_cfg = I2S_PDM_RX_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
+  config.gpio_cfg.clk = speaker_board::kPdmClk;
+  config.gpio_cfg.din = speaker_board::kPdmDin;
+  if (i2s_channel_init_pdm_rx_mode(g_rx, &config) != ESP_OK) {
+#else
   i2s_std_config_t config = {};
   config.clk_cfg = clockConfig(assist::kSampleRate);
   config.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT,
@@ -1327,6 +1362,7 @@ assist::ErrorCode openInput() {
   config.gpio_cfg.dout = I2S_GPIO_UNUSED;
   config.gpio_cfg.din = speaker_board::kI2sDin;
   if (i2s_channel_init_std_mode(g_rx, &config) != ESP_OK) {
+#endif
     i2s_del_channel(g_rx);
     g_rx = nullptr;
     return assist::ErrorCode::MicUnavailable;
@@ -1368,6 +1404,12 @@ int readMono() {
   if (read != ESP_OK && bytes_read == 0) {
     Serial.printf("%s Microphone read failed (%s)\n", kLogPrefix, esp_err_to_name(read));
     return -1;
+  }
+  if (kPdmInput) {
+    // The PDM receiver delivers mono samples already.
+    const size_t samples = bytes_read / sizeof(int16_t);
+    memcpy(g_mono, g_chunk, samples * sizeof(int16_t));
+    return static_cast<int>(samples);
   }
   const size_t frames = bytes_read / (2 * sizeof(int16_t));
   if (speaker_board::kInput == audio_chips::Input::Es8311) {

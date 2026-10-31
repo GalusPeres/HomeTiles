@@ -41,6 +41,11 @@
 #define HOMETILES_SPEAKER_BOARD "src/devices/guition_jc4880p443_portrait/speaker_board.h"
 // M5Stack Tab5 (Espressif BSP, M5Unified): ES8388 codec, ES7210 microphone
 // ADC; the codecs and the amplifier enable sit behind M5Unified's I2C.
+// Elecrow CrowPanel Advanced 10.1 (Elecrow wiki and IDF lesson 11): a
+// codec-less I2S amplifier and a PDM microphone on the P4's PDM receiver.
+#elif defined(DEVICE_ELECROW_CROWPANEL_10_1)
+#define HOMETILES_SPEAKER_BOARD "src/devices/elecrow_crowpanel_10_1/speaker_board.h"
+#define HOMETILES_SPEAKER_PDM_MIC 1
 #elif defined(DEVICE_M5STACKS_TAB5)
 #define HOMETILES_SPEAKER_BOARD "src/devices/m5stacks_tab5/speaker_board.h"
 #define HOMETILES_CODEC_BUS_BY_BOARD 1

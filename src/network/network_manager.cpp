@@ -815,7 +815,7 @@ void HomeTilesNetworkManager::connectWifi() {
     // Elecrow routes the C6 over the standard P4 SDIO pins and resets it on
     // GPIO 54. Make those explicit because the Arduino core defaults do not
     // match this board.
-    WiFi.setPins(18, 19, 17, 16, 15, 14, -1);
+    WiFi.setPins(18, 19, 17, 16, 15, 14, 54);
 #endif
     WiFi.begin(cfg.wifi_ssid, cfg.wifi_pass);
 

@@ -1008,6 +1008,15 @@ bool draw_turned_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t
 }  // namespace
 
 bool DeviceElecrowCrowPanel10::init() {
+  // ESPHome's board definition for this panel uses GPIO 32 as the active-high
+  // ESP32-C6 reset. Pulse it before ESP-Hosted starts.
+  gpio_reset_pin(GPIO_NUM_32);
+  gpio_set_direction(GPIO_NUM_32, GPIO_MODE_OUTPUT);
+  gpio_set_level(GPIO_NUM_32, 1);
+  delay(50);
+  gpio_set_level(GPIO_NUM_32, 0);
+  delay(50);
+
   Serial.println("[Device/Elecrow CrowPanel 10.1] Initialising board...");
 
   if (!init_backlight()) {

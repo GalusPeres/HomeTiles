@@ -2125,6 +2125,36 @@ void global_screensaver_timer_cb(lv_timer_t* timer) {
   }
 }
 
+// The page under the screensaver, hidden while the screensaver covers it.
+// LVGL draws the active screen under every area it refreshes on the top
+// layer (lv_refr.c refr_area_part: the screen from its top object, then the
+// whole top layer), so each value change, press and popup on the
+// screensaver also drew the page's tiles under it: 214 ms under a popup
+// against 36 ms on a page (user log b637, PopupDraw under=).
+lv_obj_t* g_hidden_page = nullptr;
+
+void hidden_page_deleted(lv_event_t*) { g_hidden_page = nullptr; }
+
+// Without redrawing: the screensaver covers the page either way, and
+// closing it draws the whole screen.
+void hide_page_under_screensaver(bool hide) {
+  lv_obj_t* page = hide ? lv_screen_active() : g_hidden_page;
+  if (!page || (hide && g_hidden_page)) return;
+  lv_display_t* display = lv_obj_get_display(page);
+  const bool invalidation = display && lv_display_is_invalidation_enabled(display);
+  if (invalidation) lv_display_enable_invalidation(display, false);
+  if (hide) {
+    lv_obj_add_flag(page, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_event_cb(page, hidden_page_deleted, LV_EVENT_DELETE, nullptr);
+    g_hidden_page = page;
+  } else {
+    lv_obj_remove_event_cb(page, hidden_page_deleted);
+    lv_obj_remove_flag(page, LV_OBJ_FLAG_HIDDEN);
+    g_hidden_page = nullptr;
+  }
+  if (invalidation) lv_display_enable_invalidation(display, true);
+}
+
 void on_global_screensaver_clicked(lv_event_t* e) {
   if (g_state && lv_event_get_target(e) == g_state->overlay) {
     hide_image_screensaver();
@@ -2146,6 +2176,7 @@ void on_global_overlay_delete(lv_event_t* e) {
     reset_media_widgets(GridType::SCREENSAVER);
     g_state = nullptr;
     popup_shell_screensaver_open(false);
+    hide_page_under_screensaver(false);
     restore_configured_display_brightness();
   }
   if (st->timer) lv_timer_delete(st->timer);
@@ -2331,6 +2362,7 @@ void show_image_screensaver() {
 #if defined(DEVICE_ESP32_S3_RGB_480)
   if (atomic_show) lv_obj_invalidate(lv_screen_active());
 #endif
+  hide_page_under_screensaver(true);
   Serial.printf("[Screensaver] Visible after %u ms\n",
                 static_cast<unsigned>(millis() - started_ms));
 }
@@ -2360,6 +2392,7 @@ void hide_image_screensaver() {
     st->timer = nullptr;
   }
   if (st->image) lv_image_set_src(st->image, nullptr);
+  hide_page_under_screensaver(false);
   if (st->overlay) {
     lv_obj_add_flag(st->overlay, LV_OBJ_FLAG_HIDDEN);
     lv_obj_delete_async(st->overlay);

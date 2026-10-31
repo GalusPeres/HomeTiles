@@ -187,7 +187,7 @@ constexpr bool upright_ready() {
     defined(DEVICE_M5STACKS_TAB5) || \
     defined(DEVICE_GUITION_JC1060P470C) || defined(DEVICE_GUITION_JC1060P470C_V2) || \
     defined(DEVICE_WAVESHARE_TOUCH_LCD_7B) || defined(DEVICE_GUITION_JC4880P443_PORTRAIT) || \
-    defined(DEVICE_WAVESHARE_TOUCH_LCD_5)
+    defined(DEVICE_WAVESHARE_TOUCH_LCD_5) || defined(DEVICE_ELECROW_CROWPANEL_10_1)
   return true;
 #else
   return false;
@@ -197,7 +197,8 @@ constexpr bool upright_ready() {
 // drivers' draw_turned_area): the own camera's picture turns the other way too.
 constexpr bool turn_reversed() {
 #if defined(DEVICE_GUITION_JC1060P470C) || defined(DEVICE_GUITION_JC1060P470C_V2) || \
-    defined(DEVICE_WAVESHARE_TOUCH_LCD_7B) || defined(DEVICE_GUITION_JC4880P443_PORTRAIT)
+    defined(DEVICE_WAVESHARE_TOUCH_LCD_7B) || defined(DEVICE_GUITION_JC4880P443_PORTRAIT) || \
+    defined(DEVICE_ELECROW_CROWPANEL_10_1)
   return true;
 #else
   return false;

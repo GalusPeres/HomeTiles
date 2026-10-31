@@ -170,11 +170,12 @@ assert.ok(!/M5\.Display\.setRotation\([^)]*g_upright/.test(tab5), 'M5GFX keeps i
 // above against the shared touch turn.
 const upright = /constexpr bool upright_ready\(\) \{\n#if ([\s\S]*?)\n  return true;/.exec(read('src/tiles/config/grid_layout.h'))[1];
 for (const name of ['JC8012P4A1)', 'JC8012P4A1_V2)', 'LCD_4_3)', 'LCD_7)', 'LCD_8)', 'LCD_10_1)', 'TAB5)',
-  'JC1060P470C)', 'JC1060P470C_V2)', 'LCD_7B)', 'JC4880P443_PORTRAIT)']) {
+  'JC1060P470C)', 'JC1060P470C_V2)', 'LCD_7B)', 'JC4880P443_PORTRAIT)', 'CROWPANEL_10_1)']) {
   assert.ok(upright.includes(name), name);
 }
 const reversed = /constexpr bool turn_reversed\(\) \{\n#if ([\s\S]*?)\n  return true;/.exec(read('src/tiles/config/grid_layout.h'))[1];
-for (const name of ['JC1060P470C)', 'JC1060P470C_V2)', 'LCD_7B)', 'JC4880P443_PORTRAIT)']) assert.ok(reversed.includes(name), name);
+// The Elecrow CrowPanel 10.1 runs a copy of the 7B driver (PR #143).
+for (const name of ['JC1060P470C)', 'JC1060P470C_V2)', 'LCD_7B)', 'JC4880P443_PORTRAIT)', 'CROWPANEL_10_1)']) assert.ok(reversed.includes(name), name);
 assert.ok(!reversed.includes('JC8012') && !reversed.includes('TAB5'), 'the panels upright by themselves turn as before');
 assert.ok(read('src/devices/device.cpp').includes('void displaySetUpright(bool upright) {\n#if ' + upright + '\n  DeviceImpl::displaySetUpright(upright);'));
 const turnedDraw = body => body.slice(body.indexOf('bool draw_turned_area('), body.indexOf('}  // namespace\n\nbool Device'));
@@ -186,6 +187,7 @@ for (const [file, ns, own] of [
   ['guition_jc1060p470c/device_guition_jc1060p470c.cpp', 'DeviceGuitionJC1060P470C', 'draw_landscape_area'],
   ['guition_jc1060p470c_v2/device_guition_jc1060p470c_v2.cpp', 'DeviceGuitionJC1060P470CV2', 'draw_landscape_area'],
   ['waveshare_touch_lcd_7b/device_waveshare_touch_lcd_7b.cpp', 'DeviceWaveshareTouchLCD7B', 'draw_landscape_area'],
+  ['elecrow_crowpanel_10_1/device_elecrow_crowpanel_10_1.cpp', 'DeviceElecrowCrowPanel10', 'draw_landscape_area'],
   ['guition_jc4880p443_portrait/device_guition_jc4880p443_portrait.cpp', 'DeviceGuitionJC4880P443Portrait', 'draw_portrait_area']]) {
   const source = read('src/devices/' + file);
   assert.equal(turnedDraw(source), turnedRef, `${file}: the same turned draw`);

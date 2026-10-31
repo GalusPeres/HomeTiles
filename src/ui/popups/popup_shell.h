@@ -35,6 +35,9 @@ void popup_shell_screensaver_open(bool open);
 // A popup opened over the screensaver (the shell on the top layer above
 // its overlay, show_popup_shell); a page popup left open under it is not.
 bool popup_shell_over_screensaver();
+// Such a popup covers the area completely (its frame or an opaque block):
+// nothing under it shows there.
+bool popup_shell_covers_over_screensaver(const lv_area_t& area);
 // The open popup's body (its card), nullptr without one.
 lv_obj_t* popup_shell_body();
 // Sets the active popup body's background; the frame copies it on the next

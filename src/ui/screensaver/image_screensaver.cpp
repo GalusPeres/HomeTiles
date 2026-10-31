@@ -2009,6 +2009,21 @@ void hide_page_under_screensaver(bool hide) {
   if (invalidation) lv_display_enable_invalidation(display, true);
 }
 
+// A popup over the screensaver lies on LVGL's top layer, which LVGL draws
+// from its root in every band (lv_refr.c refr_area_part), not from the
+// topmost object covering the band as on a screen. Every band under the
+// opaque card drew the black ground, the wallpaper and the tiles first (user
+// log b638: under=127-136 ms per opening against 36 ms on a page, up to
+// 65 ms per frame for a pressed 84x84 button). Where the popup covers the
+// band, the overlay draws nothing: an empty clip leaves its background
+// without pixels and lv_obj_redraw skips its children; LVGL restores the
+// clip after the overlay.
+void skip_under_popup(lv_event_t* e) {
+  lv_layer_t* layer = lv_event_get_layer(e);
+  if (!layer || !popup_shell_covers_over_screensaver(layer->_clip_area)) return;
+  layer->_clip_area.x2 = layer->_clip_area.x1 - 1;
+}
+
 void on_global_screensaver_clicked(lv_event_t* e) {
   if (g_state && lv_event_get_target(e) == g_state->overlay) {
     hide_image_screensaver();
@@ -2174,6 +2189,7 @@ void show_image_screensaver() {
                       LV_EVENT_CLICKED, nullptr);
   lv_obj_add_event_cb(st->overlay, on_global_overlay_delete,
                       LV_EVENT_DELETE, st);
+  lv_obj_add_event_cb(st->overlay, skip_under_popup, LV_EVENT_DRAW_MAIN_BEGIN, nullptr);
 
   st->image = lv_image_create(st->overlay);
   lv_obj_set_pos(st->image, 0, 0);

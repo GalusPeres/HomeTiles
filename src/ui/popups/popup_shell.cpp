@@ -757,6 +757,12 @@ bool popup_shell_over_screensaver() {
   return shell.active && shell.overlay && lv_obj_get_parent(shell.overlay) == lv_layer_top();
 }
 
+bool popup_shell_covers_over_screensaver(const lv_area_t& area) {
+  // LVGL's own rule for a screen (lv_refr.c refr_area_part): some object of
+  // the popup covers the whole area (cover check), not faded or transformed.
+  return popup_shell_over_screensaver() && lv_refr_get_top_obj(&area, shell.overlay) != nullptr;
+}
+
 lv_obj_t* popup_shell_body() { return shell.active ? shell.active->body : nullptr; }
 
 void popup_shell_pulse_icon(lv_obj_t* body, bool on) {

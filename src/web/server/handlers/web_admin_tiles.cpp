@@ -870,11 +870,6 @@ void WebAdminServer::handleSaveTiles() {
   const bool folder_renamed = !screensaver_grid && tile.type == TILE_FOLDER &&
                               (previous_tile.type != TILE_FOLDER || previous_tile.title != tile.title ||
                                previous_tile.icon_name != tile.icon_name);
-  if (screensaver_grid && tile.type == TILE_SENSOR) {
-    // Sensor history is not routed into the screensaver widget context.
-    // Enforce the plain value mode for old imports and direct API callers too.
-    tile.sensor_display_mode = 0;
-  }
   // Deletion: the old entity and options must not come back with a new tile.
   if (tile.type == TILE_EMPTY) clearEmptyTileFields(tile);
   // Only Weather keeps its temperature/humidity sensors, only Power flow

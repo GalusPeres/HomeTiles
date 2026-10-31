@@ -43,6 +43,13 @@ for (const file of typeFiles) {
   assert.equal(gates, allowed[file] || 0, `${file}: a screensaver tile reacts like the page's (${gates} exclusions)`);
   assert.doesNotMatch(source, /tab_id != "screensaver"/, `${file}: the editor offers the page's choices on the screensaver`);
 }
+// Saved and loaded as chosen (user 2026-10-31: a screensaver Sensor set to
+// its graph stayed a value; the save and the stored grid's normalizing reset
+// the display to 0 from the time history reached no screensaver tile).
+assert.doesNotMatch(read('src/web/server/handlers/web_admin_tiles.cpp'), /screensaver_grid && tile\.type == TILE_SENSOR/,
+  'a screensaver Sensor keeps its display when saved');
+assert.doesNotMatch(fn(read('src/ui/screensaver/screensaver_config.cpp'), 'ScreensaverConfigStore::normalizeTileGrid'), /sensor_display_mode = 0/,
+  'a screensaver Sensor keeps its display when loaded');
 const importSource = read('src/web/admin/tiles/import-export.js');
 assert.doesNotMatch(importSource, /screensaverEnergy|isScreensaverTile\s*\?\s*0/, 'an import keeps a screensaver tile\'s display');
 

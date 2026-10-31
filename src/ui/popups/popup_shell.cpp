@@ -313,6 +313,34 @@ void close_clicked(lv_event_t* event) {
   sync_popup_shell();
 }
 
+// A tap beside the card closes the popup like its X (#142). The overlay gets
+// only presses that hit none of the card's objects; both the press and the
+// release must lie outside the card, so a press on the card that slides off
+// never closes it. A card that fills the screen has no outside.
+bool g_pressed_outside = false;
+
+bool outside_card(lv_event_t* event) {
+  lv_indev_t* indev = lv_event_get_indev(event);
+  if (!indev || !shell.frame) return false;
+  lv_point_t point;
+  lv_indev_get_point(indev, &point);
+  lv_area_t card;
+  lv_obj_get_coords(shell.frame, &card);
+  return !lv_area_is_point_on(&card, &point, 0);
+}
+
+void overlay_pressed(lv_event_t* event) {
+  const lv_event_code_t code = lv_event_get_code(event);
+  if (lv_event_get_target(event) != shell.overlay) return;
+  if (code == LV_EVENT_PRESSED) {
+    g_pressed_outside = outside_card(event);
+  } else if (code == LV_EVENT_CLICKED) {
+    const bool outside = g_pressed_outside && outside_card(event);
+    g_pressed_outside = false;
+    if (outside) close_clicked(event);
+  }
+}
+
 Binding* bind(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
                lv_obj_t* icon, lv_obj_t* close) {
   for (uint32_t i = 0; i < lv_obj_get_event_count(body); ++i) {
@@ -357,6 +385,8 @@ void ensure_shell() {
   lv_obj_set_size(shell.overlay, LV_PCT(100), LV_PCT(100));
   lv_obj_remove_flag(shell.overlay, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_flag(shell.overlay, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(shell.overlay, overlay_pressed, LV_EVENT_PRESSED, nullptr);
+  lv_obj_add_event_cb(shell.overlay, overlay_pressed, LV_EVENT_CLICKED, nullptr);
   shell.frame = lv_obj_create(shell.overlay);
   lv_obj_remove_style_all(shell.frame);
   lv_obj_set_style_bg_opa(shell.frame, LV_OPA_COVER, 0);

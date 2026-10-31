@@ -165,13 +165,15 @@ void prepareForRestart() {
 }
 
 void displayUpdateCheckGuardBegin() {
-#if defined(DEVICE_GUITION_ESP32_4848S040) || defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)
+#if defined(DEVICE_GUITION_ESP32_4848S040) || defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) || \
+    defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V24)
   DeviceImpl::displayUpdateCheckGuardBegin();
 #endif
 }
 
 void displayUpdateCheckGuardEnd() {
-#if defined(DEVICE_GUITION_ESP32_4848S040) || defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)
+#if defined(DEVICE_GUITION_ESP32_4848S040) || defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) || \
+    defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V24)
   DeviceImpl::displayUpdateCheckGuardEnd();
 #endif
 }

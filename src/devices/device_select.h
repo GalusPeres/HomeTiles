@@ -24,6 +24,7 @@
 // #define DEVICE_GUITION_JC4880P443_PORTRAIT
 // #define DEVICE_GUITION_ESP32_4848S040
 // #define DEVICE_GOLDEN_SECURITY_GS_T3E_V2
+// #define DEVICE_GOLDEN_SECURITY_GS_T3E_V24
 #endif
 //
 // If nothing is selected, the project defaults to Waveshare 4B.
@@ -54,7 +55,8 @@
      defined(DEVICE_GUITION_JC1060P470C_V2) + \
      defined(DEVICE_GUITION_JC4880P443_PORTRAIT) + \
      defined(DEVICE_GUITION_ESP32_4848S040) + \
-     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)) > 1
+     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) + \
+     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V24)) > 1
 #error "Select only one device target."
 #endif
 
@@ -77,6 +79,7 @@
     !defined(DEVICE_GUITION_JC4880P443_PORTRAIT) && \
     !defined(DEVICE_GUITION_ESP32_4848S040) && \
     !defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) && \
+    !defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V24) && \
     defined(HOMETILES_CI_TARGET)
 #error "HOMETILES_CI_TARGET requires one DEVICE_* build flag."
 #endif
@@ -100,6 +103,7 @@
     !defined(DEVICE_GUITION_JC4880P443_PORTRAIT) && \
     !defined(DEVICE_GUITION_ESP32_4848S040) && \
     !defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) && \
+    !defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V24) && \
     !defined(HOMETILES_CI_TARGET)
 #define DEVICE_WAVESHARE_4B
 #endif
@@ -186,7 +190,8 @@
 // brightness floor and the compact dropdown arrow. Each board has its own
 // driver, pins, profile and firmware identity.
 #if defined(DEVICE_GUITION_ESP32_4848S040) || \
-    defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)
+    defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) || \
+    defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V24)
 #define DEVICE_GUITION_ESP32_4848S040_FAMILY
 #endif
 
@@ -194,6 +199,7 @@
 // storage and OTA lifecycle handling. Panel wiring and init remain separate.
 #if defined(DEVICE_GUITION_ESP32_4848S040) || \
     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) || \
+    defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V24) || \
     defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4) || \
     defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B)
 #define DEVICE_ESP32_S3_RGB_480
@@ -211,6 +217,7 @@
     defined(DEVICE_GUITION_JC4880P443_PORTRAIT) || \
     defined(DEVICE_GUITION_ESP32_4848S040) || \
     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) || \
+    defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V24) || \
     defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4) || \
     defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B)
 #define DEVICE_LAYOUT_480X480

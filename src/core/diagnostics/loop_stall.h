@@ -16,7 +16,8 @@
 // time the steps: one of 300 ms or more is logged with its name when it ends;
 // the other markers compile to nothing.
 
-#if defined(DEVICE_GUITION_ESP32_4848S040) || defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)
+#if defined(DEVICE_GUITION_ESP32_4848S040) || defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) || \
+    defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V24)
 #define HOMETILES_LOOP_STALL_DIAGNOSTICS 1
 #else
 #define HOMETILES_LOOP_STALL_DIAGNOSTICS 0

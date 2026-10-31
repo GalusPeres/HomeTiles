@@ -277,6 +277,12 @@ jobs:
             silicon_variant: post_v3
             rx_variant: repo-a8204
             publish: true
+          - label: Golden Security GS-T3E v2.4
+            profile: golden_security_gs_t3e_v24
+            key: golden_security_gs_t3e_v24
+            define: DEVICE_GOLDEN_SECURITY_GS_T3E_V24
+            rx_variant: native-s3
+            publish: true
         # END GENERATED DEVICE MATRIX
 
     steps:

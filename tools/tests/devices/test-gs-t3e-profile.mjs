@@ -46,7 +46,8 @@ assert.match(t3e.installer.hardwareCheck, /ESP32-S3-WROOM-1/);
 assert.match(t3e.installer.hardwareCheck, /PCB revision v2\.3/);
 assert.match(t3e.installer.hardwareCheck, /v1\.23/, 'The check names the unsupported first revision');
 // Profiles added after the T3E (the Waveshare 4.3 v3 image, #135) build later.
-const addedAfterT3e = new Set(['waveshare_touch_lcd_4_3_rev3', 'waveshare_touch_lcd_8_rev3']);
+const addedAfterT3e = new Set(['waveshare_touch_lcd_4_3_rev3', 'waveshare_touch_lcd_8_rev3',
+  'golden_security_gs_t3e_v24']);
 assert.ok(releaseProfiles.every(profile => profile === t3e || addedAfterT3e.has(profile.key) ||
   profile.ciOrder < t3e.ciOrder),
   'The T3E builds after every release profile that existed before it');

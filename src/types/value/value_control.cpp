@@ -907,7 +907,8 @@ EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card, lv_obj_t
   lv_obj_set_style_text_font(apply_label, popup_layout::font20(), 0); lv_obj_center(apply_label);
   c->dropdown = lv_dropdown_create(row); lv_obj_set_width(c->dropdown, LV_PCT(100));
   ui_control_style::valueDropdown(c->dropdown); lv_obj_center(c->dropdown);
-#if defined(DEVICE_GUITION_ESP32_4848S040) || defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)
+#if defined(DEVICE_GUITION_ESP32_4848S040) || defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) || \
+    defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V24)
   // Keep the compact Guition dropdown arrow proportional to its title-sized text.
   lv_obj_set_style_text_font(c->dropdown, &ui_symbols_20, LV_PART_INDICATOR);
 #endif

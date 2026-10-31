@@ -517,6 +517,25 @@ Arduino IDE (the `sketch.yaml` profile):
 - Upload Speed: `921600`
 - USB Mode: `Hardware CDC and JTAG`
 
+## Golden Security GS-T3E v2.4
+
+Used for:
+- `src/devices/golden_security_gs_t3e_v24` (its own driver, a copy of the
+  GS-T3E v2 driver)
+- build profile `golden_security_gs_t3e_v24`
+
+Important:
+- Community profile for PCB v2.4 (ZIGBEE_4CP_WNB_V2.4, 2024.09.09), contributed
+  in [PR #137](https://github.com/GalusPeres/HomeTiles/pull/137); hardware
+  validation by board owners is pending.
+- Display, touch, backlight and serial log are wired as on PCB v2.3 (above).
+- Relays (EU 3-gang): GPIO 45, GPIO 46 and GPIO 2 (ESPHome's v2.4 device page).
+- No USB socket: flash through the UART header J1 (TX 43 / RX 44) with IO0 held
+  low; later updates run over the air.
+- Sources and open points: [device README](src/devices/golden_security_gs_t3e_v24/README.md).
+
+Arduino IDE (the `sketch.yaml` profile): the same settings as the GS-T3E v2.
+
 ## Waveshare ESP32-S3-Touch-LCD-4 Rev 4.0
 
 Used for:

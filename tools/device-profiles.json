@@ -535,6 +535,28 @@
       }
     },
     {
+      "buildProfile": "golden_security_gs_t3e_v24",
+      "key": "golden_security_gs_t3e_v24",
+      "metadataDeviceKey": "golden_security_gs_t3e_v24",
+      "define": "DEVICE_GOLDEN_SECURITY_GS_T3E_V24",
+      "chipFamily": "ESP32-S3",
+      "flashSize": 16777216,
+      "siliconVariant": "default",
+      "minimumRevision": 0,
+      "maximumRevision": 65535,
+      "rxVariant": "native-s3",
+      "elfFlags": "",
+      "publish": true,
+      "ciOrder": 23,
+      "ciLabel": "Golden Security GS-T3E v2.4",
+      "legacySlug": "golden-security-gs-t3e-v24",
+      "installer": {
+        "label": "Golden Security GS-T3E v2.4 (PCB v2.4)",
+        "status": "validation-pending",
+        "hardwareCheck": "The board is a GS-T3E (Tuya T3E) 4-inch 480x480 wall panel with an ESP32-S3-WROOM-1 module and PCB revision v2.4 (ZIGBEE_4CP_WNB_V2.4, no USB socket; flash it through the UART header J1). PCB v2.3 has its own firmware."
+      }
+    },
+    {
       "buildProfile": "layout_test_1024x600",
       "key": "layout_test_1024x600",
       "metadataDeviceKey": "layout_test_1024x600",

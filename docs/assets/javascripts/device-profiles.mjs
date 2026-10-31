@@ -291,4 +291,13 @@ export const DEVICE_PROFILES = Object.freeze([
     "status": "validation-pending",
     "hardwareCheck": "The board is a GS-T3E (Tuya T3E) 4-inch 480x480 wall panel with an ESP32-S3-WROOM-1 module and PCB revision v2.3. The discontinued v1.23 board and the Zigbee-only T3E Pro use different hardware."
   }),
+  Object.freeze({
+    "key": "golden_security_gs_t3e_v24",
+    "buildProfile": "golden_security_gs_t3e_v24",
+    "label": "Golden Security GS-T3E v2.4 (PCB v2.4)",
+    "chipFamily": "ESP32-S3",
+    "flashSize": 16777216,
+    "status": "validation-pending",
+    "hardwareCheck": "The board is a GS-T3E (Tuya T3E) 4-inch 480x480 wall panel with an ESP32-S3-WROOM-1 module and PCB revision v2.4 (ZIGBEE_4CP_WNB_V2.4, no USB socket; flash it through the UART header J1). PCB v2.3 has its own firmware."
+  }),
 ]);

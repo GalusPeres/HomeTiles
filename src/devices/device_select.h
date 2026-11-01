@@ -222,12 +222,6 @@
 #define DEVICE_LAYOUT_480X480
 #endif
 
-// The BTT Panda Touch is a 800 x 480 panel: it shares the compact scale of
-// the 480-class layouts (its height is 480) and adds a wide, landscape body.
-#if defined(DEVICE_BTT_PANDA_TOUCH)
-#define DEVICE_LAYOUT_800X480
-#endif
-
 // The 8" and 10.1" panels share the 1280x800 HomeTiles layout.
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_8) || \
     defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1)

@@ -113,6 +113,5 @@ assert.match(read('src/devices/btt_panda_touch/hardware_io_profile.h'), /kNoHard
 const guition = read('src/devices/guition_esp32_4848s040/device_guition_esp32_4848s040.cpp');
 assert.doesNotMatch(guition, /Panda|BTT|btt_panda/,
   'A new device never changes another device driver');
-assert.match(read('src/devices/device_select.h'), /#define DEVICE_LAYOUT_800X480/);
 
 console.log('BTT Panda Touch profile, panel, touch and framebuffer contract: PASS');

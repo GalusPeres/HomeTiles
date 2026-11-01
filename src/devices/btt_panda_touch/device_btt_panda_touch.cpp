@@ -15,10 +15,6 @@
 
 namespace DeviceBTTPandaTouch {
 
-#ifndef HOMETILES_PANDA_TEST_NO_SWITCH
-#define HOMETILES_PANDA_TEST_NO_SWITCH 0
-#endif
-
 namespace {
 
 // ---------------------------------------------------------------------------
@@ -92,7 +88,6 @@ int32_t g_previousY0 = 0;
 int32_t g_previousX1 = -1;
 int32_t g_previousY1 = -1;
 bool g_frameOpen = false;
-uint32_t g_pushCount = 0;
 bool g_display_ready = false;
 bool g_touch_ready = false;
 bool g_littlefs_ready = false;
@@ -364,7 +359,6 @@ void displayPushPixels(int32_t x, int32_t y, int32_t w, int32_t h,
   if (y + h > kScreenHeight) h = kScreenHeight - y;
   if (w <= 0 || h <= 0) return;
   if (!g_frameOpen) beginFrame();
-  ++g_pushCount;
 
   // Only the flip fits a physically landscape panel.
   const bool flipped = (g_rotation & 0x02) != 0;
@@ -452,23 +446,6 @@ void displayWaitDisplay() {
   g_displayedBuffer = drawn;
   g_framebuffer = g_framebuffers[g_displayedBuffer == 0 ? 1 : 0];
   g_frameOpen = false;
-
-  // Temporary diagnostics: the switch count and a sample of both buffers.
-  static uint32_t flips = 0;
-  static uint32_t last_log = 0;
-  ++flips;
-  const uint32_t now = millis();
-  if (now - last_log > 1000) {
-    last_log = now;
-    const int32_t centre = (kScreenHeight / 2) * kScreenWidth + (kScreenWidth / 2);
-    Serial.printf("[Flip] flips=%lu pushes=%lu shown=%u draw=%u mid0=%04X mid1=%04X\n",
-                  static_cast<unsigned long>(flips),
-                  static_cast<unsigned long>(g_pushCount),
-                  static_cast<unsigned>(g_displayedBuffer),
-                  static_cast<unsigned>(g_framebuffer == g_framebuffers[0] ? 0 : 1),
-                  g_framebuffers[0] ? g_framebuffers[0][centre] : 0,
-                  g_framebuffers[1] ? g_framebuffers[1][centre] : 0);
-  }
 }
 
 // The panel scans the framebuffer the UI is drawn into. LVGL only redraws

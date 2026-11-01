@@ -82,4 +82,12 @@ assert.match(fn(renderer, 'tile_graph_slot'),
   /page \? &tileConfig\.getActiveGrid\(\) : image_screensaver_tile_grid\(\)/, 'the graph round asks for both');
 assert.match(fn(screensaver, 'image_screensaver_tile_grid'), /return g_state && g_state->slot_grid \? g_state->shown_grid : nullptr;/,
   'the screensaver\'s grid only while it shows');
-console.log('Screensaver tiles: popups, graphs and choices like the pages; slides pause under a popup');
+// A Media popup opened from the screensaver takes that tile's cover and its
+// later song, state and cover updates (user 2026-11-01, S3 b644: no cover when
+// the player sits only on the screensaver).
+const findCover = fn(renderer, 'tile_renderer_find_media_cover');
+assert.match(findCover, /GridType::SCREENSAVER\}/, 'the cover lookup includes the screensaver grid');
+assert.match(findCover, /g_screensaver_media\}/, 'and its media widgets');
+assert.doesNotMatch(fn(renderer, 'update_media_popup_from_widgets'), /GridType::SCREENSAVER\) return;/,
+  'the screensaver tile updates its open popup like a page tile');
+console.log('Screensaver tiles: popups, graphs and choices like the pages; slides pause under a popup; Media popup cover');

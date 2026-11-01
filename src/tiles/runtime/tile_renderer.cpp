@@ -3113,10 +3113,12 @@ static String media_entity_for_grid_index(GridType grid_type, uint8_t grid_index
   return tile->sensor_entity;
 }
 
+// The screensaver's tiles too: a player that sits only on the screensaver
+// opened its popup without a cover (user 2026-11-01, S3 b644).
 const lv_image_dsc_t* tile_renderer_find_media_cover(const String& entity_id, uint32_t& hash) {
-  const GridType types[] = {GridType::TAB0, GridType::TAB1, GridType::TAB2};
-  MediaTileWidgets* const grids[] = {g_tab0_media, g_tab1_media, g_tab2_media};
-  for (size_t grid = 0; grid < 3; ++grid) {
+  const GridType types[] = {GridType::TAB0, GridType::TAB1, GridType::TAB2, GridType::SCREENSAVER};
+  MediaTileWidgets* const grids[] = {g_tab0_media, g_tab1_media, g_tab2_media, g_screensaver_media};
+  for (size_t grid = 0; grid < 4; ++grid) {
     if (!grids[grid]) continue;
     for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
       const auto& widgets = grids[grid][i];
@@ -3150,8 +3152,8 @@ static void update_media_popup_from_widgets(GridType grid_type,
                                             uint8_t grid_index,
                                             MediaTileWidgets& widgets,
                                             const String& state_override = String()) {
-  // Screensaver media tiles deliberately have no popup.
-  if (grid_type == GridType::SCREENSAVER) return;
+  // Screensaver media tiles open the popup like the pages' tiles; their
+  // song, state and cover reach it the same way.
   if (grid_index >= TILES_PER_GRID) return;
   const Tile* tile_ptr = tile_renderer_get_tile_config(grid_type, grid_index);
   if (!tile_ptr || tile_ptr->type != TILE_MEDIA ||

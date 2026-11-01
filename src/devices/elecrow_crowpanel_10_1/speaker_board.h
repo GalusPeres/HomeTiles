@@ -1,7 +1,7 @@
 #pragma once
 
 // Speaker wiring of the Elecrow CrowPanel Advanced 10.1 (Elecrow wiki "ESP32-P4
-// and Audio out", IDF lesson 11 bsp_audio/bsp_mic): a codec-less I2S power
+// and Audio out", Elecrow BSP of IDF lesson 11, bsp_audio/bsp_mic): a codec-less I2S power
 // amplifier on LRCLK 21, BCLK 22, SDATA 23 with its enable on GPIO30, active
 // low (set_Audio_ctrl(true) drives it 0), PH2.0 speaker jack (4 ohm 3 W). The
 // PDM microphone runs on the P4's PDM receiver: CLK 24, DATA 26. No MCLK and

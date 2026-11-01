@@ -56,10 +56,6 @@ typedef struct {
 #define SC2336_REG_FLIP_MIRROR             0x3221
 #define SC2336_REG_SLEEP_MODE              0x0100
 
-#ifdef __cplusplus
-}
-#endif
-
 static const sc2336_reginfo_t sc2336_mipi_2lane_24Minput_1280x720_raw8_30fps[] = {
     {0x0103, 0x01},
     {SC2336_REG_SLEEP_MODE, 0x00},

@@ -178,9 +178,7 @@ assert.match(read('src/devices/waveshare_touch_lcd_5/board.h'),
 const neverCamera = ['DEVICE_GUITION_JC1060P470C', 'DEVICE_GUITION_ESP32_4848S040',
   'DEVICE_GOLDEN_SECURITY_GS_T3E_V2',
   'DEVICE_WAVESHARE_S3_TOUCH_LCD_4', 'DEVICE_WAVESHARE_S3_TOUCH_LCD_4B',
-  'DEVICE_LAYOUT_TEST_1024X600', 'DEVICE_LAYOUT_TEST_480X480',
-  // Until its SC2336 sensor has a driver.
-  'DEVICE_ELECROW_CROWPANEL_10_1'];
+  'DEVICE_LAYOUT_TEST_1024X600', 'DEVICE_LAYOUT_TEST_480X480'];
 for (const define of neverCamera) {
   assert.ok(!cameraBlock.includes(`defined(${define})`), `${define} must not select the camera`);
   assert.ok(!cameraSelect.includes(`defined(${define})`), `${define} has no camera board`);
@@ -195,7 +193,10 @@ for (const dir of ['guition_jc1060p470c', 'guition_esp32_4848s040', 'waveshare_s
 }
 
 // Every device target is classified, so a new profile cannot slip in untested.
-const cameraBoards = ['DEVICE_WAVESHARE_TOUCH_LCD_8', 'DEVICE_M5STACKS_TAB5', ...boards.map(board => board.define)];
+// The Tab5 (SC202CS) and the CrowPanel 10.1 (SC2336, test-crowpanel-local-camera)
+// bring their own sensor driver and SCCB transport.
+const cameraBoards = ['DEVICE_WAVESHARE_TOUCH_LCD_8', 'DEVICE_M5STACKS_TAB5', 'DEVICE_ELECROW_CROWPANEL_10_1',
+  ...boards.map(board => board.define)];
 const targets = [...deviceSelect.slice(0, deviceSelect.indexOf('#error "Select only one device target."'))
   .matchAll(/defined\((DEVICE_\w+)\)/g)].map(match => match[1]).filter(name => name.startsWith('DEVICE_'));
 const uniqueTargets = [...new Set(targets)].filter(name => !['DEVICE_TAB5', 'DEVICE_WAVESHARE_WIFI6_TOUCH_LCD_8'].includes(name));
@@ -209,7 +210,8 @@ if (cc) {
     '#if defined(HOMETILES_LOCAL_CAMERA)', 'LOCAL_CAMERA_ON HOMETILES_LOCAL_CAMERA_BOARD', '#endif',
     '#if defined(HOMETILES_CAMERA_SENSOR_OV5647)', 'SENSOR_ov5647', '#endif',
     '#if defined(HOMETILES_CAMERA_SENSOR_OV02C10)', 'SENSOR_ov02c10', '#endif',
-    '#if defined(HOMETILES_CAMERA_SENSOR_SC202CS)', 'SENSOR_sc202cs', '#endif', ''].join('\n');
+    '#if defined(HOMETILES_CAMERA_SENSOR_SC202CS)', 'SENSOR_sc202cs', '#endif',
+    '#if defined(HOMETILES_CAMERA_SENSOR_SC2336)', 'SENSOR_sc2336', '#endif', ''].join('\n');
   for (const define of uniqueTargets) {
     for (const beta of [false, true]) {
       const result = spawnSync(cc, ['-E', '-P', '-x', 'c++', '-DHOMETILES_CI_TARGET', `-D${define}`,

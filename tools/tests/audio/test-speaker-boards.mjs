@@ -37,6 +37,11 @@ const BOARDS = {
   DEVICE_GUITION_JC4880P443_PORTRAIT: {dir: 'guition_jc4880p443_portrait', ...GUITION_48},
   DEVICE_M5STACKS_TAB5: {dir: 'm5stacks_tab5', mclk: 30, bclk: 27, lrck: 29, dout: 26, din: 28,
     out: 'Es8388', codec: 0x10, inp: 'Es7210', mic: 0x40, amp: 'NC', byBoard: true, limit: 0.9},
+  // Elecrow CrowPanel 10.1 (PR #143, Elecrow BSP lesson 11): a codec-less I2S amplifier,
+  // enable active low, and a PDM microphone on its own clock and data pins.
+  DEVICE_ELECROW_CROWPANEL_10_1: {dir: 'elecrow_crowpanel_10_1', mclk: 'NC', bclk: 22, lrck: 21,
+    dout: 23, din: 'NC', out: 'I2sAmp', codec: 0x00, inp: 'Pdm', mic: 0x00, amp: 30,
+    ampLow: true, pdmClk: 24, pdmDin: 26, limit: 1.0},
 };
 // No voice: the ESP32-S3 panels (user decision), the host layout tests and
 // the original-panel JC1060 (board identity unproven, like its camera).
@@ -45,8 +50,6 @@ const WITHOUT_VOICE = [
   'DEVICE_GUITION_ESP32_4848S040', 'DEVICE_GOLDEN_SECURITY_GS_T3E_V2',
   'DEVICE_LAYOUT_TEST_1024X600', 'DEVICE_LAYOUT_TEST_480X480',
   'DEVICE_GUITION_JC1060P470C',
-  // Until the audio core drives its codec-less I2S amplifier and PDM microphone.
-  'DEVICE_ELECROW_CROWPANEL_10_1',
 ];
 
 const deviceSelect = read('src/devices/device_select.h');
@@ -91,7 +94,13 @@ for (const [define, facts] of Object.entries(BOARDS)) {
   assert.equal(constant(header, 'kInput'), `audio_chips::Input::${facts.inp}`, `${where} input`);
   assert.equal(Number(constant(header, 'kMicAddress')), facts.mic, `${where} ES7210 address`);
   assert.equal(gpio(constant(header, 'kAmpEnable')), facts.amp, `${where} amplifier`);
-  assert.equal(constant(header, 'kAmpActiveHigh'), 'true', `${where} amplifier level`);
+  assert.equal(constant(header, 'kAmpActiveHigh'), facts.ampLow ? 'false' : 'true', `${where} amplifier level`);
+  if (facts.inp === 'Pdm') {
+    assert.equal(gpio(constant(header, 'kPdmClk')), facts.pdmClk, `${where} PDM clock`);
+    assert.equal(gpio(constant(header, 'kPdmDin')), facts.pdmDin, `${where} PDM data`);
+    assert.match(select, new RegExp(`${define}\\)\\n#define HOMETILES_SPEAKER_BOARD [^\\n]+\\n#define HOMETILES_SPEAKER_PDM_MIC 1`),
+      `${define} selects the PDM receiver`);
+  }
   // Loudest clean level (user 2026-10-16: the Guition boards 60 %, Tab5 90 %).
   assert.equal(Number(constant(header, 'kVolumeLimit').replace(/f$/, '')), facts.limit,
     `${where} volume limit`);
@@ -115,12 +124,32 @@ for (const [define, facts] of Object.entries(BOARDS)) {
     .find(rel => fs.existsSync(path.join(root, rel)) && /\{\s*\d+,/.test(read(rel)));
   if (ioPath) {
     const ioPins = [...read(ioPath).matchAll(/^\s*\{\s*(\d+),/gm)].map(m => Number(m[1]));
-    for (const pin of [facts.mclk, facts.bclk, facts.lrck, facts.dout, facts.din, facts.amp]) {
+    for (const pin of [facts.mclk, facts.bclk, facts.lrck, facts.dout, facts.din, facts.amp,
+      facts.pdmClk, facts.pdmDin].filter(pin => pin !== undefined)) {
       assert.ok(!ioPins.includes(pin), `${facts.dir}: GPIO${pin} is an audio pin and a free I/O pin`);
     }
   }
 }
 assert.ok(!fs.existsSync(path.join(root, 'src/devices/guition_jc1060p470c/speaker_board.h')));
+
+// --- Codec-less output and PDM input (CrowPanel, PR #143) -----------------
+// Codec boards keep their paths: the software volume and the PDM receiver are
+// compile-time branches of the boards that name them.
+const core = read('src/audio/speaker.cpp');
+const glue = read('src/audio/audio_board.cpp');
+assert.match(core, /if constexpr \(speaker_board::kOutput == audio_chips::Output::I2sAmp\) \{\n    \/\/ No codec: the volume and mute scale the samples here\.\n    const int32_t gain = audio_board::outputGainQ15\(\);/,
+  'a codec-less output scales the samples with the software gain');
+assert.match(core, /scaled\[i\] = static_cast<int16_t>\(\(static_cast<int32_t>\(samples\[i\]\) \* gain\) >> 15\);/);
+assert.match(core, /constexpr i2s_port_t kTxPort = kPdmInput \? I2S_NUM_1 : I2S_NUM_AUTO;\nconstexpr i2s_port_t kRxPort = kPdmInput \? I2S_NUM_0 : I2S_NUM_AUTO;/,
+  'a PDM board keeps I2S0 for the microphone; codec boards let the driver pick');
+assert.match(core, /#if defined\(HOMETILES_SPEAKER_PDM_MIC\)[\s\S]*?i2s_channel_init_pdm_rx_mode\(g_rx, &config\)[\s\S]*?#else[\s\S]*?i2s_channel_init_std_mode\(g_rx, &config\)[\s\S]*?#endif/,
+  'the PDM receiver only on PDM boards, the I2S capture unchanged elsewhere');
+assert.match(glue, /int32_t outputGainQ15\(\) \{\n  if \(!kSoftwareOutput\) return 32768;\n  return g_soft_mute \? 0 : g_soft_gain_q15;\n\}/);
+// The volume register keeps the ES8311 scale: 0xBF = 0 dB in 0.5 dB steps, 0 = silent.
+const q15 = value => value === 0 ? 0 : Math.round(32768 * 10 ** (((Math.min(value, 0xbf) - 191) * 0.5) / 20));
+assert.equal(q15(0xbf), 32768);
+assert.equal(q15(0xbf - 12), Math.round(32768 * 10 ** (-6 / 20)), '-6 dB');
+assert.match(glue, /const float db = \(static_cast<float>\(value > 0xBF \? 0xBF : value\) - 191\.0f\) \* 0\.5f;\n      g_soft_gain_q15 = static_cast<int32_t>\(lroundf\(32768\.0f \* powf\(10\.0f, db \/ 20\.0f\)\)\);/);
 
 // --- Real codec drivers through a recording codec_bus ---------------------
 function findCompiler(candidates) {

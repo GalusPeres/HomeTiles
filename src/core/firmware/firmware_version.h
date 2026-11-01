@@ -32,6 +32,7 @@
 #if defined(HOMETILES_TEST_BETA) && \
     (defined(DEVICE_GUITION_ESP32_4848S040) || \
      defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) || \
+     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V24) || \
      defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4) || \
      defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B))
 // Keep the base below v0.7.0 so System Update offers the published OTA target.

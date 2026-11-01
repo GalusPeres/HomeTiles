@@ -446,6 +446,50 @@ The sketch console (`Serial`) runs on the USB-Serial/JTAG flashing port. The
 second USB-C connector does not enumerate a data device, so all diagnostics
 must be read from the flashing port.
 
+## Elecrow CrowPanel Advanced 10.1
+
+Used for:
+- `src/devices/elecrow_crowpanel_10_1` (its own driver, derived from the
+  Waveshare 7B driver)
+- build profile `elecrow_crowpanel_10_1`
+
+Important:
+- Community profile for the Elecrow CrowPanel Advanced 10.1-inch ESP32-P4 HMI
+  display (model DHE04310D, board V1.2), contributed in
+  [PR #143](https://github.com/GalusPeres/HomeTiles/pull/143); display, touch
+  and Wi-Fi reported working by the contributor, the rest needs validation.
+- ESP32-P4 below v3.0 with `16MB` flash and `32MB` PSRAM.
+- `1024x600` EK79007 MIPI-DSI panel, `6x4` grid like the Waveshare 7B, upright
+  layout supported. MIPI-DSI PHY power uses P4 LDO channel 3 at 2500 mV.
+- Backlight PWM on GPIO 31 (30 kHz, active high); LCD reset GPIO 41.
+- Touch is GT911 on I2C0 SDA 45 / SCL 46, reset 40, interrupt 42.
+- microSD is 1-bit SDMMC: CLK 43, CMD 44, D0 39.
+- ESP32-C6 over ESP-Hosted SDIO (board V1.1 and newer): CLK 18, CMD 19, D0-D3
+  17/16/15/14, reset GPIO32 (the tested panel's factory log; Elecrow lists
+  GPIO54 for V1.2). The board sets these pins in its own init.
+- Speaker: codec-less I2S amplifier on LRCLK 21, BCLK 22, DATA 23, enable
+  GPIO30 active low; volume in software. Microphone: PDM on CLK 24, DATA 26
+  (Elecrow BSP of IDF lesson 11).
+- Camera ("With 2MP Camera" variant): SC2336 on the CSI connector, 2 lanes,
+  SCCB on I2C1 SCL 13 / SDA 12 (Elecrow BSP of IDF lesson 13).
+- Local I/O: the UART1 header pins GPIO 47 and 48.
+- Use the repository's `partitions.csv`; HomeTiles needs two 6.5MB OTA slots.
+
+Arduino IDE:
+- Board: `ESP32P4 Dev Module`
+- USB CDC On Boot: `Disabled`
+- Chip Variant: `Before v3.00`
+- Core Debug Level: `None`
+- Flash Frequency: `80MHz`
+- Flash Mode: `QIO`
+- Flash Size: `16MB (128Mb)`
+- Partition Scheme: `Custom`
+- PSRAM: `Enabled`
+- Upload Speed: `921600`
+
+Flash and read the log through the UART0 USB-C port (CH341); the screen needs
+the second USB-C port for power as well.
+
 ## GUITION ESP32-4848S040
 
 Used for:

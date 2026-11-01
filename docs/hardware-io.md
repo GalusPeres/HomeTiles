@@ -53,6 +53,7 @@ The I/O selector offers only pins assigned for use by that device's firmware pro
     | Guition JC4880P443 | None | The exact board profile reserves its documented display, touch, microSD, USB and ESP-Hosted connections; contributor-tested |
     | Guition ESP32-4848S040 | Onboard Relay 1 on GPIO 40 for relay-equipped variants | Supported; relay-equipped variants only |
     | Golden Security GS-T3E v2 | Onboard relays on GPIO 45 and 46 | From openHASP and ESPHome configurations; the variant-specific third and fourth relays are not offered; community validation pending |
+    | Elecrow CrowPanel Advanced 10.1 | UART1 header GPIO 47 and 48 | The I2C header is the touch bus and UART3-IN the power input, so both stay reserved; community validation pending |
     | Waveshare 7B / 7B-C | None | No configurable GPIOs in these profiles |
     | Waveshare S3 LCD-4 Rev 4.0 / S3 LCD-4B | None | No configurable GPIOs in these profiles |
 

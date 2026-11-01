@@ -26,6 +26,9 @@ const switchHtmlHeader = read('src/types/switch/web_html.h');
 const switchChoiceStart = switchHtmlHeader.indexOf('struct SwitchChoice {');
 assert(switchChoiceStart >= 0, 'struct SwitchChoice');
 const switchChoiceStruct = switchHtmlHeader.slice(switchChoiceStart, switchHtmlHeader.indexOf('};', switchChoiceStart) + 2);
+// Its declaration carries the default of the select's extra attributes.
+const switchChoiceStartDecl = switchHtmlHeader.indexOf('void append_switch_choice(');
+const switchChoiceDecl = switchHtmlHeader.slice(switchChoiceStartDecl, switchHtmlHeader.indexOf(';', switchChoiceStartDecl) + 1);
 const strings = read('src/core/i18n/i18n.cpp');
 const tables = [...strings.matchAll(/static const Strings kStrings(?:De|En|Fr) = \{[\s\S]*?\};/g)].map(match => match[0]);
 assert.equal(tables.length, 3);
@@ -79,6 +82,12 @@ void appendHtmlEscaped(String& output,const String& value) {output+=value;}
 ${[...read('src/web/server/web_admin_utils.cpp').matchAll(/void appendEntityPickerField\(/g)]
   .map(match => definition(read('src/web/server/web_admin_utils.cpp').slice(match.index), 'void appendEntityPickerField(')).join('\n')}
 ${switchChoiceStruct}
+${switchChoiceDecl}
+// The panel's value sizes on the select (value_size_attrs.h).
+struct lv_font_t {};
+const lv_font_t g_value_font{};
+#define FONT_VALUE (&g_value_font)
+void append_value_size_attrs(String& html,const lv_font_t*,const char*){html+=" data-sizes=\"28,20,24,32,40,28\"";}
 ${definition(switchHtml, 'void append_switch_choice(')}
 ${definition(switchHtml, 'void append_switch_fields_html(')}
 ${definition(read('src/types/scene/web_html.cpp'), 'void append_scene_fields_html(')}

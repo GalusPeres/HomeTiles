@@ -136,11 +136,13 @@ const build = ui.slice(ui.indexOf('void UIManager::buildUI('), ui.indexOf('tab_c
 assert.ok(apply.includes('applyScreenCorners();') &&
   build.indexOf('lv_obj_set_style_bg_color(scr, lv_color_hex(ui_theme::screen()), 0);') < build.indexOf('applyScreenCorners();'));
 const corners = ui.slice(ui.indexOf('void UIManager::applyScreenCorners() {'), ui.indexOf('void UIManager::processThemeChange() {'));
-// The P4's quick Settings switch fills the framebuffer black and draws only
-// the Settings controls again; the light theme lets LVGL draw the whole page
-// instead (black bars, then square corners after a fill, user 2026-10-10).
+// The quick Settings switch lets LVGL draw the whole page in both themes and
+// on every board (light theme: black bars, then square corners after a fill,
+// user 2026-10-10; dark theme on the V2: the black fill and one area per
+// control cost 147 ms, user 2026-10-28).
 const settingsSwitch = ui.slice(ui.indexOf('void UIManager::switchToTab(uint8_t index) {'));
-assert.match(settingsSwitch, /const bool fill = !ui_theme::light\(\);\n    if \(!fill\) \{[\s\S]*?lv_obj_invalidate\(tab_panels\[index\]\);\n    \} else \{\n      BoardHAL::displayFillScreen\(0x0000\);/);
+assert.match(settingsSwitch, /lv_obj_invalidate\(tab_panels\[index\]\);\n    const uint32_t cleared_ms = switch_started_ms;/);
+assert.doesNotMatch(settingsSwitch.slice(0, settingsSwitch.indexOf('void UIManager::switchToFolder(')), /displayFillScreen\(0x0000\)/);
 for (const marker of ['lv_obj_t* corner = lv_obj_create(lv_layer_sys());',
   'ui_surface_style::apply_radius(ring, popup_layout::kCardRadius + Device::kGridGap, 0);',
   'lv_obj_set_style_outline_color(ring, lv_color_black(), 0);',

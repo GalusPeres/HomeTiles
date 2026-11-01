@@ -17,6 +17,8 @@
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/device/device_popup.h"
+#include "src/ui/popups/vacuum/vacuum_popup.h"
+#include "src/ui/popups/calendar/calendar_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/energy/energy_popup.h"
 #include "src/ui/popups/light/light_popup.h"
@@ -637,6 +639,8 @@ void show_camera_popup(const CameraPopupInit& init) {
   hide_light_popup();
   hide_media_popup();
   hide_device_popup();
+  hide_vacuum_popup();
+  hide_calendar_popup();
   hide_climate_popup();
 
   if (!g_camera_popup) g_camera_popup = create_popup();

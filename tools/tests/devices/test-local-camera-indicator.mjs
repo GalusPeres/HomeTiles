@@ -264,18 +264,18 @@ assert.match(indicator, /if \(busy \|\| !ui\.bar \|\| !ui\.visible\) return;\s*b
 assert.match(indicator, /if \(!ui\.bar\) \{\s*if \(!visible\) return;\s*create\(ui\);\s*\}/);
 assert.match(indicator, /inline void poll\(lv_timer_t\*\) \{ refresh\(objects\(\)\); \}/);
 // Tab switches set the pill before the switch is drawn (b27 hid it one poll
-// later, visibly over the Settings page), and the partial Settings refresh
-// after the framebuffer clear redraws the stripe (b27 kept only the pieces
-// above the Settings controls on the 8-inch).
+// later, visibly over the Settings page). The Settings refresh marks the whole
+// page, so the stripe on the top layer is drawn in the same full-width bands
+// from the top (b27 kept only pieces after a framebuffer clear; b28 drew the
+// faded ends after the controls; the clear and the per-control areas went in
+// b589, user 2026-10-28).
 {
   const ui = read('src/ui/ui_manager.cpp');
   const partial = ui.slice(ui.indexOf('if (partial_settings_switch) {\n    lv_display_enable_invalidation(disp, true);'));
   assert.match(partial, /^if \(partial_settings_switch\) \{\s*lv_display_enable_invalidation\(disp, true\);\s*\/\/[^\n]*\n\s*camera_indicator::refreshNow\(\);/);
-  // Stripe first: LVGL draws the dirty areas in order, and b28 drew the faded
-  // ends only after the ~150 ms of Settings controls.
-  assert.ok(partial.indexOf('BoardHAL::displayFillScreen(0x0000);') < partial.indexOf('camera_indicator::invalidateVisible();') &&
-    partial.indexOf('camera_indicator::invalidateVisible();') < partial.indexOf('lv_obj_invalidate(child);') &&
-    partial.indexOf('lv_obj_invalidate(child);') < partial.indexOf('lv_refr_now(disp);'));
+  const refresh = partial.slice(0, partial.indexOf('lv_refr_now(disp);'));
+  assert.ok(refresh.includes('lv_obj_invalidate(tab_panels[index]);'), 'the whole Settings page is marked');
+  assert.doesNotMatch(refresh, /displayFillScreen|lv_obj_invalidate\(child\)/, 'no framebuffer clear, no area per control');
   assert.match(ui, /camera_indicator::refreshNow\(\);\s*lv_obj_invalidate\(lv_scr_act\(\)\);/);
   assert.match(indicator, /inline void invalidateVisible\(\) \{[\s\S]*?for \(lv_obj_t\* part : \{ui\.bar, ui\.left, ui\.right\}\) lv_obj_invalidate\(part\);/);
 }

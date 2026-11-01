@@ -181,6 +181,12 @@ struct Tile {
   // /_tile_weather_sensors sidecar. Empty = the weather entity's value.
   String weather_temperature_sensor;
   String weather_humidity_sensor;
+  // Power flow: its node entities, one per line in power_flow::Role order
+  // (solar, grid, battery, battery charge, home; later lines are kept for
+  // further consumers). Vacuum: its map, an image or camera entity (empty:
+  // the map the Bridge finds on the vacuum's device). In the
+  // /_tile_flow_entities sidecar.
+  String flow_entities;
 
   Tile()
       : type(TILE_EMPTY),
@@ -259,7 +265,8 @@ static inline bool tileContentEquals(const Tile& a, const Tile& b) {
          a.icon_disc_mode == b.icon_disc_mode && a.icon_glow == b.icon_glow &&
          a.icon_colors == b.icon_colors &&
          a.weather_temperature_sensor == b.weather_temperature_sensor &&
-         a.weather_humidity_sensor == b.weather_humidity_sensor;
+         a.weather_humidity_sensor == b.weather_humidity_sensor &&
+         a.flow_entities == b.flow_entities;
 }
 
 // A deleted (empty) tile keeps only its slot geometry. Its entity, texts and
@@ -382,6 +389,80 @@ static inline void applyWeatherSensorsRecord(Tile& tile, const String& record) {
   tile.weather_temperature_sensor = temperature;
   tile.weather_humidity_sensor = humidity;
   normalizeWeatherSensors(tile);
+}
+
+// Power flow node entities (Tile::flow_entities): at most this many lines,
+// each a Home Assistant id like a weather sensor or empty (a node without an
+// entity). Trailing empty lines are dropped, so "" means none at all.
+static constexpr size_t kFlowEntityLinesMax = 12;
+
+// The types that keep Tile::flow_entities.
+static constexpr bool tileKeepsFlowEntities(int type) {
+  return type == TILE_POWER_FLOW || type == TILE_VACUUM;
+}
+
+static inline void normalizeFlowEntities(Tile& tile) {
+  if (!tileKeepsFlowEntities(tile.type)) {
+    tile.flow_entities = "";
+    return;
+  }
+  if (tile.type == TILE_VACUUM) {
+    // Its first line only.
+    String line;
+    for (const char* c = tile.flow_entities.c_str(); *c && *c != '\n'; ++c) line += *c;
+    const String map = normalizeWeatherSensorEntity(line);
+    tile.flow_entities = map.startsWith("image.") || map.startsWith("camera.") ? map : String();
+    return;
+  }
+  String record;
+  String kept;
+  String line;
+  size_t lines = 0;
+  for (const char* c = tile.flow_entities.c_str();; ++c) {
+    if (*c && *c != '\n') {
+      line += *c;
+      continue;
+    }
+    if (lines < kFlowEntityLinesMax) {
+      if (lines) record += '\n';
+      const String entity = normalizeWeatherSensorEntity(line);
+      record += entity;
+      if (entity.length()) kept = record;
+      ++lines;
+    }
+    line = "";
+    if (!*c) break;
+  }
+  tile.flow_entities = kept;
+}
+
+// One line of the record ("" when absent).
+static inline String flowEntityAt(const String& record, size_t role) {
+  size_t line = 0;
+  String entity;
+  for (const char* c = record.c_str();; ++c) {
+    if (*c && *c != '\n') {
+      if (line == role) entity += *c;
+      continue;
+    }
+    if (line == role || !*c) return line == role ? entity : String();
+    ++line;
+  }
+}
+
+// Power flow options in key_code, which the type does not use otherwise
+// (V7 keeps key_code for types without a stored popup mode): the header
+// (off by default, user 2026-10-24: "ohne Kopf ist besser", "kann jeder
+// selbst entscheiden"), no card (the nodes on the screen like a Transparent
+// clock) and the sign of the grid and battery sensors.
+static constexpr uint8_t kFlowHeaderBit = 0x01;
+static constexpr uint8_t kFlowNoCardBit = 0x02;
+static constexpr uint8_t kFlowGridInvertBit = 0x04;
+static constexpr uint8_t kFlowBatteryInvertBit = 0x08;
+static constexpr uint8_t kFlowOptionBits = 0x0F;
+
+static inline bool powerFlowOption(const Tile& tile, uint8_t bit) {
+  return tile.type == TILE_POWER_FLOW && (tile.key_code & bit) != 0;
 }
 
 // Clock/Text/Back use the otherwise unused display mode byte: 0 inherits
@@ -805,7 +886,8 @@ static inline bool tileHasOwnColor(const Tile& tile) {
 // and no frame line in either theme, the screen shows through. Black was the
 // old way to sit a clock on the screen, so those tiles keep their look.
 static inline bool tileTransparent(const Tile& tile) {
-  return (tile.type == TILE_CLOCK || tile.type == TILE_TEXT) && tileHasOwnColor(tile) && tileBgColorRgb(tile) == 0;
+  return ((tile.type == TILE_CLOCK || tile.type == TILE_TEXT) && tileHasOwnColor(tile) && tileBgColorRgb(tile) == 0) ||
+         powerFlowOption(tile, kFlowNoCardBit);
 }
 
 static inline uint32_t tileBgColorOrDefault(const Tile& tile, uint32_t default_color) {
@@ -844,7 +926,7 @@ struct TileEntitySlot {
   // The other entity of the tile's rules (tile_icon_colors.h), or "".
   String rule_entity;
   // Further state entities of the tile, one per line (Weather temperature
-  // and humidity sensors), or "".
+  // and humidity sensors, Power flow nodes), or "".
   String extra_entities;
 };
 

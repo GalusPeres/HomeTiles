@@ -134,7 +134,7 @@ assert.match(
 );
 assert.match(
   popup,
-  /const bool missing = !state\.length\(\);[\s\S]*lv_label_set_text\(ctx->value_label, "--"\)/,
+  /const bool missing = !state\.length\(\);[\s\S]*show_header_value\(ctx,\s*missing \? String\("--"\)/,
   'A missing HA entity must stay distinct from unknown and unavailable in the popup',
 );
 assert.match(

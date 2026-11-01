@@ -7,6 +7,8 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 import {lvglHost} from '../../lib/lvgl-host.mjs';
+import {valueUnitSource} from '../../lib/value-unit-source.mjs';
+import {ruleIconSource} from '../../lib/rule-icon-source.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
 const control = read('src/types/value/value_control.cpp'), popup = read('src/ui/popups/sensor/sensor_popup.cpp');
@@ -47,7 +49,7 @@ ${popupSurfaceHost(root)}
 #include "src/ui/popups/popup_first_frame.h"
 PopupFirstFrame g_sensor_first_frame;
 void hide_popup_shell(lv_obj_t*){} void cancel_popup_open(lv_obj_t*){}
-struct PendingSensorInit{};using SensorPopupInit=PendingSensorInit;SensorPopupInit g_pending_sensor_init;bool g_sensor_open_pending=false;
+struct PendingSensorInit{};using SensorPopupInit=PendingSensorInit;SensorPopupInit g_pending_sensor_init;bool g_sensor_open_pending=false;bool g_sensor_early_history=false;
 #include <lvgl_private.h>
 #include <algorithm>
 #include <cassert>
@@ -60,11 +62,12 @@ struct PendingSensorInit{};using SensorPopupInit=PendingSensorInit;SensorPopupIn
 #include <iostream>
 #include <ArduinoJson.h>
 #include "src/types/value/value_editor_model.h"
-extern "C" { LV_FONT_DECLARE(ui_font_14); LV_FONT_DECLARE(ui_font_16); LV_FONT_DECLARE(ui_font_20); LV_FONT_DECLARE(ui_font_24);
+extern "C" { LV_FONT_DECLARE(ui_font_12); LV_FONT_DECLARE(ui_font_14); LV_FONT_DECLARE(ui_font_16); LV_FONT_DECLARE(ui_font_20); LV_FONT_DECLARE(ui_font_24);
 LV_FONT_DECLARE(ui_font_28); LV_FONT_DECLARE(ui_font_32); LV_FONT_DECLARE(ui_font_40); LV_FONT_DECLARE(ui_font_48);
 LV_FONT_DECLARE(ui_font_56); LV_FONT_DECLARE(ui_font_64); LV_FONT_DECLARE(ui_font_72); LV_FONT_DECLARE(ui_font_80); LV_FONT_DECLARE(ui_font_96);
 LV_FONT_DECLARE(ui_symbols_20); LV_FONT_DECLARE(ui_symbols_24);
 LV_FONT_DECLARE(mdi_icons_32); LV_FONT_DECLARE(mdi_icons_40); LV_FONT_DECLARE(mdi_icons_48); }
+${valueUnitSource(root)}
 #if defined(DEVICE_LAYOUT_480X480)
 #define FONT_MDI_ICONS (&mdi_icons_32)
 #elif defined(DEVICE_LAYOUT_1024X600)
@@ -87,7 +90,7 @@ const char* binary_sensor_state_label(const char*,const char* state,const char*)
 constexpr size_t EDITABLE_PAYLOAD_MAX=24576;
 #include "src/core/memory/psram_allocator.h"
 ${read('src/types/value/value_control.h').match(/struct EditableValue \{[\s\S]*?\n};/)[0]}
-${['label','finite_json','parse_editable_value','editable_display_value'].map(n=>fn(control,n)).join('\n')}
+${['label','finite_json','parse_editable_value','editable_display_unit','editable_display_number','editable_display_value'].map(n=>fn(control,n)).join('\n')}
 namespace Device { constexpr int kGridGap = SCREEN_WIDTH == 480 ? 10 : 16; }  // the profile's grid gap (popup header rule)
 ${geometry}
 ${styles}
@@ -107,7 +110,8 @@ template<size_t N> void serializeJson(const StaticJsonDocument<N>&doc,String&tex
 struct EditableControl;
 void editable_control_refresh(EditableControl*);void editable_control_close(EditableControl*);
 ${control.slice(control.indexOf('int editable_control_height('))}
-constexpr int kCardWidth=popup_layout::kCardWidth,kCardPad=popup_layout::kCardPad,kChartHeight=popup_layout::contentScale(325),kTimeAxisMarkerCount=8,kChartLineWidth=popup_layout::scale(4),kHistoryPoints24h=288;
+constexpr int kCardWidth=popup_layout::kCardWidth,kCardPad=popup_layout::kCardPad,kTimeLabelGap=popup_layout::scale480(12),kTimeLabelExtra=kTimeLabelGap-popup_layout::scale480(8),kChartHeight=popup_layout::contentScale(325)-kTimeLabelExtra,kTimeAxisMarkerCount=8,kChartLineWidth=popup_layout::scale(4),kHistoryPoints24h=288;
+constexpr int kChartLinePad=(kChartLineWidth+1)/2,kGraphInset=popup_layout::kHeaderIconX;
 #if defined(DEVICE_LAYOUT_480X480)
 constexpr int kContentLiftY=6,kBinaryTimelineHeight=22,kBinaryActivityRowHeight=42,kTimeAxisHeight=20;
 #elif defined(DEVICE_LAYOUT_1024X600)
@@ -115,19 +119,23 @@ constexpr int kContentLiftY=0,kBinaryTimelineHeight=24,kBinaryActivityRowHeight=
 #else
 constexpr int kContentLiftY=0,kBinaryTimelineHeight=30,kBinaryActivityRowHeight=50,kTimeAxisHeight=20;
 #endif
-enum class SensorHistoryRange {Day24,Day7};
+enum class SensorHistoryRange {Day24,Day7,Hours6,Hour1,Day30};
 constexpr int kBinaryVisibleActivityRows = SCREEN_HEIGHT <= 600 ? 4 : 5;
 struct SensorPopupContext {
- bool editable=true,state_history_mode=true,binary_icon_override=false;String editable_kind,entity_id,editable_history_id;SensorHistoryRange editable_requested_range=SensorHistoryRange::Day24;
- lv_obj_t *overlay=nullptr,*card=nullptr,*title_label=nullptr,*icon_label=nullptr,*control_row=nullptr,*range_day_btn=nullptr,*range_week_btn=nullptr;int chart_height=kChartHeight;SensorHistoryRange history_range=SensorHistoryRange::Day24;
- lv_obj_t *body_box,*chart_wrap,*chart,*binary_body,*binary_activity_title,*binary_activity_date,*binary_activity_viewport,*binary_activity_status,*binary_history_title,*binary_timeline,*binary_history_status,*y_min_label,*y_max_label,*y_min_line,*y_max_line;
- lv_obj_t *binary_time_labels[8],*time_lines[8],*time_labels[8];lv_chart_series_t* series;
+ bool editable=true,state_history_mode=true,binary_icon_override=false;String editable_kind,entity_id,editable_history_id,unit;SensorHistoryRange editable_requested_range=SensorHistoryRange::Day24;
+ lv_obj_t *overlay=nullptr,*card=nullptr,*title_label=nullptr,*icon_label=nullptr,*control_row=nullptr,*range_day_btn=nullptr,*range_week_btn=nullptr,*range_hours_btn=nullptr,*range_hour_btn=nullptr,*range_month_btn=nullptr;int chart_height=kChartHeight;SensorHistoryRange history_range=SensorHistoryRange::Day24;
+ lv_obj_t *body_box,*chart_wrap,*chart,*binary_body,*binary_activity_title,*binary_activity_date,*binary_activity_viewport,*binary_activity_status,*binary_history_title,*binary_timeline,*binary_history_status,*y_min_label,*y_max_label,*y_zero_label,*y_min_line,*y_max_line;
+ lv_obj_t *binary_time_labels[8],*time_lines[8],*time_labels[8];lv_chart_series_t* series;float time_fracs[8]={};uint8_t time_count=0;
  // The graph readout is covered by test-editable-history-lvgl.mjs.
  struct {void cancel(){}} readout;
 };
 void clear_chart(SensorPopupContext* ctx,int points){lv_chart_set_point_count(ctx->chart,points);lv_chart_set_range(ctx->chart,LV_CHART_AXIS_PRIMARY_Y,99,101);lv_chart_set_all_value(ctx->chart,ctx->series,100);}
 struct Range{int hours,points;};Range get_history_range_config(SensorHistoryRange range){return range==SensorHistoryRange::Day7?Range{168,288}:Range{24,288};}
 ${fn(popup,'set_label_style')}
+// The graph's drawing is exercised by test-editable-history-lvgl.mjs.
+void on_chart_area_draw(lv_event_t*){}void place_zero_label(SensorPopupContext*){}
+// No zero line here: the axis labels are covered by test-sensor-popup-axis-labels.mjs.
+int32_t graph_zero_row(const SensorPopupContext*,int32_t,int32_t){return -1;}String zero_label_text(const SensorPopupContext*){return String("0");}
 void build_chart(SensorPopupContext* ctx){auto* body_box=ctx->body_box;${chartBuild}}
 ${fn(popup,'resize_editable_chart')}
 void update_binary_time_axis(SensorPopupContext*);
@@ -140,6 +148,8 @@ ${fn(popup,'style_range_button')}
 ${fn(popup,'update_range_buttons')}
 ${fn(popup,'on_range_click')}
 ${fn(popup,'accept_editable_history_range')}
+#include "src/tiles/config/tile_icon_colors.h"
+${ruleIconSource(root, {codepoint: true})}
 ${fn(popup,'refresh_editable_popup_icon')}
 
 int explicit_layouts=0;
@@ -234,7 +244,7 @@ int main(int argc,char**argv){
    const int group_bottom=(track.y1+track.y2+popup_layout::scale(36))/2;
    assert(abs(value_area.y1+group_bottom-row_area.y1-row_area.y2)<=3);
    assert(lv_obj_get_width(c->number_box)==lv_obj_get_width(c->slider));
-   assert(lv_obj_get_height(c->slider)==popup_layout::scale(16));assert(lv_obj_get_style_width(c->slider,LV_PART_KNOB)==popup_layout::scale(36));assert(lv_obj_get_style_text_color(c->field,LV_PART_MAIN).red==255);assert(ctx.chart_height<kChartHeight&&ctx.chart_height>=40);std::cout<<"Layout "<<SCREEN_WIDTH<<"x"<<SCREEN_HEIGHT<<" editor="<<editable_control_height(kind)<<" chart="<<ctx.chart_height<<" activity="<<lv_obj_get_height(ctx.binary_activity_viewport)<<" row="<<kBinaryActivityRowHeight<<"\\n";assert(lv_obj_has_flag(c->up,LV_OBJ_FLAG_HIDDEN)&&lv_obj_has_flag(c->down,LV_OBJ_FLAG_HIDDEN));assert(lv_obj_get_style_bg_opa(c->number_box,LV_PART_MAIN)==LV_OPA_TRANSP);}
+   assert(lv_obj_get_height(c->slider)==popup_layout::scale(16));assert(lv_obj_get_style_width(c->slider,LV_PART_KNOB)==popup_layout::scale(36));assert(lv_obj_get_style_text_color(c->field,LV_PART_MAIN).red==255);assert(ctx.chart_height<kChartHeight&&ctx.chart_height>=40-kTimeLabelExtra);std::cout<<"Layout "<<SCREEN_WIDTH<<"x"<<SCREEN_HEIGHT<<" editor="<<editable_control_height(kind)<<" chart="<<ctx.chart_height<<" activity="<<lv_obj_get_height(ctx.binary_activity_viewport)<<" row="<<kBinaryActivityRowHeight<<"\\n";assert(lv_obj_has_flag(c->up,LV_OBJ_FLAG_HIDDEN)&&lv_obj_has_flag(c->down,LV_OBJ_FLAG_HIDDEN));assert(lv_obj_get_style_bg_opa(c->number_box,LV_PART_MAIN)==LV_OPA_TRANSP);}
   if(strcmp(kind,"select")==0){lv_area_t a,b;lv_obj_get_coords(c->dropdown,&a);lv_obj_get_coords(row,&b);assert(a.y1>=b.y1&&a.y2<b.y2);assert(lv_obj_get_style_text_font(c->dropdown,LV_PART_MAIN)==popup_layout::headerTitleFont());auto color=lv_obj_get_style_bg_color(c->dropdown,LV_PART_MAIN);assert(color.red==color.green&&color.green==color.blue);for(auto state:{LV_STATE_PRESSED,LV_STATE_FOCUSED,LV_STATE_DISABLED}){lv_obj_add_state(c->dropdown,state);auto actual=lv_obj_get_style_bg_color(c->dropdown,LV_PART_MAIN);assert(actual.red==actual.green&&actual.green==actual.blue);lv_obj_remove_state(c->dropdown,state);}}
   if(strcmp(kind,"time")==0){assert(!lv_obj_has_flag(c->fields[5].box,LV_OBJ_FLAG_HIDDEN));assert(lv_obj_has_flag(c->apply,LV_OBJ_FLAG_HIDDEN));assert(lv_obj_get_width(c->clock_box)<popup_layout::kContentWidth);assert(lv_obj_get_style_text_font(c->fields[3].roller,LV_PART_MAIN)==popup_layout::font40());
     for(int i=3;i<6;++i){assert(!c->fields[i].up&&!c->fields[i].down);lv_area_t parent,value;lv_obj_get_coords(c->fields[i].box,&parent);lv_obj_get_coords(c->fields[i].roller,&value);assert(value.y1>=parent.y1&&value.y2<=parent.y2);}}

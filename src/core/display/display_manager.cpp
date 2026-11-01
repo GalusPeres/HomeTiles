@@ -1,4 +1,5 @@
 #include "src/core/display/display_manager.h"
+#include "src/core/display/display_flush_gate.h"
 #include "src/core/power/power_manager.h"
 #include "src/core/hardware/board_hal.h"
 #include "src/devices/device_select.h"
@@ -170,6 +171,9 @@ static void tab5_note_flush(uint32_t pixels, uint32_t flush_us, uint32_t push_us
 // is too scarce we fall back to the previous PSRAM double buffer, so behaviour
 // is never worse than before.
 static constexpr size_t kInternalDrawReserveBytes = 150 * 1024;  // keep free for WiFi/SDIO/lwIP
+// 72 KB on every board. The V2 with 100 KB (b588/b589, 40 rows) hung its PPA
+// rotation on a 614x71 piece of a wide tile drawn alone (crash log, user
+// 2026-10-28); with 72 KB that tile's pieces stay at most 58 rows.
 static constexpr size_t kInternalDrawMaxBytes     = 72 * 1024;   // cap one SRAM band
 static constexpr size_t kInternalDrawMinLines     = 16;          // below this SRAM isn't worth it
 // Restore after OTA preparation: Wi-Fi, MQTT and the server already own
@@ -641,6 +645,9 @@ void IRAM_ATTR DisplayManager::flush_cb(lv_display_t *lv_disp, const lv_area_t *
   const bool packed_rows = (stride_bytes == row_bytes);
   const uint32_t area_px = w * h;
   const bool is_last_flush = lv_display_flush_is_last(lv_disp);
+  // The previous band's background copy (display_flush_gate.h) completes
+  // before anything else reaches the panel.
+  display_flush_gate::settle();
   static constexpr uint32_t kMinPixelsForDma = 2048;  // avoid DMA overhead on tiny dirty areas
   static constexpr uint32_t kReverseMinPixels = (SCREEN_WIDTH * SCREEN_HEIGHT) / 8;  // trigger only on large image updates
 #if defined(DEVICE_M5STACKS_TAB5)
@@ -723,6 +730,19 @@ void IRAM_ATTR DisplayManager::flush_cb(lv_display_t *lv_disp, const lv_area_t *
     tab5_cache_us += micros() - step_start_us;
     step_start_us = micros();
 #endif
+    // A band before the frame's last runs on in the background while LVGL
+    // walks the next band (display_flush_gate.h); its draw dispatch waits for
+    // the copy before the first pixel. The last band stays synchronous, so a
+    // frame always ends with every copy done.
+    if (!is_last_flush && display_flush_gate::begin(area->x1, area->y1, static_cast<int32_t>(w),
+                                                    static_cast<int32_t>(h), (const uint16_t*)px_map)) {
+      if (area->x1 == 0 && area->y1 == 0 && w == static_cast<uint32_t>(grid_layout::screen_w()) &&
+          h == static_cast<uint32_t>(grid_layout::screen_h())) {
+        g_fullscreen_flush_seq++;
+      }
+      lv_display_flush_ready(lv_disp);
+      return;
+    }
     BoardHAL::displayPushPixelsDMA(area->x1, area->y1, w, h, (uint16_t*)px_map);
 #if defined(DEVICE_M5STACKS_TAB5)
     tab5_push_us += micros() - step_start_us;
@@ -913,6 +933,9 @@ bool DisplayManager::init() {
   }
 
   lv_display_set_flush_cb(disp, flush_cb);
+  // A board that copies bands in the background (display_flush_gate.h) gets
+  // its gate in front of LVGL's draw unit; others keep synchronous flushes.
+  display_flush_gate::install_dispatch();
 
 #if defined(DEVICE_M5STACKS_TAB5)
   lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565_SWAPPED);

@@ -131,7 +131,6 @@ void process_binary_sensor_update_queue(uint8_t max_updates = 0);
 
 void reset_weather_widget(GridType grid_type, uint8_t grid_index);
 void reset_weather_widgets(GridType grid_type);
-void tile_renderer_invalidate_weather_payload(GridType grid_type);
 // The Bridge stored a new picture of this player (bridge_images.h): tiles
 // whose song it belongs to show it, and an open Media popup with them.
 void tile_renderer_media_picture_arrived(const char* entity_id);
@@ -152,6 +151,11 @@ void process_media_update_queue(uint8_t max_updates = 0);  // 0 drains the queue
 // Thread-safe tile graph history queue (MQTT callback -> main loop).
 void queue_tile_graph_history(const char* entity_id, const char* payload, size_t len);
 void process_tile_graph_queue();  // Call from the main loop before lv_timer_handler().
+// Graph tiles of the shown grid ask for their day again once the connection
+// is up and every five minutes; call from the main loop.
+void tile_graph_service_periodic();
+// A page was shown: its graph tiles without a day ask at once.
+void tile_graph_request_soon();
 void request_tile_graph_history(const char* entity_id);  // Request history for an entity.
 
 void tile_renderer_snapshot_tab0(TileWidgetCache* out);

@@ -18,6 +18,7 @@
 #include "src/types/climate/visuals.h"
 #include "src/types/weather/weather_icons.h"
 #include "src/ui/shared/theme_schedule.h"
+#include "src/ui/shared/value_unit.h"
 #include "src/types/weather/tile_layout.h"
 #include "src/types/weather/weather_sensors.h"
 #include "src/types/climate/renderer.h"
@@ -26,11 +27,14 @@
 #include "src/ui/ui_manager.h"
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
+#include "src/types/sensor/look_view.h"
 #include "src/ui/popups/media/media_popup.h"
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/types/types_registry.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
+#include "src/core/diagnostics/tile_frame_probe.h"
+#include "src/core/memory/psram_static.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_color_rules.h"
 #include "src/tiles/runtime/tile_icon_source.h"
@@ -43,6 +47,7 @@
 #include "src/web/server/web_admin.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/ui/shared/ui_surface_style.h"
+#include "src/ui/shared/rounded_corners.h"
 #include <Arduino.h>
 #include <HTTPClient.h>
 #include <Network.h>
@@ -364,6 +369,8 @@ static void clear_sensor_widgets(GridType grid_type) {
     target[i].gauge_max = 100;
     target[i].chart = nullptr;
     target[i].series = nullptr;
+    target[i].look = nullptr;
+    target[i].editable_hash = 0;
   }
 }
 
@@ -478,19 +485,6 @@ void reset_weather_widgets(GridType grid_type) {
   clear_weather_widgets(grid_type);
 }
 
-// Drop only the cached payload hashes, keeping the widget pointers intact.
-// Used when a grid is restored from a folder cache: the widgets are reused, so
-// without this the hash short-circuit in update_weather_tile_state() would skip
-// re-applying the cached payload and the tile could stay blank ("--").
-void tile_renderer_invalidate_weather_payload(GridType grid_type) {
-  WeatherTileWidgets* target = g_tab0_weather;
-  if (grid_type == GridType::TAB1) target = g_tab1_weather;
-  else if (grid_type == GridType::TAB2) target = g_tab2_weather;
-  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
-    target[i].last_payload_hash = 0;
-  }
-}
-
 static void clear_media_widgets(GridType grid_type) {
   MediaTileWidgets* target = tile_renderer_get_media_widgets(grid_type);
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
@@ -573,7 +567,9 @@ struct SensorUpdate {
 // (35 on the 7x5 layouts); the queue must hold that without dropping.
 static constexpr uint8_t QUEUE_SIZE =
     TILES_PER_GRID + 8 > 32 ? static_cast<uint8_t>(TILES_PER_GRID + 8) : 32;
-static SensorUpdate g_update_queue[QUEUE_SIZE];
+// In PSRAM, not in internal RAM: the S3 draw band gets what internal RAM
+// leaves above its reserve (psram_static.h).
+static SensorUpdate (&g_update_queue)[QUEUE_SIZE] = psram_static_array<SensorUpdate, QUEUE_SIZE>();
 
 // Keep byte-sized queue cursors together to avoid padding before each aligned
 // queue array. Array declarations and construction order remain unchanged.
@@ -749,7 +745,10 @@ static_assert(TILES_PER_GRID <= 64,
               "Switch update masks require at most 64 tile slots");
 
 static const uint8_t SWITCH_QUEUE_SIZE = 32;
-static SwitchUpdate g_switch_queue[SWITCH_QUEUE_SIZE];
+// In PSRAM, not in internal RAM: the S3 draw band gets what internal RAM
+// leaves above its reserve (psram_static.h).
+static SwitchUpdate (&g_switch_queue)[SWITCH_QUEUE_SIZE] =
+    psram_static_array<SwitchUpdate, SWITCH_QUEUE_SIZE>();
 static uint32_t g_switch_overflow_count = 0;
 
 static void invalidate_queued_switch_slot(GridType grid_type,
@@ -1766,11 +1765,12 @@ uint32_t switch_state_icon_color(const SwitchState& state) {
   if (state.supports_temperature && !state.supports_color && state.has_color_temp) {
     rgb = lv_color_to_u32(light_color_from_temperature_kelvin(state.color_temp_kelvin)) & 0xFFFFFF;
   }
-  // The light theme shows a light's color as Home Assistant does, the same
-  // on the tile and in its popup, white light in its light grey
-  // (tone_color::ha_light_color, user 2026-10-10: "genau so wie in HA").
-  if (ui_theme::theme_light()) rgb = tone_color::ha_light_color(rgb);
-  return rgb;
+  // A light's color as Home Assistant shows it, the same on the tile and in
+  // its popup, white light in its light grey (tone_color::ha_light_color):
+  // the light theme since 2026-10-10 ("genau so wie in HA"), the dark theme
+  // since 2026-10-26 (#130: below 40 % saturation raised to 40 %, so 4400 K
+  // fills like 4000 K).
+  return tone_color::ha_light_color(rgb);
 }
 
 bool switch_payload_icon_color(const char* payload, uint32_t& rgb, bool* active) {
@@ -2440,18 +2440,19 @@ static void update_climate_tile_state(
       kept_optimistic_target ? 0 : payload_hash;
 
   if (widget.value_label) {
-    String value = state.has_current_temperature
-                       ? i18n::format_number(
-                             configManager.getConfig().language,
-                             state.current_temperature,
-                             1)
-                       : String("--");
-    value += " ";
-    value += state.temperature_unit[0]
-                 ? state.temperature_unit
-                 : "\xC2\xB0"
-                   "C";
-    lv_label_set_text(widget.value_label, value.c_str());
+    // The unit a step smaller after the number (value_unit.h).
+    const String value = state.has_current_temperature
+                             ? i18n::format_number(
+                                   configManager.getConfig().language,
+                                   state.current_temperature,
+                                   1)
+                             : String("--");
+    value_unit::show(widget.value_label, value,
+                     state.has_current_temperature
+                         ? String(state.temperature_unit[0] ? state.temperature_unit
+                                                            : "\xC2\xB0"
+                                                              "C")
+                         : String());
   }
   refresh_climate_tile_content(grid_type, grid_index, state);
   if (widget.icon_label) {
@@ -2462,7 +2463,7 @@ static void update_climate_tile_state(
           tile ? climate_tile_base_icon(*tile) : String("thermostat");
       String icon = getMdiChar(climate_visual_icon(state, base_icon));
       if (!icon.length()) icon = getMdiChar("thermostat");
-      lv_label_set_text(widget.icon_label, icon.c_str());
+      tile_rule_icon::set_glyph(widget.icon_label, icon.c_str());
     }
     tile_icon_disc::set_icon_color(
         widget.icon_label, lv_color_hex(climate_visual_color(state)));
@@ -2562,13 +2563,27 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
   // State colors follow the tile's surface (tile_surface, tile_icon_disc.h).
   const ui_theme::SurfaceScope surface = tile_surface::scope(widgets.icon_label ? widgets.icon_label : widgets.temp_label);
 
-  const TileGridConfig& grid = tileConfig.getActiveGrid();
-  const Tile& tile = grid.tiles[grid_index];
+  // The tile of the grid these widgets belong to: a hidden folder being built
+  // (tile_renderer_set_build_grid) has its own sizes, so its forecast count
+  // and condition room are its own, not those of the shown folder's tile at
+  // the same index.
+  const Tile* tile_ptr = tile_renderer_get_tile_config(grid_type, grid_index);
+  if (!tile_ptr) return;
+  const Tile& tile = *tile_ptr;
   // The temperature/humidity sensors (weather_sensors.h) count as part of
   // the state, so a sensor change re-renders an unchanged weather payload.
+  // So do today's date and day or night: the forecast's day names and the
+  // night icons change with them under the same payload. With all of them
+  // in the hash a restored folder keeps its weather as drawn (V2 b597: the
+  // full re-render on every turn to Home).
+  String today_date;
+  const bool has_today = get_local_today_date(today_date);
+  weather_icons::SunTimes sun;
+  weather_icons::parse_sun(payload, sun);
+  const bool night = weather_icons::night_now(sun);
   const uint32_t payload_hash = weather_sensors::mix_hash(
       tile.weather_temperature_sensor, tile.weather_humidity_sensor,
-      fnv1a_hash(payload));
+      fnv1a_hash(payload) ^ (fnv1a_hash(today_date.c_str()) * 31U) ^ (night ? 0x9E3779B9U : 0U));
   if (widgets.last_payload_hash == payload_hash) {
     return;
   }
@@ -2590,8 +2605,6 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
   }
   // Home Assistant reports partly cloudy and sunny at night too; the bridge
   // sun times switch them to their night icons.
-  weather_icons::SunTimes sun;
-  weather_icons::parse_sun(json.c_str(), sun);
   theme_schedule::note_sun(sun);
   icon_name = weather_icons::for_now(icon_name, sun);
 
@@ -2671,21 +2684,21 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
   const lv_coord_t card_h = tile_geometry::extent(
       tile.row, tile.span_h < 1 ? 1.0f : tile.span_h, GRID_CELL_H, GRID_GAP);
   const uint8_t forecast_limit = weather_shows_forecast(card_h) ? weather_forecast_count(card_w) : 0;
-  String today_date;
-  const bool has_today = get_local_today_date(today_date);
 
   if (widgets.temp_label) {
-    if (!show_condition) {
-      lv_label_set_text(widgets.temp_label, temp_text.c_str());
-    } else if (!widgets.condition_label) {
+    // The temperature's unit a step smaller after it (value_unit.h); with
+    // the humidity behind it the line keeps one size for both units.
+    const bool own_unit = !tile.weather_humidity_sensor.length();
+    if (!show_condition || widgets.condition_label) {
+      if (own_unit) value_unit::show_text(widgets.temp_label, temp_text);
+      else value_unit::show(widgets.temp_label, temp_text, String());
+    } else {
       String combined = temp_text;
       if (condition_text.length() && condition_text != "--") {
         combined += " ";
         combined += condition_text;
       }
-      lv_label_set_text(widgets.temp_label, combined.c_str());
-    } else {
-      lv_label_set_text(widgets.temp_label, temp_text.c_str());
+      value_unit::show(widgets.temp_label, combined, String());
     }
     lv_obj_clear_flag(widgets.temp_label, LV_OBJ_FLAG_HIDDEN);
   }
@@ -2961,7 +2974,9 @@ struct MediaUpdate {
 };
 
 static const uint8_t MEDIA_QUEUE_SIZE = 24;
-static MediaUpdate g_media_queue[MEDIA_QUEUE_SIZE];
+// In PSRAM, not in internal RAM: the S3 draw band gets what internal RAM
+// leaves above its reserve (psram_static.h).
+static MediaUpdate (&g_media_queue)[MEDIA_QUEUE_SIZE] = psram_static_array<MediaUpdate, MEDIA_QUEUE_SIZE>();
 static uint32_t g_media_overflow_count = 0;
 
 static String media_first_non_empty(const String& a,
@@ -4604,7 +4619,7 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
     const Tile* tile = tile_renderer_get_tile_config(grid_type, grid_index);
     if (tile && tile->type == TILE_MEDIA) {
       const String icon = getMdiChar(media_state_icon::name(media_tile_icon_name(*tile), icon_form));
-      if (icon.length()) set_label_text_if_changed(widgets.icon_label, icon);
+      if (icon.length()) tile_rule_icon::set_glyph(widgets.icon_label, icon.c_str());
     }
   }
 
@@ -4753,7 +4768,12 @@ struct TileGraphHistoryUpdate {
   bool valid = false;
 };
 
-static TileGraphHistoryUpdate g_tile_graph_history;
+// Answers wait here until the loop applies them: several graph tiles ask at
+// once (tile_graph_service_periodic), and one slot lost every answer but the
+// last of a loop pass. Bounded: when full, the oldest answer is replaced.
+constexpr size_t kTileGraphQueueSlots = 4;
+static TileGraphHistoryUpdate g_tile_graph_history[kTileGraphQueueSlots];
+static size_t g_tile_graph_next = 0;
 
 static bool extract_numeric_for_chart(const String& text, float& out) {
   String normalized = text;
@@ -4775,6 +4795,10 @@ static void apply_tile_graph_history(const char* target_entity, const char* payl
   String json = payload;
   String entity_id;
   if (!extract_json_string_field(json, "entity_id", entity_id)) return;
+  // A tile shows the day: the popup's 6H and 7D answers come through here
+  // too and replaced it until the next refresh.
+  float hours = 24.0f;
+  if (extract_json_number_field(json, "hours", hours) && lroundf(hours) != 24) return;
 
   // Find matching tile with graph in active grid
   const TileGridConfig& grid = tileConfig.getActiveGrid();
@@ -4866,7 +4890,30 @@ static void apply_tile_graph_history(const char* target_entity, const char* payl
       }
     }
 
-    // Use all points (same as popup - no downsampling)
+    // One point per four pixels of the graph's width (the mean of each run,
+    // about the mockup's 96 points on a two-cell tile): the area below the
+    // line draws one rect and one triangle per segment (area_graph.h), and
+    // the line stays a calm line instead of LVGL's crowded mode of upright
+    // strokes. The popup keeps every point.
+    const int32_t graph_w = lv_obj_get_content_width(w.chart);
+    const size_t target = graph_w > 8 ? static_cast<size_t>(graph_w / 4) : 96;
+    if (values.size() > target && target >= 2) {
+      std::vector<float> reduced(target);
+      for (size_t j = 0; j < target; ++j) {
+        const size_t from = j * values.size() / target;
+        const size_t to = std::max(from + 1, (j + 1) * values.size() / target);
+        float sum = 0.0f;
+        size_t valid = 0;
+        for (size_t k = from; k < to; ++k) {
+          if (!isfinite(values[k])) continue;
+          sum += values[k];
+          ++valid;
+        }
+        reduced[j] = valid ? sum / valid : NAN;
+      }
+      values.swap(reduced);
+    }
+
     // Calculate min/max for range
     float min_v = 0.0f, max_v = 0.0f;
     bool has_range = false;
@@ -4926,17 +4973,77 @@ static void apply_tile_graph_history(const char* target_entity, const char* payl
 
 void queue_tile_graph_history(const char* entity_id, const char* payload, size_t len) {
   if (!payload || len == 0) return;
-  g_tile_graph_history.entity_id = entity_id ? entity_id : "";
-  g_tile_graph_history.payload = String(payload).substring(0, len);
-  g_tile_graph_history.valid = true;
+  TileGraphHistoryUpdate& slot = g_tile_graph_history[g_tile_graph_next];
+  g_tile_graph_next = (g_tile_graph_next + 1) % kTileGraphQueueSlots;
+  slot.entity_id = entity_id ? entity_id : "";
+  slot.payload = String(payload).substring(0, len);
+  slot.valid = true;
 }
 
 void process_tile_graph_queue() {
-  if (!g_tile_graph_history.valid) return;
+  // Oldest first.
+  for (size_t i = 0; i < kTileGraphQueueSlots; ++i) {
+    TileGraphHistoryUpdate& slot = g_tile_graph_history[(g_tile_graph_next + i) % kTileGraphQueueSlots];
+    if (!slot.valid) continue;
+    apply_tile_graph_history(slot.entity_id.c_str(), slot.payload.c_str());
+    slot.valid = false;
+    slot.payload = String();
+  }
+}
 
-  apply_tile_graph_history(g_tile_graph_history.entity_id.c_str(),
-                           g_tile_graph_history.payload.c_str());
-  g_tile_graph_history.valid = false;
+// Whether a graph tile's chart holds a day (a point that is not
+// LV_CHART_POINT_NONE).
+static bool tile_graph_has_day(const SensorTileWidgets& widgets) {
+  if (!widgets.chart || !widgets.series) return false;
+  const int32_t* values = lv_chart_get_series_y_array(widgets.chart, widgets.series);
+  const uint32_t count = lv_chart_get_point_count(widgets.chart);
+  for (uint32_t i = 0; values && i < count; ++i) {
+    if (values[i] != LV_CHART_POINT_NONE) return true;
+  }
+  return false;
+}
+
+// Graph tiles ask for their day when they are built; offline that request
+// is dropped (mqttPublishHistoryRequest), so a tile built at boot stayed
+// empty until its popup asked (user log 2026-10-26). The shown grid's graph
+// tiles ask again once the connection is up and every five minutes after
+// (the Bridge's day comes in 5-minute steps), so the graph follows the day.
+// A tile still without its day asks again every 15 s, and at once when its
+// page is shown (tile_graph_request_soon): the first request after
+// connecting timed out while the Bridge was not ready yet, and its late
+// answer came while another page was shown, where apply_tile_graph_history
+// finds no tile for it (user log 2026-10-28: graphs empty until pressed).
+constexpr uint32_t kTileGraphRefreshMs = 5UL * 60UL * 1000UL;
+constexpr uint32_t kTileGraphRetryMs = 15UL * 1000UL;
+static bool g_tile_graph_online = false;
+static uint32_t g_tile_graph_asked_ms = 0;
+static uint32_t g_tile_graph_retried_ms = 0;
+static bool g_tile_graph_page_shown = false;
+
+void tile_graph_request_soon() { g_tile_graph_page_shown = true; }
+
+void tile_graph_service_periodic() {
+  if (!networkManager.isMqttConnected()) {
+    g_tile_graph_online = false;
+    return;
+  }
+  const uint32_t now = millis();
+  const bool refresh = !g_tile_graph_online || (uint32_t)(now - g_tile_graph_asked_ms) >= kTileGraphRefreshMs;
+  const bool retry = g_tile_graph_page_shown || (uint32_t)(now - g_tile_graph_retried_ms) >= kTileGraphRetryMs;
+  if (!refresh && !retry) return;
+  g_tile_graph_page_shown = false;
+  g_tile_graph_retried_ms = now;
+  if (refresh) {
+    g_tile_graph_online = true;
+    g_tile_graph_asked_ms = now;
+  }
+  const TileGridConfig& grid = tileConfig.getActiveGrid();
+  for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
+    const Tile& tile = grid.tiles[i];
+    if (tile.type != TILE_SENSOR || tile.sensor_display_mode != 2 || !g_tab0_sensors[i].chart) continue;
+    if (!refresh && tile_graph_has_day(g_tab0_sensors[i])) continue;
+    if (tile.sensor_entity.length()) request_tile_graph_history(tile.sensor_entity.c_str());
+  }
 }
 
 void request_tile_graph_history(const char* entity_id) {
@@ -5117,8 +5224,10 @@ static uint8_t tile_surface_of(const Tile& tile, GridType grid_type) {
 // The rule of a filled tile (tile_surface set_rule, 0 = none): in the light
 // theme a tile with "Ausfuellen" (tileFills) is filled from the
 // start, with its icon's color or, without one, the neutral grey
-// (kNeutralIdle; user 2026-10-10: a light that is off is grey, like the dark
-// theme's grey card). A rule row with its own "Fuellen" (user 2026-10-11)
+// (kNeutralIdle; user 2026-10-10). A Switch tile (lights, switches) is filled
+// only while it is on: off it keeps the white card, so a white light that is
+// on (filled grey) never looks like one that is off (#130, user 2026-10-26).
+// A rule row with its own "Fuellen" (user 2026-10-11)
 // changes a tile between the white and the filled look while it runs: filled
 // while a row with "Fuellen" matches, white while a row without it matches.
 // Every other tile keeps the theme's card.
@@ -5127,7 +5236,9 @@ static uint8_t tile_surface_rule_of(const Tile& tile, GridType grid_type) {
       tile_has_own_color(tile) || camera_picture::head_over_picture(tile)) {
     return 0;
   }
-  if (tileFills(tile)) return tile_surface::kFollowTint | tile_surface::kNeutralIdle;
+  if (tileFills(tile)) {
+    return tile.type == TILE_SWITCH ? tile_surface::kFollowTint : tile_surface::kFollowTint | tile_surface::kNeutralIdle;
+  }
   return tile_icon_colors::rows_fill(tile.icon_colors.c_str()) ? tile_surface::kFollowTint : 0;
 }
 
@@ -5143,6 +5254,12 @@ lv_obj_t* render_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint
     const ui_theme::SurfaceScope scope(surface_theme >= 0 ? surface_theme : ui_theme::kThemeSurface);
     lv_obj_t* tile_obj =
         desc->render(parent, col, row, tile, index, grid_type, scene_cb);
+    // Its rounded fill, frame line, icon discs, control bars and pills drawn
+    // from kept corners (rounded_corners.h). First, so the probe below times
+    // the corners with everything else.
+    rounded_corners::attach_tree(tile_obj);
+    // What it costs in large frames (tile_frame_probe.h).
+    tile_frame_probe::watch(tile_obj, index, static_cast<uint8_t>(tile.type));
     tile_surface::set(tile_obj, surface);
     if (const uint8_t rule = tile_surface_rule_of(tile, grid_type)) {
       // A tile filled from the start stays filled (its base is kJewel).
@@ -5202,6 +5319,13 @@ void update_sensor_tile_value(GridType grid_type, uint8_t grid_index, const char
       lv_arc_set_value(target[grid_index].gauge, mapped);
     }
   }
+  // A look shows the value on its gauge; an unknown or unavailable state
+  // empties it.
+  if (lv_obj_t* look = target[grid_index].look) {
+    float numeric = NAN;
+    if (!value || !parse_sensor_number(String(value), numeric)) numeric = NAN;
+    sensor_look_view::set_value(look, numeric);
+  }
 
   String displayValue = value ? String(value) : String();
   displayValue.trim();
@@ -5225,19 +5349,13 @@ void update_sensor_tile_value(GridType grid_type, uint8_t grid_index, const char
     displayValue = "--";
   }
 
-  // Combine value and unit in one label at the same size.
-  String combined = displayValue;
-  if (unit && strlen(unit) > 0 && displayValue != "--") {
-    combined += " ";
-    combined += unit;
-  }
-  // The Bridge repeats unchanged states (minute snapshot, reconnects).
-  // lv_label_set_text() always reallocates, relayouts and redraws the label,
-  // so only hand it a text that differs.
-  const char* shown = lv_label_get_text(value_label);
-  if (!shown || strcmp(shown, combined.c_str()) != 0) {
-    lv_label_set_text(value_label, combined.c_str());
-  }
+  // The unit a step smaller right after the value, like the weather
+  // forecast (value_unit.h, user 2026-10-26). The Bridge repeats unchanged
+  // states (minute snapshot, reconnects): show() hands LVGL changed texts
+  // only, since lv_label_set_text() always relayouts and redraws.
+  String unit_text = unit && displayValue != "--" ? String(unit) : String();
+  unit_text.trim();
+  value_unit::show(value_label, target[grid_index].unit_label, displayValue, unit_text);
 
   // Per-tile icon colors follow every state update; "--" covers empty,
   // unavailable and unknown states, which keep the default white icon.
@@ -5249,5 +5367,15 @@ void update_sensor_tile_value(GridType grid_type, uint8_t grid_index, const char
                                    displayValue != "--", value, nullptr,
                                    lv_color_hex(ui_theme::text()));
     }
+    // The graph's line takes the icon's color when it draws
+    // (sensor_graph_area_cb): a new icon color redraws it.
+    lv_obj_t* chart = target[grid_index].chart;
+    lv_chart_series_t* series = target[grid_index].series;
+    if (chart && series &&
+        !lv_color_eq(lv_chart_get_series_color(chart, series), lv_obj_get_style_text_color(icon, LV_PART_MAIN))) {
+      lv_obj_invalidate(chart);
+    }
+    // A look's lit places take the icon's color when it draws.
+    if (target[grid_index].look) sensor_look_view::sync_color(target[grid_index].look);
   }
 }

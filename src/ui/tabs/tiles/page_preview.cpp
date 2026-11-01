@@ -94,8 +94,12 @@ Geometry geometry() {
 }
 
 struct State {
-  // The whole screen under the card: a tap there closes it.
+  // The whole screen under the card: a tap there closes it. It draws
+  // nothing, so it comes and goes without marking the screen for a redraw
+  // (b601: the whole Home was repainted under the card, 145 ms a frame).
   lv_obj_t* catcher = nullptr;
+  // The card on it: only its area (shadow included) is redrawn.
+  lv_obj_t* card = nullptr;
   // The head's dot row, hidden while the card shows its own.
   lv_obj_t* dots = nullptr;
   // Every picture's tiles, picture i from first[i] to first[i + 1].
@@ -267,8 +271,16 @@ void follow(uint16_t folder_id) {
 void close() {
   if (g_state.idle) lv_timer_delete(g_state.idle);
   g_state.idle = nullptr;
-  if (g_state.catcher) lv_obj_delete(g_state.catcher);
+  if (g_state.catcher) {
+    // The card's area is redrawn; the catcher goes without marking the rest.
+    if (g_state.card) lv_obj_invalidate(g_state.card);
+    lv_display_t* display = lv_obj_get_display(g_state.catcher);
+    if (display) lv_display_enable_invalidation(display, false);
+    lv_obj_delete(g_state.catcher);
+    if (display) lv_display_enable_invalidation(display, true);
+  }
   g_state.catcher = nullptr;
+  g_state.card = nullptr;
   for (lv_obj_t*& cell : g_state.cells) cell = nullptr;
   g_state.count = 0;
   g_state.card_dots = nullptr;
@@ -327,6 +339,9 @@ void open(lv_obj_t* dots) {
   const int card_x = (grid_layout::screen_w() - card_w) / 2;
   const int card_y = head.center_y - head.disc / 2;
 
+  // Built without marking anything; the card marks its own area at the end.
+  lv_display_t* display = lv_obj_get_display(lv_layer_top());
+  if (display) lv_display_enable_invalidation(display, false);
   g_state.catcher = plain(lv_layer_top());
   lv_obj_set_size(g_state.catcher, grid_layout::screen_w(), grid_layout::screen_h());
   tappable(g_state.catcher, on_close, nullptr, LV_EVENT_RELEASED);
@@ -396,7 +411,13 @@ void open(lv_obj_t* dots) {
     lv_obj_set_pos(name, geo.cell_pad, geo.cell_pad + geo.pic_h + geo.text_gap);
     lv_label_set_text(name, i == 0 ? home_bar::home_title(tr.home) : !folder || !folder->name[0] ? tr.home : folder->name);
   }
+  // LVGL places new objects on its next layout pass, which would mark the
+  // catcher's whole area after all: placed now, while nothing is marked.
+  lv_obj_update_layout(g_state.catcher);
+  if (display) lv_display_enable_invalidation(display, true);
+  lv_obj_invalidate(card);
 
+  g_state.card = card;
   g_state.count = count;
   g_state.card_dots = card_dots;
   g_state.current = current;

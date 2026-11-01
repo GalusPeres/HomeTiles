@@ -60,6 +60,7 @@ const ListTile kListTiles[] = {
     {"switches", TILE_SWITCH},  {"media", TILE_MEDIA},                  {"climates", TILE_CLIMATE},
     {"covers", TILE_COVER},     {"cameras", TILE_CAMERA},               {"locks", TILE_LOCK},
     {"alarm_panels", TILE_ALARM}, {"fans", TILE_FAN},          {"scenes", TILE_SCENE},
+    {"calendars", TILE_CALENDAR}, {"vacuums", TILE_VACUUM},
 };
 
 const char* listOfType(TileType type) {
@@ -83,6 +84,10 @@ const char* listOfTile(TileType type, const char* entity) {
 bool knownList(const String& list) {
   // Scenes, scripts and buttons: a Bridge on level 4 (ha_bridge_config.h).
   if (list == "scenes") return haBridgeConfig.supportsSceneSearch();
+  // Calendars: a Bridge on level 5.
+  if (list == "calendars") return haBridgeConfig.supportsCalendars();
+  // Vacuums: a Bridge on level 6.
+  if (list == "vacuums") return haBridgeConfig.supportsVacuums();
   for (const ListTile& entry : kListTiles) {
     if (list == entry.list) return true;
   }
@@ -105,6 +110,8 @@ const char* listOfSource(const char* entity) {
   if (!strncmp(entity, "binary_sensor.", 14)) return "binary_sensors";
   if (!strncmp(entity, "climate.", 8)) return "climates";
   if (!strncmp(entity, "cover.", 6)) return "covers";
+  // A Vacuum's chosen map: an image or a camera picture.
+  if (!strncmp(entity, "image.", 6) || !strncmp(entity, "camera.", 7)) return "images";
   return "switches";
 }
 
@@ -123,6 +130,25 @@ void addEntityLines(entity_declaration::Declaration& declaration, const char* li
   }
 }
 
+// A tile's own entities: a Calendar tile names up to four calendars,
+// separated by commas (types/calendar/calendar_store.h); every other tile one.
+void addTileEntities(entity_declaration::Declaration& declaration, TileType type, const char* entity) {
+  if (type != TILE_CALENDAR) {
+    declaration.add(listOfTile(type, entity), entity);
+    return;
+  }
+  std::string id;
+  for (const char* c = entity ? entity : "";; ++c) {
+    if (*c && *c != ',') {
+      if (*c != ' ') id += *c;
+      continue;
+    }
+    if (!id.empty()) declaration.add("calendars", id.c_str());
+    id.clear();
+    if (!*c) return;
+  }
+}
+
 // The declaration: every entity the panel uses, from its tiles and settings
 // alone. It never reads what the Bridge serves, so the Bridge's answer to one
 // declaration cannot change the next one (entity_declaration_core.h). It is
@@ -137,7 +163,7 @@ entity_declaration::Declaration collectDeclaration() {
   for (const FolderEntry& folder : tileConfig.getFolders()) {
     if (!tileConfig.getFolderEntitiesCached(folder.id, slots, TILES_PER_GRID)) continue;
     for (size_t i = 0; i < TILES_PER_GRID; ++i) {
-      declaration.add(listOfTile(slots[i].type, slots[i].entity), slots[i].entity);
+      addTileEntities(declaration, slots[i].type, slots[i].entity);
       declaration.add(listOfSource(slots[i].rule_entity), slots[i].rule_entity);
       addEntityLines(declaration, slots[i].extra_entities);
     }

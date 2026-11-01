@@ -1,13 +1,14 @@
 #include "src/types/switch/web_html.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
+#include "src/web/server/render/value_size_attrs.h"
 
 // One choice like Tile color: the label on its own row, then one line of
 // segmented buttons (setSwitchChoice in types/switch/admin.js). The hidden
 // select keeps the value, so loading, saving, drafts and previews use the
 // same field as before.
 void append_switch_choice(String& html, const String& tab_id, const char* field, const char* label,
-                          const SwitchChoice* choices, size_t count) {
+                          const SwitchChoice* choices, size_t count, const String& select_attrs) {
   html += R"html(              <label class="switch-choice-label" for=")html";
   html += tab_id;
   html += "_";
@@ -18,7 +19,9 @@ void append_switch_choice(String& html, const String& tab_id, const char* field,
   html += tab_id;
   html += "_";
   html += field;
-  html += "\">";
+  html += '"';
+  html += select_attrs;
+  html += '>';
   for (size_t i = 0; i < count; ++i) {
     html += "<option value=\"";
     html += choices[i].value;
@@ -64,13 +67,19 @@ void append_switch_fields_html(String& html, const String& tab_id) {
                                   {"1", tr.switch_layout_switch},
                                   {"0", tr.switch_icon_button}};
   append_switch_choice(html, tab_id, "switch_style", tr.switch_display, layouts, 4);
+  // The bar upright (bar_orientation.h), under the layout; the editor hides
+  // it for the icon button, which has no bar (syncSwitchOrientationField).
+  const SwitchChoice orientations[] = {{"0", tr.bar_horizontal}, {"1", tr.bar_upright}};
+  append_switch_choice(html, tab_id, "switch_orientation", tr.bar_orientation, orientations, 2);
   // The Sensor value sizes. One row high, the state beside the disc offers
   // the half-height ones (Default = title size, 24, 28); from 1.5 rows the
   // large state offers the full-size ones (Default = 28, 20, 24, 32, 40).
   // The editor hides the others (syncCompactValueFontOptions).
   const SwitchChoice sizes[] = {{"0", tr.sensor_value_size_default}, {"1", "20"}, {"2", "24"},
                                 {"5", "28"}, {"3", "32"}, {"4", "40"}};
-  append_switch_choice(html, tab_id, "switch_value_font", tr.sensor_value_size, sizes, 6);
+  String size_attrs;
+  append_value_size_attrs(size_attrs, FONT_VALUE, tr.sensor_value_size_default);
+  append_switch_choice(html, tab_id, "switch_value_font", tr.sensor_value_size, sizes, 6, size_attrs);
   if (tab_id != "screensaver") {
     const SwitchChoice presses[] = {{"0", tr.long_press}, {"1", tr.short_press}};
     append_switch_choice(html, tab_id, "switch_popup_open_mode", tr.popup_open, presses, 2);

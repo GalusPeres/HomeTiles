@@ -37,7 +37,10 @@ void apply_energy_fields_from_request(WebServer& server, Tile& tile) {
   }
   setTilePopupOpenMode(tile, popup_mode);
 
-  tile.sensor_display_mode = 0;
+  // The value alone (0) or today's hours as bars below the header (2,
+  // renderer.cpp); the screensaver's editor offers no choice.
+  tile.sensor_display_mode =
+      server.hasArg("sensor_display_mode") && server.arg("sensor_display_mode").toInt() == 2 ? 2 : 0;
   tile.sensor_gauge_min = 0;
   tile.sensor_gauge_max = 100;
   tile.sensor_gauge_arc = 100;

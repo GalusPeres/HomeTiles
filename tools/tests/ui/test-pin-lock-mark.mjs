@@ -126,4 +126,17 @@ assert.ok(server.includes('html += home_level && configManager.getConfig().setti
 assert.ok(between(access, '  function refreshSettingsTileLock(', '\n  }\n').includes(
   "if (locked) icon.insertAdjacentHTML('beforeend', PREVIEW_LOCK_MARK);"));
 
+// The rim's 24 copies and the lock are text tasks: only those inside the draw
+// band are made (V2 b596: a PIN Folder tile 7.5 ms, 25 tasks per band), and the
+// bar icon fonts unpack the lock glyph once (glyph_cache.h).
+assert.ok(mark.includes('const lv_area_t& band = layer->_clip_area;') &&
+  mark.includes('return a.x1 <= band.x2 && a.x2 >= band.x1 && a.y1 <= band.y2 && a.y2 >= band.y1;') &&
+  mark.includes('if (in_band(shifted)) lv_draw_label(layer, &dsc, &shifted);') &&
+  mark.includes('if (in_band(area)) lv_draw_label(layer, &dsc, &area);'),
+  'copies outside the band are not drawn');
+for (const size of [15, 18, 22, 26, 34]) {
+  assert.ok(read(`src/fonts/mdi_bar_icons_${size}.c`).includes('.get_glyph_bitmap = glyph_cache_bitmap,'),
+    `mdi_bar_icons_${size} unpacks each glyph once`);
+}
+
 console.log('PIN lock: tiles, the head gear, PIN popup header and Web Admin previews show the lock in the icon');

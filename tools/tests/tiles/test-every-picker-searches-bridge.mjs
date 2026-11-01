@@ -73,7 +73,7 @@ const targetRule = readRepoFile('src/types/scene/scene_target.h');
 for (const domain of ['scene', 'script', 'button', 'input_button']) {
   assert.match(targetRule, new RegExp(`value\\.startsWith\\("${domain}\\."\\)`), `${domain} ids are entity ids`);
 }
-assert.match(readRepoFile('src/types/scene/web_handler.cpp'), /setSceneTarget\(tile, server\.hasArg\("scene_alias"\)/);
+assert.match(readRepoFile('src/types/scene/web_handler.cpp'), /setSceneTarget\(tile, scene_entity_for\(server\.hasArg\("scene_alias"\)/);
 const renderer = readRepoFile('src/types/scene/renderer.cpp');
 assert.match(renderer, /new SceneEventData\{sceneTarget\(tile\), scene_cb\}/, 'a tap runs the target');
 assert.match(renderer, /haBridgeConfig\.findSceneEntity\(sceneTarget\(tile\)\)/, 'the icon comes from the target');
@@ -81,7 +81,7 @@ assert.doesNotMatch(renderer, /tile\.scene_alias/, 'nothing reads the alias alon
 assert.match(readRepoFile('src/ui/tabs/tiles/tab_tiles_unified.cpp'), /haBridgeConfig\.findSceneEntity\(sceneTarget\(tile\)\)/);
 assert.match(readRepoFile('src/web/server/render/web_admin_html.cpp'), /haBridgeConfig\.findSceneEntity\(sceneTarget\(tile\)\)/);
 assert.match(readRepoFile('src/web/server/handlers/web_admin_tiles.cpp'),
-  /appendJsonEscaped\(out, tile\.type == TILE_SCENE \? sceneTarget\(tile\) : tile\.scene_alias\);/, 'the editor gets the target');
+  /appendJsonEscaped\(out, tile\.type == TILE_SCENE \? scene_picker_value\(tile\) : tile\.scene_alias\);/, 'the editor gets the target');
 assert.match(readRepoFile('src/network/bridge/ha_bridge_config.cpp'), /if \(sceneTargetIsEntityId\(alias\)\) return alias;/);
 assert.match(search, /if \(list == "scenes"\) return haBridgeConfig\.supportsSceneSearch\(\);/, 'only a Bridge on level 4 is asked');
 assert.match(search, /if \(type == TILE_SCENE && !\(entity && sceneTargetIsEntityId\(String\(entity\)\)\)\) return nullptr;/,

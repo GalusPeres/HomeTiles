@@ -399,6 +399,12 @@ void appendPreviewScaleVars(String& html, const char* selector = ":root", bool p
       GRID_CELL_W - climate_layout::kOuterInset * 2);
   emit_exact("climate-control-v-pad-top", tile_layout::scale_480(5));
   emit_exact("climate-control-v-pad-bottom", tile_layout::scale_480(5));
+  // The Vacuum's row buttons (types/vacuum/vacuum_tile.cpp row_button):
+  // the room beside glyph and text and the gap between them; the gap
+  // between the two-row tile's map and its texts (the Media cover's).
+  emit_exact("vacuum-button-pad", tile_layout::scale_480(8));
+  emit_exact("vacuum-glyph-gap", tile_layout::scale_480(4));
+  emit_exact("vacuum-text-gap", tile_layout::scale(16));  // media_tile::kTextAfterCover
   {
     // Switch tile header layouts (types/switch/renderer.cpp): the control bar
     // one Climate gap below the corner disc, as high as in a one-row tile,
@@ -406,6 +412,15 @@ void appendPreviewScaleVars(String& html, const char* selector = ":root", bool p
     emit_exact("switch-bar-height",
                GRID_CELL_H - climate_layout::kOuterInset -
                    climate_layout::content_top(header.disc, tile_icon_disc::inset()));
+  }
+  {
+    // The Sensor looks' sizes in panel pixels (types/sensor/look_view.cpp):
+    // arc width, stripe band, stripe width, smallest gap, arc stripe pitch.
+    html += "--sensor-look-metrics:";
+    for (const int px : {12, 16, 6, 5, 11}) {
+      html += String(tile_layout::scale(px));
+      html += px == 11 ? ";" : " ";
+    }
   }
   html += "--settings-panel-width:";
   html += String(settings_panel_target_width_px());
@@ -579,11 +594,23 @@ static void appendHeadBarVars(String& html) {
   emit_scaled("head-dot", dots.dot);
   emit_scaled("head-dot-active", dots.active);
   emit_scaled("head-dot-gap", dots.gap);
-  char color[96];
-  snprintf(color, sizeof(color), "--head-disc-color:#%06X;--head-dot-on:#%06X;--head-dot-off:#%06X;",
+  char color[48];
+  snprintf(color, sizeof(color), "--head-disc-color:#%06X;",
            static_cast<unsigned>(settings_style::tone(ui_theme::light() ? ui_theme::screen() : tileDefaultBgColor(),
-                                                      settings_style::kGearColor).disc),
-           static_cast<unsigned>(home_bar::dot_color(true)), static_cast<unsigned>(home_bar::dot_color(false)));
+                                                      settings_style::kGearColor).disc));
   html += color;
-  html += "}</style>\n";
+  html += "}";
+  // The dots in both themes: html[data-panel-theme] switches them like the
+  // --pv-* roles (they kept the panel's theme of the page load, so the light
+  // preview showed the dark theme's white pill).
+  auto emit_dots = [&html](int8_t surface, const char* selector) {
+    const ui_theme::SurfaceScope scope(surface);
+    char value[112];
+    snprintf(value, sizeof(value), "%s{--head-dot-on:#%06X;--head-dot-off:#%06X;}", selector,
+             static_cast<unsigned>(home_bar::dot_color(true)), static_cast<unsigned>(home_bar::dot_color(false)));
+    html += value;
+  };
+  emit_dots(0, ":root");
+  emit_dots(1, "html[data-panel-theme=\"light\"]");
+  html += "</style>\n";
 }

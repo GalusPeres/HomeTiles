@@ -364,14 +364,15 @@
     const hue = rgb[0] !== rgb[1] || rgb[1] !== rgb[2];
     return seed.L > 0.9 && (!hue || seed.C < 0.08);
   }
-  // tone_color::light_accent(): the light theme's light color.
+  // tone_color::light_accent(): a light's color as Home Assistant shows it,
+  // in both themes (#130).
   function toneLightAccent(rgb) {
-    return panelLight() ? toneHaLightColor(rgb) : rgb;
+    return toneHaLightColor(rgb);
   }
-  // switch_state_icon_color() (tile_renderer.cpp): the light theme shows a
-  // light's color as Home Assistant does, white light in its light grey.
+  // switch_state_icon_color() (tile_renderer.cpp): a light's color as Home
+  // Assistant shows it, in both themes (#130), white light in its light grey.
   function toneLightShown(hex) {
-    if (!panelThemeLight() || !/^#[0-9a-f]{6}$/i.test(String(hex))) return hex;
+    if (!/^#[0-9a-f]{6}$/i.test(String(hex))) return hex;
     const rgb = [1, 3, 5].map(i => parseInt(String(hex).slice(i, i + 2), 16));
     return toneHex(toneHaLightColor(rgb)).toUpperCase();
   }
@@ -468,8 +469,10 @@
       // An icon without a color (white, almost white light) never tints the
       // card (tile_icon_source without_white).
       if (choice && toneNoColor(given)) choice = null;
-      // White light fills in the neutral grey (tile_icon_source with_white).
-      if (!choice && given && tileElem.dataset.followTint === '1' && toneNoColor(given) && toneOklch(given).L <= 0.95) {
+      // White light fills in the neutral grey (tile_icon_source with_white):
+      // the light theme's filled tiles, every tile of the dark theme (#130).
+      if (!choice && given && (tileElem.dataset.followTint === '1' || !panelThemeLight()) && toneNoColor(given) &&
+          toneOklch(given).L <= 0.95) {
         choice = { color: givenHex.toUpperCase(), percent: fill };
       }
       if (choice) {
@@ -546,6 +549,34 @@
     // color whenever it is tinted, in every tile color; else the neutral step.
     const controls = tinted || lightCircle ? tone : toneFill(card, given || [255, 255, 255], false, glowPct, seeThrough);
     tileElem.style.setProperty('--control-fill', rgba(controls.controlColor, controls.controlOpa));
+    // A Sensor look with a color bar (admin-look.js): every place in the
+    // colors this tile gives an icon of that color, the steps above for
+    // another icon color.
+    tileElem.sensorLookTones = rgb => {
+      const placeTinted = glow && iconDiscTinted('rgb(' + rgb.join(',') + ')');
+      let placeCircle = card;
+      if (placeTinted && !(fill > 0) && !seeThrough && typeof tileTintBackground === 'function') {
+        const base = String(getComputedStyle(tileElem).getPropertyValue('--tile-card') || '').trim();
+        const familyHex = tileTintBackground(base || '#1A1A1A', toneHex(rgb), ICON_FILL_DEFAULT);
+        placeCircle = [1, 3, 5].map(i => parseInt(familyHex.slice(i, i + 2), 16));
+      }
+      let placeTone = toneFill(placeCircle, rgb, placeTinted, glowPct, seeThrough);
+      if (lightCircle) {
+        const shown = toneReadableIcon(rgb);
+        const picked = placeTinted || !iconDiscTinted('rgb(' + shown.join(',') + ')') ? shown : (panelRole('icon') || shown);
+        const over = toneNoColor(picked) ? [189, 189, 189] : picked;
+        const share = Number(panelVar('--pv-light-circle', '0.8'));
+        const amount = glowPct * (Number.isFinite(share) ? share : 0.8) / 100;
+        placeTone = { controlColor: toneBlend(card, over, Math.round(Math.min(1, Math.max(amount, 0.1)) * 255)), controlOpa: 255 };
+      }
+      if (placeTinted && !seeThrough && tileElem.dataset.surface === 'jewel' && typeof toneJewelFill === 'function') {
+        placeTone = toneJewelFill(card, rgb, glowPct, Number(tileElem.dataset.jewelStrength) || 20);
+      }
+      const placeControls = placeTinted || lightCircle ? placeTone : toneFill(card, rgb, false, glowPct, seeThrough);
+      return { lit: toneHex(toneReadableIcon(rgb)), off: rgba(placeControls.controlColor, placeControls.controlOpa) };
+    };
+    tileElem.style.setProperty('--icon-shown', given ? toneHex(toneReadableIcon(given)) : 'currentColor');
+    if (typeof renderSensorLookPreview === 'function') renderSensorLookPreview(tileElem);
     // The icon, readable like on the device (the same with every tile color,
     // Circle strength and circle option).
     if (!given) return;
@@ -688,8 +719,12 @@
   // (resolveIconColorRecord, same result as the firmware), else `fallback`.
   // `out`, when given, receives the matching state line's own "Fuellen"
   // (`fill`: 1, 0, or -1 when "Ausfuellen" decides).
+  // `out.icon`: the matching stop's or line's own icon ('' without one).
   function previewIconColor(typeValue, record, entity, meta, binaryState, fallback, out = null) {
-    if (out) out.fill = -1;
+    if (out) {
+      out.fill = -1;
+      out.icon = '';
+    }
     if (!record || typeof tileTypeHasIconColors !== 'function' ||
         !tileTypeHasIconColors(typeValue)) return fallback;
     const type = String(typeValue ?? '0');
@@ -811,8 +846,9 @@
     } else {
       delete el.dataset.followTint;
     }
-    // A tile with "Fill" shows the neutral grey without a tint (kNeutralIdle).
-    if (el.dataset.followTint === '1' && tileFillOf(tile?.icon_colors) > 0) {
+    // A tile with "Fill" shows the neutral grey without a tint (kNeutralIdle);
+    // a Switch tile (type 5) only fills while on (tile_surface_rule_of, #130).
+    if (el.dataset.followTint === '1' && tileFillOf(tile?.icon_colors) > 0 && surfaceType !== '5') {
       el.dataset.neutralIdle = '1';
     } else {
       delete el.dataset.neutralIdle;
@@ -840,7 +876,9 @@
     if (meta.css) cls.push(meta.css);
     if (typeValue === '0' && (!meta.css || meta.css !== 'empty')) cls.push('empty');
     resetTileClasses(el, cls);
-    if (typeValue === '5') applySwitchPreviewLayout(el, tile.switch_style, Number(tile.span_h) === 0.5);
+    if (typeValue === '5') {
+      applySwitchPreviewLayout(el, tile.switch_style, Number(tile.span_h) === 0.5, Number(tile.bar_orientation) === 1);
+    }
     el.dataset.type = typeValue;
     // Every circle shows, in its icon's color (user 2026-10-11: no circle options).
     el.dataset.iconDisc = '0';
@@ -923,8 +961,11 @@
       if (deviceKind) {
         devicePreviewState = parseDevicePreviewPayload(deviceDetailPayload(tile.sensor_entity || '', sensorMeta));
         if (!normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) {
-          iconName = devicePreviewIcon(deviceKind, devicePreviewState);
+          iconName = devicePreviewIcon(deviceKind, devicePreviewState, '', iconName);
         }
+      }
+      if (previewKind === 'calendar' && !normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) {
+        iconName = 'calendar';
       }
       let binarySensorPreviewState = null;
       if (previewKind === 'binary_sensor') {
@@ -956,8 +997,11 @@
                 ? devicePreviewColor(deviceKind, devicePreviewState)
                 : (previewKind === 'binary_sensor'
                   ? binarySensorPreviewColor(binarySensorPreviewState)
-                  : ''))), ruleFill);
+                  : (previewKind === 'calendar' ? calendarPreviewIconColor(tile) : '')))), ruleFill);
         if (typeof setPreviewRuleFill === 'function') setPreviewRuleFill(el, ruleFill);
+        // A matching rule shows its own icon (tile_rule_icon.h); weather
+        // icons keep their own.
+        if (ruleFill.icon && previewKind !== 'weather' && !lockIsIcon) iconName = ruleFill.icon;
         const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
         html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '>' +
           (locked && !lockIsIcon ? PREVIEW_LOCK_MARK : '') + '</i>';
@@ -968,6 +1012,7 @@
         displayTitle = metaNames[tile.sensor_entity] ||
           titleFromEntity(tile.sensor_entity);
       }
+      if (previewKind === 'calendar') displayTitle = calendarPreviewTitle(tile, displayTitle, sensorMeta);
       if (displayTitle.length) {
         html += '<div class="tile-title" id="' + tab + '-tile-' + index + '-title">' +
           tileTitleHtml(displayTitle) + '</div>';
@@ -992,7 +1037,7 @@
         el.classList.toggle('climate-header', climateValue && !climateHalf);
         if (climateHalf || climateValue) {
           html += '<div class="tile-value tile-switch-state">' +
-            escapeHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
+            unitTextHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
         }
         if (!climateHalf) {
           html += climatePreviewSlots(
@@ -1007,13 +1052,14 @@
       }
       if (previewKind === 'cover') html += coverPreviewExtraHtml(coverPreviewState, Number(tile.span_h) === 0.5);
       if (deviceKind) html += devicePreviewExtraHtml(deviceKind, devicePreviewState, Number(tile.span_h) === 0.5);
+      if (previewKind === 'calendar') html += calendarPreviewExtraHtml(tile, sensorMeta);
       if (previewKind === 'binary_sensor') {
         html += '<div class="tile-value tile-binary-sensor-value ' + (Number(tile.sensor_value_font) ? sensorValueClass : '') + '" id="' +
           tab + '-tile-' + index + '-value">' +
           escapeHtml(binarySensorPreviewStateText(binarySensorPreviewState)) +
           '</div>';
       }
-      if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + escapeHtml(editablePreviewText(iconEntity, previewKind, sensorMeta)) + '</div>';
+      if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + editablePreviewHtml(iconEntity, previewKind, sensorMeta) + '</div>';
       if (previewKind === 'clock') {
         const flags = normalizeClockFlags(tile.sensor_decimals);
         const clockTimeFont = tile.key_code || 40;
@@ -1057,6 +1103,11 @@
           tile.sensor_entity ? (sensorMeta?.mediaValues?.[tile.sensor_entity] ?? '') : ''),
           tile, iconName, tile.sensor_entity ? (metaNames[tile.sensor_entity] || '') : '');
       }
+      if (previewKind === 'power_flow' && typeof applyPowerFlowPreview === 'function') {
+        applyPowerFlowPreview(el, tile, sensorMeta);
+      } else {
+        el.classList.remove('power-flow-tile', 'power-flow-no-card');
+      }
       if (typeof applyTileRulesTint === 'function') {
         applyTileRulesTint(el, typeValue, tile.icon_colors, tile.sensor_entity || '', sensorMeta);
       }
@@ -1074,7 +1125,8 @@
         applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
       }
       if (deviceKind) {
-        applyDevicePreview(el, deviceKind, devicePreviewState, Number(tile.span_h) === 0.5);
+        applyDevicePreview(el, deviceKind, devicePreviewState, Number(tile.span_h) === 0.5,
+          Number(tile.bar_orientation) === 1, {w: Number(tile.span_w) || 1, h: Number(tile.span_h) || 1});
         applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
       }
       if (typeValue === '9') {

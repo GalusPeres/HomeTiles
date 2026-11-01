@@ -121,6 +121,17 @@ Result Client::rotate(p4_dsi_camera_presenter::Presenter& presenter,
                       int32_t panel_width, int32_t panel_height,
                       int32_t x, int32_t y, int32_t w, int32_t h,
                       const uint16_t* data, uint8_t rotation) {
+  const Result started = rotateBegin(presenter, panel_width, panel_height, x, y, w, h, data, rotation);
+  if (started != Result::Drawn) return started;
+  return rotateFinish(presenter);
+}
+
+Result Client::rotateBegin(p4_dsi_camera_presenter::Presenter& presenter,
+                           int32_t panel_width, int32_t panel_height,
+                           int32_t x, int32_t y, int32_t w, int32_t h,
+                           const uint16_t* data, uint8_t rotation) {
+  // One rotation at a time: a started one is completed first.
+  if (pending_.active) rotateFinish(presenter);
   if (reinit_at_ms_ && static_cast<int32_t>(millis() - reinit_at_ms_) >= 0) {
     reinit_at_ms_ = 0;
     reset();
@@ -174,27 +185,51 @@ Result Client::rotate(p4_dsi_camera_presenter::Presenter& presenter,
   oper.mode = PPA_TRANS_MODE_NON_BLOCKING;
   oper.user_data = done_;
 
-  Dma2dArbiterGuard dma2d_guard(25);
-  if (!done_ || !dma2d_guard.locked()) return Result::CpuFallback;
+  // The DMA2D lease stays held until rotateFinish() (dma2d_arbiter.h): no
+  // JPEG decode may share the 2D-DMA channels while the rotation runs.
+  if (!done_ || !dma2d_arbiter::lock(25)) return Result::CpuFallback;
   xSemaphoreTake(done_, 0);
   const esp_err_t err = ppa_do_scale_rotate_mirror(handle_, &oper);
   if (err != ESP_OK) {
+    dma2d_arbiter::unlock();
     Serial.printf("[Device/%s] PPA rotate submit failed err=%d -> CPU cooldown\n",
                   device_name_, static_cast<int>(err));
     noteFault();
     return Result::CpuFallback;
   }
+  pending_.active = true;
+  pending_.x = x;
+  pending_.y = y;
+  pending_.w = w;
+  pending_.h = h;
+  pending_.dst_x = dst_x;
+  pending_.dst_y = dst_y;
+  pending_.rotation = rotation;
+  return Result::Drawn;
+}
+
+bool Client::rotateDone() const {
+  return !pending_.active || (done_ && uxSemaphoreGetCount(done_) > 0);
+}
+
+Result Client::rotateFinish(p4_dsi_camera_presenter::Presenter& presenter) {
+  if (!pending_.active) return Result::Drawn;
+  const Pending p = pending_;
+  pending_.active = false;
+  bool lease_held = true;
   if (xSemaphoreTake(done_, pdMS_TO_TICKS(kPpaRotateTimeoutMs)) != pdTRUE &&
       xSemaphoreTake(done_, pdMS_TO_TICKS(kPpaPreviewGraceMs)) != pdTRUE) {
     // Accepted DMA work cannot be cancelled. Keep ownership through restart;
     // a CPU fallback here would race an engine still writing the framebuffer.
-    dma2d_guard.detach();
+    lease_held = false;
     p4_dsi_camera_presenter::restartAfterPpaTimeout(
-        device_name_, "LVGL PPA rotation", x, y, w, h, w, rotation,
+        device_name_, "LVGL PPA rotation", p.x, p.y, p.w, p.h, p.w, p.rotation,
         kPpaRotateTimeoutMs + kPpaPreviewGraceMs);
   }
   noteSuccess();
-  if (!presenter.noteUiWrite(dst_x, dst_y, h, w, true)) {
+  const bool synced = presenter.noteUiWrite(p.dst_x, p.dst_y, p.h, p.w, true);
+  if (lease_held) dma2d_arbiter::unlock();
+  if (!synced) {
     Serial.printf("[Device/%s] UI framebuffer cache sync failed\n", device_name_);
     return Result::Failed;
   }

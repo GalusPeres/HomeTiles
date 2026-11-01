@@ -29,6 +29,24 @@ void append_button(String& html, const char* css, const char* role, const char* 
   html += "</button>";
 }
 
+// A rule's own icon (tile_icon_colors.h "RRGGBB,<icon>", user 2026-10-28):
+// the hidden field keeps the icon name (empty = the tile's own icon), the
+// button opens the tile head's icon picker for it (tiles/tile-head.js
+// data-icon-input) and shows the icon in the rule's color (icon-colors.js).
+void append_rule_icon(String& html, const String& id, const char* role, const char* title) {
+  html += R"html(<input type="hidden" id=")html";
+  html += id;
+  html += R"html(_icon" value="" data-icon-color=")html";
+  html += role;
+  html += R"html("><button type="button" class="tile-rule-icon none" id=")html";
+  html += id;
+  html += R"html(_icon_button" data-icon-input=")html";
+  html += id;
+  html += R"html(_icon" aria-haspopup="listbox" title=")html";
+  appendHtmlEscaped(html, title);
+  html += R"html("><i class="mdi mdi-shape-outline"></i></button>)html";
+}
+
 }  // namespace
 
 // The icon color sits with the icon fields (Icon group); its own
@@ -179,6 +197,10 @@ void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
                   <input type="color" class="icon-color-stop-picker" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_stop_color" data-icon-color="stop-color" tabindex="-1" aria-hidden="true">
+                  <input type="hidden" id=")html";
+  html += tab_id;
+  // The selected stop's icon (its icon buttons under the stops, icon-colors.js).
+  html += R"html(_tile_icon_stop_icon" value="" data-icon-color="stop-icon">
                   <div class="icon-color-range">
                     <label>)html";
   appendHtmlEscaped(html, tr.tile_icon_color_min);
@@ -218,26 +240,33 @@ void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
     html += String(tile_icon_colors::kMaxValueBytes);
     html += R"html(" data-icon-color="value" placeholder=")html";
     appendHtmlEscaped(html, tr.tile_icon_color_state);
+    // The state, its color, its own icon (mockup rule-icons, user
+    // 2026-10-28: behind the color) and remove; contains and the row's own
+    // "Fuellen" (tile_icon_colors.h "is+"/"is-") below the state.
     html += R"html(">
-                  <label class="icon-color-contains"><input type="checkbox" id=")html";
-    html += id;
-    html += R"html(_has" data-icon-color="has"> )html";
-    appendHtmlEscaped(html, tr.tile_icon_color_contains);
-    // The row's own "Fuellen" (tile_icon_colors.h "is+"/"is-").
-    html += R"html(</label>
-                  <label class="icon-color-contains"><input type="checkbox" id=")html";
-    html += id;
-    html += R"html(_fill" data-icon-color="row-fill"> )html";
-    appendHtmlEscaped(html, tr.tile_rule_fill);
-    html += R"html(</label>
                   <input type="color" id=")html";
     html += id;
     html += R"html(_color" value="#22C55E" data-icon-color="rule-color">
+                  )html";
+    append_rule_icon(html, id, "rule-icon", tr.tile_group_icon);
+    html += R"html(
                   <button type="button" class="tile-color-reset-btn" data-icon-color="remove" data-rule=")html";
     html += String(row);
     html += R"html(" title=")html";
     appendHtmlEscaped(html, tr.tile_icon_color_remove);
     html += R"html("><i class="mdi mdi-close"></i></button>
+                  <div class="tile-icon-rule-options">
+                    <label class="icon-color-contains"><input type="checkbox" id=")html";
+    html += id;
+    html += R"html(_has" data-icon-color="has"> )html";
+    appendHtmlEscaped(html, tr.tile_icon_color_contains);
+    html += R"html(</label>
+                    <label class="icon-color-contains"><input type="checkbox" id=")html";
+    html += id;
+    html += R"html(_fill" data-icon-color="row-fill"> )html";
+    appendHtmlEscaped(html, tr.tile_rule_fill);
+    html += R"html(</label>
+                  </div>
                 </div>
 )html";
   }
@@ -275,7 +304,7 @@ void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
     html += R"html("> )html";
     appendHtmlEscaped(html, tr.tile_rule_fill);
     html += R"html(</label></div>
-                <div class="tile-color-row">
+                <div class="tile-color-row tile-color-row-icon">
                   <input type="color" id=")html";
     html += tab_id;
     html += "_tile_icon_";
@@ -285,6 +314,9 @@ void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
     html += "\" data-default=\"";
     html += row.color;
     html += R"html(" data-unset="1" data-icon-color="binary">
+                  )html";
+    append_rule_icon(html, tab_id + "_tile_icon_" + row.state, "binary-icon", tr.tile_group_icon);
+    html += R"html(
                   <button type="button" class="tile-color-reset-btn" data-icon-color="binary-clear" data-state=")html";
     html += row.state;
     html += R"html(" title=")html";

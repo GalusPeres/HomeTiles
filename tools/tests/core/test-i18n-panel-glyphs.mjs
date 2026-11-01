@@ -1,5 +1,6 @@
 // Every language may only use characters the panel fonts carry (Latin-1,
-// Latin Extended-A, general punctuation, the euro sign; ui_font_*.c), or the
+// Latin Extended-A, general punctuation, the euro sign, and Cyrillic from
+// their fallbacks; ui_font_*.c), in every text size, or the
 // ones English uses at the same place (Web-only texts such as "Cold → Warm").
 // The Czech time zones came with the minus sign U+2212 (2026-10-18), which
 // the panel would have drawn as nothing; a language pack must pass the same.
@@ -77,11 +78,29 @@ const literals = (type, name) => {
   return [...body.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(match => decode(match[1]));
 };
 
-const opts = /Opts:.*$/m.exec(readRepoFile('src/fonts/ui_font_20.c'))[0];
-const ranges = [...opts.matchAll(/-r (0x[0-9A-Fa-f]+)(?:-(0x[0-9A-Fa-f]+))?/g)]
-  .map(match => [parseInt(match[1], 16), parseInt(match[2] || match[1], 16)]);
-assert.ok(ranges.some(([first, last]) => first <= 0x0100 && last >= 0x017F), 'the fonts carry Latin Extended-A');
-const inFont = cp => cp === 0x0A || ranges.some(([first, last]) => cp >= first && cp <= last);
+// A font's ranges from its Opts line (`-r a-b` or `--range a-b,c-d`), with
+// the ranges of the font it falls back to.
+function fontRanges(name) {
+  const source = readRepoFile(`src/fonts/${name}.c`);
+  const opts = /Opts:.*$/m.exec(source)[0];
+  const ranges = [...opts.matchAll(/(?:-r|--range) (\S+)/g)].flatMap(match => match[1].split(',')).map(part => {
+    const [first, last] = part.split('-').map(value => parseInt(value, 16));
+    return [first, last ?? first];
+  });
+  const fallback = /\.fallback = &(\w+),/.exec(source);
+  return fallback ? [...ranges, ...fontRanges(fallback[1])] : ranges;
+}
+
+// Every text size of ui_font_for_size must carry a character (the clock
+// digit fonts 80 and 96 carry no letters). Russian (2026-10-29) brought
+// Cyrillic fallbacks to every size (ui_font_cyrillic_*.c).
+const textSizes = [12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 72];
+const fonts = textSizes.map(size => ({size, ranges: fontRanges(`ui_font_${size}`)}));
+for (const {size, ranges} of fonts) {
+  assert.ok(ranges.some(([first, last]) => first <= 0x0100 && last >= 0x017F), `ui_font_${size} carries Latin Extended-A`);
+  assert.ok(ranges.some(([first, last]) => first <= 0x0410 && last >= 0x044F), `ui_font_${size} carries Cyrillic`);
+}
+const inFont = cp => cp === 0x0A || fonts.every(({ranges}) => ranges.some(([first, last]) => cp >= first && cp <= last));
 
 const codes = [...source.matchAll(/\{&kStrings(\w+), &kLocale\w+\}/g)].map(match => match[1]);
 assert.ok(codes.includes('En') && codes.length >= 7, 'every built-in language is registered');

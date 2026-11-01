@@ -28,6 +28,20 @@
     // stays in the size fields (page-fields.js).
     const pageTile = tileElem.classList.contains('page-field-tile');
     const tileSpan = name => pageTile ? 1 : Number(document.getElementById(prefix + '_tile_' + name)?.value || 1);
+    // The edited tile's size, and for a Sensor look its gauge range and
+    // color record from the editor (admin-look.js setSensorLookData).
+    const sensorLookLayout = () => {
+      const layout = {span_w: tileSpan('span_w'), span_h: tileSpan('span_h')};
+      if (document.getElementById(prefix + '_tile_type')?.value !== '1') return layout;
+      const number = id => {
+        const raw = document.getElementById(prefix + id)?.value;
+        return raw === undefined || String(raw).trim() === '' ? undefined : Number(raw);
+      };
+      layout.sensor_gauge_min = number('_sensor_gauge_min');
+      layout.sensor_gauge_max = number('_sensor_gauge_max');
+      layout.icon_colors = typeof collectIconColorRecord === 'function' ? collectIconColorRecord(tab) : '';
+      return layout;
+    };
 
     const wasActive = currentTileTab === tab && currentTileIndex >= 0;
     const typeWas = tileElem.dataset.type || '0';
@@ -37,11 +51,32 @@
     const meta = getTileTypeMeta(type);
     const iconInput = document.getElementById(prefix + '_tile_icon');
     const switchStyle = document.getElementById(prefix + '_switch_style')?.value || '0';
+    // The bar upright (bar_orientation.h): Switch and Fan.
+    const switchUpright = document.getElementById(prefix + '_switch_orientation')?.value === '1';
+    const fanUpright = document.getElementById(prefix + '_fan_orientation')?.value === '1';
     const isEnergyType = type === '14';
     // Half-height tiles offer only the value sizes that fit.
     const halfHeight = tileSpan('span_h') === 0.5;
-    for (const id of ['_sensor_value_font', '_binary_sensor_value_font', '_energy_value_font'])
-      syncCompactValueFontOptions(document.getElementById(prefix + id), halfHeight);
+    // An Energy tile with bars has its value beside the disc like the Sensor
+    // graph tile (types/energy/renderer.cpp).
+    const energyBars = isEnergyType && document.getElementById(prefix + '_energy_display_mode')?.value === '2';
+    syncCompactValueFontOptions(document.getElementById(prefix + '_binary_sensor_value_font'), halfHeight);
+    syncCompactValueFontOptions(document.getElementById(prefix + '_energy_value_font'), halfHeight || energyBars);
+    // The display mode the previews take: the Energy tile keeps its own field.
+    const previewDisplayMode = document.getElementById(prefix + (isEnergyType ? '_energy_display_mode' : '_sensor_display_mode'))?.value || 0;
+    // A Sensor graph tile, and a look with its value in the head, shows its
+    // value in the header row beside the disc like a half-height tile
+    // (types/sensor/renderer.cpp).
+    const sensorMode = document.getElementById(prefix + '_sensor_display_mode')?.value || '0';
+    const sensorGraph = type === '1' && (sensorMode === '2' ||
+      (typeof isSensorLookMode === 'function' && isSensorLookMode(sensorMode) && !sensorLookValueInside(sensorMode)));
+    // A value inside a look's arc or ring offers every size, its Default the
+    // 20 or 24 the panel draws there.
+    const sensorInside = type === '1' && !halfHeight && typeof isSensorLookMode === 'function' &&
+      isSensorLookMode(sensorMode) && sensorLookValueInside(sensorMode);
+    syncCompactValueFontOptions(document.getElementById(prefix + '_sensor_value_font'), halfHeight || sensorGraph,
+                                sensorInside ? (tileSpan('span_h') > 1 ? 2 : 1) : 0);
+    if (type === '1' || isEnergyType) syncSwitchChoices(tab);
     for (const kind of ['number', 'select', 'datetime'])
       syncEditableValueFontOptions(document.getElementById(prefix + '_' + kind + '_value_font'), halfHeight);
     if (type === '5') {
@@ -49,7 +84,7 @@
       // state of a tall tile the full-size ones.
       const spanH = tileSpan('span_h');
       syncCompactValueFontOptions(document.getElementById(prefix + '_switch_value_font'),
-                                  !switchSensorLook(switchStyle, spanH));
+                                  !switchSensorLook(switchStyle, spanH, switchUpright));
       syncSwitchChoices(tab);
     }
     const deviceKind = typeof devicePreviewKind === 'function' ? devicePreviewKind(type) : '';
@@ -58,7 +93,7 @@
       // the full-size ones (tile_header.h).
       const spanH = tileSpan('span_h');
       syncCompactValueFontOptions(document.getElementById(prefix + (deviceKind ? '_' + deviceKind : '_cover') +
-        '_value_font'), !(spanH > 1));
+        '_value_font'), !(spanH > 1 && !(deviceKind === 'fan' && fanUpright)));
       syncSwitchChoices(tab);
     }
     const previewKind = meta.preview || 'none';
@@ -98,6 +133,7 @@
                 : (previewKind === 'camera' ? cameraEntity : '')))))));
     if (isEditablePreview(previewKind)) iconEntity = document.getElementById(prefix + '_' + previewKind + '_entity')?.value || '';
     if (deviceKind) iconEntity = document.getElementById(prefix + '_' + deviceKind + '_entity')?.value || '';
+    const calendarTile = previewKind === 'calendar' ? calendarTileFromInputs(tab, tileSpan('span_w'), tileSpan('span_h')) : null;
     if (type === '2') {
       const alias = document.getElementById(prefix + '_scene_alias')?.value || '';
       iconEntity = sceneEntityOf(alias);
@@ -133,9 +169,10 @@
     if (deviceKind) {
       devicePreviewState = parseDevicePreviewPayload(deviceDetailPayload(iconEntity));
       if (!normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) {
-        iconName = devicePreviewIcon(deviceKind, devicePreviewState);
+        iconName = devicePreviewIcon(deviceKind, devicePreviewState, '', iconName);
       }
     }
+    if (calendarTile && !normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) iconName = 'calendar';
     let binarySensorPreviewState = null;
     if (previewKind === 'binary_sensor') {
       binarySensorPreviewState = parseBinarySensorPreviewPayload(
@@ -151,7 +188,7 @@
     }
 
     resetTileClasses(tileElem, meta.css ? ['tile', meta.css] : ['tile']);
-    if (type === '5') applySwitchPreviewLayout(tileElem, switchStyle, halfHeight);
+    if (type === '5') applySwitchPreviewLayout(tileElem, switchStyle, halfHeight, switchUpright);
     tileElem.style.background = '';
     delete tileElem.dataset.bgOpacity;
     tileElem.dataset.type = type;
@@ -169,9 +206,7 @@
       applyTileAriaLabel(tileElem, '', type);
       if (wasActive) tileElem.classList.add('active');
       updateLayoutFromInputs(tab);
-    applyCompactSensorPreview(tileElem, type, {span_w:tileSpan('span_w'),
-      span_h:tileSpan('span_h')},
-      document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
+    applyCompactSensorPreview(tileElem, type, sensorLookLayout(), previewDisplayMode, sensorValueFont);
       return;
     }
 
@@ -244,8 +279,11 @@
               ? devicePreviewColor(deviceKind, devicePreviewState)
               : (previewKind === 'binary_sensor'
                 ? binarySensorPreviewColor(binarySensorPreviewState)
-                : ''))), ruleFill);
+                : (calendarTile ? calendarPreviewIconColor(calendarTile) : '')))), ruleFill);
       if (typeof setPreviewRuleFill === 'function') setPreviewRuleFill(tileElem, ruleFill);
+      // A matching rule shows its own icon (tile_rule_icon.h); weather icons
+      // keep their own.
+      if (ruleFill.icon && previewKind !== 'weather' && !lockIsIcon) iconName = ruleFill.icon;
       const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
       html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '>' +
         (locked && !lockIsIcon ? PREVIEW_LOCK_MARK : '') + '</i>';
@@ -256,6 +294,7 @@
       displayTitle = sensorMetaCache.names[cameraEntity] ||
         titleFromEntity(cameraEntity);
     }
+    if (calendarTile) displayTitle = calendarPreviewTitle(calendarTile, displayTitle);
     if (displayTitle) {
       html += '<div class="tile-title" id="' + tileId + '-title">' +
         tileTitleHtml(displayTitle) + '</div>';
@@ -272,7 +311,7 @@
       tileElem.classList.toggle('climate-header', climateValue && !climateHalf);
       if (climateHalf || climateValue) {
         html += '<div class="tile-value tile-switch-state">' +
-          escapeHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
+          unitTextHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
       }
       if (!climateHalf) {
         html += climatePreviewSlots(
@@ -285,6 +324,7 @@
     }
     if (previewKind === 'cover') html += coverPreviewExtraHtml(coverPreviewState, halfHeight);
     if (deviceKind) html += devicePreviewExtraHtml(deviceKind, devicePreviewState, halfHeight);
+    if (calendarTile) html += calendarPreviewExtraHtml(calendarTile);
     if (previewKind === 'binary_sensor') {
       html += '<div class="tile-value tile-binary-sensor-value ' + (Number(sensorValueFont) ? sensorValueClass : '') + '" id="' +
         tileId + '-value">' +
@@ -292,7 +332,7 @@
         '</div>';
     }
 
-    if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + escapeHtml(editablePreviewText(iconEntity, previewKind)) + '</div>';
+    if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + editablePreviewHtml(iconEntity, previewKind) + '</div>';
 
     if (previewKind === 'sensor') {
       const entitySelect = document.getElementById(prefix + (isEnergyType ? '_energy_entity' : '_sensor_entity'));
@@ -374,6 +414,18 @@
         span_h: tileSpan('span_h')
       }, iconName, mediaEntity ? (sensorMetaCache.names?.[mediaEntity] || '') : '');
     }
+    if (previewKind === 'power_flow' && typeof applyPowerFlowPreview === 'function') {
+      applyPowerFlowPreview(tileElem, {
+        flow_entities: powerFlowRecordFromInputs(prefix),
+        key_code: powerFlowOptionsFromInputs(prefix),
+        span_w: tileSpan('span_w'),
+        span_h: tileSpan('span_h'),
+        title,
+        icon_name: iconInput?.value || ''
+      }, sensorMetaCache);
+    } else {
+      tileElem.classList.remove('power-flow-tile', 'power-flow-no-card');
+    }
     if (typeof applyTileRulesTint === 'function' && typeof collectIconColorRecord === 'function' &&
         typeof iconColorOwnEntity === 'function') {
       applyTileRulesTint(tileElem, type, collectIconColorRecord(prefix), iconColorOwnEntity(prefix, String(type)), sensorMetaCache);
@@ -391,7 +443,10 @@
         span_w: tileSpan('span_w')});
     }
     if (previewKind === 'cover') applyCoverPreview(tileElem, coverPreviewState, halfHeight);
-    if (deviceKind) applyDevicePreview(tileElem, deviceKind, devicePreviewState, halfHeight);
+    if (deviceKind) {
+      applyDevicePreview(tileElem, deviceKind, devicePreviewState, halfHeight, fanUpright,
+        {w: tileSpan('span_w'), h: tileSpan('span_h')});
+    }
     if (wasActive) tileElem.classList.add('active');
     if (typeWas !== type && wasActive) {
       tileElem.classList.add('active');
@@ -400,9 +455,7 @@
     }
     if (type === '5') updateSwitchValuePreview(tab);
     updateLayoutFromInputs(tab);
-    applyCompactSensorPreview(tileElem, type, {span_w:tileSpan('span_w'),
-      span_h:tileSpan('span_h')},
-      document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
+    applyCompactSensorPreview(tileElem, type, sensorLookLayout(), previewDisplayMode, sensorValueFont);
     // The analog and the wall clock place their face once the tile has its
     // size and classes again (updateLayoutFromInputs, applyCompactSensorPreview):
     // before them the tile measured 1 x 1 in the middle of its rebuild, and the

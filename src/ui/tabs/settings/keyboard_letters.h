@@ -7,8 +7,8 @@
 // names its own letters in its LocaleProfile (keyboard_letters), and the
 // accent page and the forms of a held letter are made from them, the common
 // European letters after. Capitals and the plain letter an accented one
-// belongs to follow Unicode's Latin-1 and Latin Extended-A blocks, the
-// letters the panel fonts carry, so a new language brings only its data.
+// belongs to follow Unicode's Latin-1, Latin Extended-A and Cyrillic blocks,
+// the letters the panel fonts carry, so a new language brings only its data.
 namespace keyboard_letters {
 
 // The accent page's rows: ten, ten, and seven between Shift and Backspace.
@@ -79,6 +79,10 @@ inline size_t encode(uint32_t cp, char* out, size_t size) {
 // The capital of a small letter; signs and letters without one (ß) stay.
 inline uint32_t upper(uint32_t cp) {
   if (cp >= 'a' && cp <= 'z') return cp - 32;
+  // Cyrillic: а..я after А..Я, ѐ..џ after Ѐ..Џ, ґ after Ґ.
+  if (cp >= 0x430 && cp <= 0x44F) return cp - 0x20;
+  if (cp >= 0x450 && cp <= 0x45F) return cp - 0x50;
+  if (cp == 0x491) return 0x490;
   if (cp >= 0xE0 && cp <= 0xFE && cp != 0xF7) return cp - 0x20;
   if (cp == 0xFF) return 0x178;
   // Latin Extended-A pairs a capital with the small letter after it; from
@@ -91,9 +95,22 @@ inline uint32_t upper(uint32_t cp) {
   return cp;
 }
 
-// The plain letter ('a'..'z') an accented small letter is typed from by
-// holding it ('a' for 'ą', 's' for 'ß'); 0 for anything else.
-inline char plain(uint32_t cp) {
+// The small letter of a capital on a key (Shift): ASCII and Cyrillic, the
+// letters of the letter pages; anything else stays.
+inline uint32_t lower(uint32_t cp) {
+  if (cp >= 'A' && cp <= 'Z') return cp + 32;
+  if (cp >= 0x410 && cp <= 0x42F) return cp + 0x20;
+  if (cp >= 0x400 && cp <= 0x40F) return cp + 0x50;
+  if (cp == 0x490) return 0x491;
+  return cp;
+}
+
+// The plain letter an accented small letter is typed from by holding it
+// ('a' for 'ą', 's' for 'ß', Cyrillic е for ё and ь for ъ like the common
+// Russian keyboards); 0 for anything else.
+inline uint32_t plain(uint32_t cp) {
+  if (cp == 0x451) return 0x435;
+  if (cp == 0x44A) return 0x44C;
   struct Range {
     uint16_t first;
     uint16_t last;
@@ -109,7 +126,7 @@ inline char plain(uint32_t cp) {
       {0x179, 0x17E, 'z'}, {0x17F, 0x17F, 's'},
   };
   for (const Range& range : kRanges) {
-    if (cp >= range.first && cp <= range.last) return range.letter;
+    if (cp >= range.first && cp <= range.last) return static_cast<uint32_t>(range.letter);
   }
   return 0;
 }
@@ -152,9 +169,10 @@ inline void row_counts(uint8_t count, uint8_t out[3]) {
   out[1] = static_cast<uint8_t>(rest - out[0]);
 }
 
-// The forms offered when `letter` ('a'..'z') is held: the language's own
-// first, then the common and further letters. Returns how many `out` holds.
-inline uint8_t variants(const char* own, char letter, uint32_t* out, uint8_t capacity) {
+// The forms offered when the small `letter` of a key is held: the language's
+// own first, then the common and further letters. Returns how many `out`
+// holds.
+inline uint8_t variants(const char* own, uint32_t letter, uint32_t* out, uint8_t capacity) {
   const auto same = [letter](uint32_t cp) { return plain(cp) == letter; };
   uint8_t count = add_letters(own, out, 0, capacity, same);
   count = add_letters(kCommon, out, count, capacity, same);

@@ -99,6 +99,7 @@ History popups have **7D** and **24H** views (Energy: **7D** and **Today**); the
 | [Weather](tiles.md#weather), [Media](tiles.md#media), [Climate](tiles.md#climate) | Forecast, playback, temperature and modes |
 | [Fan](tiles.md#fan), [Lock](tiles.md#lock), [Alarm Panel](tiles.md#alarm-panel) | Speed and presets, lock and open, arming modes |
 | [Camera](tiles.md#camera) | Live video, also full screen |
+| [Calendar](tiles.md#calendar) | Month with the day's events, or the coming weeks as a list |
 
 Home Assistant can also open a folder or popup using the display's [View Select entity](bridge.md#control-the-displayed-view).
 
@@ -134,9 +135,9 @@ The connected network with its address and **Disconnect**, the **Hotspot** for a
 
 ### Localization
 
-Choose English, German, French, Polish, Czech, Slovak, or Spanish, the time zone, the time and date formats, and the keyboard layout. Tile titles also support Cyrillic characters.
+Choose English, German, French, Polish, Czech, Slovak, Spanish, or Russian, the time zone, the time and date formats, and the keyboard layout. Tile titles support Cyrillic characters in every text size.
 
-The keyboard follows the language when set to **Auto**: German, Czech, and Slovak use QWERTZ, French uses AZERTY, and English, Polish, and Spanish use QWERTY. The key beside **?123** shows the language's own letters first, for example ä, ö, ü, and ß in German, á, č, ď, é, ě, í, ň, ó, ř, š, ť, ú, ů, ý, and ž in Czech, or ñ, á, é, í, ó, ú, ü, ¿, and ¡ in Spanish, followed by other common European letters; **ABC** returns to the letters. Holding a letter offers its accented forms, the language's own first.
+The keyboard follows the language when set to **Auto**: German, Czech, and Slovak use QWERTZ, French uses AZERTY, Russian uses ЙЦУКЕН, and English, Polish, and Spanish use QWERTY. The key beside **?123** shows the language's own letters first, for example ä, ö, ü, and ß in German, á, č, ď, é, ě, í, ň, ó, ř, š, ť, ú, ů, ý, and ž in Czech, or ñ, á, é, í, ó, ú, ü, ¿, and ¡ in Spanish, followed by other common European letters; **ABC** returns to the letters. Holding a letter offers its accented forms, the language's own first. On the Russian keyboard the same key switches to QWERTY for passwords (**ABC**) and back (**АБВ**), and holding е or ь gives ё or ъ.
 
 <figure class="ht-screenshot">
 <img src="../images/v09-settings-2.png" alt="Localization settings" width="1280" height="800" loading="lazy">

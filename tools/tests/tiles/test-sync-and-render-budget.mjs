@@ -65,8 +65,11 @@ assert.equal((update.match(/Serial\.printf/g) || []).length,
              'every queued log line must be gated on a changed payload and the per-tile 30 s limit');
 assert.match(fn(folders, 'tile_queue_log_due'), /now - last < 30000UL/);
 const renderer = read('src/tiles/runtime/tile_renderer.cpp');
-assert.match(fn(renderer, 'update_sensor_tile_value'),
-             /if \(!shown \|\| strcmp\(shown, combined\.c_str\(\)\) != 0\) \{\n\s*lv_label_set_text\(value_label, combined\.c_str\(\)\);/);
+// An unchanged value and unit hand LVGL nothing (value_unit.h since b550).
+assert.match(fn(renderer, 'update_sensor_tile_value'), /value_unit::show\(value_label, target\[grid_index\]\.unit_label, displayValue, unit_text\);/);
+const valueUnit = read('src/ui/shared/value_unit.cpp');
+assert.match(valueUnit, /const char\* shown = lv_label_get_text\(label\);\n\s*if \(!shown \|\| strcmp\(shown, text\) != 0\) lv_label_set_text\(label, text\);/);
+assert.match(valueUnit, /if \(lv_obj_get_style_pad_right\(label, LV_PART_MAIN\) != room\) lv_obj_set_style_pad_right\(label, room, 0\);/);
 // A full-grid cache application fits the sensor queue; an overflow repairs
 // the visible grid from the entity cache.
 assert.match(renderer, /QUEUE_SIZE =\n\s*TILES_PER_GRID \+ 8 > 32/);
@@ -125,7 +128,7 @@ function preloadAfter() { return fn(read('src/ui/tabs/tiles/tab_tiles_unified.cp
 // perf2: popups switching ranges reuse answers younger than a minute.
 assert.match(fn(energy, 'energy_request_period'), /force && !request\.retry_requested && request\.last_response_ms != 0 &&\s*\(uint32_t\)\(now - request\.last_response_ms\) < kEnergyFreshMs/);
 assert.match(fn(mqtt, 'mqttPublishHistoryRequest'), /replay_history_response\(entity_id, hours, period_minutes, points\)/);
-assert.match(fn(mqtt, 'replay_history_response'), /now - entry\.stored_ms >= history_replay_max_age_ms\(entry\.period_minutes\)/);
+assert.match(fn(mqtt, 'fresh_history_replay'), /now - entry\.stored_ms < history_replay_max_age_ms\(entry\.period_minutes\)/);
 // As long as its own steps, at least a minute (user 2026-10-14: 7 days was
 // slow again after a minute): a week in hour steps for an hour.
 assert.match(mqtt, /static constexpr uint8_t kHistoryReplaySlots = 8;\s*static constexpr uint32_t kHistoryReplayMinAgeMs = 60UL \* 1000UL;\s*static uint32_t history_replay_max_age_ms\(uint16_t period_minutes\) \{\s*const uint32_t step = static_cast<uint32_t>\(period_minutes\) \* 60UL \* 1000UL;\s*return step > kHistoryReplayMinAgeMs \? step : kHistoryReplayMinAgeMs;/);

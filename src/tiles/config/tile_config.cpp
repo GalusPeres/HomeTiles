@@ -1,6 +1,7 @@
 #include "src/core/text/title_text.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/types/sensor/gauge_range.h"
+#include "src/types/sensor/sensor_look.h"
 #include "src/tiles/config/tile_layouts.h"
 #include "src/devices/device.h"
 #include "src/core/config/config_manager.h"
@@ -470,6 +471,7 @@ static const char* kEntityPathDir = "/_tile_entities";
 static const char* kTitlePathDir = "/_tile_titles";
 static const char* kIconColorPathDir = "/_tile_icon_colors";
 static const char* kWeatherSensorPathDir = "/_tile_weather_sensors";
+static const char* kFlowEntityPathDir = "/_tile_flow_entities";
 static const char* kTileGridDir = "/_tile_grids";
 static const char* kFolderIndexFile = "/_tile_grids/folders.bin";
 static constexpr uint32_t kFolderIndexMagic = 0x54464C44;  // 'TFLD'
@@ -602,6 +604,7 @@ static std::vector<uint32_t> g_entity_sidecar_keys;
 static std::vector<uint32_t> g_title_sidecar_keys;
 static std::vector<uint32_t> g_icon_color_sidecar_keys;
 static std::vector<uint32_t> g_weather_sensor_sidecar_keys;
+static std::vector<uint32_t> g_flow_entity_sidecar_keys;
 
 static uint32_t sidecarKey(uint16_t folder_id, size_t index) {
   return (static_cast<uint32_t>(folder_id) << 8) | static_cast<uint8_t>(index);
@@ -631,6 +634,7 @@ static SidecarTexts g_entity_sidecar_texts;
 static SidecarTexts g_title_sidecar_texts;
 static SidecarTexts g_icon_color_sidecar_texts;
 static SidecarTexts g_weather_sensor_sidecar_texts;
+static SidecarTexts g_flow_entity_sidecar_texts;
 
 static SemaphoreHandle_t sidecarTextsLock() {
   static SemaphoreHandle_t lock = xSemaphoreCreateMutex();
@@ -682,6 +686,7 @@ static SidecarTexts& sidecarTextsFor(const std::vector<uint32_t>& keys) {
   if (&keys == &g_entity_sidecar_keys) return g_entity_sidecar_texts;
   if (&keys == &g_title_sidecar_keys) return g_title_sidecar_texts;
   if (&keys == &g_weather_sensor_sidecar_keys) return g_weather_sensor_sidecar_texts;
+  if (&keys == &g_flow_entity_sidecar_keys) return g_flow_entity_sidecar_texts;
   return g_icon_color_sidecar_texts;
 }
 
@@ -713,6 +718,7 @@ static void ensureSidecarIndexBuilt() {
   scanSidecarDir(kTitlePathDir, g_title_sidecar_keys);
   scanSidecarDir(kIconColorPathDir, g_icon_color_sidecar_keys);
   scanSidecarDir(kWeatherSensorPathDir, g_weather_sensor_sidecar_keys);
+  scanSidecarDir(kFlowEntityPathDir, g_flow_entity_sidecar_keys);
 }
 
 static String entityPathFileLegacy(const char* prefix, size_t index) {
@@ -1260,6 +1266,83 @@ static void applyWeatherSensorsFromSd(uint16_t folder_id, TileGridConfig& grid) 
   }
 }
 
+// Power flow node entities (Tile::flow_entities) follow the same sidecar
+// pattern: one text file per tile, written through a .tmp file.
+static constexpr size_t kFlowEntityRecordMax = kFlowEntityLinesMax * kWeatherSensorEntityMax;
+
+static String flowEntityPathFile(uint16_t folder_id, size_t index) {
+  char path[64];
+  snprintf(path, sizeof(path), "%s/f%u_%02u.txt", kFlowEntityPathDir,
+           static_cast<unsigned>(folder_id), static_cast<unsigned>(index));
+  return String(path);
+}
+
+static bool readFlowEntitiesSd(uint16_t folder_id, size_t index, String& out) {
+  if (!storageReady()) return false;
+  ensureSidecarIndexBuilt();
+  const uint32_t key = sidecarKey(folder_id, index);
+  if (!sidecarKeyPresent(g_flow_entity_sidecar_keys, key)) return false;
+  if (sidecarTextCached(g_flow_entity_sidecar_texts, key, out)) return true;
+  const String path = flowEntityPathFile(folder_id, index);
+  for (const String& candidate : {path, tmpPathFor(path), backupPathFor(path)}) {
+    File file = storageFS().open(candidate, FILE_READ);
+    if (!file) continue;
+    const size_t size = file.size();
+    if (size == 0 || size > kFlowEntityRecordMax) { file.close(); continue; }
+    String value = file.readString();
+    file.close();
+    if (value.length() != size) continue;
+    out = value;
+    sidecarTextStore(g_flow_entity_sidecar_texts, key, value);
+    return true;
+  }
+  return false;
+}
+
+static bool writeFlowEntitiesSd(uint16_t folder_id, size_t index, const String& record) {
+  if (!storageReady()) return false;
+  if (record.length() > kFlowEntityRecordMax) return false;
+  ensureSidecarIndexBuilt();
+  const uint32_t key = sidecarKey(folder_id, index);
+  const String path = flowEntityPathFile(folder_id, index);
+  const bool present = sidecarKeyPresent(g_flow_entity_sidecar_keys, key);
+  if (record.length() == 0) {
+    if (!present) return true;
+    for (const String& candidate : {path, tmpPathFor(path), backupPathFor(path)})
+      if (storageFS().exists(candidate) && !storageFS().remove(candidate)) return false;
+    sidecarKeyRemove(g_flow_entity_sidecar_keys, key);
+    return true;
+  }
+  String current;
+  if (readFlowEntitiesSd(folder_id, index, current) && current == record) return true;
+  if (!storageFS().exists(kFlowEntityPathDir) && !storageFS().mkdir(kFlowEntityPathDir)) return false;
+  sidecarTextForget(g_flow_entity_sidecar_texts, key);
+  const String temporary = tmpPathFor(path);
+  if (storageFS().exists(temporary)) storageFS().remove(temporary);
+  File file = storageFS().open(temporary, FILE_WRITE);
+  if (!file) return false;
+  const size_t written = file.print(record);
+  file.flush(); file.close();
+  if (written != record.length() || !replaceFileWithPreparedTmp(temporary, path)) {
+    storageFS().remove(temporary);
+    return false;
+  }
+  sidecarKeyAdd(g_flow_entity_sidecar_keys, key);
+  sidecarTextStore(g_flow_entity_sidecar_texts, key, record);
+  return true;
+}
+
+static void applyFlowEntitiesFromSd(uint16_t folder_id, TileGridConfig& grid) {
+  for (size_t index = 0; index < TILES_PER_GRID; ++index) {
+    Tile& tile = grid.tiles[index];
+    String record;
+    if (!tileKeepsFlowEntities(tile.type) || !readFlowEntitiesSd(folder_id, index, record)) continue;
+    // Normalized again so a damaged or foreign file cannot reach the runtime.
+    tile.flow_entities = record;
+    normalizeFlowEntities(tile);
+  }
+}
+
 #if defined(DEVICE_ESP32_S3_RGB_480)
 static bool sidecarTextMatches(bool has_sidecar, const String& file_path,
                                const String& expected,
@@ -1304,6 +1387,11 @@ static bool gridSidecarsMatchStored(uint16_t folder_id,
     if (sensors.length()
             ? (!readWeatherSensorsSd(folder_id, index, stored_sensors) || stored_sensors != sensors)
             : sidecarKeyPresent(g_weather_sensor_sidecar_keys, key)) return false;
+
+    String stored_flow;
+    if (tile.flow_entities.length()
+            ? (!readFlowEntitiesSd(folder_id, index, stored_flow) || stored_flow != tile.flow_entities)
+            : sidecarKeyPresent(g_flow_entity_sidecar_keys, key)) return false;
 
     const bool entity_required =
         entityTileStoresSensorEntity(tile.type) &&
@@ -1378,7 +1466,7 @@ static void packTile(const Tile& in, PackedTileV7& out) {
     out.image_slideshow_sec = static_cast<uint16_t>(
         (out.image_slideshow_sec & kSlideshowValueMask) | packIconDiscOptions(in));
   }
-  out.sensor_gauge_enabled = (in.sensor_display_mode <= 2) ? in.sensor_display_mode : 0;
+  out.sensor_gauge_enabled = (in.sensor_display_mode <= sensor_look::kLastMode) ? in.sensor_display_mode : 0;
   out.sensor_gauge_min = in.sensor_gauge_min;
   out.sensor_gauge_max = in.sensor_gauge_max;
   if (shouldNormalizeGaugeRange(in.type)) {
@@ -1519,7 +1607,7 @@ static void unpackTileV7(const PackedTileV7& in, Tile& out) {
     out.sensor_decimals = 0xFF;
   }
   out.sensor_value_font = clampSensorValueFont(in.sensor_value_font);
-  out.sensor_display_mode = (in.sensor_gauge_enabled <= 2) ? in.sensor_gauge_enabled : 0;
+  out.sensor_display_mode = (in.sensor_gauge_enabled <= sensor_look::kLastMode) ? in.sensor_gauge_enabled : 0;
   out.sensor_gauge_min = in.sensor_gauge_min;
   out.sensor_gauge_max = in.sensor_gauge_max;
   if (shouldNormalizeGaugeRange(out.type)) {
@@ -1636,7 +1724,7 @@ static void unpackTileV6(const PackedTileV6& in, Tile& out) {
     out.sensor_decimals = 0xFF;
   }
   out.sensor_value_font = clampSensorValueFont(in.sensor_value_font);
-  out.sensor_display_mode = (in.sensor_gauge_enabled <= 2) ? in.sensor_gauge_enabled : 0;
+  out.sensor_display_mode = (in.sensor_gauge_enabled <= sensor_look::kLastMode) ? in.sensor_gauge_enabled : 0;
   out.sensor_gauge_min = in.sensor_gauge_min;
   out.sensor_gauge_max = in.sensor_gauge_max;
   if (shouldNormalizeGaugeRange(out.type)) {
@@ -2930,7 +3018,7 @@ bool TileConfig::loadFolderGridEntitiesOnly(uint16_t folder_id, TileEntitySlot* 
       out[i].sensor_entity = full.tiles[i].sensor_entity;
       out[i].rule_entity = tileIconSourceEntity(full.tiles[i].type, full.tiles[i].icon_colors);
       const String sensors = weatherSensorsRecord(full.tiles[i]);
-      out[i].extra_entities = sensors;
+      out[i].extra_entities = tileKeepsFlowEntities(full.tiles[i].type) ? full.tiles[i].flow_entities : sensors;
     }
     return true;
   }
@@ -2970,6 +3058,15 @@ bool TileConfig::loadFolderGridEntitiesOnly(uint16_t folder_id, TileEntitySlot* 
     sensors.type = TILE_WEATHER;
     applyWeatherSensorsRecord(sensors, record);
     out[i].extra_entities = weatherSensorsRecord(sensors);
+  }
+  // Power flow nodes and a Vacuum's chosen map too, one entity per line.
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    if (!tileKeepsFlowEntities(out[i].type)) continue;
+    Tile flow;
+    flow.type = out[i].type;
+    if (!readFlowEntitiesSd(folder_id, i, flow.flow_entities)) continue;
+    normalizeFlowEntities(flow);
+    out[i].extra_entities = flow.flow_entities;
   }
   uint32_t sidecar_ms = millis() - t_sidecar0;
   if (read_ms + unpack_ms + sidecar_ms >= 5) {
@@ -3869,6 +3966,7 @@ bool TileConfig::deleteFolder(uint16_t folder_id) {
       writeLongTitleSd(id, i, "");
       writeIconColorsSd(id, i, "");
       writeWeatherSensorsSd(id, i, "");
+      writeFlowEntitiesSd(id, i, "");
     }
     tile_layouts::drop_folder(id);
   }
@@ -4201,6 +4299,7 @@ bool TileConfig::loadGrid(uint16_t folder_id, TileGridConfig& grid,
   applyLongTitlesFromSd(folder_id, grid);
   applyIconColorsFromSd(folder_id, grid);
   applyWeatherSensorsFromSd(folder_id, grid);
+  applyFlowEntitiesFromSd(folder_id, grid);
 
   // Retired tile types become empty without renumbering the persisted enum.
   // Empty tiles saved before deletion cleared them still carry the deleted
@@ -4257,6 +4356,7 @@ bool TileConfig::saveGridInPlace(uint16_t folder_id, TileGridConfig& grid,
     working.tiles[i].icon_colors = normalizeTileIconColors(
         working.tiles[i].type, working.tiles[i].icon_colors.c_str());
     normalizeWeatherSensors(working.tiles[i]);
+    normalizeFlowEntities(working.tiles[i]);
   }
   if (ensure_navigation_tile) {
     if (folder_id == kRootFolderId) {
@@ -4344,6 +4444,11 @@ bool TileConfig::saveGridInPlace(uint16_t folder_id, TileGridConfig& grid,
     }
     if (!writeWeatherSensorsSd(folder_id, grid_idx, weatherSensorsRecord(tile))) {
       Serial.println("[TileConfig] Error saving weather sensors");
+      invalidateFolderEntityCache();
+      return false;
+    }
+    if (!writeFlowEntitiesSd(folder_id, grid_idx, tile.flow_entities)) {
+      Serial.println("[TileConfig] Error saving power flow or vacuum map entities");
       invalidateFolderEntityCache();
       return false;
     }

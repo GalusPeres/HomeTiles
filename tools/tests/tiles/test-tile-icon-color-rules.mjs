@@ -315,12 +315,12 @@ struct FS {bool exists(const String&p){return files.count(p)||directories.count(
  }} filesystem;
 FS& storageFS(){return filesystem;}bool storageReady(){return ready;}
 constexpr size_t TILES_PER_GRID=4;
-const char*kTitlePathDir="/_tile_titles",*kImagePathDir="/_tile_images",*kEntityPathDir="/_tile_entities",*kIconColorPathDir="/_tile_icon_colors",*kWeatherSensorPathDir="/_tile_weather_sensors";
+const char*kTitlePathDir="/_tile_titles",*kImagePathDir="/_tile_images",*kEntityPathDir="/_tile_entities",*kIconColorPathDir="/_tile_icon_colors",*kWeatherSensorPathDir="/_tile_weather_sensors",*kFlowEntityPathDir="/_tile_flow_entities";
 bool g_sidecar_index_built=false;
-std::vector<uint32_t> g_title_sidecar_keys,g_image_sidecar_keys,g_entity_sidecar_keys,g_icon_color_sidecar_keys,g_weather_sensor_sidecar_keys;
+std::vector<uint32_t> g_title_sidecar_keys,g_image_sidecar_keys,g_entity_sidecar_keys,g_icon_color_sidecar_keys,g_weather_sensor_sidecar_keys,g_flow_entity_sidecar_keys;
 // The PSRAM sidecar text cache (tile_config.cpp) with std containers, no lock.
 using PsString=std::string;struct SidecarText{uint32_t key;PsString text;};using SidecarTexts=std::vector<SidecarText>;
-SidecarTexts g_image_sidecar_texts,g_entity_sidecar_texts,g_title_sidecar_texts,g_icon_color_sidecar_texts,g_weather_sensor_sidecar_texts;
+SidecarTexts g_image_sidecar_texts,g_entity_sidecar_texts,g_title_sidecar_texts,g_icon_color_sidecar_texts,g_weather_sensor_sidecar_texts,g_flow_entity_sidecar_texts;
 struct SidecarTextsGuard{SidecarTextsGuard(){}~SidecarTextsGuard(){}};
 struct Tile {TileType type=TILE_EMPTY;String icon_colors;};struct TileGridConfig{Tile tiles[TILES_PER_GRID];};
 ${normalizeTile}
@@ -368,9 +368,12 @@ int main(){
   assert(resolve("v2\n00FF00\nis- FF0000 on","off",nullptr,rgb,true,&f)&&rgb==0x00FF00&&f==RowFill::Inherit);
   assert(resolve("v2\n\nis- FF0000 on","on",nullptr,rgb,false,&f)&&rgb==0xFF0000&&f==RowFill::Off);}
  // Worst case (source, bar and six states) fits the sidecar limit.
- std::string worst="v2\nFFFFFF\nfill 50\ncover icon tile=50\nsrc rules a."+std::string(126,'b')+" tile=50 noicon off\nbar smooth -12345678901 999999999999 1000:000000 1000:000000 1000:000000 1000:000000 1000:000000 1000:000000";
+ // Every stop and line carries the longest own icon (user 2026-10-28).
+ const std::string icon=","+std::string(kMaxIconBytes,'i');
+ std::string worst="v2\nFFFFFF\nfill 50\ncover icon tile=50\nsrc rules a."+std::string(126,'b')+" tile=50 noicon off\nbar smooth -12345678901 999999999999";
+ for(int i=0;i<6;++i)worst+=" 1000:000000"+icon;
  // The longest state line carries its own fill mark ("has+").
- for(int i=0;i<6;++i){worst+="\nhas+ FFFFFF ";worst+=std::string(64,'w');}
+ for(int i=0;i<6;++i){worst+="\nhas+ FFFFFF"+icon+" ";worst+=std::string(64,'w');}
  // The Media "cover" line counts too (allow_cover).
  {char out[kMaxRecordBytes+1];assert(normalize(worst.c_str(),out,sizeof(out),false,false,true,false,true)==kMaxRecordBytes);}
  // Icon-and-title tiles: a source entity; "rules" keeps the bar and states,
@@ -407,8 +410,10 @@ int main(){
   TileGridConfig grid;grid.tiles[2].type=type;reboot();applyIconColorsFromSd(3,grid);assert(grid.tiles[2].icon_colors=="v2\nFF8800");
  }
  // Tiles with their own state colors keep a fixed color and their rules;
- // own rules there may use the bar and the state list.
- assert(normalizeTileIconColors(TILE_SWITCH,full.c_str())=="v2\nFF8800");
+ // own rules there may use the bar and the state list, in the rule layer
+ // ("src rules self"; records that lost the line get it back, issue #102).
+ assert(normalizeTileIconColors(TILE_SWITCH,full.c_str())=="v2\nFF8800\nsrc rules self\nbar smooth 0 100 0:3B82F6 1000:EF4444\nis 4CAF50 on");
+ assert(normalizeTileIconColors(TILE_SWITCH,"v2\n\nsrc rules self\nis 4CAF50 on")=="v2\n\nsrc rules self\nis 4CAF50 on");
  assert(normalizeTileIconColors(TILE_SWITCH,"v2\nFF8800\nsrc rules self tile=30\nis 4CAF50 on")=="v2\nFF8800\nsrc rules self tile=30\nis 4CAF50 on");
  assert(normalizeTileIconColors(TILE_FOLDER,"v2\n\nsrc rules self\nis 4CAF50 on")=="");
  assert(normalizeTileIconColors(TILE_CLOCK,"v2\n\nsrc auto light.x tile=20")=="v2\n\nsrc auto light.x tile=20");

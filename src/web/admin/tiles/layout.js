@@ -38,7 +38,7 @@
   // Switch and Cover show their state (tile_geometry::compact_switch,
   // compact_cover).
   function supportsHalfSize(type) {
-    return isCompactSensorType(type) || isEditableValueType(type) || [2, 4, 5, 7, 8, 9, 10, 17, 18, 19, 24, 25, 26].includes(Number(type));
+    return isCompactSensorType(type) || isEditableValueType(type) || [2, 4, 5, 7, 8, 9, 10, 17, 18, 19, 24, 25, 26, 27, 29].includes(Number(type));
   }
   // Every type resizes in half steps from 1x1; only half-size types may be half
   // a row high (mirrors tile_geometry::supported).
@@ -56,24 +56,52 @@
     if (value === '2') return 24;
     return ['3', '4', '5'].includes(value) ? 28 : 20;
   }
-  // The value size choices a tile shows: Default, 24 and 28 in half-height
-  // tiles; Default, 20, 24, 32 and 40 otherwise (28 is the default there).
-  // A choice the other size lacks moves to the one that looks the same.
-  function syncCompactValueFontOptions(select, halfHeight) {
+  // The value size choices a tile shows: Default, 24 and 28 in the header
+  // row beside the disc (`compact`: half-height tiles, the Sensor graph);
+  // Default, 20, 24, 32 and 40 otherwise (28 is the default there). With
+  // the panel's sizes on the select (value_size_attrs.h) each choice is named
+  // by the size it draws there and each size is offered once: the lists
+  // named the 1280x800 sizes, so a graph tile's "28 (Default)" was its 20 px
+  // title size (user 2026-10-27). A choice the shape lacks moves to the one
+  // that looks the same, else to the nearest size.
+  // `inside`: a value inside a Sensor look's arc or ring (1 one row high,
+  // 2 taller), whose Default is the 20 or 24 of the full sizes; every other
+  // size stays offered (types/sensor/renderer.cpp).
+  function syncCompactValueFontOptions(select, compact, inside = 0) {
     if (!select?.options) return;
-    const shown = halfHeight ? ['0', '2', '5'] : ['0', '1', '2', '3', '4'];
-    for (const option of Array.from(select.options)) {
-      const hidden = !shown.includes(option.value);
+    const allowed = inside ? ['0', '1', '2', '5', '3', '4'] : compact ? ['0', '2', '5'] : ['0', '1', '2', '3', '4'];
+    const sizes = String(select.dataset?.[compact && !inside ? 'compactSizes' : 'sizes'] || '').split(',').map(Number);
+    if (inside && sizes.length > 5) sizes[0] = sizes[inside === 2 ? 2 : 1];
+    const known = sizes.length > 5 && sizes.every(size => size > 0);
+    const defaultLabel = select.dataset?.defaultLabel || '';
+    const options = Array.from(select.options);
+    const seen = [];
+    for (const option of options) {
+      const size = known ? sizes[Number(option.value)] : 0;
+      const hidden = !allowed.includes(option.value) || (known && seen.includes(size));
       option.hidden = hidden;
       option.disabled = hidden;
-      if (option.value === '0') {
-        option.textContent = option.textContent.replace(/^\d+(?= )/, halfHeight ? '20' : '28');
-      }
+      if (!hidden) seen.push(size);
+      if (known) option.textContent = option.value === '0' && defaultLabel ? size + ' (' + defaultLabel + ')' : String(size);
+      else if (option.value === '0') option.textContent = option.textContent.replace(/^\d+(?= )/, compact ? '20' : '28');
     }
-    const value = select.value;
-    if (halfHeight && value === '1') select.value = '0';
-    else if (halfHeight && (value === '3' || value === '4')) select.value = '5';
-    else if (!halfHeight && value === '5') select.value = '0';
+    const current = options.find(option => option.value === String(select.value));
+    if (!current?.hidden) return;
+    if (!known) {
+      const value = select.value;
+      if (compact && value === '1') select.value = '0';
+      else if (compact && (value === '3' || value === '4')) select.value = '5';
+      else if (!compact && value === '5') select.value = '0';
+      return;
+    }
+    const want = sizes[Number(current.value)];
+    let best = null;
+    for (const option of options) {
+      if (option.hidden) continue;
+      const distance = Math.abs(sizes[Number(option.value)] - want);
+      if (!best || distance < best.distance) best = {value: option.value, distance};
+    }
+    if (best) select.value = best.value;
   }
   // Number, Select and Date/Time value sizes (1 = 20, 2 = 24, 0 = 28, 3 = 32,
   // 4 = 40): half-height tiles offer 20, 24 and 28 (editable_display_tile).
@@ -99,7 +127,8 @@
     // (if any) centered beside it.
     const compactIconTitle = [2, 4, 7, 8, 18].includes(Number(type)) && halfHeight;
     // Half-height Switch: icon, title and state like a compact Sensor.
-    const compactSwitch = [5, 17, 19, 24, 25, 26].includes(Number(type)) && halfHeight;
+    // A half-height Calendar: the next event's time and title (compact_calendar).
+    const compactSwitch = [5, 17, 19, 24, 25, 26, 27, 29].includes(Number(type)) && halfHeight;
     // Number, Select and Date/Time like a compact Sensor.
     const compactEditable = isEditableValueType(type) && halfHeight;
     if (compactEditable) valueFont = editableCompactValueFont(valueFont);
@@ -113,20 +142,44 @@
     // (switch_layout::sensor_look).
     // The Cover position bar uses the same header (tile_header.h).
     // Lock, Alarm panel and Fan too (types/device).
-    const switchHeader = [5, 19, 24, 25, 26].includes(Number(type)) && el.classList.contains('switch-bar');
-    const switchTall = switchHeader && Number(layout?.span_h) > 1;
+    const switchHeader = [5, 19, 24, 25, 26, 29].includes(Number(type)) && el.classList.contains('switch-bar');
+    // An upright bar keeps the header beside the disc (bar_orientation.h).
+    // A two-by-two Vacuum takes the tall title and state size too; its state
+    // stands beside its map (render_vacuum_tile, applyVacuumPreview).
+    const switchTall = switchHeader && Number(layout?.span_h) > 1 && !el.classList.contains('switch-upright');
     el.classList.toggle('switch-tall', switchTall);
     if (switchTall) el.style?.setProperty?.('--switch-span-h', String(Number(layout.span_h)));
     else el.style?.removeProperty?.('--switch-span-h');
     const tallSize = switchTall ? ({1: 20, 2: 24, 3: 32, 4: 40}[Number(valueFont)] || 28) : 0;
     for (const size of [20, 24, 32, 40]) el.classList.toggle('switch-value-' + size, tallSize === size);
-    const valueSize = (compact && !compactIconTitle) || (switchHeader && !switchTall) ? compactValueSize(valueFont) : 20;
+    // A Sensor graph tile (display mode 2) has the Switch header beside the
+    // disc at the half-height value sizes (types/sensor/renderer.cpp); its
+    // graph needs the Bridge's history, so the box below stays empty like
+    // the panel's before the history arrives. An Energy tile with bars has
+    // the same header and box (types/energy/renderer.cpp).
+    const sensorGraph = (Number(type) === 1 || Number(type) === 14) && Number(mode) === 2 && !halfHeight;
+    el.classList.toggle('sensor-graph', sensorGraph);
+    // The looks below the header (types/sensor/sensor_look.h, admin-look.js):
+    // the graph's header with the value beside the disc, or the title alone
+    // right-aligned with the value inside the arc or ring.
+    const sensorLook = Number(type) === 1 && !halfHeight && typeof isSensorLookMode === 'function' && isSensorLookMode(mode);
+    const lookInside = sensorLook && sensorLookValueInside(mode);
+    el.classList.toggle('sensor-look-head', sensorLook && !lookInside);
+    el.classList.toggle('sensor-look-inside', lookInside);
+    if (el.dataset) {
+      el.dataset.lookTall = Number(layout?.span_h) > 1 ? '1' : '0';
+      el.dataset.lookFont = String(Number(valueFont) || 0);
+    }
+    if (typeof setSensorLookData === 'function') setSensorLookData(el, sensorLook ? mode : 0, layout);
+    const valueSize = (compact && !compactIconTitle) || (switchHeader && !switchTall) || sensorGraph ||
+      (sensorLook && !lookInside) ? compactValueSize(valueFont) : 20;
     el.classList.toggle('compact-value-24', valueSize === 24);
     el.classList.toggle('compact-value-28', valueSize === 28);
     el.classList.toggle('clock-compact', Number(type) === 9 && halfHeight);
     // A half-height Text tile: the text alone (tile_geometry::compact_text).
     el.classList.toggle('text-compact', Number(type) === 10 && halfHeight);
     if (Number(type) === 9) fitCompactClockPreview(el);
+    if (typeof renderSensorLookPreview === 'function') renderSensorLookPreview(el);
   }
 
   // Every bound is the shown grid (placeCols/placeRows, the server's
@@ -337,6 +390,8 @@
   // Smallest size a type accepts (Media needs 2x2, half-size types 1x0.5).
   function minimumTileSize(type) {
     if (Number(type) === MEDIA_TILE_TYPE) return [Math.min(MEDIA_TILE_MIN_SPAN, placeCols()), Math.min(MEDIA_TILE_MIN_SPAN, placeRows())];
+    // The Power flow needs room for its four nodes (types/power_flow).
+    if (Number(type) === 28) return [Math.min(2, placeCols()), Math.min(2, placeRows())];
     return [1, supportsHalfSize(type) ? 0.5 : 1];
   }
 

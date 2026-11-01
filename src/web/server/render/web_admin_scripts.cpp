@@ -196,7 +196,8 @@ void appendAdminScripts(String& html) {
     appendJsEntry(kEntityPickerKeys[i], loc.entity_picker_labels[i]);
   }
   static const char* const kIconPickerKeys[] = {
-      "iconPickerAuto", "iconPickerAutoHint", "iconPickerNone", "iconPickerNoneHint", "iconPickerNoMatch"};
+      "iconPickerAuto", "iconPickerAutoHint", "iconPickerNone", "iconPickerNoneHint", "iconPickerNoMatch",
+      "iconPickerRuleHint"};
   static_assert(sizeof(kIconPickerKeys) / sizeof(kIconPickerKeys[0]) ==
                     sizeof(i18n::LocaleProfile::icon_picker_labels) / sizeof(const char*),
                 "one key per icon picker label");

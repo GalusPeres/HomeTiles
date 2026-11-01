@@ -134,7 +134,7 @@ for (const needle of [
 assert.ok(readRepoFile('src/tiles/config/tile_config.h').includes(
   'a.weather_temperature_sensor == b.weather_temperature_sensor'));
 assert.ok(readRepoFile('src/network/mqtt/mqtt_handlers.cpp').includes(
-  'for (const char* extra = slot.extra_entities; *extra;)'));
+  'for (const char* extra = slot.type == TILE_VACUUM ? "" : slot.extra_entities; *extra;)'));
 const renderer = readRepoFile('src/tiles/runtime/tile_renderer.cpp');
 assert.ok(renderer.includes('weather_sensors::apply_temperature(tile.weather_temperature_sensor, unit, temperature, has_temp);'));
 assert.ok(renderer.includes('weather_sensors::append_humidity(tile.weather_humidity_sensor, temp_text);'));

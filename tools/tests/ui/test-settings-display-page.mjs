@@ -37,6 +37,8 @@ const expected = {
     'No conectado', 'Punto de acceso activo', 'Actualización disponible'],
   kStringsSk: ['Obrazovka', 'Jas', 'Spánok', 'Otočenie', 'Šetrič obrazovky', 'Spustí sa po', 'Zvuk', 'Hlasitosť', 'Mikrofón', 'Displej a zvuk', 'Spánok %s',
     'Nie je pripojené', 'Prístupový bod zapnutý', 'Dostupná aktualizácia'],
+  kStringsRu: ['Экран', 'Яркость', 'Сон', 'Поворот', 'Заставка', 'Запуск через', 'Звук', 'Громкость', 'Микрофон', 'Экран и звук', 'Сон %s',
+    'Не подключено', 'Точка доступа вкл.', 'Доступно обновление'],
 };
 const struct = header.slice(header.indexOf('struct Strings {'), header.indexOf('\n};', header.indexOf('struct Strings {')));
 const fields = [...struct.replace(/\/\/[^\n]*/g, '').matchAll(/const char\*\s+(\w+);/g)].map(match => match[1]);
@@ -94,7 +96,8 @@ assert.match(rawModel, /void microphone_selected\(bool on\) \{ speaker::setMicEn
 assert.match(screen, /case Category::Display:\s*return settings_model::sound_values\(\)\.speaker \? s\.settings_display_sound : s\.display_label;/);
 assert.match(rawScreen, /case Category::Display:\s*return settings_model::sound_values\(\)\.speaker \? "monitor-speaker" : "monitor";/);
 const soundNames = {kStringsEn: 'Display & Sound', kStringsDe: 'Anzeige & Ton', kStringsFr: '\u00c9cran et son',
-  kStringsPl: 'Ekran i d\u017awi\u0119k', kStringsCs: 'Displej a zvuk', kStringsEs: 'Pantalla y sonido', kStringsSk: 'Displej a zvuk'};
+  kStringsPl: 'Ekran i d\u017awi\u0119k', kStringsCs: 'Displej a zvuk', kStringsEs: 'Pantalla y sonido', kStringsSk: 'Displej a zvuk',
+  kStringsRu: '\u042d\u043a\u0440\u0430\u043d \u0438 \u0437\u0432\u0443\u043a'};
 const soundIndex = fields.indexOf('settings_display_sound');
 assert.ok(soundIndex > 0, 'settings_display_sound is a field');
 for (const table of tables) {

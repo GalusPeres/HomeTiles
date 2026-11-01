@@ -111,7 +111,7 @@ assert.match(tileBuild, /init\.colored_icons = data->colored_icons;/);
 assert.doesNotMatch(tileBuild, /getMdiChar\(/);
 const tileState = fn(tileRenderer, 'update_weather_tile_state');
 assert.equal(tileState.match(/weather_icons::text\(/g)?.length, 2, 'tile state header and forecast icons');
-assert.match(tileState, /weather_icons::parse_sun\(json\.c_str\(\), sun\);\s*theme_schedule::note_sun\(sun\);\s*icon_name = weather_icons::for_now\(icon_name, sun\);/);
+assert.match(tileState, /weather_icons::parse_sun\(payload, sun\);[\s\S]*theme_schedule::note_sun\(sun\);\s*icon_name = weather_icons::for_now\(icon_name, sun\);/);
 assert.match(tileState, /icon_forced\s*\? weather_icons::Style::Single/);
 assert.match(tileState, /tile_icon_disc::set_icon_color\(widgets\.icon_label, lv_color_hex\(tint \? tint : ui_theme::text\(\)\)\)/);
 assert.doesNotMatch(tileState, /getMdiChar\(/);

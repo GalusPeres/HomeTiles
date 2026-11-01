@@ -22,10 +22,13 @@
 #include "src/types/media/state_icon.h"
 #include "src/types/binary_sensor/renderer.h"
 #include "src/types/energy/energy_data.h"
+#include "src/types/power_flow/flow_updates.h"
+#include "src/types/power_flow/renderer.h"
 #include "src/types/media/artwork_payload.h"
 #include "src/web/server/web_admin.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_source.h"
+#include "src/tiles/runtime/tile_rule_icon.h"
 #include "src/ui/tabs/tiles/home_bar.h"
 #include "src/ui/tabs/tiles/page_preview.h"
 #include <misc/cache/instance/lv_image_cache.h>
@@ -234,6 +237,37 @@ static void log_folder_switch_memory(const char* phase, uint16_t folder_id) {
                 ESP.getFreeHeap() / 1024,
                 ESP.getMinFreeHeap() / 1024,
                 ESP.getFreePsram() / 1024);
+}
+
+// Where a page turn from the cache spends its time before the frame (user
+// 2026-10-28; V2 b597: Home took 42 ms from the tap to its first frame, the
+// emptiest page 7 ms): one line per turn with each step in microseconds,
+// "tap" from the request in the touch callback to the loop taking it.
+static uint32_t g_switch_requested_us = 0;
+static uint32_t g_switch_step_us = 0;
+static char g_switch_steps[240];
+static size_t g_switch_steps_used = 0;
+
+static void switch_steps_begin() {
+  g_switch_step_us = micros();
+  const int used = snprintf(g_switch_steps, sizeof(g_switch_steps), "tap=%lu",
+                            static_cast<unsigned long>(g_switch_requested_us ? g_switch_step_us - g_switch_requested_us : 0));
+  g_switch_steps_used = used > 0 ? static_cast<size_t>(used) : 0;
+}
+
+static void switch_step(const char* name) {
+  const uint32_t now = micros();
+  if (g_switch_steps_used < sizeof(g_switch_steps)) {
+    const int used = snprintf(g_switch_steps + g_switch_steps_used, sizeof(g_switch_steps) - g_switch_steps_used,
+                              " %s=%lu", name, static_cast<unsigned long>(now - g_switch_step_us));
+    if (used > 0) g_switch_steps_used += static_cast<size_t>(used);
+  }
+  g_switch_step_us = micros();
+}
+
+static void switch_steps_log(uint16_t folder_id) {
+  Serial.printf("[Tiles] switch steps folder=%u us: %s\n", static_cast<unsigned>(folder_id), g_switch_steps);
+  g_switch_requested_us = 0;
 }
 
 static void clear_navigation_preload_plan() {
@@ -683,8 +717,20 @@ static void hide_preview_images(GridType grid_type);
 static void tiles_refresh_icons_for_grid(GridType grid_type);
 static bool process_preview_step(GridType grid_type, bool only_missing, uint8_t max_loads);
 
+// The generation of Home Assistant's first icons: a grid built before it may
+// lack its automatically resolved icons.
+static uint32_t g_tiles_first_icon_generation = 0;
+
 static void refresh_active_folder_icons_if_stale(FolderCacheEntry& entry) {
   if (entry.icon_generation == g_tiles_icon_generation) return;
+  // A grid that already has Home Assistant's icons shows first and takes
+  // the changed ones right after its frame (the loop's icon refresh): the
+  // refresh cost a page turn up to 85 ms on V2 before anything was drawn
+  // (user 2026-10-28, b586 log "folder-icons refreshed folder=1 ... 83 ms").
+  if (g_tiles_first_icon_generation && entry.icon_generation >= g_tiles_first_icon_generation) {
+    g_tiles_icon_refresh_requested = true;
+    return;
+  }
 
   const uint32_t started_ms = millis();
   tiles_refresh_icons_for_grid(GridType::TAB0);
@@ -2022,6 +2068,7 @@ void tiles_request_reload_all() {
 void tiles_request_icon_refresh() {
   ++g_tiles_icon_generation;
   if (g_tiles_icon_generation == 0) g_tiles_icon_generation = 1;
+  if (!g_tiles_first_icon_generation) g_tiles_first_icon_generation = g_tiles_icon_generation;
   g_tiles_icon_refresh_requested = true;
 }
 
@@ -2038,6 +2085,7 @@ void tiles_request_release_all() {
 }
 
 void tiles_switch_to_folder(uint16_t folder_id) {
+  g_switch_requested_us = micros();
   viewNavigationClosePopups();
   // A page turn under the open overview keeps it (user 2026-10-13), any
   // other folder closes it.
@@ -2435,7 +2483,9 @@ void tiles_process_reload_requests() {
 
       g_folder_switch_pending = false;
       g_pending_folder_id = kInvalidFolderId;
+      switch_steps_begin();
       snapshot_active_cache();
+      switch_step("snapshot");
 
       if (can_reuse) {
         if (!tileConfig.setActiveFolderCached(folder_id, target->grid_config)) {
@@ -2448,35 +2498,48 @@ void tiles_process_reload_requests() {
           return;
         }
         restore_active_cache(*target);
-        // Restored widgets carry their old payload hash; without clearing it the
-        // weather tile's hash short-circuit skips the re-apply and can stay blank.
-        tile_renderer_invalidate_weather_payload(GridType::TAB0);
+        switch_step("restored");
         // Hidden folder grids may have been built before Home Assistant sent
         // its icon metadata. Refresh a stale cache while it is still hidden so
         // automatically resolved light/switch icons are present on first draw.
         refresh_active_folder_icons_if_stale(*target);
+        switch_step("icons");
         apply_cached_states(GridType::TAB0, target->grid_config);
+        switch_step("states");
         process_sensor_update_queue();
+        switch_step("sensor");
         process_switch_update_queue();
+        switch_step("switch");
         process_climate_update_queue();
         process_cover_update_queue();
         process_binary_sensor_update_queue();
+        switch_step("other");
         process_weather_update_queue();
+        switch_step("weather");
         process_media_update_queue();
+        switch_step("media");
         if (previous && previous != target && previous->grid) {
           lv_obj_add_flag(previous->grid, LV_OBJ_FLAG_HIDDEN);
         }
         lv_obj_clear_flag(target->grid, LV_OBJ_FLAG_HIDDEN);
+        power_flow_shown(target->grid);
+        switch_step("show");
         home_bar::shown(target->grid, folder_id, previous ? previous->folder_id : kInvalidFolderId);
+        switch_step("bar");
         // The regular path is followed by the normal LVGL refresh. The
         // post-input fast path refreshes once after this function returns, so
         // never nest a full-screen refresh inside the cache transaction.
         lv_obj_invalidate(target->grid);
         target->last_used_ms = millis();
+        // Graph tiles whose day came while this page was hidden ask again.
+        tile_graph_request_soon();
         schedule_preview_load(GridType::TAB0);
         schedule_navigation_preload(folder_id, tileConfig.getActiveGrid());
+        switch_step("schedule");
         log_folder_switch_memory("folder-switch-cached", folder_id);
         uiManager.finishFolderSwitch(folder_id, true);
+        switch_step("finish");
+        switch_steps_log(folder_id);
         return;
       }
 
@@ -2501,7 +2564,6 @@ void tiles_process_reload_requests() {
 
       restore_active_cache(*target);
       if (target->grid) {
-        tile_renderer_invalidate_weather_payload(GridType::TAB0);
         refresh_active_folder_icons_if_stale(*target);
         apply_cached_states(GridType::TAB0, target->grid_config);
         process_sensor_update_queue();
@@ -2515,6 +2577,7 @@ void tiles_process_reload_requests() {
           lv_obj_add_flag(previous->grid, LV_OBJ_FLAG_HIDDEN);
         }
         lv_obj_clear_flag(target->grid, LV_OBJ_FLAG_HIDDEN);
+        power_flow_shown(target->grid);
         home_bar::shown(target->grid, folder_id, previous ? previous->folder_id : kInvalidFolderId);
         lv_obj_invalidate(target->grid);
         target->last_used_ms = millis();
@@ -2572,9 +2635,14 @@ void tiles_process_reload_requests() {
           g_active_cache->icon_generation == g_tiles_icon_generation) {
         continue;
       }
+      const uint32_t started_ms = millis();
       tiles_refresh_icons_for_grid(grid_type);
       if (grid_type == GridType::TAB0 && g_active_cache) {
         g_active_cache->icon_generation = g_tiles_icon_generation;
+        Serial.printf("[Tiles] folder-icons refreshed after the frame folder=%u generation=%lu in %lu ms\n",
+                      static_cast<unsigned>(g_active_cache->folder_id),
+                      static_cast<unsigned long>(g_tiles_icon_generation),
+                      static_cast<unsigned long>(millis() - started_ms));
       }
     }
   }
@@ -2818,7 +2886,8 @@ static void tiles_refresh_icons_for_grid(GridType grid_type) {
       continue;
     }
 
-    lv_label_set_text(icon_lbl, iconChar.c_str());
+    // A rule's own icon stays until its rule ends (tile_rule_icon.h).
+    tile_rule_icon::set_glyph(icon_lbl, iconChar.c_str());
     tile_icon_disc::set_icon_hidden(icon_lbl, false);
     lv_obj_invalidate(icon_lbl);
   }
@@ -2844,6 +2913,12 @@ void tiles_update_sensor_by_entity(GridType grid_type, const char* entity_id, co
   // setting must reach the label), but only a new payload is logged; the
   // renderers skip identical texts and colors.
   const bool changed = cache_entity_payload(entity_id, value);
+  // Power flow tiles read every node from the cache; they redraw in the
+  // loop (types/power_flow), and a node's open Sensor popup follows.
+  if (grid_type == GridType::TAB0 && power_flow_entity_changed(entity_id)) {
+    const String unit = haBridgeConfig.findSensorUnit(entity_id);
+    queue_sensor_popup_value(entity_id, value, unit.length() ? unit.c_str() : nullptr);
+  }
   // Previously, returning immediately during sleep cached only the latest
   // state and left UI queues empty. Waking then required a special
   // catch-up in tiles_refresh_visible_from_cache(), which could omit tile

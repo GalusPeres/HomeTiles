@@ -139,7 +139,11 @@ assert.match(entrySource, /settings_keyboard::create\(g_entry\.root, keys, keybo
 // French AZERTY can be chosen in Localization > Keyboard (value 3).
 assert.match(rawModel, /"Fran\\xC3\\xA7" "ais \(AZERTY\)"/);
 assert.match(model, /if \(cfg\.keyboard_layout == 3\) return 2;/);
-assert.match(readRepoFile('src/core/config/config_manager.cpp'), /if \(normalized\.keyboard_layout > 3\) normalized\.keyboard_layout = 0;/);
+// Russian JCUKEN as value 4 (2026-10-29), the keyboard's Layout::Jcuken.
+assert.ok(rawModel.includes('"Русский (ЙЦУКЕН)"'), 'Russian JCUKEN in Localization > Keyboard');
+assert.match(model, /if \(cfg\.keyboard_layout == 4\) return 3;/);
+assert.match(readRepoFile('src/core/config/config_manager.cpp'), /if \(normalized\.keyboard_layout > 4\) normalized\.keyboard_layout = 0;/);
+assert.match(entrySource, /case 3:\s*return settings_keyboard::Layout::Jcuken;/);
 
 // --- Model: the former WiFi popup's paths --------------------------------------------------------------
 const scan = between(model, 'static void wifi_try_scan() {', 'static void wifi_stop_scan() {');

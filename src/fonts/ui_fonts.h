@@ -50,3 +50,14 @@ static inline const lv_font_t* ui_font_for_size(uint8_t size) {
     default: return &ui_font_20;
   }
 }
+
+// The size of a font from ui_font_for_size (0 for any other font).
+static inline uint8_t ui_font_size_of(const lv_font_t* font) {
+  for (const uint8_t size : {12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 72, 80, 96}) {
+#if !defined(DEVICE_LAYOUT_480X480)
+    if (size < 16) continue;
+#endif
+    if (ui_font_for_size(size) == font) return size;
+  }
+  return 0;
+}

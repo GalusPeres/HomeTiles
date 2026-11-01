@@ -6,6 +6,7 @@
 
 #include <Arduino.h>
 #include <LittleFS.h>
+#include <cmath>
 #include <cstring>
 #include <utility>
 #include <driver/gpio.h>
@@ -25,6 +26,7 @@
 #include "src/devices/common/p4_dsi_ui_ppa.h"
 #include "src/devices/common/p4_dsi_camera_presenter.h"
 #include "src/devices/common/p4_dsi_cpu_rotate.h"
+#include "src/devices/common/touch_one_euro.h"
 #include "src/devices/guition_jc8012p4a1/vendor/displays_config.h"
 #include "src/devices/guition_jc8012p4a1/vendor/gsl3680_touch.h"
 #include "src/devices/guition_jc8012p4a1/vendor/guition_sdmmc.h"
@@ -50,7 +52,6 @@ constexpr uintptr_t kCacheLineSize = 64;
 constexpr uint32_t kPpaPreviewTimeoutMs = 200;
 constexpr uint32_t kPpaPreviewGraceMs = 800;
 constexpr uint8_t kTouchReleaseDebounceReads = 0;
-constexpr int32_t kTouchJitterThresholdPx = 2;
 constexpr uint8_t kTouchSamplePointCount = 2;
 constexpr uint8_t kInvalidTouchTrackId = 0xFF;
 
@@ -86,6 +87,13 @@ bool g_touch_active = false;
 uint8_t g_touch_release_reads = 0;
 int32_t g_touch_stable_x = 0;
 int32_t g_touch_stable_y = 0;
+// The newest point, reported with the next read (getTouch).
+int32_t g_touch_next_x = 0;
+int32_t g_touch_next_y = 0;
+// The touch point's smoothing per axis and the time of the last read.
+TouchOneEuro g_touch_filter_x;
+TouchOneEuro g_touch_filter_y;
+uint32_t g_touch_last_ms = 0;
 uint8_t g_touch_active_track_id = kInvalidTouchTrackId;
 
 void log_step(const char* message) {
@@ -979,25 +987,44 @@ bool DeviceGuitionJC8012P4A1::getTouch(int16_t& x, int16_t& y) {
   if (mapped_x >= logical_w) mapped_x = logical_w - 1;
   if (mapped_y >= logical_h) mapped_y = logical_h - 1;
 
+  // The same GSL3680 as the V2, whose logs showed both effects handled here
+  // (2026-10-27; this board's own hardware is untested).
+  const uint32_t now = millis();
+  const bool fresh = !g_touch_active;
   if (!g_touch_active) {
+    g_touch_filter_x.reset(static_cast<float>(mapped_x));
+    g_touch_filter_y.reset(static_cast<float>(mapped_y));
     g_touch_stable_x = mapped_x;
     g_touch_stable_y = mapped_y;
     g_touch_active = true;
   } else {
-    const int32_t dx = mapped_x - g_touch_stable_x;
-    const int32_t dy = mapped_y - g_touch_stable_y;
-    const int32_t adx = dx >= 0 ? dx : -dx;
-    const int32_t ady = dy >= 0 ? dy : -dy;
-
-    if (adx <= kTouchJitterThresholdPx && ady <= kTouchJitterThresholdPx) {
-    } else {
-      g_touch_stable_x = mapped_x;
-      g_touch_stable_y = mapped_y;
+    // The 1-euro filter (touch_one_euro.h) in place of a dead zone: a
+    // dragged 5 px dead zone (b566) stopped the jitter but made sliders
+    // start late and move in small bursts (user 2026-10-27). Whole pixels
+    // with a pixel of hysteresis, so a value resting near a half pixel does
+    // not flip between two pixels.
+    const float dt_s = static_cast<float>(now - g_touch_last_ms) / 1000.0f;
+    const float step_s = dt_s < 0.001f ? 0.001f : dt_s > 0.05f ? 0.05f : dt_s;
+    const float fx = g_touch_filter_x.filter(static_cast<float>(mapped_x), step_s);
+    const float fy = g_touch_filter_y.filter(static_cast<float>(mapped_y), step_s);
+    if (fabsf(fx - static_cast<float>(g_touch_stable_x)) >= 1.0f) {
+      g_touch_stable_x = static_cast<int32_t>(lroundf(fx));
+    }
+    if (fabsf(fy - static_cast<float>(g_touch_stable_y)) >= 1.0f) {
+      g_touch_stable_y = static_cast<int32_t>(lroundf(fy));
     }
   }
+  g_touch_last_ms = now;
 
-  x = static_cast<int16_t>(g_touch_stable_x);
-  y = static_cast<int16_t>(g_touch_stable_y);
+  // One read late (about 9 ms): the newest point waits for the next read,
+  // and a finger lifting drops it. The GSL3680 moves its last point before
+  // a lift by 2 to 20 px, and sliders and the graph cursor kept that.
+  const int32_t shown_x = fresh ? g_touch_stable_x : g_touch_next_x;
+  const int32_t shown_y = fresh ? g_touch_stable_y : g_touch_next_y;
+  g_touch_next_x = g_touch_stable_x;
+  g_touch_next_y = g_touch_stable_y;
+  x = static_cast<int16_t>(shown_x);
+  y = static_cast<int16_t>(shown_y);
 
   static uint32_t touch_log_counter = 0;
   if (++touch_log_counter % 20 == 1) {

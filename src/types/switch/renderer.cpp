@@ -314,8 +314,9 @@ void bar_draw_cb(lv_event_t* e) {
   const int32_t width = lv_area_get_width(&area);
   const int32_t height = lv_area_get_height(&area);
   if (width < 4 || height < 4) return;
-  const int32_t radius =
-      std::min<int32_t>(lv_obj_get_style_radius(view->bar, LV_PART_MAIN), height / 2);
+  // An upright bar rounds by its width (level_bar::radius_of).
+  const int32_t radius = std::min<int32_t>(lv_obj_get_style_radius(view->bar, LV_PART_MAIN),
+                                           (view->upright ? width : height) / 2);
   const lv_color_t card = lv_obj_get_style_bg_color(view->card, LV_PART_MAIN);
   const uint32_t accent_rgb = accent_color(view);
   const lv_color_t accent = lv_color_hex(accent_rgb);
@@ -326,15 +327,23 @@ void bar_draw_cb(lv_event_t* e) {
   if (view->bar_kind == static_cast<uint8_t>(Bar::Dimmer)) {
     // The handle line: the card's color (tone_color::notch_on).
     const lv_color_t notch = lv_color_hex(tone_color::notch_on(accent_rgb, lv_color_to_u32(card) & 0xFFFFFF));
-    level_bar::draw_fill(layer, view->bar, view->level, view->bar_base, accent, notch);
+    level_bar::draw_fill(layer, view->bar, view->level, view->bar_base, accent, notch, view->upright);
     return;
   }
 
   if (view->bar_kind != static_cast<uint8_t>(Bar::Toggle)) return;
-  // Flush half-width thumb like the Light popup switch, the bar's radius.
-  const int32_t half = width / 2;
-  const lv_area_t thumb = view->on ? lv_area_t{area.x2 - half + 1, area.y1, area.x2, area.y2}
-                                   : lv_area_t{area.x1, area.y1, area.x1 + half - 1, area.y2};
+  // Flush half-width thumb like the Light popup switch, the bar's radius;
+  // upright a half-height thumb, on at the top.
+  lv_area_t thumb;
+  if (view->upright) {
+    const int32_t half = height / 2;
+    thumb = view->on ? lv_area_t{area.x1, area.y1, area.x2, area.y1 + half - 1}
+                     : lv_area_t{area.x1, area.y2 - half + 1, area.x2, area.y2};
+  } else {
+    const int32_t half = width / 2;
+    thumb = view->on ? lv_area_t{area.x2 - half + 1, area.y1, area.x2, area.y2}
+                     : lv_area_t{area.x1, area.y1, area.x1 + half - 1, area.y2};
+  }
   lv_color_t thumb_color = accent;
   lv_color_t symbol_color = mark;
   if (!view->on) {
@@ -358,12 +367,12 @@ void bar_draw_cb(lv_event_t* e) {
 // follows, release commits. The bar never toggles or opens the popup.
 
 uint8_t level_at(const SwitchBarView* view, const lv_point_t& point) {
-  return level_bar::value_at(view->bar, view->bar_base, point);
+  return level_bar::value_at(view->bar, view->bar_base, point, view->upright);
 }
 
 // Redraws only the columns a level change touches (level_bar::invalidate_change).
 void invalidate_level_change(const SwitchBarView* view, uint8_t old_level, uint8_t new_level) {
-  level_bar::invalidate_change(view->bar, view->bar_base, old_level, new_level);
+  level_bar::invalidate_change(view->bar, view->bar_base, old_level, new_level, view->upright);
 }
 
 void show_local_level(SwitchEventData* data, uint8_t value) {
@@ -610,14 +619,52 @@ void release_timer_cb(lv_timer_t*) {
 
 }  // namespace
 
-bool switch_tile_card_color(GridType grid_type, uint8_t index, uint32_t& rgb) {
+namespace {
+
+// A header layout's event data, the user data of its bar's events (the icon
+// button has no bar).
+SwitchEventData* bar_event_data(const SwitchBarView* view) {
+  if (!view || !view->bar) return nullptr;
+  const uint32_t count = lv_obj_get_event_count(view->bar);
+  for (uint32_t i = 0; i < count; ++i) {
+    lv_event_dsc_t* dsc = lv_obj_get_event_dsc(view->bar, i);
+    if (dsc && lv_event_dsc_get_cb(dsc) == bar_event_cb) {
+      return static_cast<SwitchEventData*>(lv_event_dsc_get_user_data(dsc));
+    }
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+void switch_tile_hold_from_popup(GridType grid_type, uint8_t index, uint8_t value, bool level, bool released) {
   SwitchTileWidgets* widgets = tile_renderer_get_switch_widgets(grid_type);
-  if (!widgets || index >= TILES_PER_GRID) return false;
-  lv_obj_t* card = widgets[index].view ? widgets[index].view->card : nullptr;
-  if (!card && widgets[index].icon_label) card = lv_obj_get_parent(widgets[index].icon_label);
-  if (!card) return false;
-  rgb = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
-  return true;
+  if (!widgets || index >= TILES_PER_GRID) return;
+  SwitchEventData* data = bar_event_data(widgets[index].view);
+  if (!data) return;
+  if (g_drag.data != data) {
+    // Another tile's hold ends now: it shows its reported state.
+    cancel_live_timer();
+    if (g_release_timer) {
+      lv_timer_delete(g_release_timer);
+      release_timer_cb(nullptr);
+    }
+    g_drag = DimmerDrag{};
+    g_drag.data = data;
+  }
+  g_drag.value = value;
+  g_drag.hold_level = level;
+  if (released) {
+    start_hold();
+  } else {
+    // A release's hold timer would end the hold during this gesture.
+    if (g_release_timer) {
+      lv_timer_delete(g_release_timer);
+      g_release_timer = nullptr;
+    }
+    g_drag.dragging = false;
+    g_drag.block_until = millis() + kRemoteBlockMs;
+  }
 }
 
 bool switch_tile_held_on(const SwitchTileWidgets& widgets, bool& on) {
@@ -715,6 +762,7 @@ lv_obj_t* render_switch_tile(lv_obj_t* parent, int col, int row, const Tile& til
     view->icon = icon_lbl;
     view->layout = static_cast<uint8_t>(layout);
     view->compact = compact;
+    view->upright = bar_orientation::upright(tile);
     // Before any state: the likely bar, an empty dimmer for lights.
     const bool light = is_light_entity_id(tile.sensor_entity);
     view->bar_kind = static_cast<uint8_t>(switch_layout::bar_for(layout, compact, light));
@@ -725,7 +773,7 @@ lv_obj_t* render_switch_tile(lv_obj_t* parent, int col, int row, const Tile& til
     if (icon_lbl) {
       lv_obj_align(icon_lbl, LV_ALIGN_TOP_LEFT, tile_layout::scale_480(-8), tile_layout::scale_480(-8));
     }
-    const bool tall = switch_layout::sensor_look(layout, tile.span_h);
+    const bool tall = switch_layout::sensor_look(layout, tile.span_h, view->upright);
     const tile_header::Header text = tile_header::create(container, tile, tall, bar_box(tile).top);
     title_lbl = text.title;
     view->state_label = text.state;

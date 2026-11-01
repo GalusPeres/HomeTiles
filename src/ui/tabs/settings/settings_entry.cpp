@@ -286,6 +286,8 @@ settings_keyboard::Layout keyboard_layout() {
       return settings_keyboard::Layout::Qwertz;
     case 2:
       return settings_keyboard::Layout::Azerty;
+    case 3:
+      return settings_keyboard::Layout::Jcuken;
     default:
       return settings_keyboard::Layout::Qwerty;
   }

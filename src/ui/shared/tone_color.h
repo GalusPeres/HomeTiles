@@ -2,6 +2,7 @@
 
 #include <math.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include "src/core/config/icon_glow.h"
 #include "src/core/config/tile_color.h"
@@ -47,17 +48,22 @@ struct Oklch {
   float L, C, h;
 };
 
+inline float srgb_to_linear_exact(uint8_t value) {
+  const float v = value / 255.0f;
+  return v <= 0.04045f ? v / 12.92f : powf((v + 0.055f) / 1.055f, 2.4f);
+}
+
+// The table in the heap (PSRAM on the S3), not in internal RAM: the S3 draw
+// band gets what internal RAM leaves above its reserve (psram_static.h).
 inline float srgb_to_linear(uint8_t value) {
-  static float table[256];
-  static bool ready = false;
-  if (!ready) {
-    for (int i = 0; i < 256; ++i) {
-      const float v = i / 255.0f;
-      table[i] = v <= 0.04045f ? v / 12.92f : powf((v + 0.055f) / 1.055f, 2.4f);
+  static float* const table = [] {
+    float* made = static_cast<float*>(malloc(256 * sizeof(float)));
+    if (made) {
+      for (int i = 0; i < 256; ++i) made[i] = srgb_to_linear_exact(static_cast<uint8_t>(i));
     }
-    ready = true;
-  }
-  return table[value];
+    return made;
+  }();
+  return table ? table[value] : srgb_to_linear_exact(value);
 }
 
 inline uint8_t linear_to_srgb(float value) {
@@ -342,20 +348,14 @@ inline uint32_t ha_light_color(uint32_t rgb) {
   return (channel(5.0f) << 16) | (channel(3.0f) << 8) | channel(1.0f);
 }
 
-// In the light theme a light's fill, power button and popup icon
-// (user 2026-10-10).
-inline uint32_t light_accent(uint32_t rgb) {
-  rgb &= 0xFFFFFF;
-  return ui_theme::light() ? ha_light_color(rgb) : rgb;
-}
+// A light's fill, power button and popup icon: Home Assistant's color of the
+// light in both themes (user 2026-10-10 light theme, 2026-10-26 dark theme
+// too, #130: "wie in HA"), white light its light grey.
+inline uint32_t light_accent(uint32_t rgb) { return ha_light_color(rgb & 0xFFFFFF); }
 
-// The icon of a light (its popup header, user 2026-10-10: "genau so wie in
-// HA"): in the light theme exactly its power button's color (light_accent),
-// white light Home Assistant's light grey too.
-inline uint32_t light_icon(uint32_t rgb) {
-  rgb &= 0xFFFFFF;
-  return ui_theme::light() ? light_accent(rgb) : rgb;
-}
+// The icon of a light (its popup header): exactly its power button's color
+// (light_accent).
+inline uint32_t light_icon(uint32_t rgb) { return light_accent(rgb); }
 
 // The tile color "From icon" at its default strength
 // (tile_icon_colors::kTintDefault).

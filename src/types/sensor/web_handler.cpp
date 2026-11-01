@@ -1,6 +1,7 @@
 #include "src/types/sensor/web_handler.h"
 
 #include "src/types/sensor/gauge_range.h"
+#include "src/types/sensor/sensor_look.h"
 
 void apply_sensor_fields_from_request(WebServer& server, Tile& tile) {
   tile.sensor_entity = server.hasArg("sensor_entity") ? server.arg("sensor_entity") : "";
@@ -34,7 +35,8 @@ void apply_sensor_fields_from_request(WebServer& server, Tile& tile) {
   tile.sensor_display_mode = 0;
   if (server.hasArg("sensor_display_mode")) {
     int mode = server.arg("sensor_display_mode").toInt();
-    if (mode >= 0 && mode <= 2) tile.sensor_display_mode = static_cast<uint8_t>(mode);
+    // 0-2 and the looks (sensor_look.h).
+    if (mode >= 0 && mode <= sensor_look::kLastMode) tile.sensor_display_mode = static_cast<uint8_t>(mode);
   }
   // The bounds with their decimals (issue #83: 3.7 to 4.2 V became 4 to 4);
   // an empty or unreadable bound keeps its default, an empty range 0-100.

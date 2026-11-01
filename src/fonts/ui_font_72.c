@@ -10,6 +10,10 @@
 #include "lvgl.h"
 #endif
 
+extern const lv_font_t ui_font_cyrillic_72;
+
+#include "src/fonts/glyph_cache.h"
+
 #ifndef UI_FONT_72
 #define UI_FONT_72 1
 #endif
@@ -17606,7 +17610,7 @@ const lv_font_t ui_font_72 = {
 lv_font_t ui_font_72 = {
 #endif
     .get_glyph_dsc = lv_font_get_glyph_dsc_fmt_txt,    /*Function pointer to get glyph's data*/
-    .get_glyph_bitmap = lv_font_get_bitmap_fmt_txt,    /*Function pointer to get glyph's bitmap*/
+    .get_glyph_bitmap = glyph_cache_bitmap,    /*Unpacked once, src/fonts/glyph_cache.c*/
     .line_height = 92,          /*The maximum line height required by the font*/
     .base_line = 19,             /*Baseline measured from the bottom of the line*/
 #if !(LVGL_VERSION_MAJOR == 6 && LVGL_VERSION_MINOR == 0)
@@ -17618,7 +17622,7 @@ lv_font_t ui_font_72 = {
 #endif
     .dsc = &font_dsc,          /*The custom font data. Will be accessed by `get_glyph_bitmap/dsc` */
 #if LV_VERSION_CHECK(8, 2, 0) || LVGL_VERSION_MAJOR >= 9
-    .fallback = NULL,
+    .fallback = &ui_font_cyrillic_72,
 #endif
     .user_data = NULL,
 };

@@ -1,0 +1,1554 @@
+#include "src/types/power_flow/renderer.h"
+
+#include <Arduino.h>
+#include <esp_heap_caps.h>
+#include <lvgl_private.h>
+// lvgl.h no longer exports lv_image_cache_drop() (tile_renderer.cpp).
+#include <misc/cache/instance/lv_image_cache.h>
+#include <math.h>
+#include <new>
+#include <stdlib.h>
+#include <string.h>
+
+#include "src/core/config/config_manager.h"
+#include "src/core/i18n/i18n.h"
+#include "src/core/power/power_manager.h"
+#include "src/network/bridge/ha_bridge_config.h"
+#include "src/tiles/icons/mdi_icons.h"
+#include "src/tiles/runtime/tile_icon_disc.h"
+#include "src/tiles/runtime/tile_icon_source.h"
+#include "src/tiles/runtime/tile_press.h"
+#include "src/tiles/runtime/tile_renderer_fonts.h"
+#include "src/tiles/runtime/tile_renderer_shared.h"
+#include "src/types/power_flow/flow_geometry.h"
+#include "src/types/power_flow/flow_metrics.h"
+#include "src/ui/popups/popup_shell.h"
+#include "src/ui/popups/sensor/sensor_popup.h"
+#include "src/ui/screensaver/image_screensaver.h"
+#include "src/ui/shared/tone_color.h"
+#include "src/ui/shared/ui_surface_style.h"
+#include "src/ui/shared/ui_theme.h"
+#include "src/ui/shared/value_unit.h"
+
+// The Power flow tile (decided design: flow_geometry.h). Each node is one
+// Home Assistant sensor and opens its normal Sensor popup when tapped; there
+// is no popup of the tile itself. Only what flows now is colored, in the
+// color of its source, with one dot moving from the source to the target.
+//
+// Cost: the lines and dots are drawn by one object (DRAW_MAIN), the nodes
+// are plain objects above it. A state change only marks the tile; the loop
+// redraws it once. The dots move with the display's own refresh while a
+// flow runs, on a shown page, without a popup and while the display is
+// awake: each step redraws the dot's small area only, never the tile.
+namespace {
+
+using namespace power_flow;
+
+// The node colors of the decided design (Home Assistant's energy colors);
+// grid and battery by direction like Home Assistant's card (user 2026-10-26).
+constexpr uint32_t kSolarColor = 0xFF9800;
+constexpr uint32_t kGridColor = 0x488FC2;        // supplying (grid consumption)
+constexpr uint32_t kGridReturnColor = 0x8353D1;  // taking the feed-in (grid return)
+constexpr uint32_t kBatteryColor = 0xF06292;     // charging (battery in)
+constexpr uint32_t kBatteryOutColor = 0x4DB6AC;  // discharging or resting (battery out)
+// The header icon (picture 66): the Energy color of the user's panel.
+constexpr uint32_t kHeaderIconColor = 0xF29C06;
+// Lines without a flow, darker on the light screen than on a white card.
+constexpr uint32_t kIdleDark = 0x3C3C3C;
+constexpr uint32_t kIdleLightCard = 0xDCDEE2;
+constexpr uint32_t kIdleLightScreen = 0xCDD0D5;
+// One step of the dots per display frame (60 fps on the 17 ms refresh,
+// user 2026-10-24): the display's refresh moves them (LV_EVENT_REFR_START),
+// so every frame shows one step and no timer beats against the refresh
+// (b533's 40 ms timer showed its steps for 34 or 51 ms). The step follows
+// the flow's power (flow_model.h dot_speed); a dot is drawn smoothed on
+// quarter pixels (flow_geometry.h render_dot).
+
+// The dots' cost in the log: one line per this many ms while they move.
+constexpr uint32_t kMotionLogMs = 10000;
+// Dots that stood still at least this long log why when they move again:
+// what the last frame without a move saw and whether a state woke them.
+constexpr uint32_t kStillLogMs = 500;
+constexpr size_t kMaxFlowTiles = 32;
+
+struct NodeWidgets {
+  lv_obj_t* ring = nullptr;
+  lv_obj_t* disc = nullptr;
+  lv_obj_t* icon = nullptr;
+  lv_obj_t* value = nullptr;
+  lv_obj_t* unit = nullptr;  // value_unit::show
+  uint32_t color = 0xFFFFFFFFu;
+  bool shown = false;
+};
+
+struct FlowTileState {
+  lv_obj_t* card = nullptr;
+  lv_obj_t* canvas = nullptr;
+  lv_obj_t* charge = nullptr;
+  lv_obj_t* charge_unit = nullptr;
+  // The grid's feed-in icon: "transmission-tower-import" mirrored, drawn
+  // once (grid_feed_picture), shown instead of the icon label.
+  lv_obj_t* grid_feed = nullptr;
+  lv_draw_buf_t* grid_feed_buf = nullptr;
+  String entities[kRoleCount];
+  bool grid_invert = false;
+  bool battery_invert = false;
+  uint32_t card_color = 0;
+  uint32_t idle_color = 0;
+  int line_width = 4;
+  int dot_radius = 5;
+  Layout layout;
+  lv_area_t line_box[kLineCount] = {};
+  NodeWidgets node[kNodeCount];
+  bool line_shown[kLineCount] = {};
+  bool line_live[kLineCount] = {};
+  bool reverse[kLineCount] = {};
+  uint32_t line_color[kLineCount] = {};
+  float step[kLineCount] = {};  // px per display frame (dot_speed)
+  float phase[kLineCount] = {};  // distance along the line
+  lv_point_t dot[kLineCount] = {};  // in quarter pixels (kDotSteps)
+  // Each line's whole stroke as one picture of coverages over its
+  // line_box (render_stroke), drawn in the line's color now: computed once
+  // with the layout, a color change keeps it. In the LVGL heap, freed with
+  // the tile.
+  uint8_t* stroke_pixels[kLineCount] = {};
+  lv_image_dsc_t stroke[kLineCount] = {};
+  bool dirty = false;
+};
+
+FlowTileState* g_tiles[kMaxFlowTiles] = {};
+lv_display_t* g_motion_display = nullptr;
+
+// What the dots cost (one log line per kMotionLogMs while they move): the
+// frames that moved one, their dirty areas and render time, the steps' own
+// time and the longest gap between two frames (the loop elsewhere).
+struct MotionStats {
+  uint32_t window_ms = 0;
+  uint32_t frames = 0;
+  uint32_t step_us = 0;
+  uint32_t step_max_us = 0;
+  uint32_t render_us = 0;
+  uint32_t render_max_us = 0;
+  uint32_t areas = 0;
+  uint32_t areas_max = 0;
+  uint32_t gap_max_us = 0;
+  uint32_t dots_max = 0;
+  // The tiles' line drawing (canvas DRAW_MAIN) inside those frames.
+  uint32_t lines_us = 0;
+  uint32_t lines_max_us = 0;
+  uint32_t frame_lines_us = 0;
+  // Within it: line pictures and dots (count and time).
+  uint32_t piece_n[2] = {};
+  uint32_t piece_us[2] = {};
+  // LVGL's search for the topmost covering object of each area (from the
+  // screen's cover check to the first object drawn).
+  uint32_t search_us = 0;
+  uint32_t search_start_us = 0;
+  // Where a frame's time goes: LVGL's layout pass before rendering, the
+  // flushes to the panel (count and time) and the dirty pixels, so the log
+  // shows whether the cost follows the number of areas or their size.
+  uint32_t layout_us = 0;
+  uint32_t flush_us = 0;
+  uint32_t flushes = 0;
+  uint32_t pixels = 0;
+  // Drawing the areas (between the flushes) and the end of the refresh
+  // after the last flush.
+  uint32_t draw_us = 0;
+  uint32_t tail_us = 0;
+  uint32_t segment_start_us = 0;
+  // The frame under way.
+  uint32_t frame_start_us = 0;
+  uint32_t frame_areas = 0;
+  uint32_t flush_start_us = 0;
+  uint32_t last_ready_us = 0;
+};
+MotionStats g_motion_stats;
+bool g_any_dirty = false;
+
+int round_px(float value) { return static_cast<int>(lroundf(value)); }
+
+// A node's color now (the tile's directions, past the idle threshold): the
+// grid purple while it takes the feed-in, else blue; the battery magenta
+// while it charges, else cyan (also at rest, user 2026-10-26).
+uint32_t node_color(uint8_t node, const Inputs& in) {
+  switch (node) {
+    case kNodePv: return kSolarColor;
+    case kNodeBattery: return in.has_battery && -in.battery >= kIdleWatts ? kBatteryColor : kBatteryOutColor;
+    default: return in.has_grid && -in.grid >= kIdleWatts ? kGridReturnColor : kGridColor;
+  }
+}
+
+// A sensor's number from the entity cache (the Bridge's first snapshot
+// until a state arrived); unknown and unavailable states give none.
+bool cached_number(const String& entity, float& out) {
+  if (!entity.length()) return false;
+  String payload;
+  if (!tile_icon_source::cached_payload(entity, payload)) payload = haBridgeConfig.findSensorInitialValue(entity);
+  payload.trim();
+  payload.replace(",", ".");
+  char* end = nullptr;
+  const float parsed = strtof(payload.c_str(), &end);
+  if (!payload.length() || !end || end == payload.c_str() || isnan(parsed) || isinf(parsed)) return false;
+  out = parsed;
+  return true;
+}
+
+bool cached_watts(const String& entity, float& out) {
+  if (!cached_number(entity, out)) return false;
+  float factor = 1.0f;
+  unit_factor(haBridgeConfig.findSensorUnit(entity).c_str(), factor);
+  out *= factor;
+  return true;
+}
+
+// A power's amount and its unit, the unit a step smaller after it like
+// every value (value_unit.h, user 2026-10-26); "--" without a reading.
+void show_power(lv_obj_t* label, lv_obj_t*& unit, bool known, float watts) {
+  if (!known) {
+    value_unit::show(label, unit, "--", "");
+    return;
+  }
+  const char* language = configManager.getConfig().language;
+  const float magnitude = fabsf(watts);
+  if (magnitude >= 999950.0f) {
+    value_unit::show(label, unit, i18n::format_number(language, magnitude / 1000000.0f, 1), "MW");
+  } else if (magnitude >= 999.5f) {
+    value_unit::show(label, unit, i18n::format_number(language, magnitude / 1000.0f, 1), "kW");
+  } else {
+    value_unit::show(label, unit, i18n::format_number(language, magnitude, 0), "W");
+  }
+}
+
+// While the battery charges, its node shows Home Assistant's charging icon
+// for its level (the frontend's batteryIcon: the level rounded to tens,
+// below 10 % the outline; user 2026-10-24).
+String charging_icon(bool has_level, float level) {
+  if (!has_level) return "battery-charging";
+  if (level < 10.0f) return "battery-charging-outline";
+  const long tens = LV_MIN(10L, lroundf(level / 10.0f)) * 10L;
+  return String("battery-charging-") + String(tens);
+}
+
+void set_text(lv_obj_t* label, const String& text) {
+  if (!label) return;
+  const char* shown = lv_label_get_text(label);
+  if (shown && text == shown) return;
+  lv_label_set_text(label, text.c_str());
+}
+
+void set_icon(lv_obj_t* label, const String& name, const char* fallback) {
+  if (!label) return;
+  String glyph = getMdiChar(normalizeMdiIconName(name));
+  if (!glyph.length()) glyph = getMdiChar(fallback);
+  set_text(label, glyph);
+}
+
+// The node's disc and icon for an icon color: the plain tile disc of that
+// color on the tile's card ("Ausfuellen" off, user 2026-10-24).
+void color_node(FlowTileState& st, NodeWidgets& node, uint32_t rgb) {
+  if (!node.disc || node.color == rgb) return;
+  node.color = rgb;
+  const tone_color::Fill fill = tile_icon_disc::tile_fill(st.card, st.card_color, rgb, true, false, false,
+                                                          ui_surface_style::icon_glow_percent());
+  lv_obj_set_style_bg_color(node.disc, lv_color_hex(fill.disc), 0);
+  lv_obj_set_style_text_color(node.icon, lv_color_hex(tone_color::readable_icon(rgb)), 0);
+  // The mirrored feed-in picture takes the grid icon's color too.
+  if (&node == &st.node[kNodeGrid] && st.grid_feed) {
+    lv_obj_set_style_image_recolor(st.grid_feed, lv_color_hex(tone_color::readable_icon(rgb)), 0);
+  }
+}
+
+// What keeps `obj` off the screen: the first hidden object from it up (itself
+// included), or its screen when that is not the active one; null when shown.
+lv_obj_t* hidden_by(lv_obj_t* obj) {
+  lv_obj_t* screen = lv_obj_get_screen(obj);
+  if (screen != lv_screen_active()) return screen;
+  for (lv_obj_t* o = obj; o; o = lv_obj_get_parent(o)) {
+    if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) return o;
+  }
+  return nullptr;
+}
+
+bool shown_on_screen(lv_obj_t* obj) { return obj && !hidden_by(obj); }
+
+// A dot's place now, in quarter pixels.
+lv_point_t dot_point(const FlowTileState& st, uint8_t line) {
+  const Polyline& path = st.layout.line[line];
+  const float length = polyline_length(path);
+  const Point p = point_at(path, st.reverse[line] ? length - st.phase[line] : st.phase[line]);
+  return {round_px(p.x * kDotSteps), round_px(p.y * kDotSteps)};
+}
+
+// The pixels a dot at `q` (quarter pixels, relative to the canvas) covers,
+// on the screen.
+lv_area_t dot_area(const FlowTileState& st, const lv_area_t& canvas, lv_point_t q) {
+  const int32_t x = canvas.x1 + dot_pixel(q.x) - st.dot_radius, y = canvas.y1 + dot_pixel(q.y) - st.dot_radius;
+  const int32_t size = dot_picture_size(st.dot_radius);
+  return {x, y, x + size - 1, y + size - 1};
+}
+
+// A node ring lies opaque over the ends of its lines; the dots run out from
+// under it. Where it covers a dot's area completely (its box without the
+// corners its radius rounds), nothing changes on screen, so that part is
+// not redrawn. Redrawn, every dot step near a node drew its ring, disc and
+// icon again (b539: ~0.45 ms of each frame on the V2). False when nothing
+// is left.
+bool clip_to_rings(const FlowTileState& st, lv_area_t& area) {
+  for (const NodeWidgets& node : st.node) {
+    if (!node.shown || !node.ring || lv_obj_has_flag(node.ring, LV_OBJ_FLAG_HIDDEN)) continue;
+    lv_area_t box;
+    lv_obj_get_coords(node.ring, &box);
+    if (!lv_area_is_on(&area, &box)) continue;
+    const int32_t corner = LV_MIN(lv_obj_get_style_radius(node.ring, LV_PART_MAIN),
+                                  LV_MIN(lv_area_get_width(&box), lv_area_get_height(&box)) / 2);
+    if (area.x1 >= box.x1 + corner && area.x2 <= box.x2 - corner) {
+      // Across the ring's top or bottom side.
+      if (area.y1 >= box.y1 && area.y2 <= box.y2) return false;
+      if (area.y1 < box.y1 && area.y2 <= box.y2) area.y2 = box.y1 - 1;
+      else if (area.y2 > box.y2 && area.y1 >= box.y1) area.y1 = box.y2 + 1;
+    } else if (area.y1 >= box.y1 + corner && area.y2 <= box.y2 - corner) {
+      // Across its left or right side.
+      if (area.x1 >= box.x1 && area.x2 <= box.x2) return false;
+      if (area.x1 < box.x1 && area.x2 <= box.x2) area.x2 = box.x1 - 1;
+      else if (area.x2 > box.x2 && area.x1 >= box.x1) area.x1 = box.x2 + 1;
+    }
+  }
+  return true;
+}
+
+// What redrawing a dot's step did: drawn, covered by the rings at both
+// ends, or refused by LVGL (the area not visible yet, e.g. in the frame that
+// shows a page again). lv_obj_invalidate_area drops a refused area without a
+// word; counted as drawn, it ended the dot frames until the next state
+// arrived (user 2026-10-28: after a page turn the dots stood ~5 s).
+enum class DotRedraw : uint8_t { kDrawn, kCovered, kRefused };
+
+// Redraws a dot's old and new place.
+DotRedraw invalidate_dot(const FlowTileState& st, const lv_area_t& canvas, lv_point_t a, lv_point_t b) {
+  bool any = false;
+  bool refused = false;
+  lv_display_t* display = lv_obj_get_display(st.canvas);
+  auto invalidate = [&](lv_area_t area) {
+    if (!clip_to_rings(st, area)) return;
+    lv_area_t visible = area;
+    if (!display || !lv_display_is_invalidation_enabled(display) || !lv_obj_area_is_visible(st.canvas, &visible)) {
+      refused = true;
+      return;
+    }
+    lv_obj_invalidate_area(st.canvas, &area);
+    any = true;
+  };
+  const lv_area_t from = dot_area(st, canvas, a), to = dot_area(st, canvas, b);
+  // Neighbouring steps share one small area; a dot that starts over
+  // redraws both ends.
+  const int32_t size = dot_picture_size(st.dot_radius);
+  if (abs(from.x1 - to.x1) <= size && abs(from.y1 - to.y1) <= size) {
+    invalidate({LV_MIN(from.x1, to.x1), LV_MIN(from.y1, to.y1), LV_MAX(from.x2, to.x2), LV_MAX(from.y2, to.y2)});
+  } else {
+    invalidate(from);
+    invalidate(to);
+  }
+  if (refused) return DotRedraw::kRefused;
+  return any ? DotRedraw::kDrawn : DotRedraw::kCovered;
+}
+
+bool any_live(const FlowTileState& st) {
+  for (bool live : st.line_live) {
+    if (live) return true;
+  }
+  return false;
+}
+
+// Why the last frame moved no dot (the log compares these pointers).
+constexpr const char* kStillNoFlow = "no flow";
+constexpr const char* kStillPopup = "popup";
+constexpr const char* kStillSleep = "sleep";
+constexpr const char* kStillScreensaver = "screensaver";
+constexpr const char* kStillHidden = "hidden";
+constexpr const char* kStillWaiting = "waiting";
+constexpr const char* kStillRefused = "not visible";
+
+// What hid a flow tile in the last frame that found it hidden (for the log;
+// sizes, not the object, which may be gone when it is logged).
+struct HiddenBy {
+  bool screen;
+  uint8_t depth;
+  int32_t width;
+  int32_t height;
+};
+HiddenBy g_hidden_by = {};
+
+HiddenBy hidden_info(lv_obj_t* card, lv_obj_t* hider) {
+  uint8_t depth = 0;
+  for (lv_obj_t* o = card; o && o != hider; o = lv_obj_get_parent(o)) ++depth;
+  return {hider == lv_obj_get_screen(card) && hider != card, depth, lv_obj_get_width(hider), lv_obj_get_height(hider)};
+}
+
+// One step of every shown dot; the number of dots that moved. `waiting`:
+// the next frame should come although no dot moved (a dot shown that did not
+// change its pixel, or one whose area is not visible yet). `still`: why
+// nothing moved.
+uint32_t step_dots(bool& waiting, const char*& still) {
+  waiting = false;
+  still = kStillNoFlow;
+  // Nothing moves where nobody sees it: behind a popup, asleep, or under the
+  // screensaver (b539 log: there the dots ran on at ~47 frames a second and
+  // redrew the screensaver above them in every area). Nothing asks for frames
+  // there either: the redraw that shows the tile again brings a frame, and
+  // that frame steps the dots and asks for the next (motion_display_cb).
+  if (popup_shell_active()) {
+    still = kStillPopup;
+    return 0;
+  }
+  if (powerManager.isInSleep()) {
+    still = kStillSleep;
+    return 0;
+  }
+  if (image_screensaver_covers_ui()) {
+    still = kStillScreensaver;
+    return 0;
+  }
+  uint32_t moved = 0;
+  for (FlowTileState* st : g_tiles) {
+    if (!st || !any_live(*st)) continue;
+    if (lv_obj_t* hider = st->card ? hidden_by(st->card) : nullptr) {
+      // A hidden flow asks for no frames (b609 kept them running here in the
+      // background; the dots' stop after a page turn had another cause, see
+      // motion_display_cb). Showing the tile redraws it, and that frame
+      // steps its dots.
+      g_hidden_by = hidden_info(st->card, hider);
+      still = kStillHidden;
+      continue;
+    }
+    still = kStillWaiting;
+    lv_area_t canvas;
+    lv_obj_get_coords(st->canvas, &canvas);
+    for (uint8_t line = 0; line < kLineCount; ++line) {
+      if (!st->line_live[line]) continue;
+      const float length = polyline_length(st->layout.line[line]);
+      if (length <= 0.0f) continue;
+      st->phase[line] = fmodf(st->phase[line] + st->step[line], length);
+      const lv_point_t next = dot_point(*st, line);
+      if (next.x == st->dot[line].x && next.y == st->dot[line].y) {
+        waiting = true;
+        continue;
+      }
+      const DotRedraw redraw = invalidate_dot(*st, canvas, st->dot[line], next);
+      // Not visible yet: the dot stays where it is drawn and the next frame
+      // tries again.
+      if (redraw == DotRedraw::kRefused) {
+        still = kStillRefused;
+        waiting = true;
+        continue;
+      }
+      st->dot[line] = next;
+      // Under a ring: the next frame still comes.
+      if (redraw == DotRedraw::kCovered) {
+        waiting = true;
+        continue;
+      }
+      ++moved;
+    }
+  }
+  return moved;
+}
+
+// Which objects the dot frames draw (one log line per kMotionLogMs, with
+// the dots' line): the card and its children, every tile of the grid, the
+// grid, the siblings LVGL draws after each level on the way up to the screen,
+// and the top and system layers with their children. Each probe keeps its
+// object's place, size and child count from when it was added, so the log
+// never reads an object that is gone. Tags: k card child, c card, t tile,
+// g grid, a level above (with its number), s sibling of a level, L layer,
+// l layer child.
+struct DrawProbe {
+  lv_obj_t* obj = nullptr;
+  int32_t x = 0;
+  int32_t y = 0;
+  int32_t width = 0;
+  int32_t height = 0;
+  uint32_t children = 0;
+  char tag = '?';
+  uint8_t level = 0;
+  uint32_t start_us = 0;
+  uint32_t sum_us = 0;
+};
+constexpr size_t kMaxProbes = 96;
+// In LVGL's heap (PSRAM on the panels), made with the first probe: the SRAM
+// draw band gets the internal RAM left above its reserve (S3 b605).
+DrawProbe* g_probes = nullptr;
+size_t g_probe_count = 0;
+
+void probe_cb(lv_event_t* e) {
+  DrawProbe* probe = static_cast<DrawProbe*>(lv_event_get_user_data(e));
+  const lv_event_code_t code = lv_event_get_code(e);
+  if (code == LV_EVENT_DELETE) {
+    probe->obj = nullptr;
+    return;
+  }
+  MotionStats& m = g_motion_stats;
+  if (!m.frame_areas) return;
+  if (code == LV_EVENT_DRAW_MAIN_BEGIN) {
+    probe->start_us = micros();
+    if (m.search_start_us) {
+      m.search_us += probe->start_us - m.search_start_us;
+      m.search_start_us = 0;
+    }
+  } else if (code == LV_EVENT_DRAW_POST_BEGIN) {
+    // A level above the top object only gets its post-draw events.
+    if (!probe->start_us) probe->start_us = micros();
+  } else if (code == LV_EVENT_DRAW_POST_END && probe->start_us) {
+    probe->sum_us += micros() - probe->start_us;
+    probe->start_us = 0;
+  }
+}
+
+void add_probe(lv_obj_t* obj, char tag, uint8_t level) {
+  if (!obj || g_probe_count >= kMaxProbes) return;
+  if (!g_probes) g_probes = static_cast<DrawProbe*>(lv_malloc_zeroed(sizeof(DrawProbe) * kMaxProbes));
+  if (!g_probes) return;
+  for (size_t i = 0; i < g_probe_count; ++i) {
+    if (g_probes[i].obj == obj) return;
+  }
+  DrawProbe& probe = g_probes[g_probe_count++];
+  lv_area_t coords;
+  lv_obj_get_coords(obj, &coords);
+  probe.obj = obj;
+  probe.x = coords.x1;
+  probe.y = coords.y1;
+  probe.width = lv_area_get_width(&coords);
+  probe.height = lv_area_get_height(&coords);
+  probe.children = lv_obj_get_child_count(obj);
+  probe.tag = tag;
+  probe.level = level;
+  for (const lv_event_code_t code :
+       {LV_EVENT_DRAW_MAIN_BEGIN, LV_EVENT_DRAW_POST_BEGIN, LV_EVENT_DRAW_POST_END, LV_EVENT_DELETE}) {
+    lv_obj_add_event_cb(obj, probe_cb, code, &probe);
+  }
+}
+
+void add_children(lv_obj_t* parent, char tag, uint8_t level) {
+  const uint32_t count = parent ? lv_obj_get_child_count(parent) : 0;
+  for (uint32_t i = 0; i < count; ++i) add_probe(lv_obj_get_child(parent, static_cast<int32_t>(i)), tag, level);
+}
+
+// Each area's top object search starts with the screen's cover check.
+void search_cb(lv_event_t*) {
+  MotionStats& m = g_motion_stats;
+  if (m.frame_areas && !m.search_start_us) m.search_start_us = micros();
+}
+
+void add_probes(lv_obj_t* card) {
+  lv_obj_add_event_cb(lv_obj_get_screen(card), search_cb, LV_EVENT_COVER_CHECK, nullptr);
+  add_probe(card, 'c', 0);
+  add_children(card, 'k', 0);
+  lv_obj_t* grid = lv_obj_get_parent(card);
+  if (!grid) return;
+  add_probe(grid, 'g', 1);
+  add_children(grid, 't', 1);
+  uint8_t level = 1;
+  for (lv_obj_t* parent = lv_obj_get_parent(grid); parent; parent = lv_obj_get_parent(parent)) {
+    add_probe(parent, 'a', ++level);
+    add_children(parent, 's', level - 1);
+  }
+  for (lv_obj_t* layer : {lv_display_get_layer_top(g_motion_display), lv_display_get_layer_sys(g_motion_display)}) {
+    add_probe(layer, 'L', 0);
+    add_children(layer, 'l', 0);
+  }
+}
+
+void log_probes(uint32_t frames) {
+  // The twelve most expensive objects (their trees), per dot frame.
+  bool shown[kMaxProbes] = {};
+  char line[900];
+  int used = snprintf(line, sizeof(line), "[PowerFlow] Dots draw per frame (%u probes):",
+                      static_cast<unsigned>(g_probe_count));
+  for (int rank = 0; rank < 12; ++rank) {
+    int best = -1;
+    for (size_t i = 0; i < g_probe_count; ++i) {
+      if (shown[i] || !g_probes[i].sum_us) continue;
+      if (best < 0 || g_probes[i].sum_us > g_probes[best].sum_us) best = static_cast<int>(i);
+    }
+    if (best < 0) break;
+    shown[best] = true;
+    const DrawProbe& probe = g_probes[best];
+    used += snprintf(line + used, sizeof(line) - used, " %c%u %ldx%ld@%ld,%ld n=%lu %luus%s", probe.tag,
+                     static_cast<unsigned>(probe.level), static_cast<long>(probe.width),
+                     static_cast<long>(probe.height), static_cast<long>(probe.x), static_cast<long>(probe.y),
+                     static_cast<unsigned long>(probe.children), static_cast<unsigned long>(probe.sum_us / frames),
+                     probe.obj ? "" : " (gone)");
+    if (used >= static_cast<int>(sizeof(line)) - 1) break;
+  }
+  Serial.println(line);
+  for (size_t i = 0; i < g_probe_count; ++i) g_probes[i].sum_us = 0;
+}
+
+void log_motion(uint32_t now_ms) {
+  MotionStats& m = g_motion_stats;
+  if (!m.window_ms) m.window_ms = now_ms;
+  if (now_ms - m.window_ms < kMotionLogMs) return;
+  if (m.frames) {
+    const uint32_t frames = m.frames;
+    const uint32_t window = now_ms - m.window_ms;
+    Serial.printf("[PowerFlow] Dots %lu s: frames=%lu (%.1f/s) dots<=%lu areas avg=%.1f max=%lu px avg=%lu "
+                  "render avg=%.2f max=%.2f ms layout avg=%lu us draw avg=%lu us flush avg=%lu us n=%.1f "
+                  "tail avg=%lu us lines avg=%lu max=%lu us (line %.1f %lu us dot %.1f %lu us) "
+                  "search avg=%lu us step avg=%lu max=%lu us gap max=%.1f ms\n",
+                  static_cast<unsigned long>(window / 1000), static_cast<unsigned long>(frames),
+                  frames * 1000.0f / window, static_cast<unsigned long>(m.dots_max),
+                  static_cast<float>(m.areas) / frames, static_cast<unsigned long>(m.areas_max),
+                  static_cast<unsigned long>(m.pixels / frames),
+                  m.render_us / 1000.0f / frames, m.render_max_us / 1000.0f,
+                  static_cast<unsigned long>(m.layout_us / frames), static_cast<unsigned long>(m.draw_us / frames),
+                  static_cast<unsigned long>(m.flush_us / frames), static_cast<float>(m.flushes) / frames,
+                  static_cast<unsigned long>(m.tail_us / frames),
+                  static_cast<unsigned long>(m.lines_us / frames), static_cast<unsigned long>(m.lines_max_us),
+                  static_cast<float>(m.piece_n[0]) / frames, static_cast<unsigned long>(m.piece_us[0] / frames),
+                  static_cast<float>(m.piece_n[1]) / frames, static_cast<unsigned long>(m.piece_us[1] / frames),
+                  static_cast<unsigned long>(m.search_us / frames), static_cast<unsigned long>(m.step_us / frames), static_cast<unsigned long>(m.step_max_us),
+                  m.gap_max_us / 1000.0f);
+  }
+  if (m.frames) log_probes(m.frames);
+  m = MotionStats{};
+  m.window_ms = now_ms;
+}
+
+// Why the dots last stood still and since when, and whether a state (a
+// refresh) woke them since.
+const char* g_still_reason = nullptr;
+uint32_t g_still_since_ms = 0;
+bool g_woken_by_state = false;
+
+// A frame without a move. A hidden tile logs once what hides it; only a
+// stop with the tile shown (waiting for its pixel or refused) starts the
+// stall clock: time on another page or behind a popup is no stall.
+void note_still(const char* still, uint32_t now_ms) {
+  if (still != g_still_reason && still == kStillHidden) {
+    Serial.printf("[PowerFlow] Dots wait: tile hidden by %s %ldx%ld, %u levels up\n",
+                  g_hidden_by.screen ? "another screen" : "an object", static_cast<long>(g_hidden_by.width),
+                  static_cast<long>(g_hidden_by.height), static_cast<unsigned>(g_hidden_by.depth));
+  }
+  const bool stalled = still == kStillWaiting || still == kStillRefused;
+  if (!stalled) g_still_since_ms = 0;
+  else if (!g_still_since_ms || still != g_still_reason) g_still_since_ms = now_ms | 1;
+  g_still_reason = still;
+}
+
+// Once per stall that lasted kStillLogMs: what the last frame without a move
+// saw and what woke the dots.
+void log_still(uint32_t now_ms) {
+  if (!g_still_since_ms || now_ms - g_still_since_ms < kStillLogMs) return;
+  Serial.printf("[PowerFlow] Dots move again after %lu ms (last frame: %s, woken by %s)\n",
+                static_cast<unsigned long>(now_ms - g_still_since_ms), g_still_reason ? g_still_reason : "none",
+                g_woken_by_state ? "a state" : "a frame");
+}
+
+// The frames after a page with a flow came up (power_flow_shown; user
+// 2026-10-28, b609: after a page turn the dot still stood about a second and
+// no log said why): when each frame came, counted from the showing, and what
+// it found; one line once the dots made kShownMoves steps, after
+// kShownFrames frames or kShownTraceMs. m moved, w waiting for its pixel or
+// under a ring, r not visible, h hidden, p behind a popup, n no flow,
+// s asleep or under the screensaver.
+constexpr uint8_t kShownFrames = 20;
+constexpr uint8_t kShownMoves = 4;
+constexpr uint32_t kShownTraceMs = 3000;
+struct ShownTrace {
+  uint32_t shown_ms = 0;  // 0: no trace
+  bool hidden_at_show = false;
+  HiddenBy at_show = {};
+  bool hidden_later = false;
+  HiddenBy later = {};  // the last frame that found a flow hidden
+  uint8_t count = 0;
+  uint8_t moves = 0;
+  uint16_t at_ms[kShownFrames] = {};
+  char what[kShownFrames] = {};
+};
+ShownTrace g_shown_trace;
+
+char still_code(const char* still) {
+  if (still == kStillWaiting) return 'w';
+  if (still == kStillRefused) return 'r';
+  if (still == kStillHidden) return 'h';
+  if (still == kStillPopup) return 'p';
+  if (still == kStillNoFlow) return 'n';
+  return 's';
+}
+
+void describe_hidden(char* out, size_t size, bool hidden, const HiddenBy& by) {
+  if (!hidden) {
+    snprintf(out, size, "shown");
+    return;
+  }
+  snprintf(out, size, "hidden by %s %ldx%ld, %u levels up", by.screen ? "another screen" : "an object",
+           static_cast<long>(by.width), static_cast<long>(by.height), static_cast<unsigned>(by.depth));
+}
+
+void log_shown() {
+  ShownTrace& t = g_shown_trace;
+  char frames[kShownFrames * 7 + 1];
+  size_t used = 0;
+  int first_move = -1;
+  frames[0] = '\0';
+  for (uint8_t i = 0; i < t.count && used < sizeof(frames) - 1; ++i) {
+    if (first_move < 0 && t.what[i] == 'm') first_move = t.at_ms[i];
+    used += snprintf(frames + used, sizeof(frames) - used, " %u%c", static_cast<unsigned>(t.at_ms[i]), t.what[i]);
+  }
+  char first[12];
+  if (first_move < 0) snprintf(first, sizeof(first), "none");
+  else snprintf(first, sizeof(first), "%d ms", first_move);
+  char at_show[64];
+  char later[64];
+  describe_hidden(at_show, sizeof(at_show), t.hidden_at_show, t.at_show);
+  describe_hidden(later, sizeof(later), t.hidden_later, t.later);
+  Serial.printf("[PowerFlow] Shown: first move %s; at the showing %s, last hidden frame %s; frames (ms):%s\n",
+                first, at_show, t.hidden_later ? later : "none", frames);
+  t.shown_ms = 0;
+}
+
+void trace_frame(uint32_t moved, const char* still, uint32_t now_ms) {
+  ShownTrace& t = g_shown_trace;
+  if (!t.shown_ms) return;
+  const uint32_t at = now_ms - t.shown_ms;
+  if (t.count < kShownFrames) {
+    t.at_ms[t.count] = static_cast<uint16_t>(at < 65535u ? at : 65535u);
+    t.what[t.count] = moved ? 'm' : still_code(still);
+    ++t.count;
+  }
+  if (moved) {
+    ++t.moves;
+  } else if (still == kStillHidden) {
+    t.hidden_later = true;
+    t.later = g_hidden_by;
+  }
+  if (t.moves >= kShownMoves || t.count >= kShownFrames || at >= kShownTraceMs) log_shown();
+}
+
+// The display's refresh: one step at its start (its areas are drawn in this
+// same refresh), the next frame asked for while a dot is shown; nothing
+// shown, nothing asked: LVGL rests its refresh until the UI changes again.
+void motion_display_cb(lv_event_t* e) {
+  MotionStats& m = g_motion_stats;
+  const lv_event_code_t code = lv_event_get_code(e);
+  if (code == LV_EVENT_REFR_START) {
+    m.frame_areas = 0;
+    const uint32_t started = micros();
+    bool waiting = false;
+    const char* still = nullptr;
+    const uint32_t moved = step_dots(waiting, still);
+    const uint32_t now_ms = millis();
+    trace_frame(moved, still, now_ms);
+    // The next frame is asked for here, also after a move: the refresh paused
+    // its timer before this event, and the area of the step does not always
+    // restart it. lv_inv_area drops an area inside one already marked without
+    // a refresh request (lv_refr.c), and in the frame that shows a page again
+    // its whole grid is marked: the dots made one step and stood until the
+    // next state (user 2026-10-28, b610 trace "22m 8293m", "23m 3674m").
+    if (moved || waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));
+    if (!moved) {
+      note_still(still, now_ms);
+      return;
+    }
+    log_still(now_ms);
+    g_still_since_ms = 0;
+    g_still_reason = nullptr;
+    g_woken_by_state = false;
+    const uint32_t now = micros();
+    const uint32_t step = now - started;
+    ++m.frames;
+    m.step_us += step;
+    if (step > m.step_max_us) m.step_max_us = step;
+    if (moved > m.dots_max) m.dots_max = moved;
+    if (m.last_ready_us && now - m.last_ready_us > m.gap_max_us) m.gap_max_us = now - m.last_ready_us;
+    m.frame_start_us = now;
+    m.frame_lines_us = 0;
+    m.frame_areas = g_motion_display->inv_p;
+    for (uint32_t i = 0; i < m.frame_areas; ++i) m.pixels += lv_area_get_size(&g_motion_display->inv_areas[i]);
+  } else if (!m.frame_areas) {
+    return;
+  } else if (code == LV_EVENT_RENDER_START) {
+    m.segment_start_us = micros();
+    m.layout_us += m.segment_start_us - m.frame_start_us;
+  } else if (code == LV_EVENT_FLUSH_START) {
+    m.search_start_us = 0;
+    m.flush_start_us = micros();
+    if (m.segment_start_us) m.draw_us += m.flush_start_us - m.segment_start_us;
+  } else if (code == LV_EVENT_FLUSH_FINISH) {
+    m.segment_start_us = micros();
+    m.flush_us += m.segment_start_us - m.flush_start_us;
+    ++m.flushes;
+  } else if (code == LV_EVENT_REFR_READY) {
+    const uint32_t now = micros();
+    if (m.segment_start_us) m.tail_us += now - m.segment_start_us;
+    m.segment_start_us = 0;
+    const uint32_t render = now - m.frame_start_us;
+    m.render_us += render;
+    if (render > m.render_max_us) m.render_max_us = render;
+    m.areas += m.frame_areas;
+    if (m.frame_areas > m.areas_max) m.areas_max = m.frame_areas;
+    m.lines_us += m.frame_lines_us;
+    if (m.frame_lines_us > m.lines_max_us) m.lines_max_us = m.frame_lines_us;
+    m.frame_areas = 0;
+    m.last_ready_us = now;
+    log_motion(millis());
+  }
+}
+
+// A flow runs: the refresh moves the dots from now on (the callbacks stay
+// and return at once without a shown dot), the next frame starts them.
+void wake_motion(lv_obj_t* card) {
+  if (!g_motion_display) {
+    g_motion_display = lv_obj_get_display(card);
+    if (!g_motion_display) return;
+    for (const lv_event_code_t code : {LV_EVENT_REFR_START, LV_EVENT_RENDER_START, LV_EVENT_FLUSH_START,
+                                       LV_EVENT_FLUSH_FINISH, LV_EVENT_REFR_READY}) {
+      lv_display_add_event_cb(g_motion_display, motion_display_cb, code, nullptr);
+    }
+    add_probes(card);
+  }
+  g_woken_by_state = true;
+  lv_timer_resume(lv_display_get_refr_timer(g_motion_display));
+}
+
+// Counts one drawing of a kind (0 line picture, 1 dot) started at
+// `started_us` while a dot step's frame is drawn.
+void count_piece(int kind, uint32_t started_us) {
+  MotionStats& m = g_motion_stats;
+  if (!m.frame_areas) return;
+  ++m.piece_n[kind];
+  m.piece_us[kind] += micros() - started_us;
+}
+
+// Off screen, never shown: draws the mirrored icon.
+lv_obj_t* g_picture_canvas = nullptr;
+
+void picture_canvas_deleted(lv_event_t*) { g_picture_canvas = nullptr; }
+
+lv_obj_t* picture_canvas() {
+  if (!g_picture_canvas) {
+    g_picture_canvas = lv_canvas_create(nullptr);
+    if (g_picture_canvas) lv_obj_add_event_cb(g_picture_canvas, picture_canvas_deleted, LV_EVENT_DELETE, nullptr);
+  }
+  return g_picture_canvas;
+}
+
+// An A8 picture over `pixels`, drawn recolored (like the Sensor graph's).
+void set_mask(lv_image_dsc_t& image, const uint8_t* pixels, int32_t width, int32_t height) {
+  image.header.magic = LV_IMAGE_HEADER_MAGIC;
+  image.header.cf = LV_COLOR_FORMAT_A8;
+  image.header.w = width;
+  image.header.h = height;
+  image.header.stride = width;
+  image.data = pixels;
+  image.data_size = static_cast<size_t>(width) * static_cast<size_t>(height);
+}
+
+// Every shown line's stroke picture, once with the layout. A line without
+// memory for it draws as an LVGL line through its points instead.
+bool dot_pictures(int radius);
+void render_strokes(FlowTileState& st) {
+  dot_pictures(st.dot_radius);
+  for (uint8_t line = 0; line < kLineCount; ++line) {
+    const lv_area_t& box = st.line_box[line];
+    const int32_t width = lv_area_get_width(&box), height = lv_area_get_height(&box);
+    if (!st.line_shown[line] || st.layout.line[line].count < 2 || width <= 0 || height <= 0) continue;
+    uint8_t* pixels = static_cast<uint8_t*>(lv_malloc(static_cast<size_t>(width) * static_cast<size_t>(height)));
+    if (!pixels) {
+      Serial.printf("[PowerFlow] No memory for line %u's picture (%ldx%ld)\n", static_cast<unsigned>(line),
+                    static_cast<long>(width), static_cast<long>(height));
+      continue;
+    }
+    render_stroke(pixels, width, height, box.x1, box.y1, st.layout.line[line], static_cast<float>(st.line_width));
+    st.stroke_pixels[line] = pixels;
+    set_mask(st.stroke[line], pixels, width, height);
+  }
+}
+
+// The dots' pictures for every quarter pixel position (render_dot), shared
+// by all tiles of the layout's dot radius; false without memory (the dots
+// are then drawn on whole pixels).
+uint8_t* g_dot_pixels = nullptr;
+int g_dot_radius = 0;
+lv_image_dsc_t g_dot_image[kDotSteps * kDotSteps] = {};
+
+bool dot_pictures(int radius) {
+  if (g_dot_pixels && g_dot_radius == radius) return true;
+  const int size = dot_picture_size(radius);
+  const size_t bytes = static_cast<size_t>(size) * static_cast<size_t>(size);
+  if (g_dot_pixels) {
+    for (lv_image_dsc_t& image : g_dot_image) lv_image_cache_drop(&image);
+    lv_free(g_dot_pixels);
+  }
+  g_dot_pixels = static_cast<uint8_t*>(lv_malloc(bytes * kDotSteps * kDotSteps));
+  g_dot_radius = g_dot_pixels ? radius : 0;
+  if (!g_dot_pixels) return false;
+  for (int fy = 0; fy < kDotSteps; ++fy) {
+    for (int fx = 0; fx < kDotSteps; ++fx) {
+      uint8_t* pixels = g_dot_pixels + bytes * (fy * kDotSteps + fx);
+      render_dot(pixels, radius, fx, fy);
+      set_mask(g_dot_image[fy * kDotSteps + fx], pixels, size, size);
+    }
+  }
+  return true;
+}
+
+// Hides or shows `obj` only when that changes (a flag set again would
+// redraw it).
+void set_hidden(lv_obj_t* obj, bool hidden) {
+  if (!obj || lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN) == hidden) return;
+  if (hidden) lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+  else lv_obj_remove_flag(obj, LV_OBJ_FLAG_HIDDEN);
+}
+
+// "transmission-tower-import" mirrored, its arrow coming in from the lines
+// on the right (user 2026-10-24): drawn once like the icon label, its rows
+// turned around, then shown as a picture centred where the label is (LVGL
+// draws no mirrored text). False without memory.
+bool grid_feed_picture(FlowTileState& st) {
+  if (st.grid_feed) return true;
+  NodeWidgets& w = st.node[kNodeGrid];
+  lv_obj_t* canvas = picture_canvas();
+  const String glyph = getMdiChar("transmission-tower-import");
+  const lv_font_t* font = w.icon ? lv_obj_get_style_text_font(w.icon, LV_PART_MAIN) : nullptr;
+  if (!canvas || !w.ring || !font || !glyph.length()) return false;
+  lv_point_t size;
+  lv_text_get_size(&size, glyph.c_str(), font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  if (size.x <= 0 || size.y <= 0) return false;
+  lv_draw_buf_t* picture = lv_draw_buf_create(size.x, size.y, LV_COLOR_FORMAT_ARGB8888, LV_STRIDE_AUTO);
+  if (!picture) return false;
+  lv_draw_buf_clear(picture, nullptr);
+  lv_canvas_set_draw_buf(canvas, picture);
+  lv_layer_t layer;
+  lv_canvas_init_layer(canvas, &layer);
+  lv_draw_label_dsc_t dsc;
+  lv_draw_label_dsc_init(&dsc);
+  dsc.font = font;
+  // White, colored like the icon label when shown (the grid turns purple
+  // while feeding in, color_node).
+  dsc.color = lv_color_white();
+  dsc.text = glyph.c_str();
+  const lv_area_t area = {0, 0, size.x - 1, size.y - 1};
+  lv_draw_label(&layer, &dsc, &area);
+  lv_canvas_finish_layer(canvas, &layer);
+  lv_image_set_src(canvas, nullptr);
+  for (int32_t y = 0; y < size.y; ++y) {
+    uint32_t* row = reinterpret_cast<uint32_t*>(picture->data + y * picture->header.stride);
+    for (int32_t a = 0, b = size.x - 1; a < b; ++a, --b) {
+      const uint32_t left = row[a];
+      row[a] = row[b];
+      row[b] = left;
+    }
+  }
+  lv_image_cache_drop(picture);
+  st.grid_feed_buf = picture;
+  st.grid_feed = lv_image_create(w.ring);
+  lv_obj_add_flag(st.grid_feed, LV_OBJ_FLAG_HIDDEN);
+  lv_image_set_src(st.grid_feed, picture);
+  lv_obj_set_style_image_recolor(st.grid_feed, lv_obj_get_style_text_color(w.icon, LV_PART_MAIN), 0);
+  lv_obj_set_style_image_recolor_opa(st.grid_feed, LV_OPA_COVER, 0);
+  lv_obj_center(st.grid_feed);
+  return true;
+}
+
+// The grid's icon past the idle threshold (user 2026-10-24): while the grid
+// supplies "transmission-tower-export" as MDI draws it (the arrow leaves the
+// mast towards the lines), while feeding in "transmission-tower-import"
+// mirrored (the arrow comes from the lines into the mast), else the plain
+// mast. Without memory for the picture, the import icon as it is.
+void show_grid_icon(FlowTileState& st, const Inputs& in) {
+  NodeWidgets& w = st.node[kNodeGrid];
+  if (!w.icon) return;
+  const bool supplying = in.has_grid && in.grid >= kIdleWatts;
+  const bool feeding = in.has_grid && -in.grid >= kIdleWatts;
+  const bool mirrored = feeding && grid_feed_picture(st);
+  set_hidden(st.grid_feed, !mirrored);
+  set_hidden(w.icon, mirrored);
+  if (mirrored) return;
+  set_icon(w.icon, "", supplying ? "transmission-tower-export" : feeding ? "transmission-tower-import" : "transmission-tower");
+}
+
+void canvas_draw_cb(lv_event_t* e) {
+  FlowTileState* st = static_cast<FlowTileState*>(lv_event_get_user_data(e));
+  lv_layer_t* layer = lv_event_get_layer(e);
+  if (!st || !layer) return;
+  const uint32_t started_us = micros();
+  lv_area_t canvas;
+  lv_obj_get_coords(st->canvas, &canvas);
+  lv_draw_image_dsc_t image_dsc;
+  lv_draw_image_dsc_init(&image_dsc);
+  image_dsc.recolor_opa = LV_OPA_COVER;
+  // The idle lines first, the flows over them, then their dots. A line's
+  // picture holds its whole stroke; LVGL draws only the part being drawn.
+  for (int pass = 0; pass < 2; ++pass) {
+    for (uint8_t line = 0; line < kLineCount; ++line) {
+      if (!st->line_shown[line] || st->line_live[line] != (pass == 1)) continue;
+      lv_area_t box = st->line_box[line];
+      lv_area_move(&box, canvas.x1, canvas.y1);
+      if (!lv_area_is_on(&box, &layer->_clip_area)) continue;
+      const uint32_t line_started_us = micros();
+      if (st->stroke_pixels[line]) {
+        image_dsc.src = &st->stroke[line];
+        image_dsc.recolor = lv_color_hex(st->line_color[line]);
+        lv_draw_image(layer, &image_dsc, &box);
+      } else {
+        const Polyline& path = st->layout.line[line];
+        lv_point_precise_t points[kMaxLinePoints];
+        for (uint8_t i = 0; i < path.count; ++i) {
+          points[i].x = canvas.x1 + round_px(path.p[i].x);
+          points[i].y = canvas.y1 + round_px(path.p[i].y);
+        }
+        lv_draw_line_dsc_t line_dsc;
+        lv_draw_line_dsc_init(&line_dsc);
+        line_dsc.width = st->line_width;
+        line_dsc.round_start = 1;
+        line_dsc.round_end = 1;
+        line_dsc.color = lv_color_hex(st->line_color[line]);
+        line_dsc.points = points;
+        line_dsc.point_cnt = path.count;
+        lv_draw_line(layer, &line_dsc);
+      }
+      count_piece(0, line_started_us);
+    }
+  }
+  const bool smooth = g_dot_pixels && g_dot_radius == st->dot_radius;
+  lv_draw_rect_dsc_t dot_dsc;
+  lv_draw_rect_dsc_init(&dot_dsc);
+  dot_dsc.radius = LV_RADIUS_CIRCLE;
+  dot_dsc.bg_opa = LV_OPA_COVER;
+  for (uint8_t line = 0; line < kLineCount; ++line) {
+    if (!st->line_live[line]) continue;
+    const lv_point_t q = st->dot[line];
+    const lv_area_t area = dot_area(*st, canvas, q);
+    if (!lv_area_is_on(&area, &layer->_clip_area)) continue;
+    const uint32_t dot_started_us = micros();
+    if (smooth) {
+      const int fx = q.x - dot_pixel(q.x) * kDotSteps, fy = q.y - dot_pixel(q.y) * kDotSteps;
+      image_dsc.src = &g_dot_image[fy * kDotSteps + fx];
+      image_dsc.recolor = lv_color_hex(st->line_color[line]);
+      lv_draw_image(layer, &image_dsc, &area);
+    } else {
+      // Its whole pixel, a circle of the dot's size centred on it.
+      const lv_area_t whole = {area.x1, area.y1, area.x2 - 1, area.y2 - 1};
+      dot_dsc.bg_color = lv_color_hex(st->line_color[line]);
+      lv_draw_rect(layer, &dot_dsc, &whole);
+    }
+    count_piece(1, dot_started_us);
+  }
+  // Counted while a dot step's frame is drawn (the dots' log line).
+  if (g_motion_stats.frame_areas) g_motion_stats.frame_lines_us += micros() - started_us;
+}
+
+// Redraws one line where it runs, its straight pieces and its bend, with its
+// dot: a line switching on or off (the grid around its idle threshold) or
+// changing its color redrew the whole card, 42-49 ms frames on the V2
+// (b539 log).
+void invalidate_line(const FlowTileState& st, uint8_t line) {
+  const Polyline& path = st.layout.line[line];
+  if (path.count < 2) return;
+  lv_area_t canvas;
+  lv_obj_get_coords(st.canvas, &canvas);
+  const int margin = st.line_width + st.dot_radius + 1;
+  auto invalidate = [&](uint8_t first, uint8_t last) {
+    lv_area_t box = {LV_COORD_MAX, LV_COORD_MAX, LV_COORD_MIN, LV_COORD_MIN};
+    for (uint8_t i = first; i <= last; ++i) {
+      box.x1 = LV_MIN(box.x1, round_px(path.p[i].x));
+      box.y1 = LV_MIN(box.y1, round_px(path.p[i].y));
+      box.x2 = LV_MAX(box.x2, round_px(path.p[i].x));
+      box.y2 = LV_MAX(box.y2, round_px(path.p[i].y));
+    }
+    lv_area_increase(&box, margin, margin);
+    lv_area_move(&box, canvas.x1, canvas.y1);
+    lv_obj_invalidate_area(st.canvas, &box);
+  };
+  if (!path.bend.present) {
+    for (uint8_t i = 0; i + 1 < path.count; ++i) invalidate(i, i + 1);
+    return;
+  }
+  for (uint8_t i = 0; i < path.bend_first; ++i) invalidate(i, i + 1);
+  invalidate(path.bend_first, path.bend_last);
+  for (uint8_t i = path.bend_last; i + 1 < path.count; ++i) invalidate(i, i + 1);
+}
+
+// Reads every node from the entity cache and shows it.
+void refresh(FlowTileState& st) {
+  st.dirty = false;
+  const ui_theme::SurfaceScope surface = tile_surface::scope(st.card);
+  Inputs in;
+  in.has_pv = cached_watts(st.entities[kRolePv], in.pv);
+  in.has_grid = cached_watts(st.entities[kRoleGrid], in.grid);
+  in.has_battery = cached_watts(st.entities[kRoleBattery], in.battery);
+  in.has_home = cached_watts(st.entities[kRoleHome], in.home);
+  if (st.grid_invert) in.grid = -in.grid;
+  if (st.battery_invert) in.battery = -in.battery;
+  const Flows flows = compute(in);
+
+  show_power(st.node[kNodePv].value, st.node[kNodePv].unit, in.has_pv, in.pv);
+  show_power(st.node[kNodeGrid].value, st.node[kNodeGrid].unit, in.has_grid, in.grid);
+  // Every value its amount, the battery's too: its icon shows charging (user
+  // 2026-10-26; b541-b545 kept Home Assistant's minus).
+  show_power(st.node[kNodeBattery].value, st.node[kNodeBattery].unit, in.has_battery, in.battery);
+  const bool home_known = st.entities[kRoleHome].length() ? in.has_home : flows.home_known;
+  show_power(st.node[kNodeHome].value, st.node[kNodeHome].unit, home_known, flows.home);
+  float charge = 0.0f;
+  const bool has_charge = cached_number(st.entities[kRoleBatteryCharge], charge);
+  if (st.charge) {
+    value_unit::show(st.charge, st.charge_unit,
+                     has_charge ? i18n::format_number(configManager.getConfig().language, charge, 0) : String("--"),
+                     has_charge ? String("%") : String());
+  }
+  show_grid_icon(st, in);
+  // The battery shows its charge in the icon Home Assistant gives it; while
+  // it charges (the tile's direction, past the idle threshold) the charging
+  // icon for its level.
+  const bool charging = in.has_battery && -in.battery >= kIdleWatts;
+  const String& battery_icon_entity =
+      st.entities[kRoleBatteryCharge].length() ? st.entities[kRoleBatteryCharge] : st.entities[kRoleBattery];
+  set_icon(st.node[kNodeBattery].icon,
+           charging ? charging_icon(has_charge, charge) : haBridgeConfig.findEntityIcon(battery_icon_entity),
+           charging ? "battery-charging" : "battery");
+  // Grid and battery by their direction, home in the color of the source
+  // that delivers most.
+  color_node(st, st.node[kNodeGrid], node_color(kNodeGrid, in));
+  color_node(st, st.node[kNodeBattery], node_color(kNodeBattery, in));
+  color_node(st, st.node[kNodeHome],
+             node_color(flows.home_source == kNodeCount ? kNodeGrid : flows.home_source, in));
+
+  const float strongest = strongest_flow(flows);
+  for (uint8_t line = 0; line < kLineCount; ++line) {
+    const bool live = st.line_shown[line] && flows.watts[line] > 0.0f;
+    const uint32_t color = live ? node_color(line_source(static_cast<Line>(line), flows), in) : st.idle_color;
+    const bool reverse = line == kLineBatteryGrid && flows.grid_to_battery;
+    const bool changed = live != st.line_live[line] || color != st.line_color[line] || reverse != st.reverse[line];
+    if (changed && live && (!st.line_live[line] || reverse != st.reverse[line])) st.phase[line] = 0.0f;
+    st.line_live[line] = live;
+    st.line_color[line] = color;
+    st.reverse[line] = reverse;
+    st.step[line] = dot_speed(flows.watts[line], strongest);
+    if (live) st.dot[line] = dot_point(st, line);
+    if (changed && st.line_shown[line]) invalidate_line(st, line);
+  }
+  if (any_live(st)) wake_motion(st.card);
+}
+
+// Whether a node's popup shows the state history instead of the graph.
+bool node_state_history(const String& entity) {
+  String kind = haBridgeConfig.findSensorStateKind(entity);
+  kind.trim();
+  kind.toLowerCase();
+  return kind == "state" ? true
+         : kind == "number" ? false
+                            : sensor_popup_should_use_state_history(haBridgeConfig.findSensorInitialValue(entity),
+                                                                    haBridgeConfig.findSensorUnit(entity));
+}
+
+void open_node_popup(lv_event_t* e, FlowTileState& st, uint8_t role, uint8_t node) {
+  const String& entity = st.entities[role];
+  if (!entity.length()) return;
+  SensorPopupInit init;
+  init.entity_id = entity;
+  init.title = haBridgeConfig.findSensorName(entity);
+  if (!init.title.length()) init.title = entity;
+  String icon = normalizeMdiIconName(haBridgeConfig.findEntityIcon(entity));
+  if (!icon.length()) icon = node == kNodePv ? "solar-power" : node == kNodeGrid ? "transmission-tower"
+                             : node == kNodeHome ? "home-lightning-bolt" : "battery";
+  init.icon_name = icon;
+  init.unit = haBridgeConfig.findSensorUnit(entity);
+  // Whole numbers in header, readout and axis, like the tile and Home
+  // Assistant's own card (user 2026-10-26: "immer keine Nachkommastelle");
+  // a sensor in kW or MW keeps the digits Home Assistant sends.
+  String unit = init.unit;
+  unit.trim();
+  unit.toLowerCase();
+  if (unit != "kw" && unit != "mw" && unit != "gw") init.decimals = 0;
+  init.bg_color = st.card_color;
+  init.value = haBridgeConfig.findSensorInitialValue(entity);
+  init.state_history_mode = node_state_history(entity);
+  // The header icon in the node's color.
+  init.forced_icon = true;
+  init.forced_icon_color = st.node[node].color & 0xFFFFFF;
+  finish_press_before_popup(e);
+  show_sensor_popup(init);
+}
+
+// The node a ring or the charge label belongs to, as user data:
+// role * 8 + node.
+void node_click_cb(lv_event_t* e) {
+  if (lv_event_get_code(e) != LV_EVENT_SHORT_CLICKED) return;
+  FlowTileState* st = static_cast<FlowTileState*>(lv_event_get_user_data(e));
+  lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+  if (!st || !target) return;
+  const uintptr_t tag = reinterpret_cast<uintptr_t>(lv_obj_get_user_data(target));
+  open_node_popup(e, *st, static_cast<uint8_t>(tag / 8), static_cast<uint8_t>(tag % 8));
+}
+
+// A tap on a value opens its sensor like a tap on the node: every value
+// (user 2026-10-26), the battery's charge its own sensor (user 2026-10-24).
+void make_value_tappable(FlowTileState& st, lv_obj_t* label, uint8_t role, uint8_t node) {
+  if (!label || !st.entities[role].length()) return;
+  lv_obj_add_flag(label, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_ext_click_area(label, tile_layout::scale(10));
+  lv_obj_set_user_data(label, reinterpret_cast<void*>(static_cast<uintptr_t>(role * 8 + node)));
+  lv_obj_add_event_cb(label, node_click_cb, LV_EVENT_SHORT_CLICKED, &st);
+}
+
+void card_delete_cb(lv_event_t* e) {
+  if (lv_event_get_code(e) != LV_EVENT_DELETE) return;
+  FlowTileState* st = static_cast<FlowTileState*>(lv_event_get_user_data(e));
+  if (!st) return;
+  for (FlowTileState*& slot : g_tiles) {
+    if (slot == st) slot = nullptr;
+  }
+  for (uint8_t line = 0; line < kLineCount; ++line) {
+    if (!st->stroke_pixels[line]) continue;
+    lv_image_cache_drop(&st->stroke[line]);
+    lv_free(st->stroke_pixels[line]);
+    st->stroke_pixels[line] = nullptr;
+  }
+  // The card goes first, its children after: the feed-in picture lets go
+  // of its pixels before they are freed.
+  if (st->grid_feed_buf) {
+    if (st->grid_feed) lv_image_set_src(st->grid_feed, nullptr);
+    lv_image_cache_drop(st->grid_feed_buf);
+    lv_draw_buf_destroy(st->grid_feed_buf);
+    st->grid_feed_buf = nullptr;
+  }
+  st->~FlowTileState();
+  free(st);
+}
+
+FlowTileState* new_state() {
+  void* memory = heap_caps_malloc(sizeof(FlowTileState), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  if (!memory) memory = malloc(sizeof(FlowTileState));
+  return memory ? new (memory) FlowTileState() : nullptr;
+}
+
+bool register_state(FlowTileState* st) {
+  for (FlowTileState*& slot : g_tiles) {
+    if (slot) continue;
+    slot = st;
+    return true;
+  }
+  static uint32_t last_log_ms = 0;
+  if (last_log_ms == 0 || millis() - last_log_ms > 60000) {
+    last_log_ms = millis();
+    Serial.printf("[PowerFlow] More than %u tiles; this one does not follow states\n",
+                  static_cast<unsigned>(kMaxFlowTiles));
+  }
+  return false;
+}
+
+// A node is the corner of a 1x1 tile: its disc is the tile's corner disc
+// (on the V2 a square with round corners, concentric with the card corner),
+// the ring around it the card corner itself (user 2026-10-24: "auf dem V2
+// sind das nicht komplette Kreise"). Both take the tiles' shared radius
+// styles, so they follow the tiles.
+void apply_ring_shape(lv_obj_t* ring) { ui_surface_style::apply_radius(ring, tile_layout::scale_480(22), 0); }
+void apply_disc_shape(lv_obj_t* disc) {
+  ui_surface_style::apply_radius(disc, tile_icon_disc::radius_baseline() - tile_icon_disc::corner_shrink(), 0);
+}
+
+// A node: the plain tile disc with its icon inside a ring in the card's
+// color (the corner of a tile, user 2026-10-24). The ring is what a tap hits.
+void create_node(FlowTileState& st, uint8_t node, uint8_t role, int pad_left, int pad_top, bool frame_lines) {
+  NodeWidgets& w = st.node[node];
+  const Point centre = st.layout.node[node];
+  const int ring = round_px(2.0f * st.layout.ring);
+  const int disc = round_px(2.0f * st.layout.disc);
+  w.ring = lv_obj_create(st.card);
+  lv_obj_remove_style_all(w.ring);
+  lv_obj_remove_flag(w.ring, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(w.ring, ring, ring);
+  lv_obj_set_pos(w.ring, round_px(centre.x) - ring / 2 - pad_left, round_px(centre.y) - ring / 2 - pad_top);
+  apply_ring_shape(w.ring);
+  lv_obj_set_style_bg_opa(w.ring, LV_OPA_COVER, 0);
+  lv_obj_set_style_bg_color(w.ring, lv_color_hex(st.card_color), 0);
+  lv_obj_set_style_bg_color(w.ring, lv_color_hex(tone_color::pressed_card(st.card_color)), LV_STATE_PRESSED);
+  tile_press::apply(w.ring);
+  // Without a card the rings take the frame line when it is on (user
+  // 2026-10-24); on a card only the card has it.
+  if (frame_lines) ui_surface_style::apply_global_tile_border(w.ring);
+  if (st.entities[role].length()) {
+    lv_obj_add_flag(w.ring, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_user_data(w.ring, reinterpret_cast<void*>(static_cast<uintptr_t>(role * 8 + node)));
+    lv_obj_add_event_cb(w.ring, node_click_cb, LV_EVENT_SHORT_CLICKED, &st);
+  } else {
+    lv_obj_remove_flag(w.ring, LV_OBJ_FLAG_CLICKABLE);
+  }
+
+  w.disc = lv_obj_create(w.ring);
+  lv_obj_remove_style_all(w.disc);
+  lv_obj_remove_flag(w.disc, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_remove_flag(w.disc, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(w.disc, disc, disc);
+  lv_obj_center(w.disc);
+  apply_disc_shape(w.disc);
+  lv_obj_set_style_bg_opa(w.disc, LV_OPA_COVER, 0);
+
+  w.icon = lv_label_create(w.ring);
+  set_label_style(w.icon, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
+  lv_obj_center(w.icon);
+  w.shown = true;
+}
+
+lv_obj_t* create_value(FlowTileState& st, const lv_font_t* font) {
+  lv_obj_t* label = lv_label_create(st.card);
+  set_label_style(label, lv_color_hex(ui_theme::text()), font);
+  lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
+  lv_label_set_text(label, "--");
+  return label;
+}
+
+// A value box: `x` its left edge, `width` its width, centred on `centre_y`.
+void place_value(lv_obj_t* label, int x, int width, float centre_y, lv_text_align_t align, int pad_left,
+                 int pad_top) {
+  const lv_font_t* font = lv_obj_get_style_text_font(label, LV_PART_MAIN);
+  const int height = lv_font_get_line_height(font);
+  lv_obj_set_width(label, width > 1 ? width : 1);
+  lv_obj_set_style_text_align(label, align, 0);
+  lv_obj_set_pos(label, x - pad_left, round_px(centre_y) - height / 2 - pad_top);
+}
+
+}  // namespace
+
+lv_obj_t* render_power_flow_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint8_t index,
+                                  GridType grid_type) {
+  (void)index;
+  if (!parent) {
+    Serial.println("[TileRenderer] ERROR: parent NULL for power flow tile");
+    return nullptr;
+  }
+  lv_obj_t* card = lv_button_create(parent);
+  if (!card) return nullptr;
+  const uint32_t card_color = tileBgColorOrDefault(tile, tileDefaultBgColor());
+  lv_obj_set_style_bg_color(card, lv_color_hex(card_color), LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+  ui_surface_style::apply_radius(card, tile_layout::scale_480(22), 0);
+  lv_obj_set_style_border_width(card, 0, 0);
+  lv_obj_set_style_shadow_width(card, 0, 0);
+  lv_obj_set_style_pad_hor(card, tile_layout::scale_480(20), 0);
+  lv_obj_set_style_pad_ver(card, tile_layout::scale_480(24), 0);
+  lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+  // The card has no action of its own; its nodes do.
+  lv_obj_remove_flag(card, LV_OBJ_FLAG_CLICKABLE);
+  disable_pressed_button_animation(card);
+  place_tile_card(card, col, row, tile);
+
+  FlowTileState* st = new_state();
+  if (!st) {
+    Serial.println("[PowerFlow] ERROR: no memory for the tile state");
+    return card;
+  }
+  st->card = card;
+  for (uint8_t role = 0; role < kRoleCount; ++role) st->entities[role] = flowEntityAt(tile.flow_entities, role);
+  st->grid_invert = powerFlowOption(tile, kFlowGridInvertBit);
+  st->battery_invert = powerFlowOption(tile, kFlowBatteryInvertBit);
+  const bool on_card = !powerFlowOption(tile, kFlowNoCardBit);
+  st->card_color = card_color;
+  st->idle_color = !ui_theme::light() ? kIdleDark : on_card ? kIdleLightCard : kIdleLightScreen;
+  st->line_width = line_width();
+  st->dot_radius = dot_radius();
+  lv_obj_add_event_cb(card, card_delete_cb, LV_EVENT_DELETE, st);
+
+  // The tile's size as the grid places it (whole and half cells alike).
+  const float width = tile_geometry::extent(tile.col, tile.span_w, GRID_CELL_W, GRID_GAP);
+  const float height = tile_geometry::extent(tile.row, tile.span_h, GRID_CELL_H, GRID_GAP);
+  const Metrics metrics = device_metrics();
+  st->layout = layout(width, height, metrics, powerFlowOption(tile, kFlowHeaderBit) ? header_top(metrics) : 0.0f);
+  const int pad_left = lv_obj_get_style_pad_left(card, LV_PART_MAIN);
+  const int pad_top = lv_obj_get_style_pad_top(card, LV_PART_MAIN);
+
+  const bool has_pv = st->entities[kRolePv].length() > 0;
+  const bool has_grid = st->entities[kRoleGrid].length() > 0;
+  const bool has_battery = st->entities[kRoleBattery].length() || st->entities[kRoleBatteryCharge].length();
+  // Lines to a node without an entity are left out (like Home Assistant).
+  st->line_shown[kLineGridHome] = has_grid;
+  st->line_shown[kLinePvBattery] = has_pv && has_battery;
+  st->line_shown[kLinePvHome] = has_pv;
+  st->line_shown[kLinePvGrid] = has_pv && has_grid;
+  st->line_shown[kLineBatteryHome] = has_battery;
+  st->line_shown[kLineBatteryGrid] = has_battery && has_grid;
+  for (uint8_t line = 0; line < kLineCount; ++line) {
+    const Polyline& path = st->layout.line[line];
+    lv_area_t& box = st->line_box[line];
+    // The points a line width and a pixel around: the stroke's smoothed
+    // edge, with points between whole pixels, stays inside (its picture).
+    const int margin = st->line_width + 1;
+    box = {LV_COORD_MAX, LV_COORD_MAX, LV_COORD_MIN, LV_COORD_MIN};
+    for (uint8_t i = 0; i < path.count; ++i) {
+      box.x1 = LV_MIN(box.x1, round_px(path.p[i].x) - margin);
+      box.y1 = LV_MIN(box.y1, round_px(path.p[i].y) - margin);
+      box.x2 = LV_MAX(box.x2, round_px(path.p[i].x) + margin);
+      box.y2 = LV_MAX(box.y2, round_px(path.p[i].y) + margin);
+    }
+    st->line_color[line] = st->idle_color;
+  }
+  render_strokes(*st);
+
+  st->canvas = lv_obj_create(card);
+  lv_obj_remove_style_all(st->canvas);
+  lv_obj_remove_flag(st->canvas, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_remove_flag(st->canvas, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(st->canvas, round_px(width), round_px(height));
+  lv_obj_set_pos(st->canvas, -pad_left, -pad_top);
+  lv_obj_add_event_cb(st->canvas, canvas_draw_cb, LV_EVENT_DRAW_MAIN, st);
+
+  const bool frame_lines = !on_card && grid_type != GridType::SCREENSAVER;
+  static const uint8_t kNodeRole[kNodeCount] = {kRolePv, kRoleGrid, kRoleHome, kRoleBattery};
+  // The home joins with the first sensor: a tile without any shows no node
+  // (user 2026-10-26).
+  const bool has_home = has_pv || has_grid || has_battery || st->entities[kRoleHome].length() > 0;
+  const bool node_shown[kNodeCount] = {has_pv, has_grid, has_home, has_battery};
+  const lv_font_t* font = value_font();
+  const Layout& l = st->layout;
+  const int gap = round_px(l.ring) + value_gap();
+  const int edge = value_edge();
+  for (uint8_t node = 0; node < kNodeCount; ++node) {
+    if (!node_shown[node]) continue;
+    create_node(*st, node, kNodeRole[node], pad_left, pad_top, frame_lines);
+    st->node[node].value = create_value(*st, font);
+    make_value_tappable(*st, st->node[node].value, kNodeRole[node], node);
+  }
+  // Values (mockup): solar right of its node, grid and home under theirs,
+  // the battery's charge left and its power right of it.
+  const float line_h = lv_font_get_line_height(font);
+  const float below = gap + value_below() - (line_h - font->base_line) + line_h / 2.0f;
+  if (NodeWidgets& n = st->node[kNodePv]; n.value) {
+    const int x = round_px(l.node[kNodePv].x) + gap;
+    place_value(n.value, x, round_px(width) - edge - x, l.node[kNodePv].y, LV_TEXT_ALIGN_LEFT, pad_left, pad_top);
+  }
+  if (NodeWidgets& n = st->node[kNodeGrid]; n.value) {
+    const int half = round_px(l.node[kNodeGrid].x) - edge;
+    place_value(n.value, round_px(l.node[kNodeGrid].x) - half, 2 * half, l.node[kNodeGrid].y + below,
+                LV_TEXT_ALIGN_CENTER, pad_left, pad_top);
+  }
+  if (NodeWidgets& n = st->node[kNodeHome]; n.value) {
+    const int half = round_px(width - l.node[kNodeHome].x) - edge;
+    place_value(n.value, round_px(l.node[kNodeHome].x) - half, 2 * half, l.node[kNodeHome].y + below,
+                LV_TEXT_ALIGN_CENTER, pad_left, pad_top);
+  }
+  if (NodeWidgets& n = st->node[kNodeBattery]; n.value) {
+    const int x = round_px(l.node[kNodeBattery].x) + gap;
+    place_value(n.value, x, round_px(width) - edge - x, l.node[kNodeBattery].y, LV_TEXT_ALIGN_LEFT, pad_left,
+                pad_top);
+    const int charge_right = round_px(l.node[kNodeBattery].x) - gap;
+    st->charge = create_value(*st, font);
+    place_value(st->charge, edge, charge_right - edge, l.node[kNodeBattery].y, LV_TEXT_ALIGN_RIGHT, pad_left,
+                pad_top);
+    make_value_tappable(*st, st->charge, kRoleBatteryCharge, kNodeBattery);
+  }
+
+  set_icon(st->node[kNodePv].icon, "", "solar-power");
+  set_icon(st->node[kNodeGrid].icon, "", "transmission-tower");
+  set_icon(st->node[kNodeHome].icon, "", "home-lightning-bolt");
+  color_node(*st, st->node[kNodePv], kSolarColor);
+  color_node(*st, st->node[kNodeGrid], kGridColor);
+  color_node(*st, st->node[kNodeBattery], kBatteryOutColor);
+
+  // Header (off by default): the tile's icon in a node's disc in the top
+  // left corner and the title alone top right (picture 66).
+  if (powerFlowOption(tile, kFlowHeaderBit)) {
+    NodeWidgets header;
+    const float corner = l.ring;
+    const int ring = round_px(2.0f * l.ring), disc = round_px(2.0f * l.disc);
+    header.ring = lv_obj_create(card);
+    lv_obj_remove_style_all(header.ring);
+    lv_obj_remove_flag(header.ring, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_remove_flag(header.ring, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_size(header.ring, ring, ring);
+    lv_obj_set_pos(header.ring, round_px(corner) - ring / 2 - pad_left, round_px(corner) - ring / 2 - pad_top);
+    apply_ring_shape(header.ring);
+    lv_obj_set_style_bg_opa(header.ring, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(header.ring, lv_color_hex(card_color), 0);
+    if (frame_lines) ui_surface_style::apply_global_tile_border(header.ring);
+    header.disc = lv_obj_create(header.ring);
+    lv_obj_remove_style_all(header.disc);
+    lv_obj_remove_flag(header.disc, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_size(header.disc, disc, disc);
+    lv_obj_center(header.disc);
+    apply_disc_shape(header.disc);
+    lv_obj_set_style_bg_opa(header.disc, LV_OPA_COVER, 0);
+    header.icon = lv_label_create(header.ring);
+    set_label_style(header.icon, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
+    lv_obj_center(header.icon);
+    set_icon(header.icon, isMdiIconDisabled(tile.icon_name) ? String() : tile.icon_name, "lightning-bolt");
+    color_node(*st, header, kHeaderIconColor);
+    if (tile.title.length()) {
+      lv_obj_t* title = lv_label_create(card);
+      set_label_style(title, lv_color_hex(ui_theme::text()), font);
+      lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
+      const int right = round_px(width) - title_right();
+      const int left = round_px(l.ring * 2.0f) + value_gap();
+      lv_obj_set_width(title, right - left > 1 ? right - left : 1);
+      lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_RIGHT, 0);
+      hometiles_title::tile(title, tile.title.c_str(), true);
+      const int top = title_baseline() - (lv_font_get_line_height(font) - font->base_line);
+      lv_obj_set_pos(title, left - pad_left, top - pad_top);
+    }
+  }
+
+  register_state(st);
+  refresh(*st);
+  return card;
+}
+
+bool power_flow_entity_changed(const char* entity_id) {
+  if (!entity_id || !*entity_id) return false;
+  bool used = false;
+  for (FlowTileState* st : g_tiles) {
+    if (!st) continue;
+    for (const String& entity : st->entities) {
+      if (!entity.length() || !entity.equalsIgnoreCase(entity_id)) continue;
+      st->dirty = true;
+      used = true;
+      break;
+    }
+  }
+  if (used) g_any_dirty = true;
+  return used;
+}
+
+void process_power_flow_updates() {
+  if (!g_any_dirty) return;
+  g_any_dirty = false;
+  for (FlowTileState* st : g_tiles) {
+    if (st && st->dirty) refresh(*st);
+  }
+}
+
+void power_flow_touch_down(lv_obj_t* pressed) {
+  for (lv_obj_t* obj = pressed; obj; obj = lv_obj_get_parent(obj)) {
+    const uint32_t count = lv_obj_get_event_count(obj);
+    for (uint32_t i = 0; i < count; ++i) {
+      lv_event_dsc_t* dsc = lv_obj_get_event_dsc(obj, i);
+      if (!dsc || lv_event_dsc_get_cb(dsc) != node_click_cb) continue;
+      const FlowTileState* st = static_cast<const FlowTileState*>(lv_event_dsc_get_user_data(dsc));
+      const uintptr_t tag = reinterpret_cast<uintptr_t>(lv_obj_get_user_data(obj));
+      const uint8_t role = static_cast<uint8_t>(tag / 8);
+      if (!st || role >= power_flow::kRoleCount || !st->entities[role].length() ||
+          node_state_history(st->entities[role])) {
+        return;
+      }
+      sensor_popup_prefetch_history(st->entities[role]);
+      return;
+    }
+  }
+}
+
+void power_flow_shown(lv_obj_t* shown) {
+  if (!shown || !g_motion_display) return;
+  for (FlowTileState* st : g_tiles) {
+    if (!st || !st->card || !any_live(*st)) continue;
+    lv_obj_t* o = st->card;
+    while (o && o != shown) o = lv_obj_get_parent(o);
+    if (!o) continue;
+    g_shown_trace = ShownTrace{};
+    g_shown_trace.shown_ms = millis() | 1;
+    if (lv_obj_t* hider = hidden_by(st->card)) {
+      g_shown_trace.hidden_at_show = true;
+      g_shown_trace.at_show = hidden_info(st->card, hider);
+    }
+    lv_timer_resume(lv_display_get_refr_timer(g_motion_display));
+    return;
+  }
+}

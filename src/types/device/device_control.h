@@ -21,6 +21,10 @@ void queue_detail(const String& entity, const char* payload, size_t length);
 void queue_result(TileType type, const char* payload, size_t length);
 // Loop: applies queued states and answers to the tiles and the popup.
 void process(uint8_t budget = 4);
+// Every device tile and popup shows its state again with the next process()
+// pass (a Bridge icon update: the Vacuum's automatic icon is Home
+// Assistant's icon of the entity).
+void refresh_all();
 
 // The state a just sent command aims for ("locked", "unlocked", an armed_*
 // state or "disarmed"), shown until the device reports another state, the

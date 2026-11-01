@@ -7,6 +7,8 @@ import {fileURLToPath} from 'node:url';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 import {lvglHost} from '../../lib/lvgl-host.mjs';
 import deviceCatalog from '../../device-catalog.js';
+import {valueUnitSource} from '../../lib/value-unit-source.mjs';
+import {ruleIconSource} from '../../lib/rule-icon-source.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
@@ -26,22 +28,28 @@ if (!host || !jsonInclude) {
 }
 const out = path.join(root, 'build/tests/editable-history-lvgl');
 fs.mkdirSync(out, {recursive: true});
-fs.writeFileSync(path.join(out,'esp_heap_caps.h'),'#pragma once\n#include <cstdlib>\n#define MALLOC_CAP_SPIRAM 1\n#define MALLOC_CAP_8BIT 2\ninline void* heap_caps_malloc(size_t n,int){return malloc(n);}\ninline void heap_caps_free(void*p){free(p);}\n');
+fs.writeFileSync(path.join(out,'esp_heap_caps.h'),'#pragma once\n#include <cstdlib>\n#define MALLOC_CAP_SPIRAM 1\n#define MALLOC_CAP_8BIT 2\n#define MALLOC_CAP_INTERNAL 4\ninline void* heap_caps_malloc(size_t n,int){return malloc(n);}\ninline void* heap_caps_aligned_alloc(size_t,size_t n,int){return malloc(n);}\ninline void heap_caps_free(void*p){free(p);}\n');
 const layout = read('src/ui/popups/popup_layout.h');
 const geometry = layout.slice(layout.indexOf('namespace popup_layout {'), layout.indexOf('// Standard popup close button.')) + '}';
 const chartBuild = popup.slice(popup.indexOf('  // Chart wrapper: Y-axis labels'), popup.indexOf('  lv_obj_move_foreground(ctx->icon_label);'));
 const rangeBuild = popup.slice(popup.indexOf('  lv_obj_t* range_row = lv_obj_create(card);'), popup.indexOf('  set_range_buttons_visible(ctx, false);', popup.indexOf('  lv_obj_t* range_row = lv_obj_create(card);')));
-const readoutFunctions = ['get_value_font', 'set_label_text_if_changed', 'numeric_fraction_digits', 'apply_decimals',
+const readoutFunctions = ['get_value_font', 'set_label_text_if_changed', 'numeric_fraction_digits', 'popup_digits', 'apply_decimals',
   'sensor_value_display', 'readout_target', 'invalidate_readout_cursor', 'on_readout_cursor_draw', 'show_readout_band',
   'clear_sensor_readout', 'move_readout_cursor', 'append_readout_time', 'binary_state_identifier_text', 'write_state_history_label',
-  'apply_chart_readout', 'apply_timeline_readout', 'on_sensor_readout_apply', 'sensor_readout_graph',
+  'apply_chart_readout', 'apply_timeline_readout', 'apply_sensor_readout', 'on_sensor_readout_apply', 'sensor_readout_graph',
   'sensor_readout_is_latest', 'on_sensor_readout_end', 'refresh_sensor_readout',
-  'build_readout_band', 'keep_chart_history', 'attach_chart_readout', 'attach_timeline_readout'];
+  'build_readout_band', 'keep_chart_history', 'attach_chart_readout', 'attach_timeline_readout',
+  // The graph's picture: area, grid lines and line (mockups sensor-graph-2 and -3).
+  'graph_picture', 'on_chart_area_draw'];
 const cpp = `
 #include <lvgl.h>
 #include "src/ui/popups/popup_first_frame.h"
 #include "src/ui/popups/popup_open.h"
 #include "src/ui/popups/popup_graph_readout.h"
+#include "src/ui/shared/area_graph.h"
+#include <lvgl_private.h>
+// The graph's drawing (defined with the readout functions below).
+static void on_chart_area_draw(lv_event_t*);
 void hide_popup_shell(lv_obj_t*){}
 lv_obj_t* header_value_source=nullptr;
 void show_popup_shell(lv_obj_t*,lv_obj_t*,lv_obj_t*,lv_obj_t*,lv_obj_t*,void(*)()=nullptr,lv_obj_t* value=nullptr){header_value_source=value;}
@@ -59,9 +67,10 @@ void popup_shell_control_raised_fill(uint32_t,uint32_t,lv_color_t&c,lv_opa_t&o){
 #include <fstream>
 #include <iostream>
 #include <ArduinoJson.h>
-extern "C" { LV_FONT_DECLARE(ui_font_14); LV_FONT_DECLARE(ui_font_16); LV_FONT_DECLARE(ui_font_20); LV_FONT_DECLARE(ui_font_24);
+extern "C" { LV_FONT_DECLARE(ui_font_12); LV_FONT_DECLARE(ui_font_14); LV_FONT_DECLARE(ui_font_16); LV_FONT_DECLARE(ui_font_20); LV_FONT_DECLARE(ui_font_24);
 LV_FONT_DECLARE(ui_font_28); LV_FONT_DECLARE(ui_font_32); LV_FONT_DECLARE(ui_font_40); LV_FONT_DECLARE(ui_font_48);
 LV_FONT_DECLARE(ui_font_56); LV_FONT_DECLARE(ui_font_64); LV_FONT_DECLARE(ui_font_72); LV_FONT_DECLARE(ui_font_80); LV_FONT_DECLARE(ui_font_96); }
+${valueUnitSource(root)}
 class String : public std::string {public:
  using std::string::string; using std::string::operator=; String()=default; String(const std::string& value):std::string(value){}
  bool isEmpty()const{return empty();} bool equalsIgnoreCase(const char* other)const{String a=*this,b=other;a.toLowerCase();b.toLowerCase();return a==b;}
@@ -87,7 +96,7 @@ String normalize_state_history_value(const String& value){return value;}
 String format_state_history_label(const String& value){return value;}
 String format_state_history_date(uint64_t){return "Today · 09/07/2026";}
 String format_binary_activity_time(uint64_t,bool){return "11:16:39 AM";}
-uint32_t ticks=100;uint32_t millis(){return ticks;}
+uint32_t ticks=100;uint32_t millis(){return ticks;}uint32_t micros(){return ticks*1000;}
 struct Logger{void println(const char*){}template<class... T>void printf(const char*,T...){}}Serial;
 int opening_layout_calls=0;
 void counted_opening_layout(lv_obj_t* object){++opening_layout_calls;lv_obj_update_layout(object);}
@@ -96,7 +105,8 @@ namespace Device { constexpr int kGridGap = SCREEN_WIDTH == 480 ? 10 : 16; }  //
 ${geometry}
 #undef lv_obj_update_layout
 ${popup.slice(popup.indexOf('constexpr int kBinaryTimelineHeight') - '#if defined(DEVICE_LAYOUT_480X480)\n'.length, popup.indexOf('struct HistoryRangeConfig'))}
-constexpr int kCardWidth=popup_layout::kCardWidth,kCardPad=popup_layout::kCardPad,kChartHeight=popup_layout::contentScale(325),kTimeAxisMarkerCount=8,kChartLineWidth=popup_layout::scale(4),kHistoryPoints24h=288;
+constexpr int kCardWidth=popup_layout::kCardWidth,kCardPad=popup_layout::kCardPad,kTimeLabelGap=popup_layout::scale480(12),kTimeLabelExtra=kTimeLabelGap-popup_layout::scale480(8),kChartHeight=popup_layout::contentScale(325)-kTimeLabelExtra,kTimeAxisMarkerCount=8,kChartLineWidth=popup_layout::scale(4),kHistoryPoints24h=288;
+${popup.slice(popup.indexOf('// The numeric graph (mockup'), popup.indexOf('constexpr uint16_t kHistoryHours24h'))}
 constexpr int kRangeButtonWidth=popup_layout::scale(92),kRangeButtonHeight=popup_layout::kNavHeight,kRangeButtonGap=popup_layout::scale(10);
 #if defined(DEVICE_LAYOUT_480X480)
 constexpr int kTimeAxisHeight=20;
@@ -111,8 +121,8 @@ struct EditableControl;
 ${popup.match(/struct HistoryRangeConfig \{[\s\S]*?\n};/)[0]}
 ${popup.match(/struct SensorPopupContext \{[\s\S]*?\n};/)[0]}
 ${read('src/ui/popups/sensor/sensor_popup.h').match(/struct SensorPopupInit \{[\s\S]*?\n};/)[0]}
-SensorPopupContext* g_sensor_popup_ctx=nullptr;PopupFirstFrame g_sensor_first_frame;SensorPopupInit g_pending_sensor_init;bool g_sensor_open_pending=false;
-struct Pending{bool valid=false;}g_pending_history,g_pending_binary_state;
+SensorPopupContext* g_sensor_popup_ctx=nullptr;PopupFirstFrame g_sensor_first_frame;SensorPopupInit g_pending_sensor_init;bool g_sensor_open_pending=false;bool g_sensor_early_history=false;
+struct Pending{bool valid=false;String entity_id;std::string payload;}g_pending_history,g_pending_binary_state;
 // clear_chart() and clear_binary_history() drop a kept readout.
 static void clear_sensor_readout(SensorPopupContext*);static void refresh_sensor_readout(SensorPopupContext*);
 struct EditableValue{String kind,state="32",unit="%";bool available=true,valid=true,has_state=true;};
@@ -120,20 +130,23 @@ struct Bridge{String payload="number";String findEditableValue(const String&){re
 EditableValue parse_editable_value(const String&p){EditableValue v;v.kind=String(p.substr(0,p.find('|')));return v;}
 uint32_t editable_value_generation(){return 1;}
 String editable_display_value(const EditableValue& value){return value.state+" "+value.unit;}
+String editable_display_number(const EditableValue& value){return value.state;}
+String editable_display_unit(const EditableValue& value){return value.unit;}
 // Locale lookups of the readout; formatting, snapping and drawing are real.
 bool readout_12h=false;
 bool readout_twelve_hour(){return readout_12h;}
 char readout_decimal_separator(){return '.';}
 const char* get_weekday_abbrev(uint8_t day){static const char* names[]={"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};return names[day%7];}
+String short_date_label(const struct tm&){return String("1. Jan");}
 void editable_control_close(EditableControl*){}void editable_control_open(EditableControl*,const String&){}void editable_control_follow_colors(EditableControl*){}
 bool isMdiIconDisabled(const String&){return false;}String getMdiChar(const String&){return "";}
 
 void update_binary_state(SensorPopupContext*,const String&,bool,const String&,uint64_t,const String&){assert(false);}
-void hide_pin_popup(){}void hide_camera_popup(){}void hide_climate_popup(){}void hide_cover_popup(){}void hide_light_popup(){}void hide_weather_popup(){}void hide_energy_popup(){}void hide_media_popup(){}void hide_device_popup(){}
+void hide_pin_popup(){}void hide_camera_popup(){}void hide_climate_popup(){}void hide_cover_popup(){}void hide_light_popup(){}void hide_weather_popup(){}void hide_energy_popup(){}void hide_media_popup(){}void hide_device_popup(){}void hide_calendar_popup(){}void hide_vacuum_popup(){}
 void viewNavigationPopupShown(lv_obj_t*,const char*){}
-HistoryRangeConfig get_history_range_config(SensorHistoryRange r){return r==SensorHistoryRange::Day7?HistoryRangeConfig{168,35,288}:HistoryRangeConfig{24,5,288};}
+HistoryRangeConfig get_history_range_config(SensorHistoryRange r){return r==SensorHistoryRange::Day7?HistoryRangeConfig{168,35,288}:r==SensorHistoryRange::Hours6?HistoryRangeConfig{6,1,360}:HistoryRangeConfig{24,5,288};}
 ${fn(control, 'editable_control_height')}
-${['set_label_style','set_range_buttons_visible','style_range_button','update_range_buttons','accept_editable_history_range','clear_chart'].map(n => fn(popup,n)).join('\n')}
+${['set_label_style','set_range_buttons_visible','show_hours_button','style_range_button','update_range_buttons','accept_editable_history_range','clear_chart'].map(n => fn(popup,n)).join('\n')}
 void build_chart(SensorPopupContext* ctx){auto* body_box=ctx->body_box;${chartBuild}}
 ${fn(popup,'measure_label_text_width')}
 int calc_time_axis(const SensorPopupContext* ctx,String* labels,float* fracs,int){int count=ctx->history_range==SensorHistoryRange::Day7?7:4;for(int i=0;i<count;++i){labels[i]=std::to_string(i);fracs[i]=float(i)/(count-1);}return count;}
@@ -143,7 +156,9 @@ bool is_popup_visible(SensorPopupContext*);
 static void attach_timeline_readout(SensorPopupContext*);
 static void keep_chart_history(SensorPopupContext*,const std::vector<float>&,int32_t,uint64_t,uint64_t,uint16_t);
 int history_layout_calls=0;
-${['update_binary_time_axis','update_y_axis_layout','resize_editable_chart','editable_control_top','layout_editable_history','extract_epoch','extract_numeric','binary_state_code','binary_state_color','binary_state_priority','binary_state_identifier','state_history_color','local_date_key','on_binary_timeline_draw','refresh_binary_labels','refresh_binary_activity_rows','on_binary_activity_scroll','clear_binary_history','ensure_binary_view','binary_timeline_hex_nibble','decode_state_timeline'].map(n => n==='layout_editable_history' ? fn(popup,n).replace('{','{ ++history_layout_calls;') : fn(popup,n)).join('\n')}
+// The zero line's label (defined with the readout functions below).
+static uint8_t popup_digits(const SensorPopupContext*,float);
+${['chart_extremes','graph_zero_row','zero_label_text','place_zero_label','update_binary_time_axis','update_y_axis_layout','resize_editable_chart','editable_control_top','layout_editable_history','extract_epoch','extract_numeric','binary_state_code','binary_state_color','binary_state_priority','binary_state_identifier','state_history_color','local_date_key','on_binary_timeline_draw','refresh_binary_labels','refresh_binary_activity_rows','on_binary_activity_scroll','clear_binary_history','ensure_binary_view','binary_timeline_hex_nibble','decode_state_timeline'].map(n => n==='layout_editable_history' ? fn(popup,n).replace('{','{ ++history_layout_calls;') : fn(popup,n)).join('\n')}
 ${readoutFunctions.map(n => fn(popup,n)).join('\n')}
 void update_value_label(SensorPopupContext*ctx,const String& value,const String& unit){ctx->unit=unit;if(ctx->value_label)lv_label_set_text(ctx->value_label,value.c_str());}
 void apply_binary_history_payload(SensorPopupContext*,DynamicJsonDocument&){assert(false&&"Unexpected binary response");}
@@ -152,8 +167,12 @@ ${fn(popup,'apply_history_payload')}
 ${fn(popup,'editable_history_fingerprint')}
 int requests=0;
 void request_history_for_context(SensorPopupContext*ctx){ctx->editable_history_id=std::to_string(++requests);ctx->history_request_fingerprint=editable_history_fingerprint(ctx->entity_id);}
+// Editable values never ask early (request_history_early's first check,
+// test-sensor-popup-early-history.mjs); they keep the request after the first frame.
+void request_history_early(const SensorPopupInit&){g_sensor_early_history=false;}
 #include "src/tiles/config/tile_icon_colors.h"
-${['popup_icon_state_known','apply_popup_icon_color','apply_editable_icon_color'].map(n=>fn(popup,n)).join('\n')}
+${ruleIconSource(root, {codepoint: true})}
+${['popup_icon_state_known','apply_popup_icon_color','apply_editable_icon_color','show_header_value'].map(n=>fn(popup,n)).join('\n')}
 ${fn(popup,'apply_sensor_header')}
 ${fn(popup,'apply_sensor_header_value')}
 ${fn(popup,'apply_init_to_context')}
@@ -174,6 +193,8 @@ void touch_release(){touch_down=false;lv_indev_read(touch);}
 bool white_at(const std::vector<uint32_t>&pixels,int x,int y){return (pixels[y*SCREEN_WIDTH+x]&0xffffff)==0xffffff;}
 bool near_color(uint32_t pixel,uint32_t color){for(int shift:{0,8,16}){const int a=(pixel>>shift)&255,b=(color>>shift)&255;if(std::abs(a-b)>12)return false;}return true;}
 void snapshot(const char*file,const std::vector<uint32_t>&pixels){std::ofstream out(file,std::ios::binary);auto u16=[&](uint16_t v){out.write(reinterpret_cast<char*>(&v),2);};auto u32=[&](uint32_t v){out.write(reinterpret_cast<char*>(&v),4);};out.write("BM",2);u32(54+pixels.size()*4);u32(0);u32(54);u32(40);u32(SCREEN_WIDTH);u32(-SCREEN_HEIGHT);u16(1);u16(32);u32(0);u32(pixels.size()*4);u32(0);u32(0);u32(0);u32(0);out.write(reinterpret_cast<const char*>(pixels.data()),pixels.size()*4);}
+// The history's values (a Number graph); a run below zero gets a zero line.
+std::vector<int> history_values{20,60,100,40,80};
 int main(int argc,char**argv){
  lv_init();auto*display=lv_display_create(SCREEN_WIDTH,SCREEN_HEIGHT);std::vector<uint32_t>pixels(SCREEN_WIDTH*SCREEN_HEIGHT);
  lv_display_set_color_format(display,LV_COLOR_FORMAT_XRGB8888);lv_display_set_buffers(display,pixels.data(),nullptr,pixels.size()*4,LV_DISPLAY_RENDER_MODE_FULL);
@@ -188,7 +209,7 @@ int main(int argc,char**argv){
  auto payload=[&](bool empty=false,bool error=false){auto cfg=get_history_range_config(ctx.editable_requested_range);JsonDocument doc;doc["entity_id"]="test.entity";doc["request_id"]=ctx.editable_history_id.c_str();doc["hours"]=cfg.hours;doc["period_minutes"]=cfg.period_minutes;doc["kind"]="editable";doc["unit"]="%";doc["range_start"]=1788768000;doc["range_end"]=1788854400;doc["history_available"]=!error;
   if(error)doc["error"]="recorder_unavailable";
   auto values=doc["values"].to<JsonArray>();auto activity=doc["activity"].to<JsonArray>();auto palette=doc["palette"].to<JsonArray>();palette.add("Home");palette.add("Office");
-  if(!empty&&!error){for(int v:{20,60,100,40,80})values.add(v);for(int i=0;i<40;++i){auto item=activity.add<JsonObject>();item["timestamp"]=1788854400+i*60;item["state"]=ctx.editable_kind=="time"?"17:00:00":ctx.editable_kind=="select"?"Home":"32";}doc["timeline_points"]=4;doc["timeline_encoding"]="palette4-hex";doc["timeline_data"]="0011";}
+  if(!empty&&!error){for(int v:history_values)values.add(v);for(int i=0;i<40;++i){auto item=activity.add<JsonObject>();item["timestamp"]=1788854400+i*60;item["state"]=ctx.editable_kind=="time"?"17:00:00":ctx.editable_kind=="select"?"Home":"32";}doc["timeline_points"]=4;doc["timeline_encoding"]="palette4-hex";doc["timeline_data"]="0011";}
   String result;serializeJson(doc,static_cast<std::string&>(result));return result;
  };
  int section_top=-1,select_activity_y=-1,select_viewport_height=-1;
@@ -269,7 +290,7 @@ int main(int argc,char**argv){
   touch_at(content.x1+width/2,content.y1+ctx.chart_height/2);
   assert(ctx.readout.active()&&!shown(ctx.readout_value_label)&&"A press is applied with the next display refresh, not in the input event");
   lv_refr_now(display);
-  assert(ctx.readout_kind==kReadoutChart&&ctx.readout_point==2&&strcmp(ctx.readout_value_text,"100 %")==0&&"The readout snaps to the touched history point");
+  assert(ctx.readout_kind==kReadoutChart&&ctx.readout_point==2&&strcmp(ctx.readout_value_text,"100")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"%")==0&&"The readout snaps to the touched history point");
   assert(strlen(ctx.readout_time_text)==5&&ctx.readout_time_text[2]==':'&&"24H readouts show the local clock time");
   assert(shown(ctx.value_box)&&shown(ctx.readout_time_label)&&shown(ctx.readout_value_label));
   assert(lv_obj_get_y(ctx.value_box)==control_y&&lv_obj_get_style_bg_opa(ctx.value_box,LV_PART_MAIN)==LV_OPA_COVER&&"The readout covers the editor band only while touching");
@@ -284,7 +305,7 @@ int main(int argc,char**argv){
   touch_at(content.x1+width/4,content.y1+5);touch_at(content.x2,content.y1+5);
   assert(ctx.readout_point==2&&"Moves between refreshes must not update the readout");
   lv_refr_now(display);
-  assert(ctx.readout_point==4&&strcmp(ctx.readout_value_text,"80 %")==0);
+  assert(ctx.readout_point==4&&strcmp(ctx.readout_value_text,"80")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"%")==0);
   // The press stays with the graph outside its bounds and never scrolls.
   touch_at(SCREEN_WIDTH-1,SCREEN_HEIGHT-1);lv_refr_now(display);
   assert(ctx.readout.active()&&ctx.readout_point==4&&lv_obj_get_scroll_y(ctx.body_box)==0&&lv_obj_get_scroll_y(card)==0&&lv_obj_get_scroll_x(card)==0);
@@ -296,6 +317,26 @@ int main(int argc,char**argv){
   // A tap is released before any frame shows a readout.
   touch_at(content.x1+10,content.y1+10);touch_release();lv_refr_now(display);
   assert(ctx.readout_kind==kReadoutNone&&!shown(ctx.readout_value_label)&&!shown(ctx.value_box));
+  // A line running below zero: a faint line at zero and its own label on
+  // the zero row, left like the maximum's (user 2026-10-27); gone again
+  // with a range above zero.
+  history_values={-60,60,100,-20,80};load_kind("number");
+  const int32_t zero_height=lv_obj_get_content_height(ctx.chart),zero_gap=lv_font_get_line_height(popup_layout::font20());
+  const int32_t zero_row=area_graph::zero_row(ctx.chart,0,zero_height,zero_gap);
+  // A small graph (the 480x480 editors' 40 px) has no room for a third label.
+  if(zero_height>=4*zero_gap)assert(zero_row>0&&"Room for the zero line");
+  assert(shown(ctx.y_zero_label)==(zero_row>0)&&"The zero line and its label come together");
+  if(zero_row>0){
+   assert(lv_obj_get_y(ctx.y_zero_label)==zero_row&&lv_obj_get_x(ctx.y_zero_label)==kGraphInset&&"The zero label sits on the zero line");
+   assert(lv_label_get_text(ctx.y_zero_label)[0]=='0'&&strcmp(value_unit::unit_text(ctx.y_zero_label),"%")==0&&"The zero label shows 0 and the unit");
+   lv_point_t top;lv_chart_get_point_pos_by_id(ctx.chart,ctx.series,2,&top);lv_area_t chart_area;lv_obj_get_coords(ctx.chart,&chart_area);
+   const int x=chart_area.x1+top.x+2,y=chart_area.y1+lv_obj_get_style_pad_top(ctx.chart,LV_PART_MAIN)+zero_row;
+   const int lift=int(pixels[y*SCREEN_WIDTH+x]&0xff)-int(pixels[(y+2)*SCREEN_WIDTH+x]&0xff);
+   if(lift<4||lift>32)std::cerr<<"zero line lift "<<lift<<std::endl;
+   assert(lift>=4&&lift<=32&&"A faint line at zero over the area");
+  }
+  history_values={20,60,100,40,80};load_kind("number");
+  assert(!shown(ctx.y_zero_label)&&"No zero label above zero");
   // Time editors have no graph; the same area never starts a readout.
   load_kind("time");touch_at(content.x1+width/2,content.y1+ctx.chart_height/2);lv_refr_now(display);
   assert(ctx.readout_kind==kReadoutNone&&!shown(ctx.readout_value_label));touch_release();
@@ -333,7 +374,10 @@ int main(int argc,char**argv){
  auto open=[&](){const bool cached=reusable_sensor_body(&ctx,init);const int before=requests,layouts=history_layout_calls,opening_layouts=opening_layout_calls;show_sensor_popup(init);assert(opening_layout_calls==opening_layouts&&"Opening must not force a whole-screen layout before its first frame");assert(popup_open_pending(ctx.card)&&PopupFirstFrame::any_pending()&&g_sensor_open_pending&&requests==before&&history_layout_calls==layouts);assert(shown(ctx.body_box)==cached&&"Matching cached content must be visible in the first frame");finish_sensor_popup_open();assert(g_sensor_open_pending&&requests==before);lv_refr_now(display);process_popup_open();assert(!g_sensor_open_pending&&g_sensor_first_frame.pending()&&shown(ctx.body_box));lv_refr_now(display);};
  auto open_and_load=[&](){open();apply_history_payload(&ctx,payload().c_str());assert(ctx.history_loaded);};
  for(const char*kind:{"number","select","time"}){
-  haBridgeConfig.payload=kind;open_and_load();const auto children=lv_obj_get_child_count(ctx.binary_activity_viewport);const auto count=ctx.binary_activity.size();const int requested=requests,layouts=history_layout_calls;
+  haBridgeConfig.payload=kind;open_and_load();
+  // The Bridge answers editable histories for 24 hours and 7 days only.
+  assert(!shown(ctx.range_hours_btn)&&lv_obj_get_width(ctx.range_row)==kRangeButtonWidth*2+kRangeButtonGap&&"Editable histories offer no 6H");
+  const auto children=lv_obj_get_child_count(ctx.binary_activity_viewport);const auto count=ctx.binary_activity.size();const int requested=requests,layouts=history_layout_calls;
   for(int i=0;i<20;++i){hide_sensor_popup();show_sensor_popup(init);assert(requests==requested&&ctx.binary_activity.size()==count&&lv_obj_get_child_count(ctx.binary_activity_viewport)==children&&history_layout_calls==layouts);assert(shown(ctx.chart_wrap)==(ctx.editable_kind=="number"));assert(PopupFirstFrame::any_pending());hide_sensor_popup();assert(!PopupFirstFrame::any_pending());}
   haBridgeConfig.payload=String(kind)+"|state_changed";open();assert(requests==requested+1&&ctx.binary_activity.size()==count);
   haBridgeConfig.payload=String(kind)+"|state_changed_again";apply_history_payload(&ctx,payload().c_str());hide_sensor_popup();open();assert(requests==requested+2&&"A response to an old state must not mark the current state fresh");
@@ -351,36 +395,44 @@ int main(int argc,char**argv){
  const auto* sensor_graph=ctx.chart;const int sensor_layouts=history_layout_calls;
  for(int i=0;i<20;++i){hide_sensor_popup();open();assert(ctx.chart==sensor_graph&&shown(ctx.value_box)&&shown(ctx.chart_wrap));assert(lv_chart_get_y_array(ctx.chart,ctx.series)[0]==123&&"Warm Sensor opens must not clear the cached graph");assert(history_layout_calls==sensor_layouts);}
  init.entity_id="sensor.other";open();assert(lv_chart_get_y_array(ctx.chart,ctx.series)[0]==LV_CHART_POINT_NONE&&"A different entity must not inherit the previous graph");
+ assert(shown(ctx.range_hours_btn)&&shown(ctx.range_hour_btn)&&shown(ctx.range_month_btn)&&lv_obj_get_width(ctx.range_row)==kRangeButtonWidth*5+kRangeButtonGap*4&&"Numeric graphs offer 30D 7D 24H 6H 1H");
  {
   // Numeric Sensors read exact history values in the old value row. Large
   // spans are stored as rounded integers in the chart itself.
   ctx.decimals=2;apply_history_payload(&ctx,R"({"entity_id":"sensor.other","hours":24,"period_minutes":5,"unit":"C","values":[21.5,null,22.25,1234.56]})");
-  assert(ctx.readout_kind==kReadoutChart&&ctx.readout_point==3&&ctx.readout_latest&&shown(ctx.readout_value_label)&&strcmp(ctx.readout_value_text,"1234.56 C")==0&&"New history shows the newest point without a touch");
+  assert(ctx.readout_kind==kReadoutChart&&ctx.readout_point==3&&ctx.readout_latest&&shown(ctx.readout_value_label)&&strcmp(ctx.readout_value_text,"1234.56")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"C")==0&&"New history shows the newest point without a touch");
   lv_obj_update_layout(card);lv_refr_now(display);
   lv_area_t content,wrap;lv_obj_get_content_coords(ctx.chart,&content);lv_obj_get_coords(ctx.chart_wrap,&wrap);const int width=lv_area_get_width(&content);
-  assert(white_at(pixels,wrap.x1+ctx.readout_x,content.y2-2)&&"The newest point shows the cursor");
+  // Issue #139: before a touch only the newest point's dot, no cursor line.
+  assert(!ctx.readout_touched&&!white_at(pixels,wrap.x1+ctx.readout_x,content.y2-2)&&"No cursor line before the graph is touched");
   touch_at(content.x2-1,content.y1+4);lv_refr_now(display);
-  assert(ctx.readout_point==3&&strcmp(ctx.readout_value_text,"1234.56 C")==0&&"Readouts use exact history values");
+  assert(ctx.readout_point==3&&strcmp(ctx.readout_value_text,"1234.56")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"C")==0&&"Readouts use exact history values");
+  assert(ctx.readout_touched&&white_at(pixels,wrap.x1+ctx.readout_x,content.y2-2)&&"A touch on the point already shown brings the cursor line");
   assert(shown(ctx.value_box)&&lv_obj_get_style_bg_opa(ctx.value_box,LV_PART_MAIN)==LV_OPA_TRANSP&&lv_obj_get_style_y(ctx.value_box,LV_PART_MAIN)==popup_layout::kValueY-kContentLiftY);
   touch_at(content.x1+width/3,content.y1+4);lv_refr_now(display);
-  assert(ctx.readout_point==1&&strcmp(ctx.readout_value_text,"21.50 C")==0);
+  assert(ctx.readout_point==1&&strcmp(ctx.readout_value_text,"21.50")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"C")==0);
   // Release keeps the readout where the finger left it, also with new data.
   touch_release();
   assert(!ctx.readout.active()&&ctx.readout_kind==kReadoutChart&&ctx.readout_point==1&&!ctx.readout_latest&&shown(ctx.readout_value_label)&&"Release keeps the Sensor readout");
   lv_refr_now(display);assert(white_at(pixels,wrap.x1+ctx.readout_x,content.y2-2)&&"The cursor stays after release");
   apply_history_payload(&ctx,R"({"entity_id":"sensor.other","hours":24,"period_minutes":5,"unit":"C","values":[21.5,null,22.25,1300]})");
-  assert(ctx.readout_point==1&&strcmp(ctx.readout_value_text,"21.50 C")==0&&!ctx.readout_latest&&"New history keeps the position the finger left");
+  assert(ctx.readout_point==1&&strcmp(ctx.readout_value_text,"21.50")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"C")==0&&!ctx.readout_latest&&"New history keeps the position the finger left");
   // Dragging to the newest point follows new data again.
   touch_at(content.x1+width/3,content.y1+4);touch_at(content.x2+20,content.y1+4);lv_refr_now(display);touch_release();
   assert(ctx.readout_point==3&&ctx.readout_latest);
   apply_history_payload(&ctx,R"({"entity_id":"sensor.other","hours":24,"period_minutes":5,"unit":"C","values":[21.5,22,23,24,25.5]})");
-  assert(ctx.readout_point==4&&strcmp(ctx.readout_value_text,"25.50 C")==0&&"The newest point follows new history");
+  assert(ctx.readout_point==4&&strcmp(ctx.readout_value_text,"25.50")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"C")==0&&"The newest point follows new history");
   // A range change starts at the newest point of the new range.
   touch_at(content.x1+10,content.y1+4);touch_release();assert(ctx.readout_point==0&&!ctx.readout_latest&&"A tap reads its point at once and keeps it");
   lv_obj_send_event(ctx.range_week_btn,LV_EVENT_CLICKED,nullptr);
   assert(ctx.history_range==SensorHistoryRange::Day7&&ctx.readout_kind==kReadoutNone&&ctx.readout_latest&&!shown(ctx.readout_value_label));
   apply_history_payload(&ctx,R"({"entity_id":"sensor.other","hours":168,"period_minutes":35,"unit":"C","values":[20,null,19.25]})");
-  assert(ctx.readout_point==2&&strcmp(ctx.readout_value_text,"19.25 C")==0&&ctx.readout_latest);
+  assert(ctx.readout_point==2&&strcmp(ctx.readout_value_text,"19.25")==0&&strcmp(value_unit::unit_text(ctx.readout_value_label),"C")==0&&ctx.readout_latest);
+  // 6H takes only its own answer, in minutes.
+  lv_obj_send_event(ctx.range_hours_btn,LV_EVENT_CLICKED,nullptr);assert(ctx.history_range==SensorHistoryRange::Hours6&&ctx.readout_kind==kReadoutNone);
+  apply_history_payload(&ctx,R"({"entity_id":"sensor.other","hours":24,"period_minutes":5,"unit":"C","values":[1,2]})");assert(ctx.readout_kind==kReadoutNone&&"6H ignores a day");
+  apply_history_payload(&ctx,R"({"entity_id":"sensor.other","hours":6,"period_minutes":1,"unit":"C","values":[1,2,3]})");
+  assert(ctx.readout_point==2&&strcmp(ctx.readout_value_text,"3.00")==0&&ctx.readout_latest&&"6H shows its newest point");
   lv_obj_send_event(ctx.range_day_btn,LV_EVENT_CLICKED,nullptr);assert(ctx.history_range==SensorHistoryRange::Day24&&ctx.readout_kind==kReadoutNone);
   apply_history_payload(&ctx,R"({"entity_id":"sensor.other","hours":24,"period_minutes":5,"unit":"C","values":[21.5,null,22.25,1234.56]})");
   touch_at(content.x1+width/3,content.y1+4);lv_refr_now(display);

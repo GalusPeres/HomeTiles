@@ -87,7 +87,7 @@ int main() {
 `);
 const binary = path.join(out, 'probe' + (process.platform === 'win32' ? '.exe' : ''));
 // The stubs come first: the probe's Arduino and config headers resolve to them.
-let run = spawnSync(host.cxx, ['-I', stubs, ...host.flags, '-std=c++17', '-DHOMETILES_TEST_BETA',
+let run = spawnSync(host.cxx, ['-I', stubs, ...host.flags, '-std=c++17', '-DHOMETILES_TEXT_FIT_PROBE',
   source, host.archive, '-o', binary], {encoding: 'utf8'});
 assert.equal(run.status, 0, run.stdout + run.stderr);
 run = spawnSync(binary, [], {encoding: 'utf8'});
@@ -104,5 +104,8 @@ assert.deepEqual(reasons, [
 for (const line of findings) assert.match(line, /need=\d+ have=\d+ line=\d+ at=-?\d+,-?\d+/, line);
 assert.match(fs.readFileSync(path.join(root, 'HomeTiles.ino'), 'utf8'),
              /#if defined\(HOMETILES_TEXT_FIT_PROBE\)\s*text_fit_probe::start\(\);\s*#endif/,
-             'the probe starts after the UI is built, in beta builds only');
+             'the probe starts after the UI is built, in translation check builds only');
+// Off unless a translation check turns it on (test-draw-band-internal-ram.mjs).
+assert.ok(fs.readFileSync(path.join(root, 'src/core/diagnostics/text_fit_probe.h'), 'utf8').replace(/\r\n?/g, '\n')
+  .includes('\n// #define HOMETILES_TEXT_FIT_PROBE 1\n'), 'a test build carries no text fit probe');
 console.log(`Text fit probe: ${findings.length} labels that do not fit are logged once with their whole text`);

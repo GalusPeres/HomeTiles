@@ -20,7 +20,7 @@ for (const marker of [
   'inline bool own_state_colors_icon(const char* record) {',
   'if (layer.self && !allow_self) layer = Source{};',
   'if (!layer.self || (!allow_bar && !allow_rows)) {',
-  '!(layer.mode == SourceMode::Rules && layer.self && layer.icon &&',
+  '!(own_rules && layer.mode == SourceMode::Rules && layer.self && layer.icon &&',
   'if (!fixed_fallback) return false;',
   'inline constexpr uint8_t kTintMinimum = 10;',
   'inline constexpr uint8_t kTintMaximum = 50;',
@@ -68,7 +68,8 @@ for (const marker of [
   'if (switch_domain(domain)) return switch_payload_icon_color(payload, rgb, &active);',
   'if (domain == "climate") return climate_payload_icon_color(payload, rgb, &active);',
   'if (domain == "cover") return cover_payload_icon_color(payload, rgb, &active);',
-  'return tile_icon_colors::resolve(record.c_str(), state.c_str(), display, rgb, false, fill);',
+  // The matching row's own icon too (tile_rule_icon.h, user 2026-10-28).
+  'return tile_icon_colors::resolve(record.c_str(), state.c_str(), display, rgb, false, fill, icon);',
   'tile_icon_disc::force_icon_color(icon, lv_color_hex(rgb));',
   'tile_icon_disc::force_icon_color(icon, lv_color_hex(fixed));',
   'tile_icon_disc::release_icon_color(icon);',

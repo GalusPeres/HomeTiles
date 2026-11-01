@@ -13,6 +13,8 @@
 #include "src/ui/popups/media/media_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/device/device_popup.h"
+#include "src/ui/popups/vacuum/vacuum_popup.h"
+#include "src/ui/popups/calendar/calendar_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/popup_layout.h"
 #include "src/network/mqtt/mqtt_handlers.h"
@@ -4197,6 +4199,8 @@ void show_weather_popup(const WeatherPopupInit& init) {
   hide_energy_popup();
   hide_media_popup();
   hide_device_popup();
+  hide_vacuum_popup();
+  hide_calendar_popup();
   if (!g_weather_popup_ctx) {
     g_weather_popup_ctx = new WeatherPopupContext();
     build_popup_ui(g_weather_popup_ctx, init);
@@ -4223,6 +4227,11 @@ void show_weather_popup(const WeatherPopupInit& init) {
   lv_obj_invalidate(ctx->card);
   viewNavigationPopupShown(ctx->card, init.entity_id.c_str());
   show_popup_shell(g_weather_popup_ctx->overlay, g_weather_popup_ctx->card, g_weather_popup_ctx->location_label, g_weather_popup_ctx->icon_label, g_weather_popup_ctx->close_button);
+  // The resident body shows in the first frame: its footer pill and buttons
+  // take this tile's card and icon colors now, after the shell (they follow
+  // its disc). They showed the last opening's colors until the content was
+  // applied after that frame (user 2026-10-28: an element bottom left).
+  apply_init_to_context(ctx, init);
 }
 
 void preload_weather_popup() {

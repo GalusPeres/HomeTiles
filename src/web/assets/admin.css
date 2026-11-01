@@ -1659,6 +1659,16 @@
     }
     .gauge-fields > label, .graph-fields > label,
     .gauge-fields > input, .graph-fields > input { margin:0; }
+    /* Sensor: Min and Max in one row (web_html.cpp), the old gauge's own
+       fields below over both columns in the same grid. */
+    .gauge-fields > .sensor-range { display:grid; grid-template-columns:1fr 1fr; gap:6px; min-width:0; }
+    .gauge-fields > .sensor-range > input { margin:0; min-width:0; }
+    .gauge-fields > .gauge-shape-fields {
+      grid-column:1 / -1; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);
+      gap:9px 10px; align-items:center;
+    }
+    .gauge-fields > .gauge-shape-fields.hidden { display:none; }
+    .gauge-shape-fields > label, .gauge-shape-fields > input { margin:0; }
     .tile-color-label-row,
     .tile-color-row { display:grid; grid-template-columns:minmax(72px,1fr) 38px; gap:8px; align-items:center; }
     /* The tile Color field has no reset button: the Global choice replaces it. */
@@ -1837,7 +1847,8 @@
         text-overflow:ellipsis;
       }
     }
-    .gauge-fields { padding-left:4px; }
+    /* The range row lines up with the fields above (user 2026-10-28: Min / Max was indented). */
+    .gauge-fields { padding-left:0; }
     .gauge-fields.hidden { display:none; }
 
     /* Notification */
@@ -1866,7 +1877,7 @@
     /* These renderers share the Sensor header on the device. Scale its
        coordinates once and compensate the preview's 3 px selection border. */
     .tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
-             .cover, .device, .energy, .weather, .media, .climate, .switch-bar) > .tile-title {
+             .cover, .device, .energy, .weather, .media, .climate, .switch-bar, .calendar) > .tile-title {
       position:absolute;
       top:calc(var(--tile-header-title-top, 14px) - 3px);
       right:calc(var(--tile-header-title-right, 8px) - 3px);
@@ -1875,7 +1886,7 @@
       text-align:right;
     }
     .tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
-             .cover, .device, .energy, .weather, .media, .climate, .switch-bar) > .tile-icon {
+             .cover, .device, .energy, .weather, .media, .climate, .switch-bar, .calendar) > .tile-icon {
       position:absolute;
       top:calc(var(--tile-header-icon-top, 8px) - 3px);
       left:calc(var(--tile-header-icon-left, 6px) - 3px);
@@ -1902,7 +1913,10 @@
     .tile-value.tile-editable-value { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .tile-value.sensor-value-size-24 { font-size:var(--fs24, 12px); }
     .tile-value.sensor-value-size-20 { font-size:var(--fs20, 10px); }
-    .tile-unit { color:inherit; font-size:inherit; margin-left:0.28em; }
+    /* A unit a step smaller after its number, its top level with the digits,
+       like the weather forecast (user 2026-10-26; value_unit_rules.h: 80 %,
+       a thin gap, the digits' tops meeting). */
+    .tile-unit { color:inherit; font-size:.8em; line-height:1; margin-left:.17em; vertical-align:.18em; }
     .tile.binary_sensor,
     .tile.number,
     .tile.select,
@@ -1986,17 +2000,26 @@
        the card's bottom. Positions compensate the 3 px selection border. */
     .tile.switch.switch-bar,
     .tile.cover.switch-bar,
-    .tile.device.switch-bar { display:block; }
+    .tile.device.switch-bar,
+    .tile.energy.sensor-graph,
+    .tile.sensor.sensor-graph,
+    .tile.sensor.sensor-look-head { display:block; }
     .tile.switch.switch-bar > .tile-icon,
     .tile.cover.switch-bar > .tile-icon,
-    .tile.device.switch-bar > .tile-icon { margin:0; }
+    .tile.device.switch-bar > .tile-icon,
+    .tile.energy.sensor-graph > .tile-icon,
+    .tile.sensor.sensor-graph > .tile-icon,
+    .tile.sensor.sensor-look-head > .tile-icon { margin:0; }
     /* Title and state left-aligned beside the corner disc like the
        half-height tiles (compact_sensor_layout): two insets from the disc,
        the block centered on it, the state at the half-height value size. */
     .tile.switch.switch-bar,
     .tile.cover.switch-bar,
     .tile.device.switch-bar,
-    .tile.climate.climate-header {
+    .tile.climate.climate-header,
+    .tile.energy.sensor-graph,
+    .tile.sensor.sensor-graph,
+    .tile.sensor.sensor-look-head {
       --switch-text-left:calc(3 * var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) - 3px);
       --switch-text-top:calc(var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) / 2 - 3px
         - (var(--compact-title-line, 12px) + var(--compact-value-line, 12px)) / 2);
@@ -2008,7 +2031,13 @@
     .tile.cover.switch-bar > .tile-switch-state,
     .tile.device.switch-bar > .tile-switch-state,
     .tile.climate.climate-header > .tile-title,
-    .tile.climate.climate-header > .tile-switch-state {
+    .tile.climate.climate-header > .tile-switch-state,
+    .tile.energy.sensor-graph > .tile-title,
+    .tile.sensor.sensor-graph > .tile-title,
+    .tile.sensor.sensor-look-head > .tile-title,
+    .tile.energy.sensor-graph > .tile-value,
+    .tile.sensor.sensor-graph > .tile-value,
+    .tile.sensor.sensor-look-head > .tile-value {
       position:absolute;
       left:var(--switch-text-left);
       right:calc(2 * var(--compact-inset, 3px) - 3px);
@@ -2025,7 +2054,10 @@
     .tile.switch.switch-bar > .tile-title,
     .tile.cover.switch-bar > .tile-title,
     .tile.device.switch-bar > .tile-title,
-    .tile.climate.climate-header > .tile-title {
+    .tile.climate.climate-header > .tile-title,
+    .tile.energy.sensor-graph > .tile-title,
+    .tile.sensor.sensor-graph > .tile-title,
+    .tile.sensor.sensor-look-head > .tile-title {
       /* On the LVGL baseline like the half-height tiles (--compact-*-dy). */
       top:calc(var(--switch-text-top) + var(--compact-title-dy, 0px));
       font-size:var(--compact-title-font, 10px);
@@ -2034,7 +2066,10 @@
     .tile.switch.switch-bar > .tile-switch-state,
     .tile.cover.switch-bar > .tile-switch-state,
     .tile.device.switch-bar > .tile-switch-state,
-    .tile.climate.climate-header > .tile-switch-state {
+    .tile.climate.climate-header > .tile-switch-state,
+    .tile.energy.sensor-graph > .tile-value,
+    .tile.sensor.sensor-graph > .tile-value,
+    .tile.sensor.sensor-look-head > .tile-value {
       top:calc(var(--switch-text-top) + var(--compact-title-line, 12px) + var(--compact-value-dy, 0px));
       bottom:auto;
       font-size:var(--compact-value-font, 10px);
@@ -2043,21 +2078,59 @@
     .tile.switch.switch-bar:not(:has(> .tile-title)) > .tile-switch-state,
     .tile.cover.switch-bar:not(:has(> .tile-title)) > .tile-switch-state,
     .tile.device.switch-bar:not(:has(> .tile-title)) > .tile-switch-state,
-    .tile.climate.climate-header:not(:has(> .tile-title)) > .tile-switch-state {
+    .tile.climate.climate-header:not(:has(> .tile-title)) > .tile-switch-state,
+    .tile.energy.sensor-graph:not(:has(> .tile-title)) > .tile-value,
+    .tile.sensor.sensor-graph:not(:has(> .tile-title)) > .tile-value,
+    .tile.sensor.sensor-look-head:not(:has(> .tile-title)) > .tile-value {
       top:calc(var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) / 2 - 3px
         - var(--compact-value-line, 12px) / 2 + var(--compact-value-dy, 0px));
     }
     .tile.switch.switch-bar.compact-value-24,
     .tile.cover.switch-bar.compact-value-24,
-    .tile.device.switch-bar.compact-value-24 {
+    .tile.device.switch-bar.compact-value-24,
+    .tile.energy.sensor-graph.compact-value-24,
+    .tile.sensor.sensor-graph.compact-value-24,
+    .tile.sensor.sensor-look-head.compact-value-24 {
       --compact-value-font:var(--compact-value-font-24); --compact-value-line:var(--compact-value-line-step-24);
       --compact-value-dy:var(--compact-value-dy-24);
     }
     .tile.switch.switch-bar.compact-value-28,
     .tile.cover.switch-bar.compact-value-28,
-    .tile.device.switch-bar.compact-value-28 {
+    .tile.device.switch-bar.compact-value-28,
+    .tile.energy.sensor-graph.compact-value-28,
+    .tile.sensor.sensor-graph.compact-value-28,
+    .tile.sensor.sensor-look-head.compact-value-28 {
       --compact-value-font:var(--compact-value-font-28); --compact-value-line:var(--compact-value-line-step-28);
       --compact-value-dy:var(--compact-value-dy-28);
+    }
+    /* Sensor looks (types/sensor/sensor_look.h, admin-look.js): the SVG over
+       the whole card in panel pixels; with the value inside the arc or ring
+       the title alone right-aligned and centred on the disc like the panel's
+       (sensor renderer create_title_head), the value's em box placed by the
+       script (line height 1, the panel's top). */
+    .tile.sensor.sensor-look-inside { display:block; }
+    .tile.sensor.sensor-look-inside > .tile-icon { margin:0; }
+    .tile.sensor > .sensor-look-svg {
+      position:absolute; left:-3px; top:-3px; width:calc(100% + 6px); height:calc(100% + 6px);
+      pointer-events:none; overflow:visible;
+    }
+    .tile.sensor.sensor-look-inside > .tile-title {
+      position:absolute;
+      left:calc(3 * var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) - 3px);
+      right:calc(var(--tile-header-title-right, 8px) - 3px);
+      top:calc(var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) / 2 - 3px);
+      transform:translateY(-50%);
+      width:auto; max-width:none; margin:0; padding:0;
+      font-size:var(--fs20, 10px);
+      line-height:1.35;
+      text-align:right;
+      white-space:pre-line;
+      overflow:hidden;
+    }
+    .tile.sensor.sensor-look-inside > .tile-value {
+      position:absolute; left:-3px; right:-3px; width:auto; max-width:none; margin:0; padding:0;
+      bottom:auto; transform:none; line-height:1; text-align:center; white-space:nowrap;
+      overflow:hidden; text-overflow:ellipsis;
     }
     /* From 1.5 rows (switch_layout::sensor_look): the Sensor title top
        right, the state at a Sensor value size centered between the disc and
@@ -2170,6 +2243,68 @@
     .tile-device-part.button { background:var(--device-button, rgba(255,255,255,0.18)); }
     .tile-device-part.lit { background:var(--switch-accent, #9E9E9E); color:var(--switch-card, #1A1A1A); }
     .tile-switch.is-unavailable > * { display:none !important; }
+    /* Vacuum (render_vacuum_tile) in the device's own measures: the row in
+       the level bar's place (inset from the card, one bar high), equal
+       buttons one gap apart, each the controls' fill with the level bar's
+       radius (concentric with the card), glyph at the icon size and text at
+       the title size in the text color. Two columns and rows (vacuum-map):
+       the tall title top right, the map in the Media cover's place, the
+       state and the values line beside it (placeVacuumMapPreview). */
+    .tile.device.switch-bar > .tile-vacuum {
+      position:absolute;
+      left:calc(var(--climate-margin-x, 5px) - 3px);
+      right:calc(var(--climate-margin-x, 5px) - 3px);
+      bottom:calc(var(--climate-slots-bottom, 3px) - 3px);
+      height:var(--switch-bar-height, 30px);
+      display:flex; gap:var(--climate-grid-gap, 7px);
+    }
+    .tile-vacuum-button {
+      flex:1 1 0; min-width:0; height:100%; box-sizing:border-box;
+      display:flex; align-items:center; justify-content:center; gap:var(--vacuum-glyph-gap, 2px);
+      padding:0 var(--vacuum-button-pad, 4px);
+      border-radius:var(--climate-control-radius, 8px);
+      background:var(--control-fill, rgba(255,255,255,0.12)); color:var(--pv-text, #fff);
+      font-size:var(--fs20, 10px); white-space:nowrap; overflow:hidden;
+    }
+    .tile-vacuum-button i { font-size:var(--icon-size, 24px); line-height:1; }
+    .tile-vacuum-button span { overflow:hidden; text-overflow:ellipsis; }
+    .tile-vacuum .off { opacity:.4; }
+    .tile.device.switch-bar.switch-tall.vacuum-map > .tile-switch-state,
+    .tile.device.switch-bar.switch-tall.vacuum-map > .tile-vacuum-values {
+      position:absolute; transform:none; text-align:left;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .tile.device.switch-bar.switch-tall.vacuum-map > .tile-vacuum-values {
+      margin:0; padding:0; width:auto; max-width:none;
+      font-size:var(--compact-value-font, 10px); line-height:var(--compact-value-line, 12px);
+    }
+    .tile-vacuum-map {
+      position:absolute;
+      display:flex; align-items:center; justify-content:center; box-sizing:border-box;
+      border-radius:var(--climate-control-radius, 8px); background:#000;
+      color:#fff; font-size:var(--icon-size, 24px);
+    }
+    .tile-vacuum-map i { opacity:.4; }
+    /* Upright (bar_orientation.h): the bar below the header over the rest
+       of the tile; the fill rises from the bottom with the handle line
+       across it, the switch is on at the top, a Fan's speeds stack from the
+       bottom. */
+    .tile.switch.switch-bar.switch-upright > .tile-switch,
+    .tile.device.switch-bar.switch-upright > .tile-switch {
+      top:calc(var(--preview-cell-h, 73px) - var(--climate-slots-bottom, 3px) + 3px - var(--switch-bar-height, 30px));
+      height:auto;
+    }
+    .tile.switch-upright .tile-switch .tile-switch-fill {
+      left:0; right:0; top:auto; bottom:calc(-1 * var(--switch-end-radius, 3px)); width:auto; height:0;
+    }
+    .tile.switch-upright .tile-switch .tile-switch-handle {
+      top:var(--switch-handle-margin, 6px); right:auto; left:50%;
+      width:var(--switch-handle-h, 42%); height:var(--switch-handle-w, 3px);
+      transform:translate(-50%, -50%);
+    }
+    .tile.switch-upright .tile-switch .tile-switch-knob { top:50%; bottom:0; left:0; right:0; width:auto; }
+    .tile.switch-upright .tile-switch.is-on .tile-switch-knob { top:0; bottom:50%; left:0; }
+    .tile.switch-upright .tile-switch .tile-device-parts { flex-direction:column-reverse; }
 
 .tile.cover .tile-cover-value {
       font-size:var(--fs20, 10px);
@@ -3195,7 +3330,7 @@
    Centered icons above a title (Folder, Scene, Camera, Switch) use the same
    size (tile_icon_disc::header_diameter). */
 .tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
-         .cover, .device, .energy, .weather, .media, .climate, .switch-bar):not(.empty):not(.sensor-compact) > .tile-icon::after,
+         .cover, .device, .energy, .weather, .media, .climate, .switch-bar, .calendar):not(.empty):not(.sensor-compact) > .tile-icon::after,
 .tile:is(.scene, .navigate, .camera, .switch:not(.switch-bar)):not(.empty):not(.sensor-compact) > .tile-icon::after {
   width:var(--icon-disc-corner, var(--icon-disc-round, 30px));
   height:var(--icon-disc-corner, var(--icon-disc-round, 30px));
@@ -3204,7 +3339,7 @@
    tile_icon_disc::add_round places it, not centered on the icon box, whose
    position and size are rounded to pixels. */
 .tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
-         .cover, .device, .energy, .weather, .media, .climate, .switch-bar):not(.empty):not(.sensor-compact) > .tile-icon::after {
+         .cover, .device, .energy, .weather, .media, .climate, .switch-bar, .calendar):not(.empty):not(.sensor-compact) > .tile-icon::after {
   left:calc(var(--compact-inset, 2px) + var(--corner-disc-shrink, 0px) - var(--tile-header-icon-left, 6px));
   top:calc(var(--compact-inset, 2px) + var(--corner-disc-shrink, 0px) - var(--tile-header-icon-top, 8px));
   width:calc(var(--icon-disc-corner, var(--icon-disc-round, 30px)) - 2 * var(--corner-disc-shrink, 0px));
@@ -3319,7 +3454,6 @@
   top:calc(var(--compact-value-top, max(0px, (var(--compact-h) - var(--compact-title-line) - var(--compact-value-line) - var(--compact-text-gap)) / 2) + var(--compact-title-line) + var(--compact-text-gap)) + var(--compact-value-dy, 0px)); bottom:auto;
   font-size:var(--compact-value-font); line-height:var(--compact-value-line);
 }
-.tile.sensor-compact .tile-unit { font-size:inherit; }
 /* Chosen half-height value sizes (compact_sensor_layout::value_font); title
    and value both use the value line to center their block. */
 .tile.sensor-compact.compact-value-24 {
@@ -3432,6 +3566,9 @@
   box-sizing:border-box;
 }
 .switch-choices button { padding:6px 8px; white-space:nowrap; }
+/* A row the layout does not use (Switch orientation, the Sensor menu): its
+   grid rule above outweighs .tile-settings .hidden. */
+.type-fields.show > .switch-choices.hidden { display:none; }
 /* Value sizes the tile size does not offer (syncSwitchChoices). */
 .switch-choices button.hidden { display:none; }
 .icon-color-presets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
@@ -3454,7 +3591,8 @@
   cursor:copy;
   touch-action:manipulation;
 }
-.icon-color-handles { position:relative; height:42px; margin:4px 9px 0; }
+/* The stops with their value, and each stop's own icon below it. */
+.icon-color-handles { position:relative; height:68px; margin:4px 9px 0; }
 .icon-color-stop {
   position:absolute;
   top:0;
@@ -3498,21 +3636,54 @@
 }
 .icon-color-stop-remove.hidden { display:none; }
 .icon-color-stop-picker { position:absolute; width:1px; height:1px; padding:0; border:0; opacity:0; pointer-events:none; }
+.icon-color-stop-icon {
+  position:absolute;
+  top:38px;
+  width:30px;
+  height:28px;
+  margin-left:-15px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  border:1px solid var(--line-strong);
+  border-radius:8px;
+  background:var(--well);
+  font-size:18px;
+  cursor:pointer;
+}
 .icon-color-bar-editor { position:relative; }
 .icon-color-range { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px; }
 .icon-color-range label { margin:0; font-size:12px; }
 .icon-color-range input { margin-top:4px; padding:8px 10px; font-size:13px; }
+/* A state line (mockup rule-icons, user 2026-10-28): the state, its color,
+   its own icon and remove; contains and "Fuellen" in a second line below
+   the state, so the state keeps its room. */
 .tile-icon-rule {
   display:grid;
-  grid-template-columns:minmax(0,1.6fr) auto auto 44px 38px;
-  gap:8px;
+  grid-template-columns:minmax(0,1fr) 44px 38px 38px;
+  gap:6px 8px;
   align-items:center;
-  margin-bottom:8px;
+  margin-bottom:10px;
 }
+.tile-icon-rule-options { grid-column:1; display:flex; gap:16px; flex-wrap:wrap; }
 .tile-icon-rule input { min-width:0; margin:0; }
 .tile-icon-rule input[type="text"] { padding:8px 10px; font-size:13px; }
 .tile-icon-rule input[type="color"] { width:100%; height:38px; padding:4px 7px; border-radius:10px; }
 .icon-color-contains { display:inline-flex; align-items:center; gap:6px; margin:0; font-size:12px; white-space:nowrap; }
+/* A rule's own icon: the tile head's icon button in the rule's color; the
+   tile's own icon dimmed while the rule has none. On/Off: color, icon,
+   reset. */
+.tile-rule-icon {
+  width:38px; height:38px; display:grid; place-items:center; padding:0; border:1px solid var(--line-strong);
+  border-radius:10px; background:var(--well); color:var(--text); font-size:20px; cursor:pointer;
+  transition:border-color 0.15s, box-shadow 0.15s;
+}
+.tile-rule-icon.none, .icon-color-stop-icon.none { color:#4a4a4a; }
+.tile-rule-icon:focus-visible, .tile-rule-icon.open,
+.icon-color-stop-icon:focus-visible, .icon-color-stop-icon.open {
+  outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-ring);
+}
+.tile-color-row.tile-color-row-icon { grid-template-columns:minmax(72px,1fr) 38px 38px; }
 .icon-color-contains input { width:16px; height:16px; }
 /* On/Off: the state's label left, its own "Fuellen" right. */
 .tile-color-label-row.icon-color-fill-label { grid-template-columns:minmax(0,1fr) auto; }
@@ -3541,6 +3712,15 @@
 /* The shown type's entity, under Type in the fixed head of the panel. */
 .tile-entity-slot { margin-bottom:10px; }
 .tile-entity-slot:empty { display:none; }
+/* Type options shown elsewhere (data-tile-place, type-selection.js
+   placeTileTypeParts) keep the type fields' rows: label above its field,
+   checkboxes on their own line. */
+.tile-place-slot:empty { display:none; }
+.tile-place-slot { margin-top:10px; }
+.tile-place { display:grid; grid-template-columns:minmax(0, 1fr); gap:9px; }
+.tile-place > * { min-width:0; }
+.tile-place > label { margin:0; }
+.tile-place > .inline-checkbox { margin:0 0 4px; }
 input[data-entity-picker].hidden + .entity-picker { display:none; }
 .entity-picker-field {
   width:100%; min-width:0; display:flex; align-items:center; gap:10px; min-height:44px;
@@ -3848,3 +4028,58 @@ select.setup-from:hover { background-color:#333333; }
 .setup-foot .btn { padding:8px 12px; font-size:13px; }
 .setup-apply:disabled, .setup-save:disabled { opacity:0.45; cursor:not-allowed; }
 .setup-save:disabled { background:var(--accent); }
+
+/* Power flow (types/power_flow/admin.js): without a card the nodes sit on
+   the screen like a Transparent clock. */
+.tile.power-flow-no-card { background:transparent !important; outline-color:transparent !important; }
+
+/* Calendar (types/calendar/calendar_tile.cpp): the Sensor header above the
+   content the tile's size allows; the content box starts below the disc row
+   like content_y there. Day and event colors come from the inline styles
+   (calendar_model::calendar_color). */
+.tile.calendar:not(.sensor-compact) { display:block; }
+.tile.calendar > .calendar-preview-body {
+  position:absolute;
+  left:calc(var(--tile-pad-h, 10px) - 3px); right:calc(var(--tile-pad-h, 10px) - 3px);
+  top:calc(var(--compact-inset, 3px) * 2 + var(--icon-disc-corner, 30px) - 3px);
+  bottom:calc(var(--tile-pad-v, 12px) - 3px);
+  overflow:hidden; color:var(--pv-text, #fff); font-size:var(--fs20, 10px); line-height:1.25;
+}
+.calendar-preview-body.next { display:flex; flex-direction:column; justify-content:center; padding-left:calc(var(--fs20, 10px) * .9); }
+.calendar-preview-body.next > .calendar-preview-bar {
+  position:absolute; left:0; top:50%; transform:translateY(-50%);
+  width:max(2px, calc(var(--fs20, 10px) * .3)); height:calc(var(--fs24, 12px) * 2.3); border-radius:4px;
+}
+.calendar-preview-body.next > .calendar-preview-what { font-size:var(--fs24, 12px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.calendar-preview-body.next.wide > .calendar-preview-what { font-size:var(--fs28, 14px); }
+.calendar-preview-body.next > .calendar-preview-when,
+.tile.calendar .calendar-preview-time,
+.tile.calendar .calendar-preview-daylabel,
+.tile.calendar .calendar-preview-message { color:var(--pv-text-secondary, #D8DEE9); }
+.calendar-preview-body.next > .calendar-preview-when { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.calendar-preview-body.agenda { display:flex; flex-direction:column; }
+.calendar-preview-body.countdown { display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; }
+.calendar-preview-body.countdown > .calendar-preview-what { font-size:var(--fs28, 14px); max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.calendar-preview-body.countdown > .calendar-preview-when { color:var(--pv-text-secondary, #D8DEE9); max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tile.calendar .calendar-preview-daylabel { font-size:var(--fs16, 8px); margin-top:.3em; }
+.tile.calendar .calendar-preview-row { display:flex; align-items:center; gap:.45em; min-height:1.55em; white-space:nowrap; }
+.tile.calendar .calendar-preview-time { flex:0 0 auto; min-width:3.6em; }
+.tile.calendar .calendar-preview-row > .calendar-preview-bar { flex:0 0 auto; width:max(2px, .22em); height:1.1em; border-radius:3px; }
+.tile.calendar .calendar-preview-title { overflow:hidden; text-overflow:ellipsis; }
+.tile.calendar .calendar-preview-message { margin:auto; text-align:center; }
+.calendar-preview-grid { display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); height:100%; text-align:center; }
+.calendar-preview-grid.month { grid-template-rows:auto repeat(var(--calendar-rows, 6), minmax(0, 1fr)); }
+.calendar-preview-grid > .calendar-preview-dow { font-size:var(--fs16, 8px); color:var(--pv-text-secondary, #D8DEE9); }
+.calendar-preview-day { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; min-height:0; }
+.calendar-preview-day > small { font-size:var(--fs16, 8px); color:var(--pv-text-secondary, #D8DEE9); }
+.calendar-preview-day > b { font-weight:normal; min-width:1.7em; line-height:1.7em; border-radius:50%; }
+/* A one-row week strip: number and dots stay inside the tile (calendar_tile.cpp fits them the same way). */
+.calendar-preview-grid.week .calendar-preview-day { gap:1px; }
+.calendar-preview-grid.week .calendar-preview-day > b { line-height:1.5em; min-width:1.5em; }
+.calendar-preview-grid.month .calendar-preview-day > b { font-size:var(--fs16, 8px); }
+.calendar-preview-day.strip-today { border-radius:.8em; background:color-mix(in srgb, var(--calendar-tint, #fff) 15%, transparent); }
+.calendar-preview-day.today > b { background:var(--pv-text, #fff); color:var(--tile-card, #1A1A1A); }
+.calendar-preview-day.past > b { color:var(--pv-text-secondary, #D8DEE9); }
+.calendar-preview-day.outside > b { opacity:.4; }
+.calendar-preview-dots { display:flex; gap:2px; height:4px; }
+.calendar-preview-dots > i { width:4px; height:4px; border-radius:50%; }

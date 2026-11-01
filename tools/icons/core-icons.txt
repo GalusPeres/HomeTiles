@@ -30,6 +30,17 @@ backspace
 backspace-outline
 battery
 battery-charging
+battery-charging-10
+battery-charging-100
+battery-charging-20
+battery-charging-30
+battery-charging-40
+battery-charging-50
+battery-charging-60
+battery-charging-70
+battery-charging-80
+battery-charging-90
+battery-charging-outline
 battery-outline
 bell-ring
 blinds-horizontal
@@ -89,6 +100,10 @@ eye-off
 factory
 fan
 fan-off
+fan-plus
+fan-speed-1
+fan-speed-2
+fan-speed-3
 file
 fire
 folder
@@ -112,6 +127,8 @@ hexagon
 history
 home
 home-analytics
+home-import-outline
+home-lightning-bolt
 home-outline
 icon-name
 image
@@ -139,6 +156,9 @@ lock-open-variant
 lock-outline
 login-variant
 magnify
+map
+map-marker
+map-outline
 microphone
 minus
 mirror
@@ -190,6 +210,8 @@ repeat
 repeat-once
 resize
 restart
+robot-vacuum-alert
+robot-vacuum-off
 rocket-launch
 rocket-launch-outline
 roller-shade
@@ -224,6 +246,7 @@ snowflake
 snowflake-melt
 sofa
 solar-power
+solar-power-variant
 speaker
 speaker-multiple
 speaker-pause
@@ -240,6 +263,7 @@ switch
 tab
 tag
 target
+target-variant
 television
 television-play
 temperature-kelvin
@@ -252,10 +276,13 @@ timer-outline
 toggle-switch-variant
 translate
 transmission-tower
+transmission-tower-export
+transmission-tower-import
 tray-arrow-down
 tune-variant
 update
 usb
+vacuum
 vibrate
 video
 view-grid-plus-outline

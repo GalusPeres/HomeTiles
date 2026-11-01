@@ -12,6 +12,8 @@
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/device/device_popup.h"
+#include "src/ui/popups/vacuum/vacuum_popup.h"
+#include "src/ui/popups/calendar/calendar_popup.h"
 #include "src/ui/popups/energy/energy_popup.h"
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/media/media_popup.h"
@@ -24,6 +26,7 @@
 #include <cmath>
 #include <cstring>
 #include "src/ui/shared/ui_theme.h"
+#include "src/ui/shared/value_unit.h"
 
 namespace {
 
@@ -64,6 +67,7 @@ struct CoverPopupContext {
   lv_obj_t* icon_label = nullptr;
   lv_obj_t* title_label = nullptr;
   lv_obj_t* top_value_label = nullptr;
+  lv_obj_t* top_value_unit = nullptr;  // value_unit.h
   lv_obj_t* main_panel = nullptr;
   lv_obj_t* position_panel = nullptr;
   lv_obj_t* controls_panel = nullptr;
@@ -288,16 +292,19 @@ void update_top_value(CoverPopupContext* ctx) {
                                    : String("unavailable");
   String text = i18n::cover_state_label(
       configManager.getConfig().language, display_state);
+  // The position's percent a step smaller after it (value_unit.h, user
+  // 2026-10-26).
+  String unit;
   if (ctx->state.has_position) {
     text += "  \xC2\xB7  ";
     text += String(ctx->state.position);
-    text += "%";
+    unit = "%";
   } else if (ctx->state.has_tilt_position) {
     text += "  \xC2\xB7  ";
     text += String(ctx->state.tilt_position);
-    text += "%";
+    unit = "%";
   }
-  lv_label_set_text(ctx->top_value_label, text.c_str());
+  value_unit::show(ctx->top_value_label, ctx->top_value_unit, text, unit);
 }
 
 int slider_center_y_for_value(uint8_t value) {
@@ -1231,6 +1238,8 @@ void show_cover_popup(const CoverPopupInit& init) {
   hide_energy_popup();
   hide_media_popup();
   hide_device_popup();
+  hide_vacuum_popup();
+  hide_calendar_popup();
   hide_camera_popup();
 
   if (g_ctx && g_ctx->overlay && g_ctx->card) {
@@ -1275,6 +1284,7 @@ void show_cover_popup(const CoverPopupInit& init) {
   lv_obj_clear_flag(value_box, LV_OBJ_FLAG_SCROLLABLE);
 
   ctx->top_value_label = lv_label_create(value_box);
+  ctx->top_value_unit = nullptr;
   lv_obj_set_width(ctx->top_value_label, LV_PCT(100));
   lv_obj_set_height(ctx->top_value_label, popup_layout::kValueHeight);
   lv_obj_set_style_text_align(ctx->top_value_label, LV_TEXT_ALIGN_CENTER, 0);

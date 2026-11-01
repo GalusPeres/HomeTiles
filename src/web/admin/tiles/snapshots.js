@@ -77,7 +77,7 @@
     // data, its entity and options returned with the next tile in the slot.
     const tile = Number(snapshot?.type) === 0 ? {} : Object.assign({}, prev);
     const layout = normalizeSnapshotLayout(snapshot, index, tab);
-    const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity', 'icon_disc', 'icon_glow'];
+    const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'bar_orientation', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity', 'icon_disc', 'icon_glow'];
 
     tile.type = clampInt(snapshot?.type, 0, 255, Number(prev.type) || 0);
     tile.title = snapshot?.title || '';
@@ -136,8 +136,26 @@
       tile.key_code = cameraTransparency(snapshot.camera_transparency);
       tile.key_modifier = cameraOptionFlags({head: snapshot.camera_head, tap: snapshot.camera_tap});
     }
-    for (const kind of ['lock', 'alarm', 'fan']) {
+    for (const kind of ['lock', 'alarm', 'fan', 'vacuum']) {
       if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, kind + '_entity')) tile.sensor_entity = snapshot[kind + '_entity'] || '';
+    }
+    // The Vacuum popup's layout (types/device/web.cpp vacuum_layout).
+    if (Number(tile.type) === 29 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'vacuum_layout')) {
+      tile.sensor_display_mode = String(snapshot.vacuum_layout) === '1' ? 1 : 0;
+    }
+    if (Number(tile.type) === 29 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'vacuum_map')) {
+      tile.vacuum_map = snapshot.vacuum_map || '';
+    }
+    if (Number(tile.type) === 29 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'vacuum_every')) {
+      tile.image_slideshow_sec = Math.max(3, Math.min(60, Number(snapshot.vacuum_every) || 5));
+    }
+    // Calendar: the view and the first day of the week (types/calendar/web.h).
+    if (Number(tile.type) === 27 && snapshot) {
+      if (Object.prototype.hasOwnProperty.call(snapshot, 'calendar_view')) tile.sensor_display_mode = Number(snapshot.calendar_view) || 0;
+      if (Object.prototype.hasOwnProperty.call(snapshot, 'calendar_week_start')) {
+        const value = Number(snapshot.calendar_week_start);
+        tile.sensor_decimals = [0, 1, 6].includes(value) ? value : 255;
+      }
     }
     if (snapshot && (Object.prototype.hasOwnProperty.call(snapshot, 'clock_show_time') || Object.prototype.hasOwnProperty.call(snapshot, 'clock_show_date'))) {
       let flags = 0;
@@ -170,6 +188,10 @@
     }
     if ([8,9,10].includes(Number(tile.type)) && snapshot?.tile_border !== undefined) {
       tile.sensor_display_mode = ['0','false'].includes(String(snapshot.tile_border)) ? 1 : 0;
+    }
+    // The Power flow options in their stored field (types/power_flow/admin.js).
+    if (Number(tile.type) === 28 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'flow_header')) {
+      tile.key_code = powerFlowOptionBits(snapshot);
     }
     if (Number(tile.type) === 12 && snapshot?.weather_colored_icons !== undefined) {
       tile.sensor_display_mode = ['0','false'].includes(String(snapshot.weather_colored_icons)) ? 1 : 0;

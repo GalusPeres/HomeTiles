@@ -22,10 +22,13 @@ assert.match(sleep,
 assert.doesNotMatch(sleep, /process_tile_graph_queue\(\);/,
   'Sleep must not start request/response graph processing');
 // Every loop, inside the camera gate: no idle two-second batch any more (a
-// moving Cover's steps arrive twice a second, user 2026-10-02).
+// moving Cover's steps arrive twice a second, user 2026-10-02). Graph tiles
+// ask for their day again after connecting (tile_graph_service_periodic).
 assert.match(active,
-  /if \(!camera_popup_busy && !PopupFirstFrame::any_pending\(\)\)\s*\{\s*if \(!hold_tile_updates\) process_tile_update_queues<TileUpdateBudget::Active>\(\);\s*process_tile_graph_queue\(\);\s*energy_service_periodic\(\);\s*\}/,
+  /if \(!camera_popup_busy && !PopupFirstFrame::any_pending\(\)\)\s*\{\s*if \(!hold_tile_updates\) process_tile_update_queues<TileUpdateBudget::Active>\(\);\s*process_tile_graph_queue\(\);\s*tile_graph_service_periodic\(\);\s*energy_service_periodic\(\);\s*\}/,
   'Camera gating, graph order, and energy scheduling must stay in loop()');
+assert.doesNotMatch(sleep, /tile_graph_service_periodic\(\);/,
+  'Sleep must not ask for graph histories');
 assert.doesNotMatch(active, /isHighPerformance|last_queue_ms|>= 2000|process_idle_media_updates/,
   'Tile updates must not wait for an idle batch');
 assert.doesNotMatch(service,
@@ -35,9 +38,10 @@ assert.doesNotMatch(sleep, /process_idle_media_updates\(\);/,
   'The sleep path retains its existing drain policy');
 
 const queueTypes = ['sensor', 'switch', 'climate', 'cover',
-  'binary_sensor', 'editable', 'device', 'weather', 'media'];
+  'binary_sensor', 'editable', 'device', 'calendar', 'weather', 'media'];
 const queueFunction = type => type === 'editable' ? 'process_editable_updates'
-  : type === 'device' ? 'process_device_updates' : `process_${type}_update_queue`;
+  : type === 'device' ? 'process_device_updates'
+  : type === 'calendar' ? 'process_calendar_updates' : `process_${type}_update_queue`;
 const declarations = queueTypes.map(type =>
   `void ${queueFunction(type)}(uint8_t max_updates = 0);`).join('\n');
 const endpoints = queueTypes.map((type, index) =>
@@ -55,10 +59,14 @@ const source = `
 // Icon-and-title recolors run last and are bounded by the pending mask.
 static unsigned icon_source_calls = 0;
 void process_icon_source_updates() { ++icon_source_calls; }
+// Power flow tiles redraw each marked tile once per pass, in every budget.
+static unsigned power_flow_calls = 0;
+void process_power_flow_updates() { ++power_flow_calls; }
+bool power_flow_entity_changed(const char*) { return false; }
 
 struct Call { std::size_t queue; uint8_t budget; };
-static std::array<unsigned, 9> pending{};
-static std::array<Call, 9> calls{};
+static std::array<unsigned, 10> pending{};
+static std::array<Call, 10> calls{};
 static std::size_t call_count = 0;
 
 static void consume(std::size_t queue, uint8_t budget) {
@@ -71,7 +79,7 @@ static void consume(std::size_t queue, uint8_t budget) {
 
 ${endpoints}
 
-static void expect_calls(const std::array<uint8_t, 9>& budgets) {
+static void expect_calls(const std::array<uint8_t, 10>& budgets) {
   assert(call_count == calls.size());
   for (std::size_t i = 0; i < calls.size(); ++i) {
     assert(calls[i].queue == i);
@@ -81,8 +89,8 @@ static void expect_calls(const std::array<uint8_t, 9>& budgets) {
 }
 
 int main() {
-  constexpr std::array<uint8_t, 9> active = {6, 6, 4, 4, 4, 4, 4, 4, 2};
-  constexpr std::array<uint8_t, 9> drain_all = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+  constexpr std::array<uint8_t, 10> active = {6, 6, 4, 4, 4, 4, 4, 2, 4, 2};
+  constexpr std::array<uint8_t, 10> drain_all = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   pending.fill(20);
 
   process_tile_update_queues<TileUpdateBudget::Active>();
@@ -128,6 +136,8 @@ try {
   fs.writeFileSync(path.join(tempRoot, 'src/types/value/value_control.h'), '#pragma once\nvoid process_editable_updates(uint8_t);\n');
   fs.mkdirSync(path.join(tempRoot, 'src/types/device'), {recursive:true});
   fs.writeFileSync(path.join(tempRoot, 'src/types/device/device_updates.h'), '#pragma once\n#include <stdint.h>\nvoid process_device_updates(uint8_t);\n');
+  fs.mkdirSync(path.join(tempRoot, 'src/types/calendar'), {recursive:true});
+  fs.writeFileSync(path.join(tempRoot, 'src/types/calendar/calendar_updates.h'), '#pragma once\n#include <stdint.h>\nvoid process_calendar_updates(uint8_t);\n');
   const stubDir = path.join(tempRoot, 'src', 'tiles', 'runtime');
   fs.mkdirSync(stubDir, {recursive: true});
   fs.writeFileSync(path.join(stubDir, 'tile_renderer.h'),

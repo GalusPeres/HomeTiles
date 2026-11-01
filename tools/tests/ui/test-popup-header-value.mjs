@@ -10,6 +10,7 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 import {lvglHost} from '../../lib/lvgl-host.mjs';
+import {valueUnitSource} from '../../lib/value-unit-source.mjs';
 import {radiusPolicyHost, toneColorHost, popupSurfaceHost} from '../../lib/surface-style-host.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -80,23 +81,24 @@ assert.match(code(fn(sensor, 'build_popup_shell')),
   /ctx->value_label = lv_label_create\(parts\.card\);[\s\S]*lv_obj_add_flag\(ctx->value_label, LV_OBJ_FLAG_HIDDEN\);/,
   'The Sensor value holder is hidden and exists before the first frame');
 assert.match(code(fn(sensor, 'update_value_label')),
-  /sensor_value_display\(value, unit, ctx->decimals, categorical_state\)[\s\S]*set_label_text_if_changed\(ctx->value_label/,
+  /show_header_value\(ctx, sensor_value_display\(value, ctx->decimals, categorical_state\), unit\);/,
   'Numeric and textual Sensors keep the established value formatting');
-assert.match(code(fn(sensor, 'update_binary_state')), /lv_label_set_text\(\s*ctx->value_label,\s*i18n::binary_sensor_state_label/,
+assert.match(code(fn(sensor, 'update_binary_state')), /show_header_value\(ctx,\s*missing \? String\(\"--\"\)\s*:\s*String\(i18n::binary_sensor_state_label/,
   'Binary Sensors show their translated state');
 assert.match(code(fn(sensor, 'apply_init_to_context')),
-  /if \(init\.editable\) \{\s*set_label_text_if_changed\(ctx->value_label,\s*editable_display_value\(editable_value\)\.c_str\(\)\);/,
+  /if \(init\.editable\) \{\s*show_header_value\(ctx, editable_display_number\(editable_value\), editable_display_unit\(editable_value\)\);/,
   'Number, Select and Date/Time show the tile value');
 assert.match(code(fn(sensor, 'process_sensor_popup_queue')),
-  /parse_editable_value\([\s\S]*set_label_text_if_changed\(ctx->value_label, editable_display_value\(value\)\.c_str\(\)\);/,
+  /parse_editable_value\([\s\S]*show_header_value\(ctx, editable_display_number\(value\), editable_display_unit\(value\)\);/,
   'Editor values update while the popup is open');
 const show = code(fn(sensor, 'show_sensor_popup'));
 assert.ok(show.indexOf('apply_sensor_header_value(ctx, init);') > 0 &&
   show.indexOf('apply_sensor_header_value(ctx, init);') < show.indexOf('show_popup_shell('),
   'The first frame shows the value of the opened entity');
 const firstFrame = code(fn(sensor, 'apply_sensor_header_value'));
-for (const marker of ['editable_display_value(value)', 'update_binary_state(ctx, init.value, init.binary_available,',
-  'sensor_value_display(init.value, init.unit, init.decimals,'])
+for (const marker of ['show_header_value(ctx, editable_display_number(value), editable_display_unit(value));',
+  'update_binary_state(ctx, init.value, init.binary_available,',
+  'show_header_value(ctx, sensor_value_display(init.value, init.decimals, init.state_history_mode), init.unit);'])
   assert.ok(firstFrame.includes(marker), `First frame: ${marker}`);
 // Energy: the hidden holder carries today's value from the first frame on.
 const energy = read('src/ui/popups/energy/energy_popup.cpp');
@@ -127,6 +129,7 @@ const cpp = String.raw`
 #include "src/ui/popups/popup_first_frame.h"
 #include "src/ui/popups/popup_body.h"
 extern "C" {LV_FONT_DECLARE(ui_font_12);LV_FONT_DECLARE(ui_font_14);LV_FONT_DECLARE(ui_font_16);LV_FONT_DECLARE(ui_font_20);LV_FONT_DECLARE(ui_font_24);LV_FONT_DECLARE(ui_font_28);LV_FONT_DECLARE(ui_font_32);LV_FONT_DECLARE(ui_font_40);LV_FONT_DECLARE(ui_font_48);LV_FONT_DECLARE(ui_font_56);LV_FONT_DECLARE(ui_font_64);LV_FONT_DECLARE(ui_font_72);LV_FONT_DECLARE(ui_font_80);LV_FONT_DECLARE(ui_font_96);LV_FONT_DECLARE(mdi_icons_32);LV_FONT_DECLARE(mdi_icons_40);LV_FONT_DECLARE(mdi_icons_48);}
+${valueUnitSource(root)}
 #if defined(DEVICE_LAYOUT_480X480)
 #define FONT_MDI_ICONS (&mdi_icons_32)
 #elif defined(DEVICE_LAYOUT_1024X600)

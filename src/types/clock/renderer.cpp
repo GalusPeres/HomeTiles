@@ -264,13 +264,14 @@ struct ClockShadowSet {
 
 // Rolling digits (clock option, user 2026-10-11): the time as one cell per
 // character; at a new minute a changed digit rolls up once (an LVGL animation
-// of the cell's strip: the old digit leaves at the top, the new one comes in
-// from below), the others stay. The fixed-width digits keep every cell in
-// place.
+// of the cell's two digits: the old one leaves at the top, the new one comes
+// in from below), the others stay. The fixed-width digits keep every cell in
+// place. The cell clips its two labels and the animation moves them; a strip
+// object between them cost one more object in every draw band (b594).
 struct ClockRollLine {
   static constexpr uint8_t kMaxChars = 12;
   lv_obj_t* row = nullptr;
-  lv_obj_t* strips[kMaxChars] = {};
+  lv_obj_t* cells[kMaxChars] = {};
   uint8_t count = 0;
   char text[kMaxChars + 1] = "";
   const lv_font_t* font = nullptr;
@@ -319,19 +320,26 @@ static uint8_t get_clock_flags(const Tile& tile) {
   return flags;
 }
 
-static void clock_roll_y(void* var, int32_t value) { lv_obj_set_y(static_cast<lv_obj_t*>(var), value); }
-
-// The roll ended: the incoming digit becomes the shown one, the strip back up.
-static void clock_roll_done(lv_anim_t* anim) {
-  lv_obj_t* strip = static_cast<lv_obj_t*>(anim->var);
-  lv_obj_t* shown = lv_obj_get_child(strip, 0);
-  lv_obj_t* incoming = lv_obj_get_child(strip, 1);
-  if (shown && incoming) lv_label_set_text(shown, lv_label_get_text(incoming));
-  lv_obj_set_y(strip, 0);
+// The cell's shown digit at `value`, the incoming one a line below it.
+static void clock_roll_y(void* var, int32_t value) {
+  lv_obj_t* cell = static_cast<lv_obj_t*>(var);
+  lv_obj_t* shown = lv_obj_get_child(cell, 0);
+  lv_obj_t* incoming = lv_obj_get_child(cell, 1);
+  if (shown) lv_obj_set_y(shown, value);
+  if (incoming) lv_obj_set_y(incoming, value + lv_obj_get_style_height(cell, LV_PART_MAIN));
 }
 
-static void clock_roll_label(lv_obj_t* strip, const lv_font_t* font, lv_coord_t width, lv_coord_t y, const char* text) {
-  lv_obj_t* label = lv_label_create(strip);
+// The roll ended: the incoming digit becomes the shown one, both back in place.
+static void clock_roll_done(lv_anim_t* anim) {
+  lv_obj_t* cell = static_cast<lv_obj_t*>(anim->var);
+  lv_obj_t* shown = lv_obj_get_child(cell, 0);
+  lv_obj_t* incoming = lv_obj_get_child(cell, 1);
+  if (shown && incoming) lv_label_set_text(shown, lv_label_get_text(incoming));
+  clock_roll_y(cell, 0);
+}
+
+static void clock_roll_label(lv_obj_t* cell, const lv_font_t* font, lv_coord_t width, lv_coord_t y, const char* text) {
+  lv_obj_t* label = lv_label_create(cell);
   if (!label) return;
   set_label_style(label, lv_color_hex(ui_theme::text()), font);
   lv_obj_set_width(label, width);
@@ -343,7 +351,7 @@ static void clock_roll_label(lv_obj_t* strip, const lv_font_t* font, lv_coord_t 
 // One cell per character, each as wide as its glyph (a fixed-width digit).
 static void clock_roll_rebuild(ClockRollLine& roll, const char* text) {
   lv_obj_clean(roll.row);
-  memset(roll.strips, 0, sizeof(roll.strips));
+  memset(roll.cells, 0, sizeof(roll.cells));
   size_t count = strlen(text);
   if (count > ClockRollLine::kMaxChars) count = ClockRollLine::kMaxChars;
   for (size_t i = 0; i < count; ++i) {
@@ -356,15 +364,9 @@ static void clock_roll_rebuild(ClockRollLine& roll, const char* text) {
     lv_obj_set_size(cell, width, roll.line_h);
     lv_obj_remove_flag(cell, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_remove_flag(cell, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_t* strip = lv_obj_create(cell);
-    if (!strip) break;
-    lv_obj_remove_style_all(strip);
-    lv_obj_set_size(strip, width, roll.line_h * 2);
-    lv_obj_remove_flag(strip, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_remove_flag(strip, LV_OBJ_FLAG_CLICKABLE);
-    clock_roll_label(strip, roll.font, width, 0, ch);
-    clock_roll_label(strip, roll.font, width, roll.line_h, ch);
-    roll.strips[i] = strip;
+    clock_roll_label(cell, roll.font, width, 0, ch);
+    clock_roll_label(cell, roll.font, width, roll.line_h, ch);
+    roll.cells[i] = cell;
   }
   roll.count = static_cast<uint8_t>(count);
   memcpy(roll.text, text, count);
@@ -382,16 +384,16 @@ static bool clock_roll_set_text(ClockRollLine& roll, const char* text, bool anim
     return true;
   }
   for (size_t i = 0; i < count; ++i) {
-    if (text[i] == roll.text[i] || !roll.strips[i]) continue;
-    lv_obj_t* strip = roll.strips[i];
-    lv_obj_t* shown = lv_obj_get_child(strip, 0);
-    lv_obj_t* incoming = lv_obj_get_child(strip, 1);
+    if (text[i] == roll.text[i] || !roll.cells[i]) continue;
+    lv_obj_t* cell = roll.cells[i];
+    lv_obj_t* shown = lv_obj_get_child(cell, 0);
+    lv_obj_t* incoming = lv_obj_get_child(cell, 1);
     if (!shown || !incoming) continue;
     // A roll still running ends at once.
-    if (lv_anim_get(strip, clock_roll_y)) {
-      lv_anim_delete(strip, clock_roll_y);
+    if (lv_anim_get(cell, clock_roll_y)) {
+      lv_anim_delete(cell, clock_roll_y);
       lv_label_set_text(shown, lv_label_get_text(incoming));
-      lv_obj_set_y(strip, 0);
+      clock_roll_y(cell, 0);
     }
     const char ch[2] = {text[i], '\0'};
     lv_label_set_text(incoming, ch);
@@ -401,7 +403,7 @@ static bool clock_roll_set_text(ClockRollLine& roll, const char* text, bool anim
     }
     lv_anim_t anim;
     lv_anim_init(&anim);
-    lv_anim_set_var(&anim, strip);
+    lv_anim_set_var(&anim, cell);
     lv_anim_set_exec_cb(&anim, clock_roll_y);
     lv_anim_set_values(&anim, 0, -roll.line_h);
     lv_anim_set_duration(&anim, 450);

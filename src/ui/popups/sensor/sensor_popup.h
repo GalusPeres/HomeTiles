@@ -23,9 +23,11 @@ struct SensorPopupInit {
   // takes the same color as the tile icon for the current state.
   String icon_colors;
   // Rules that force the tile icon color (another entity, entity color):
-  // the header shows the tile icon's color from the opening.
+  // the header shows the tile icon's color from the opening, and the icon of
+  // their matching rule (tile_rule_icon.h codepoint, 0 = the tile's own).
   bool forced_icon = false;
   uint32_t forced_icon_color = 0xFFFFFF;
+  uint32_t forced_icon_glyph = 0;
 };
 
 // Ordinary HA sensors with textual states use the same discrete history view
@@ -35,6 +37,12 @@ bool sensor_popup_should_use_state_history(const String& value,
                                            const String& unit);
 
 void show_sensor_popup(const SensorPopupInit& init);
+// A finger came down on a tile whose popup shows this numeric sensor's graph
+// (the Bridge's answer took ~125 ms, the popup ~110 ms to show, user
+// 2026-10-29: the graph still came after the popup): its 24 h history is
+// asked now, and the popup opened by the tap finds the answer, or the request
+// on its way, instead of asking only then.
+void sensor_popup_prefetch_history(const String& entity_id);
 void preload_sensor_popup();
 void hide_sensor_popup();
 void sensor_popup_follow_tile_color(uint32_t color);

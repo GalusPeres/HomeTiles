@@ -53,9 +53,10 @@ inline bool weather_shows_forecast(lv_coord_t card_h) { return card_h >= WEATHER
 // (renderer.cpp).
 lv_coord_t weather_forecast_text_width(const char* language);
 lv_coord_t weather_forecast_text_width();
-// The room between two days and at the card's edges: 85 % of a day's text,
-// the look of five days on the 4B's 3 x 2 card (user 2026-10-07).
-inline lv_coord_t weather_forecast_gap(lv_coord_t text_w) { return text_w * 85 / 100; }
+// The room between two days and at the card's edges: at least half a day's
+// text (user 2026-10-27, mockup build/design-mockups/weather-days: one day
+// more on every card; 2026-10-07 took 85 %, five days on the 4B's 3 x 2).
+inline lv_coord_t weather_forecast_gap(lv_coord_t text_w) { return text_w * 50 / 100; }
 // As many days as fit with that room between and around them.
 inline uint8_t weather_forecast_count(lv_coord_t card_w) {
   const lv_coord_t text_w = weather_forecast_text_width();

@@ -238,7 +238,8 @@ void apply_state(GridType grid_type, uint8_t index,
       if (tile) {
         const String icon = binary_sensor_resolve_icon(*tile, state);
         if (icon.length()) {
-          lv_label_set_text(widgets.icon_label, getMdiChar(icon).c_str());
+          // A rule's own icon stays while its rule applies (tile_rule_icon.h).
+          tile_rule_icon::set_glyph(widgets.icon_label, getMdiChar(icon).c_str());
           tile_icon_disc::set_icon_hidden(widgets.icon_label, false);
         } else {
           tile_icon_disc::set_icon_hidden(widgets.icon_label, true);
@@ -572,6 +573,9 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
     widgets.icon_label = lv_label_create(card);
     set_label_style(widgets.icon_label, lv_color_hex(icon_color), FONT_MDI_ICONS);
     lv_label_set_text(widgets.icon_label, getMdiChar(icon).c_str());
+    // The matching rule's own icon from the first frame on.
+    tile_icon_color_rules::apply_icon(widgets.icon_label, tile.icon_colors.c_str(), rule_state_known(state),
+                                      binary_sensor_state_name(state.value), initial_label.c_str());
     lv_obj_align(widgets.icon_label, LV_ALIGN_TOP_LEFT,
                  tile_layout::scale_480(-8),
                  tile_layout::scale_480(-8));
@@ -627,11 +631,12 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
           if (!init.entity_id.length()) return;
           init.bg_color = tile_icon_source::popup_background(static_cast<lv_obj_t*>(lv_event_get_current_target(event)), init.bg_color);
           lv_color_t forced;
-          if (tile_icon_disc::forced_color(
-                  tile_icon_source::card_icon(static_cast<lv_obj_t*>(lv_event_get_current_target(event))),
-                  forced)) {
+          lv_obj_t* tile_icon =
+              tile_icon_source::card_icon(static_cast<lv_obj_t*>(lv_event_get_current_target(event)));
+          if (tile_icon_disc::forced_color(tile_icon, forced)) {
             init.forced_icon = true;
             init.forced_icon_color = lv_color_to_u32(forced) & 0xFFFFFF;
+            tile_rule_icon::shown(tile_icon, init.forced_icon_glyph);
           }
           finish_press_before_popup(event);
           show_binary_sensor_popup(init);

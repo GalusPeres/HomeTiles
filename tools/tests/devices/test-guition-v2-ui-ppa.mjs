@@ -101,6 +101,7 @@ inline int xSemaphoreTake(SemaphoreHandle_t sem, uint32_t timeout) {
   if (timeout == 800 && finish_in_grace) ready_signal = 1;
   int result = ready_signal; ready_signal = 0; return result;
 }
+inline int uxSemaphoreGetCount(SemaphoreHandle_t sem) { assert(sem); return ready_signal; }
 inline int ppa_register_client(const ppa_client_config_t* cfg, ppa_client_handle_t* out) {
   assert(cfg->oper_type == PPA_OPERATION_SRM); ++registered;
   *out = register_error ? nullptr : reinterpret_cast<void*>(1);

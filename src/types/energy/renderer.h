@@ -11,3 +11,8 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
                              uint8_t index,
                              GridType grid_type);
 
+struct EnergyEntryData;
+
+// A new day answer for an Energy source: the tiles showing its bars take the
+// hours and redraw (sensor_display_mode 2).
+void energy_tile_bars_update(const EnergyEntryData& entry);

@@ -5,6 +5,7 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 import {lvglHost} from '../../lib/lvgl-host.mjs';
+import {ruleIconSource} from '../../lib/rule-icon-source.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
@@ -127,6 +128,8 @@ uint32_t mdiUnknownIconCodepoint(){return 0;}uint32_t getMdiCodepoint(const Stri
 ${read('src/types/media/state_icon.h').replace(/^#.*$/gm,'')}
 using TileType=int;constexpr int TILE_MEDIA=7;struct Tile{TileType type=TILE_MEDIA;};Tile test_tile;
 const Tile* tile_renderer_get_tile_config(GridType,uint8_t){return &test_tile;}String media_tile_icon_name(const Tile&){return "speaker";}
+#include "src/tiles/config/tile_icon_colors.h"
+${ruleIconSource(root)}
 ${fn('update_media_tile_state')}
 ${runtime.match(/struct MediaUpdate \{[\s\S]*?\n};/)[0]}
 constexpr int MEDIA_QUEUE_SIZE=24;MediaUpdate g_media_queue[24];uint8_t g_media_head=0,g_media_tail=0;

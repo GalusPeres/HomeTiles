@@ -1,14 +1,15 @@
 #pragma once
 
-// Beta builds log every visible label whose text does not fit: cut,
+// Turned on, it logs every visible label whose text does not fit: cut,
 // ellipsized or scrolled in its box, taller than a fixed box, or wider than
 // a parent that clips it. Used to check translations on the device (user
 // 2026-10-03: French and Polish must fit every screen). Release builds
 // compile it out.
-#if defined(HOMETILES_TEST_BETA) || defined(HOMETILES_ISSUE38_BETA) || \
-    defined(HOMETILES_CAMERA_BETA)
-#define HOMETILES_TEXT_FIT_PROBE 1
-#endif
+//
+// A translation check turns it on here: every 2 s it measures every visible
+// label, and the test builds are judged by feel against the releases (user
+// 2026-10-28: "die alte Version war ueberall schneller").
+// #define HOMETILES_TEXT_FIT_PROBE 1
 
 namespace text_fit_probe {
 

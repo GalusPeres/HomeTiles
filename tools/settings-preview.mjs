@@ -81,8 +81,12 @@ const step = Number(option('step') || 0);
 // --lang=<code> renders the firmware in that language, any registered one
 // (the mockup stays English).
 const language = option('lang') || 'en';
-// --keys=accents shows the keyboard's accent page (with --entry).
+// --keys=accents shows the keyboard's accent page, latin the QWERTY page of
+// a layout with its own alphabet (Russian), shift the capitals (with --entry).
 const keys = option('keys');
+const keysCode = {accents: 'settings_keyboard::g_kb.accents = true;', latin: 'settings_keyboard::g_kb.latin = true;',
+  shift: 'settings_keyboard::g_kb.shift = true;'}[keys];
+if (keys !== undefined && !keysCode) throw new Error(`unknown keys ${keys}`);
 const dialogs = {github: 'git', restart: 'restart', unpair: 'encOff', password: 'pwOff', pairing: 'code', leave: 'wzExit'};
 if (dialog !== undefined && !(dialog in dialogs)) throw new Error(`unknown dialog ${dialog}`);
 const categories = {display: 0, wifi: 1, localization: 2, system: 3, setup: 0};
@@ -140,12 +144,12 @@ const Code = language[0].toUpperCase() + language.slice(1);
 if (!codes.includes(Code)) throw new Error(`unknown language ${language}`);
 const enTable = codes.map(code => table(`kStrings${code}`)).join('\n');
 // A language's name and keyboard from its LocaleProfile: the second entry
-// and the last two (keyboard_layout, keyboard_letters).
+// and keyboard_layout, keyboard_letters (before the Energy period labels).
 const localeOf = code => {
   const start = i18nSource.indexOf(`static const LocaleProfile kLocale${code} = {`);
   const body = i18nSource.slice(start, i18nSource.indexOf('static const ', start + 10));
   const name = /=\s*\{\s*"[^"]*",\s*("[^"]*")/.exec(body)[1];
-  const tail = /\s(\d+),(?:\s*\/\/[^\n]*)?\s*("(?:[^"\\]|\\.)*")\s*,?\s*\};/.exec(body);
+  const tail = /\s(\d+),(?:\s*\/\/[^\n]*)?\s*("(?:[^"\\]|\\.)*")\s*,?\s*(?:\{[^{}]*\}\s*)?\};/.exec(body);
   return {name, layout: Number(tail[1]), letters: tail[2]};
 };
 const locales = codes.map(localeOf);
@@ -222,7 +226,13 @@ struct Manager { Config cfg; const Config& getConfig() { return cfg; } } configM
 ${surfaceStyleHost(root)}
 enum : int { TILE_SENSOR = 1, TILE_BINARY_SENSOR, TILE_ENERGY, TILE_SCENE, TILE_FOLDER, TILE_BACK, TILE_CAMERA, TILE_SETTINGS,
   TILE_NUMBER, TILE_SELECT, TILE_DATETIME, TILE_LOCK, TILE_ALARM, TILE_FAN, TILE_CLOCK, TILE_SWITCH, TILE_COVER, TILE_CLIMATE,
-  TILE_TEXT };
+  TILE_TEXT, TILE_CALENDAR, TILE_VACUUM };
+// PSRAM tables (psram_static.h) come from the host's heap.
+#include <new>
+#define MALLOC_CAP_SPIRAM 0
+#define MALLOC_CAP_8BIT 0
+inline void* heap_caps_malloc(size_t bytes, int) { return malloc(bytes); }
+${strip(read('src/core/memory/psram_static.h'))}
 ${strip(read('src/tiles/config/tile_geometry.h'))}
 ${strip(read('src/tiles/config/grid_layout.h'))}
 ${strip(read('src/ui/popups/popup_layout.h'))}
@@ -302,7 +312,7 @@ bool time_text(char* buf, size_t len) { snprintf(buf, len, "%s", "${time}"); ret
 bool update_available() { return false; }
 // Localization: English, Berlin, the rest Auto (mockup st.loc).
 uint8_t locale_option_count(LocaleList list) {
-  static const uint8_t kCounts[] = {${codes.length}, 27, 3, 4, 4};
+  static const uint8_t kCounts[] = {${codes.length}, 27, 3, 4, 5};
   return kCounts[static_cast<int>(list)];
 }
 const char* locale_option(LocaleList list, uint8_t index) {
@@ -311,7 +321,7 @@ const char* locale_option(LocaleList list, uint8_t index) {
   static const char* const kTimes[] = {"Auto (language)", "24-hour", "12-hour"};
   static const char* const kDates[] = {"Auto (language)", "DD.MM.YYYY", "MM/DD/YYYY", "YYYY/MM/DD"};
   static const char* const kKeyboards[] = {"Auto (language)", "Deutsch (QWERTZ)", "English (QWERTY)",
-                                           "Fran\xC3\xA7" "ais (AZERTY)"};
+                                           "Fran\xC3\xA7" "ais (AZERTY)", "Русский (ЙЦУКЕН)"};
   switch (list) {
     case LocaleList::Language: return kLanguages[index];
     case LocaleList::TimeZone: return kZones[index];
@@ -464,7 +474,7 @@ int main(int argc, char** argv) {
   ${open === undefined ? '' : `setup_screen::open_locale_list(${Number(open)});`}
   ${press === undefined ? '' : `lv_obj_add_state(setup_screen::g_locale_rows[${Number(press)}].row, LV_STATE_PRESSED);`}
   ${entry === undefined ? '' : `setup_screen::open_entry(${entry === 'manual'}, "FRITZ!Box 7590 XY");`}
-  ${keys === 'accents' ? 'settings_keyboard::g_kb.accents = true; settings_keyboard::lay_out();' : ''}
+  ${keysCode ? `${keysCode} settings_keyboard::lay_out();` : ''}
   ${dialog === 'leave' ? 'setup_screen::open_leave_dialog();' : ''}
   ${option('drag') === 'up' ? `{
     // The step's list that scrolls in itself (step 0: the language group on
@@ -501,7 +511,7 @@ int main(int argc, char** argv) {
   }` : ''}
   ${args.includes('--press-close') ? 'lv_obj_add_state(settings_screen::g_close, LV_STATE_PRESSED);' : ''}
   ${entry === undefined ? '' : `settings_screen::open_entry(${entry === 'manual'}, "FRITZ!Box 7590 XY");`}
-  ${keys === 'accents' ? 'settings_keyboard::g_kb.accents = true; settings_keyboard::lay_out();' : ''}
+  ${keysCode ? `${keysCode} settings_keyboard::lay_out();` : ''}
   ${dialog === undefined || dialog === 'pairing' ? '' : `settings_screen::open_dialog(settings_screen::Dialog::${{github: 'GitHub', restart: 'Restart', unpair: 'Unpair', password: 'RemovePassword'}[dialog]});`}
   `}
   ui_surface_style::process_pending_updates();

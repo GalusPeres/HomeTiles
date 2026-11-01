@@ -1011,6 +1011,8 @@
         ? tile.switch_style
         : (tile.sensor_decimals === 1 ? 1 : 0);
       fd.append('switch_style', style);
+      // The bar upright (bar_orientation.h); older exports have none.
+      fd.append('bar_orientation', Number(tile.bar_orientation) === 1 ? '1' : '0');
       fd.append('sensor_value_font', tile.sensor_value_font ?? 0);
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
@@ -1052,6 +1054,13 @@
       if (tile.sensor_value_y_offset !== undefined && tile.sensor_value_y_offset !== null && String(tile.sensor_value_y_offset).length > 0) {
         fd.append('sensor_value_y_offset', tile.sensor_value_y_offset);
       }
+      // The bars below the header (2); the screensaver shows the value alone.
+      const screensaverEnergy = Number(folderId) === Number(SCREENSAVER_FOLDER_ID);
+      fd.append('sensor_display_mode', !screensaverEnergy && Number(tile.sensor_display_mode) === 2 ? '2' : '0');
+    } else if (safeType === 28) {
+      fd.append('flow_entities', tile.flow_entities || '');
+      const bits = Number(tile.key_code) || 0;
+      for (const [name, bit] of POWER_FLOW_OPTIONS) fd.append(name, (bits & bit) ? '1' : '0');
     } else if (safeType === MEDIA_TILE_TYPE) {
       fd.append('media_entity', tile.sensor_entity || tile.media_entity || '');
       fd.append('media_layout', Number(tile.sensor_display_mode) === 1 ? '1' : '0');
@@ -1076,9 +1085,24 @@
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }
-    } else if (safeType === 24 || safeType === 25 || safeType === 26) {
+    } else if (safeType === 27) {
+      // The calendars, view and first day of the week (types/calendar/web.cpp).
+      const calendars = calendarEntitiesOf(tile.sensor_entity || tile.calendar_entities || '');
+      CALENDAR_FIELDS.forEach((field, i) => fd.append(field, calendars[i] || ''));
+      fd.append('calendar_view', String(Number(tile.sensor_display_mode) || 0));
+      fd.append('calendar_week_start', String(tile.sensor_decimals ?? 255));
+      if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
+        fd.append('popup_open_mode', tile.popup_open_mode);
+      }
+    } else if (safeType === 24 || safeType === 25 || safeType === 26 || safeType === 29) {
       const kind = devicePreviewKind(safeType);
       fd.append(kind + '_entity', tile.sensor_entity || tile[kind + '_entity'] || '');
+      if (safeType === 26) fd.append('bar_orientation', Number(tile.bar_orientation) === 1 ? '1' : '0');
+      if (safeType === 29) {
+        fd.append('vacuum_layout', Number(tile.sensor_display_mode) === 1 ? '1' : '0');
+        fd.append('vacuum_map', tile.vacuum_map || '');
+        fd.append('vacuum_every', String(Math.max(3, Math.min(60, Number(tile.image_slideshow_sec) || 5))));
+      }
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }

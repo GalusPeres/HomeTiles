@@ -10,6 +10,7 @@
 #include <Arduino.h>
 #include <lvgl.h>
 #include <lvgl_private.h>
+#include <stdlib.h>
 #include "src/ui/popups/popup_shell.h"
 
 // Diagnostic builds only: one current touch, no history, buffers or timers.
@@ -97,12 +98,15 @@ inline uint32_t descendants(lv_obj_t* obj) {
 // One line: each part's time in ms (blocks under 0.5 ms left out), its size
 // and how many objects it holds.
 inline void report_segments() {
-  static char line[1024];
-  size_t used = snprintf(line, sizeof(line), "[PopupDraw] under=%lu.%lu",
+  // In the heap (PSRAM on the S3), not in internal RAM (psram_static.h).
+  constexpr size_t kLineBytes = 1024;
+  static char* const line = static_cast<char*>(malloc(kLineBytes));
+  if (!line) return;
+  size_t used = snprintf(line, kLineBytes, "[PopupDraw] under=%lu.%lu",
                          static_cast<unsigned long>(segments[0].us / 1000),
                          static_cast<unsigned long>(segments[0].us / 100 % 10));
   int overlay_child = 0, body_child = 0;
-  for (int i = 1; i < segment_count && used < sizeof(line); ++i) {
+  for (int i = 1; i < segment_count && used < kLineBytes; ++i) {
     const Segment& s = segments[i];
     char name[12];
     if (s.kind == 'v') snprintf(name, sizeof(name), "overlay");
@@ -110,12 +114,12 @@ inline void report_segments() {
     else if (s.kind == 'o') snprintf(name, sizeof(name), "o%d", overlay_child++);
     else snprintf(name, sizeof(name), "b%d", body_child++);
     if (s.us < 500) continue;
-    used += snprintf(line + used, sizeof(line) - used, " | %s %ldx%ld n=%lu %lu.%lu", name,
+    used += snprintf(line + used, kLineBytes - used, " | %s %ldx%ld n=%lu %lu.%lu", name,
                      static_cast<long>(lv_obj_get_width(s.obj)), static_cast<long>(lv_obj_get_height(s.obj)),
                      static_cast<unsigned long>(descendants(s.obj)), static_cast<unsigned long>(s.us / 1000),
                      static_cast<unsigned long>(s.us / 100 % 10));
   }
-  if (unmarked && used < sizeof(line)) snprintf(line + used, sizeof(line) - used, " | %d unmarked", unmarked);
+  if (unmarked && used < kLineBytes) snprintf(line + used, kLineBytes - used, " | %d unmarked", unmarked);
   Serial.printf("%s\n", line);
 }
 

@@ -2727,6 +2727,7 @@ async function saveGestureEdge(select) {
     }
     const hasMeta = Object.prototype.hasOwnProperty.call(payload, 'editable_values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'device_values') ||
+                    Object.prototype.hasOwnProperty.call(payload, 'calendar_values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'units') ||
                     Object.prototype.hasOwnProperty.call(payload, 'icons') ||
@@ -2751,6 +2752,8 @@ async function saveGestureEdge(select) {
       editableValues: payload.editable_values || payload.editableValues || {},
       // Lock, Alarm panel and Fan detail states (types/device).
       deviceValues: payload.device_values || payload.deviceValues || {},
+      // Calendar events (types/calendar).
+      calendarValues: payload.calendar_values || payload.calendarValues || {},
       // Weather and media tile states, the payloads their tiles draw.
       weatherValues: payload.weather_values || payload.weatherValues || {},
       mediaValues: payload.media_values || payload.mediaValues || {},
@@ -3045,12 +3048,12 @@ async function saveGestureEdge(select) {
     ['climate'], ['media_player'], ['weather'], ['camera'], ['lock'], ['alarm_control_panel'],
     ['number', 'input_number'], ['select', 'input_select'],
     ['datetime', 'date', 'time', 'input_datetime'], ['scene'], ['script'], ['button', 'input_button'],
-    ['automation'], ['humidifier'], ['siren'], ['remote']
+    ['automation'], ['humidifier'], ['siren'], ['remote'], ['calendar'], ['vacuum']
   ];
   // Lists the Bridge searches (entity_search.py LIST_DOMAINS).
   const ENTITY_REMOTE_LISTS = new Set(['sensors', 'binary_sensors', 'numbers', 'selects', 'datetimes',
     'weathers', 'switches', 'media', 'climates', 'covers', 'cameras', 'images', 'locks', 'alarm_panels', 'fans',
-    'energy', 'scenes']);
+    'energy', 'scenes', 'calendars', 'vacuums']);
   const ENTITY_REMOTE_DELAY_MS = 250;
   const ENTITY_REMOTE_POLL_MS = 120;
   const ENTITY_REMOTE_TIMEOUT_MS = 5000;
@@ -3863,6 +3866,10 @@ async function saveGestureEdge(select) {
   // hidden `<tab>_tile_icon` input: empty = automatic (the entity's own
   // icon, also its state icons), "none" = no icon, else an MDI name from the
   // panel's own list (/api/mdi_icons).
+  // The same picker sets a rule's own icon (tile_icon_colors_html.cpp): a
+  // button with data-icon-input names its hidden field (data-icon-value, when
+  // set, is the icon it shows); empty keeps the tile's own icon, and a rule
+  // has no "No icon".
 
   const ICON_PICKER_STEP = 240;
   const tileHeadNativeTitle = typeof HTMLTextAreaElement === 'function'
@@ -3872,7 +3879,7 @@ async function saveGestureEdge(select) {
   let mdiIconNames = null;
   let mdiIconFetch = null;
   let iconPickerPopover = null;
-  let iconPickerOpen = null;  // {tab, query, matches, shown, active, state}
+  let iconPickerOpen = null;  // {tab, input, button, rule, query, matches, shown, active, state}
 
   function fetchMdiIconNames() {
     if (mdiIconNames) return Promise.resolve(mdiIconNames);
@@ -4002,21 +4009,22 @@ async function saveGestureEdge(select) {
   function iconPickerChoose(value) {
     const open = iconPickerOpen;
     if (!open) return;
-    const input = document.getElementById(open.tab + '_tile_icon');
+    const input = document.getElementById(open.input);
     closeIconPicker(true);
-    if (!input || input.value === value) return;
+    if (!input || iconPickerCurrent(open) === value) return;
     input.value = value;
     input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  function iconPickerCurrent(tab) {
-    const raw = String(document.getElementById(tab + '_tile_icon')?.value || '').trim();
-    return isExplicitlyDisabledValue(raw) ? 'none' : normalizeMdiIconName(raw);
+  function iconPickerCurrent(open) {
+    const shown = open.button?.dataset.iconValue;
+    const raw = String(shown ?? document.getElementById(open.input)?.value ?? '').trim();
+    return !open.rule && isExplicitlyDisabledValue(raw) ? 'none' : normalizeMdiIconName(raw);
   }
 
   function iconPickerCellsHtml(from, to) {
     const open = iconPickerOpen;
-    const current = iconPickerCurrent(open.tab);
+    const current = iconPickerCurrent(open);
     let html = '';
     for (let index = from; index < to; index++) {
       const name = open.matches[index];
@@ -4031,17 +4039,19 @@ async function saveGestureEdge(select) {
     const open = iconPickerOpen;
     const list = iconPickerPopover?.querySelector('.icon-picker-list');
     if (!open || !list) return;
-    const current = iconPickerCurrent(open.tab);
+    const current = iconPickerCurrent(open);
     const choice = (value, icon, name, hint) =>
       '<button type="button" class="icon-picker-choice' + (current === value ? ' selected' : '') + '" data-icon="' +
       value + '"><span class="entity-picker-icon"><i class="mdi mdi-' + escapeHtml(icon) + '"></i></span>' +
       '<span class="entity-picker-text"><span class="entity-picker-name">' + escapeHtml(name) + '</span>' +
       '<span class="entity-picker-context">' + escapeHtml(hint) + '</span></span></button>';
-    // Home's head always shows its circle: no "No icon" there.
-    const none = document.getElementById(open.tab + '_tile_icon')?.dataset.autoIcon
+    // Home's head always shows its circle: no "No icon" there, nor for a
+    // rule, whose Automatic keeps the tile's own icon.
+    const none = open.rule || document.getElementById(open.tab + '_tile_icon')?.dataset.autoIcon
       ? '' : choice('none', 'cancel', t('iconPickerNone'), t('iconPickerNoneHint'));
     let html = open.query ? '' : '<div class="icon-picker-choices' + (none ? '' : ' single') + '">' +
-      choice('', tileAutomaticIcon(open.tab), t('iconPickerAuto'), t('iconPickerAutoHint')) + none + '</div>';
+      choice('', tileAutomaticIcon(open.tab), t('iconPickerAuto'),
+        t(open.rule ? 'iconPickerRuleHint' : 'iconPickerAutoHint')) + none + '</div>';
     if (open.state === 'loading') {
       html += '<div class="entity-picker-loading"><div></div><div></div><div></div></div>';
     } else if (open.state === 'failed') {
@@ -4082,7 +4092,7 @@ async function saveGestureEdge(select) {
     // icon is marked.
     open.active = open.query ? 0 : -1;
     if (!open.query) {
-      const current = open.matches.indexOf(iconPickerCurrent(open.tab));
+      const current = open.matches.indexOf(iconPickerCurrent(open));
       if (current >= 0) {
         open.active = current;
         open.shown = Math.min(open.matches.length, Math.max(open.shown, current + ICON_PICKER_STEP));
@@ -4113,7 +4123,10 @@ async function saveGestureEdge(select) {
 
   function placeIconPicker() {
     const open = iconPickerOpen;
-    const row = open && document.getElementById(open.tab + '_tile_title')?.closest('.tile-head-row');
+    // The tile head's row, or a rule's section across the panel at the
+    // height of its button.
+    const row = !open ? null : open.rule ? open.button?.closest('.icon-color-section')
+      : document.getElementById(open.tab + '_tile_title')?.closest('.tile-head-row');
     if (!row || !iconPickerPopover) return;
     const pop = iconPickerPopover;
     if (window.innerWidth <= 560) {
@@ -4122,7 +4135,9 @@ async function saveGestureEdge(select) {
       return;
     }
     pop.classList.remove('sheet');
-    const rect = row.getBoundingClientRect();
+    const across = row.getBoundingClientRect();
+    const own = open.rule ? open.button.getBoundingClientRect() : across;
+    const rect = { left: across.left, width: across.width, top: own.top, bottom: own.bottom };
     const below = window.innerHeight - rect.bottom - 12;
     const above = rect.top - 12;
     const up = below < 300 && above > below;
@@ -4133,7 +4148,9 @@ async function saveGestureEdge(select) {
     pop.style.top = (up ? Math.max(8, rect.top - 6 - Math.min(height, pop.offsetHeight || height)) : rect.bottom + 6) + 'px';
   }
 
-  function openIconPicker(tab) {
+  // `button`: a rule's icon button (data-icon-input); without one the tile
+  // head's picker.
+  function openIconPicker(tab, button = null) {
     closeIconPicker(false);
     if (typeof closeEntityPicker === 'function') closeEntityPicker(false);
     if (!iconPickerPopover) {
@@ -4147,8 +4164,10 @@ async function saveGestureEdge(select) {
     const search = iconPickerPopover.querySelector('input');
     search.value = '';
     search.placeholder = t('iconPickerSearch');
-    iconPickerOpen = { tab, query: '', matches: [], shown: 0, active: 0, state: 'loading' };
-    const button = document.getElementById(tab + '_tile_icon_picker');
+    const rule = !!button;
+    if (!button) button = document.getElementById(tab + '_tile_icon_picker');
+    iconPickerOpen = { tab, input: rule ? button.dataset.iconInput : tab + '_tile_icon', button, rule,
+      query: '', matches: [], shown: 0, active: 0, state: 'loading' };
     button?.classList.add('open');
     button?.setAttribute('aria-expanded', 'true');
     iconPickerPopover.classList.add('open');
@@ -4164,7 +4183,7 @@ async function saveGestureEdge(select) {
     if (!open) return;
     iconPickerOpen = null;
     iconPickerPopover?.classList.remove('open');
-    const button = document.getElementById(open.tab + '_tile_icon_picker');
+    const button = open.button;
     button?.classList.remove('open');
     button?.setAttribute('aria-expanded', 'false');
     if (focusButton) button?.focus();
@@ -4201,8 +4220,15 @@ async function saveGestureEdge(select) {
     const button = target?.closest?.('.tile-icon-picker');
     if (button) {
       const tab = tileHeadTab(button);
-      if (iconPickerOpen?.tab === tab) closeIconPicker(true);
+      if (iconPickerOpen?.button === button) closeIconPicker(true);
       else openIconPicker(tab);
+      return;
+    }
+    const ruleButton = target?.closest?.('button[data-icon-input]');
+    if (ruleButton) {
+      const tab = ruleButton.closest('[data-tab]')?.dataset.tab || '';
+      if (iconPickerOpen?.button === ruleButton) closeIconPicker(true);
+      else if (tab) openIconPicker(tab, ruleButton);
       return;
     }
     if (!iconPickerOpen) return;
@@ -4428,7 +4454,7 @@ async function saveGestureEdge(select) {
     // data, its entity and options returned with the next tile in the slot.
     const tile = Number(snapshot?.type) === 0 ? {} : Object.assign({}, prev);
     const layout = normalizeSnapshotLayout(snapshot, index, tab);
-    const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity', 'icon_disc', 'icon_glow'];
+    const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'bar_orientation', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity', 'icon_disc', 'icon_glow'];
 
     tile.type = clampInt(snapshot?.type, 0, 255, Number(prev.type) || 0);
     tile.title = snapshot?.title || '';
@@ -4487,8 +4513,26 @@ async function saveGestureEdge(select) {
       tile.key_code = cameraTransparency(snapshot.camera_transparency);
       tile.key_modifier = cameraOptionFlags({head: snapshot.camera_head, tap: snapshot.camera_tap});
     }
-    for (const kind of ['lock', 'alarm', 'fan']) {
+    for (const kind of ['lock', 'alarm', 'fan', 'vacuum']) {
       if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, kind + '_entity')) tile.sensor_entity = snapshot[kind + '_entity'] || '';
+    }
+    // The Vacuum popup's layout (types/device/web.cpp vacuum_layout).
+    if (Number(tile.type) === 29 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'vacuum_layout')) {
+      tile.sensor_display_mode = String(snapshot.vacuum_layout) === '1' ? 1 : 0;
+    }
+    if (Number(tile.type) === 29 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'vacuum_map')) {
+      tile.vacuum_map = snapshot.vacuum_map || '';
+    }
+    if (Number(tile.type) === 29 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'vacuum_every')) {
+      tile.image_slideshow_sec = Math.max(3, Math.min(60, Number(snapshot.vacuum_every) || 5));
+    }
+    // Calendar: the view and the first day of the week (types/calendar/web.h).
+    if (Number(tile.type) === 27 && snapshot) {
+      if (Object.prototype.hasOwnProperty.call(snapshot, 'calendar_view')) tile.sensor_display_mode = Number(snapshot.calendar_view) || 0;
+      if (Object.prototype.hasOwnProperty.call(snapshot, 'calendar_week_start')) {
+        const value = Number(snapshot.calendar_week_start);
+        tile.sensor_decimals = [0, 1, 6].includes(value) ? value : 255;
+      }
     }
     if (snapshot && (Object.prototype.hasOwnProperty.call(snapshot, 'clock_show_time') || Object.prototype.hasOwnProperty.call(snapshot, 'clock_show_date'))) {
       let flags = 0;
@@ -4521,6 +4565,10 @@ async function saveGestureEdge(select) {
     }
     if ([8,9,10].includes(Number(tile.type)) && snapshot?.tile_border !== undefined) {
       tile.sensor_display_mode = ['0','false'].includes(String(snapshot.tile_border)) ? 1 : 0;
+    }
+    // The Power flow options in their stored field (types/power_flow/admin.js).
+    if (Number(tile.type) === 28 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'flow_header')) {
+      tile.key_code = powerFlowOptionBits(snapshot);
     }
     if (Number(tile.type) === 12 && snapshot?.weather_colored_icons !== undefined) {
       tile.sensor_display_mode = ['0','false'].includes(String(snapshot.weather_colored_icons)) ? 1 : 0;
@@ -4577,12 +4625,12 @@ async function saveGestureEdge(select) {
   // (tileTypeHasFixedIconColorOnly / tileTypeRulesUseOwnEntity in
   // tile_type_policy.h).
   const ICON_COLOR_FIXED_TYPES = ['2', '4', '8', '9', '10', '18'];
-  const ICON_COLOR_OWN_TYPES = ['1', '5', '12', '14', '15', '17', '19', '20', '21', '22', '23', '24', '25', '26'];
+  const ICON_COLOR_OWN_TYPES = ['1', '5', '12', '14', '15', '17', '19', '20', '21', '22', '23', '24', '25', '26', '29'];
   // The own entity field of each type (pairs, not an object with numeric keys).
   const ICON_COLOR_ENTITY_FIELDS = [['1', '_sensor_entity'], ['5', '_switch_entity'], ['12', '_weather_entity'],
     ['14', '_energy_entity'], ['15', '_media_entity'], ['17', '_climate_entity'], ['19', '_cover_entity'],
     ['20', '_binary_sensor_entity'], ['21', '_number_entity'], ['22', '_select_entity'], ['23', '_datetime_entity'],
-    ['24', '_lock_entity'], ['25', '_alarm_entity'], ['26', '_fan_entity']];
+    ['24', '_lock_entity'], ['25', '_alarm_entity'], ['26', '_fan_entity'], ['29', '_vacuum_entity']];
   // Domains shown by the Switch tile (tile_icon_source.cpp switch_domain).
   const ICON_COLOR_SWITCH_DOMAINS = ['light', 'switch', 'input_boolean', 'automation', 'fan',
     'humidifier', 'remote', 'siren'];
@@ -4626,6 +4674,27 @@ async function saveGestureEdge(select) {
   function iconColorParseHex(text) {
     const match = /^#?([0-9a-fA-F]{6})$/.exec(String(text));
     return match ? parseInt(match[1], 16) : null;
+  }
+
+  // valid_icon(): a rule's own icon (user 2026-10-28) is an MDI name of
+  // lowercase letters, digits and dashes, at most 48 characters.
+  function iconColorValidIcon(name) {
+    return /^[a-z0-9-]{1,48}$/.test(String(name ?? ''));
+  }
+
+  // parse_color_icon(): "RRGGBB" or "RRGGBB,<icon>".
+  function iconColorParseHexIcon(text) {
+    const value = String(text);
+    const comma = value.indexOf(',');
+    const icon = comma < 0 ? '' : value.slice(comma + 1);
+    if (comma >= 0 && !iconColorValidIcon(icon)) return null;
+    const color = iconColorParseHex(comma < 0 ? value : value.slice(0, comma));
+    return color === null ? null : { color, icon };
+  }
+
+  // append_icon(): ",<icon>" after a color, nothing without one.
+  function iconColorIconSuffix(icon) {
+    return iconColorValidIcon(icon) ? ',' + icon : '';
   }
 
   function iconColorHex(rgb) {
@@ -4681,8 +4750,9 @@ async function saveGestureEdge(select) {
     return needle.length > 0 && haystack.includes(needle);
   }
 
-  // parse_rule(): "<op>[+|-] RRGGBB <value>"; `fill` is the state line's own
-  // "Fuellen" (1 "is+", 0 "is-", -1 a plain "is" following the "fill" line).
+  // parse_rule(): "<op>[+|-] RRGGBB[,<icon>] <value>"; `fill` is the state
+  // line's own "Fuellen" (1 "is+", 0 "is-", -1 a plain "is" following the
+  // "fill" line), `icon` its own icon ('' without one).
   function iconColorParseRule(line) {
     const text = iconColorTrim(line);
     const space = text.indexOf(' ');
@@ -4695,10 +4765,10 @@ async function saveGestureEdge(select) {
     if (!['ge', 'le', 'eq', 'is', 'has'].includes(op)) return null;
     const rest = text.slice(space + 1);
     const colorEnd = rest.indexOf(' ');
-    const color = iconColorParseHex(colorEnd < 0 ? rest : rest.slice(0, colorEnd));
-    if (color === null) return null;
+    const parsed = iconColorParseHexIcon(colorEnd < 0 ? rest : rest.slice(0, colorEnd));
+    if (!parsed) return null;
     const value = colorEnd < 0 ? '' : iconColorTrim(rest.slice(colorEnd));
-    return value ? { op, color, value, fill } : null;
+    return value ? { op, color: parsed.color, icon: parsed.icon, value, fill } : null;
   }
 
   // tile_icon_colors::rows_fill(): a state line with its own "Fuellen".
@@ -4712,13 +4782,13 @@ async function saveGestureEdge(select) {
     return stops.sort((a, b) => a.position - b.position);
   }
 
-  // parse_stop(): "P:RRGGBB", P with 1-4 digits, clamped to 0..1000.
+  // parse_stop(): "P:RRGGBB[,<icon>]", P with 1-4 digits, clamped to 0..1000.
   function iconColorParseStop(token) {
     const colon = token.indexOf(':');
     if (colon < 1 || colon > 4 || !/^[0-9]+$/.test(token.slice(0, colon))) return null;
-    const color = iconColorParseHex(token.slice(colon + 1));
-    if (color === null) return null;
-    return { position: Math.min(Number(token.slice(0, colon)), 1000), color };
+    const parsed = iconColorParseHexIcon(token.slice(colon + 1));
+    if (!parsed) return null;
+    return { position: Math.min(Number(token.slice(0, colon)), 1000), color: parsed.color, icon: parsed.icon };
   }
 
   // parse_bar(): "bar <smooth|steps> <min> <max> <P>:<RRGGBB> ...".
@@ -4816,12 +4886,27 @@ async function saveGestureEdge(select) {
     return iconColorBarColorAt(bar, (value - bar.min) / (bar.max - bar.min));
   }
 
+  // bar_icon(): the icon of the last stop at or below the value (the first
+  // stop below it), on smooth bars too: an icon cannot blend.
+  function iconColorBarIcon(bar, value) {
+    let t = (value - bar.min) / (bar.max - bar.min);
+    if (!(t > 0)) t = 0;
+    if (t > 1) t = 1;
+    let index = 0;
+    bar.stops.forEach((stop, i) => { if (stop.position / 1000 <= t) index = i; });
+    return bar.stops[index]?.icon || '';
+  }
+
   // resolve(): the icon color for a known state as "#RRGGBB", or '' for the
   // type default. Only v2 records are evaluated.
   // `out`, when given, receives the matching state line's own fill (`fill`:
-  // 1, 0 or -1 like iconColorParseRule).
+  // 1, 0 or -1 like iconColorParseRule) and the matching stop's or line's
+  // own icon (`icon`, '' without one).
   function resolveIconColorRecord(record, state, display, fixedFallback = true, out = null) {
-    if (out) out.fill = -1;
+    if (out) {
+      out.fill = -1;
+      out.icon = '';
+    }
     const text = String(record ?? '');
     if (!iconColorIsV2(text) || state === undefined || state === null) return '';
     const lines = text.split('\n');
@@ -4832,14 +4917,20 @@ async function saveGestureEdge(select) {
         if (barSeen) continue;
         barSeen = true;
         const bar = number !== null ? iconColorParseBar(line) : null;
-        if (bar) return '#' + iconColorHex(iconColorBarColor(bar, number));
+        if (bar) {
+          if (out) out.icon = iconColorBarIcon(bar, number);
+          return '#' + iconColorHex(iconColorBarColor(bar, number));
+        }
         continue;
       }
       const rule = iconColorParseRule(line);
       if (!rule || (rule.op !== 'is' && rule.op !== 'has')) continue;
       if (iconColorTextMatches(rule.op, rule.value, state) ||
           (display !== undefined && display !== null && iconColorTextMatches(rule.op, rule.value, display))) {
-        if (out) out.fill = rule.fill;
+        if (out) {
+          out.fill = rule.fill;
+          out.icon = rule.icon;
+        }
         return '#' + iconColorHex(rule.color);
       }
     }
@@ -4905,14 +4996,28 @@ async function saveGestureEdge(select) {
     return { mode: 'steps', min, max: highest, minText: String(min), maxText: String(highest), stops };
   }
 
+  // has_rule_lines(): a v2 record with a color bar or a state line.
+  function iconColorHasRuleLines(text) {
+    if (!iconColorIsV2(text)) return false;
+    return text.split('\n').slice(2).some(line => line.startsWith('bar ') ||
+      ['is', 'has'].includes(iconColorParseRule(line)?.op));
+  }
+
   // normalize(): any record (editor, import, b39) in the canonical v2 form;
   // numeric types keep only the bar, text types only the state lines.
   function normalizeIconColorRecord(record, allowBar, allowRows, allowSource = false, allowSelf = false,
     allowCover = false) {
     const text = String(record ?? '');
     const v2 = iconColorIsV2(text);
+    // Only the Sensor family and the Binary sensor evaluate rules on their
+    // own state themselves; every other type with an entity of its own keeps
+    // its "src rules self" line (records before b575 lost it, issue #102).
+    const ownRules = allowBar || allowRows;
     let source = allowSource ? iconColorRecordSource(text) : null;
     if (source?.self && !allowSelf) source = null;
+    if (!source && v2 && allowSource && allowSelf && !ownRules && iconColorHasRuleLines(text)) {
+      source = { mode: 'rules', self: true, entity: '', tile: 0, icon: true, enabled: true };
+    }
     if (source?.mode === 'rules') {
       if (!source.self || (!allowBar && !allowRows)) {
         allowBar = true;
@@ -4922,9 +5027,10 @@ async function saveGestureEdge(select) {
       allowBar = false;
       allowRows = false;
     }
-    // "src rules self" coloring the icon only is implicit (b40 records).
+    // "src rules self" coloring the icon only is implicit for the types that
+    // evaluate their own state (b40 records).
     const emitLayer = !!source &&
-      !(source.mode === 'rules' && source.self && source.icon && !source.tile && source.enabled);
+      !(ownRules && source.mode === 'rules' && source.self && source.icon && !source.tile && source.enabled);
     const lines = text.split('\n');
     const fixedIndex = v2 ? 1 : 0;
     const fixed = iconColorParseHex(iconColorTrim(lines[fixedIndex] ?? ''));
@@ -4948,7 +5054,7 @@ async function saveGestureEdge(select) {
     }
     if (bar) {
       out += '\nbar ' + bar.mode + ' ' + bar.minText + ' ' + bar.maxText +
-        bar.stops.map(stop => ' ' + stop.position + ':' + iconColorHex(stop.color)).join('');
+        bar.stops.map(stop => ' ' + stop.position + ':' + iconColorHex(stop.color) + iconColorIconSuffix(stop.icon)).join('');
     }
     let rows = 0;
     if (allowRows) {
@@ -4972,7 +5078,7 @@ async function saveGestureEdge(select) {
         const value = iconColorClipValue(rule.value);
         if (!value) continue;
         const mark = rule.fill === 1 ? '+' : rule.fill === 0 ? '-' : '';
-        out += '\n' + rule.op + mark + ' ' + iconColorHex(rule.color) + ' ' + value;
+        out += '\n' + rule.op + mark + ' ' + iconColorHex(rule.color) + iconColorIconSuffix(rule.icon) + ' ' + value;
         rows++;
       }
     }
@@ -5015,7 +5121,10 @@ async function saveGestureEdge(select) {
     for (const line of lines.slice(2)) {
       if (line.startsWith('bar ')) { bar = iconColorParseBar(line); continue; }
       const rule = iconColorParseRule(line);
-      if (rule) rows.push({ has: rule.op === 'has', color: '#' + iconColorHex(rule.color), value: rule.value, fill: rule.fill });
+      if (rule) {
+        rows.push({ has: rule.op === 'has', color: '#' + iconColorHex(rule.color), value: rule.value, fill: rule.fill,
+          icon: rule.icon });
+      }
     }
     return { color: fixed === null ? '' : '#' + iconColorHex(fixed), bar, rows,
       fill: iconColorFillOf(lines.slice(2)), cover: iconColorCoverOf(lines.slice(2)),
@@ -5073,7 +5182,10 @@ async function saveGestureEdge(select) {
   // states of its entity (own or other); '' without a known state or result.
   // Rules never fall back to the fixed color here.
   function iconColorLayerColor(record, layer, ownEntity, meta, typeValue, out = null) {
-    if (out) out.fill = -1;
+    if (out) {
+      out.fill = -1;
+      out.icon = '';
+    }
     if (!layer || !layer.enabled) return '';
     const entity = layer.self ? String(ownEntity || '') : layer.entity;
     if (!entity) return '';
@@ -5221,7 +5333,8 @@ async function saveGestureEdge(select) {
     const input = iconColorEl(tab, '_tile_icon_bar');
     if (!input) return;
     input.value = mode === 'off' ? ''
-      : [mode].concat(stops.map(stop => stop.position + ':' + iconColorHex(stop.color))).join(' ');
+      : [mode].concat(stops.map(stop => stop.position + ':' + iconColorHex(stop.color) + iconColorIconSuffix(stop.icon)))
+        .join(' ');
   }
 
   function iconColorSelectedStop(tab) {
@@ -5286,8 +5399,9 @@ async function saveGestureEdge(select) {
     strip.style.background = iconColorGradient(bar.mode, iconColorSortStops(bar.stops.map(stop => ({ ...stop }))));
     let knobs = Array.from(handles.querySelectorAll('.icon-color-stop'));
     let labels = Array.from(handles.querySelectorAll('.icon-color-stop-label'));
-    if (knobs.length !== bar.stops.length) {
-      knobs.concat(labels).forEach(el => el.remove());
+    let icons = Array.from(handles.querySelectorAll('.icon-color-stop-icon'));
+    if (knobs.length !== bar.stops.length || icons.length !== bar.stops.length) {
+      knobs.concat(labels, icons).forEach(el => el.remove());
       knobs = bar.stops.map((stop, index) => {
         const knob = document.createElement('button');
         knob.type = 'button';
@@ -5303,6 +5417,20 @@ async function saveGestureEdge(select) {
         handles.appendChild(label);
         return label;
       });
+      // Each stop's own icon below its value: the tile head's icon picker
+      // for the selected stop (tile-head.js data-icon-input).
+      icons = bar.stops.map((stop, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'icon-color-stop-icon';
+        button.dataset.iconColor = 'stop-icon-button';
+        button.dataset.stop = String(index);
+        button.dataset.iconInput = tab + '_tile_icon_stop_icon';
+        button.setAttribute('aria-haspopup', 'listbox');
+        button.title = typeof t === 'function' ? t('iconPickerAuto') : '';
+        handles.appendChild(button);
+        return button;
+      });
     }
     const selected = iconColorSelectedStop(tab);
     const range = iconColorBarRange(tab);
@@ -5315,6 +5443,8 @@ async function saveGestureEdge(select) {
       labels[index].textContent = range
         ? iconColorFormatValue(range.min + stop.position / 1000 * (range.max - range.min), range.max - range.min)
         : '';
+      icons[index].style.left = left;
+      renderIconColorIconButton(tab, icons[index], stop.icon || '', '#' + iconColorHex(stop.color));
     });
     const remove = handles.querySelector('[data-icon-color="stop-remove"]');
     const removable = selected >= 0 && selected < bar.stops.length && bar.stops.length > 2;
@@ -5326,6 +5456,33 @@ async function saveGestureEdge(select) {
 
   function iconColorRuleRow(tab, index) {
     return iconColorEl(tab, '_tile_icon_rule_' + index);
+  }
+
+  // A rule's icon button: its own icon in the rule's color, else the tile's
+  // own icon dimmed (data-icon-value: the icon the picker marks).
+  function renderIconColorIconButton(tab, button, icon, color) {
+    if (!button) return;
+    const own = iconColorValidIcon(icon) ? icon : '';
+    const shown = own || (typeof tileAutomaticIcon === 'function' ? tileAutomaticIcon(tab) : 'shape-outline');
+    const html = '<i class="mdi mdi-' + escapeHtml(shown) + '"></i>';
+    if (button.innerHTML !== html) button.innerHTML = html;
+    button.classList.toggle('none', !own);
+    button.style.color = own ? (normalizeIconColorHex(color) || '') : '';
+    button.dataset.iconValue = own;
+  }
+
+  function renderIconColorIconButtons(tab) {
+    for (let index = 0; index < ICON_COLOR_MAX_ROWS; index++) {
+      const row = iconColorRuleRow(tab, index);
+      if (!row || row.classList.contains('hidden')) continue;
+      renderIconColorIconButton(tab, document.getElementById(row.id + '_icon_button'),
+        document.getElementById(row.id + '_icon')?.value || '', document.getElementById(row.id + '_color')?.value || '');
+    }
+    for (const state of ['on', 'off']) {
+      const input = iconColorEl(tab, '_tile_icon_' + state);
+      renderIconColorIconButton(tab, iconColorEl(tab, '_tile_icon_' + state + '_icon_button'),
+        iconColorEl(tab, '_tile_icon_' + state + '_icon')?.value || '', input?.value || '');
+    }
   }
 
   // A row's "Fuellen" box: its own mark, else (a new row, or a line from
@@ -5352,7 +5509,8 @@ async function saveGestureEdge(select) {
         value: document.getElementById(row.id + '_value')?.value || '',
         has: !!document.getElementById(row.id + '_has')?.checked,
         color: document.getElementById(row.id + '_color')?.value || ICON_COLOR_ROW_DEFAULT,
-        fill: iconColorFillOfBox(document.getElementById(row.id + '_fill'))
+        fill: iconColorFillOfBox(document.getElementById(row.id + '_fill')),
+        icon: document.getElementById(row.id + '_icon')?.value || ''
       });
     }
     return rows;
@@ -5368,23 +5526,28 @@ async function saveGestureEdge(select) {
       const has = document.getElementById(row.id + '_has');
       const color = document.getElementById(row.id + '_color');
       const fill = document.getElementById(row.id + '_fill');
+      const icon = document.getElementById(row.id + '_icon');
+      if (icon) icon.value = entry && iconColorValidIcon(entry.icon) ? entry.icon : '';
       if (value) value.value = entry ? entry.value : '';
       if (has) has.checked = !!entry?.has;
       setIconColorFillBox(tab, fill, entry ? (entry.fill ?? -1) : -1);
       if (color) color.value = entry ? (normalizeIconColorHex(entry.color) || ICON_COLOR_ROW_DEFAULT) : ICON_COLOR_ROW_DEFAULT;
     }
     iconColorEl(tab, '_tile_icon_rule_add')?.classList.toggle('hidden', rows.length >= ICON_COLOR_MAX_ROWS);
+    renderIconColorIconButtons(tab);
   }
 
   // Binary sensor On/Off pickers; unset pickers keep the type color and
   // follow "Ausfuellen" (their "Fuellen" box shows it).
-  function setIconColorBinaryInput(tab, state, color, fill = -1) {
+  function setIconColorBinaryInput(tab, state, color, fill = -1, icon = '') {
     const input = iconColorEl(tab, '_tile_icon_' + state);
     if (!input) return;
     const hex = normalizeIconColorHex(color);
     input.value = hex || input.dataset.default || ICON_COLOR_BINARY_DEFAULTS[state];
     input.dataset.unset = hex ? '0' : '1';
     setIconColorFillBox(tab, iconColorEl(tab, '_tile_icon_' + state + '_fill'), hex ? fill : -1);
+    const iconInput = iconColorEl(tab, '_tile_icon_' + state + '_icon');
+    if (iconInput) iconInput.value = hex && iconColorValidIcon(icon) ? icon : '';
   }
 
   function readIconColorBinaryRows(tab) {
@@ -5393,7 +5556,8 @@ async function saveGestureEdge(select) {
       const input = iconColorEl(tab, '_tile_icon_' + state);
       if (input && input.dataset.unset === '0') {
         rows.push({ value: state, has: false, color: input.value,
-          fill: iconColorFillOfBox(iconColorEl(tab, '_tile_icon_' + state + '_fill')) });
+          fill: iconColorFillOfBox(iconColorEl(tab, '_tile_icon_' + state + '_fill')),
+          icon: iconColorEl(tab, '_tile_icon_' + state + '_icon')?.value || '' });
       }
     }
     return rows;
@@ -5462,7 +5626,8 @@ async function saveGestureEdge(select) {
         return /^[^ \t\r]+$/.test(text) ? text : '-';
       };
       lines.push(['bar', bar.mode, number('_tile_icon_bar_min'), number('_tile_icon_bar_max')]
-        .concat(bar.stops.map(stop => stop.position + ':' + iconColorHex(stop.color))).join(' '));
+        .concat(bar.stops.map(stop => stop.position + ':' + iconColorHex(stop.color) + iconColorIconSuffix(stop.icon)))
+        .join(' '));
     }
     const binaryOwn = type === '20' && (!layer || layer.self);
     const rows = binaryOwn ? readIconColorBinaryRows(tab) : readIconColorRows(tab);
@@ -5470,7 +5635,8 @@ async function saveGestureEdge(select) {
       const color = normalizeIconColorHex(row.color) || ICON_COLOR_ROW_DEFAULT;
       const value = row.value.replace(/[\u0000-\u001f\u007f]/g, '');
       // A row's own "Fuellen" (user 2026-10-11), else it follows "Ausfuellen".
-      lines.push((row.has ? 'has' : 'is') + iconColorMarkOf(row.fill) + ' ' + color.slice(1) + ' ' + value);
+      lines.push((row.has ? 'has' : 'is') + iconColorMarkOf(row.fill) + ' ' + color.slice(1) +
+        iconColorIconSuffix(row.icon) + ' ' + value);
     }
     // A switched-off own layer at its defaults without rules is no layer.
     const idle = layer && layer.self && !layer.enabled && layer.mode === 'rules' && layer.icon && !layer.tile &&
@@ -5581,6 +5747,7 @@ async function saveGestureEdge(select) {
     iconColorEl(tab, '_tile_icon_state_section')?.classList.toggle('hidden', !showRows);
     iconColorEl(tab, '_tile_icon_binary_section')?.classList.toggle('hidden', !showBinary);
     if (showBar) renderIconColorBar(tab);
+    renderIconColorIconButtons(tab);
   }
 
   function loadIconColorFields(tab, data) {
@@ -5609,7 +5776,7 @@ async function saveGestureEdge(select) {
     if (onInput) onInput.value = on ? '1' : '0';
     for (const state of ['on', 'off']) {
       const row = parsed.rows.find(entry => !entry.has && iconColorFold(entry.value) === state);
-      setIconColorBinaryInput(tab, state, row ? row.color : '', row ? row.fill : -1);
+      setIconColorBinaryInput(tab, state, row ? row.color : '', row ? row.fill : -1, row ? row.icon : '');
     }
     syncIconColorFields(tab);
   }
@@ -5670,10 +5837,23 @@ async function saveGestureEdge(select) {
   document.addEventListener('input', event => {
     const target = event.target;
     const role = target?.dataset?.iconColor;
-    if (!['color', 'binary', 'value', 'rule-color', 'min', 'max', 'stop-color', 'rule-strength', 'fill-strength'].includes(role)) return;
+    if (!['color', 'binary', 'value', 'rule-color', 'min', 'max', 'stop-color', 'rule-strength', 'fill-strength',
+      'rule-icon', 'binary-icon', 'stop-icon'].includes(role)) return;
     const tab = iconColorEventTab(target);
     if (!tab) return;
     if (role === 'color' || role === 'binary') target.dataset.unset = '0';
+    // An On/Off icon keeps its row with the color it shows.
+    if (role === 'binary-icon') {
+      const color = document.getElementById(target.id.replace(/_icon$/, ''));
+      if (color) color.dataset.unset = '0';
+    }
+    if (role === 'stop-icon') {
+      const bar = readIconColorBar(tab);
+      const stop = bar.stops[iconColorSelectedStop(tab)];
+      if (!stop) return;
+      stop.icon = iconColorValidIcon(target.value) ? target.value : '';
+      writeIconColorBar(tab, bar.mode, bar.stops);
+    }
     if (role === 'stop-color') {
       const bar = readIconColorBar(tab);
       const stop = bar.stops[iconColorSelectedStop(tab)];
@@ -5711,6 +5891,12 @@ async function saveGestureEdge(select) {
     const tab = iconColorEventTab(button);
     if (!button || !tab) return;
     const role = button.dataset.iconColor;
+    if (role === 'stop-icon-button') {
+      // Its icon picker (tile-head.js) sets this stop's icon.
+      setIconColorSelectedStop(tab, Number(button.dataset.stop));
+      renderIconColorBar(tab);
+      return;
+    }
     if (role === 'stop') {
       // A finished drag is not a click on the stop.
       if (button.dataset.dragged === '1') {
@@ -5905,6 +6091,11 @@ async function saveGestureEdge(select) {
   function isScreensaverTileTab(tab) {
     return tab === 'screensaver';
   }
+  // The first of the screensaver's rows at the bottom of a layout's screen
+  // with `rows` rows: two, three upright (screensaver_places::first_row).
+  function screensaverFirstRow(key, rows) {
+    return Math.max(0, rows - (key === 'portrait' ? 3 : 2));
+  }
   function firstAllowedGridRow(tab, classic = false) {
     // The screensaver's two rows at the bottom of the shown grid, three
     // upright (screensaver_places.cpp); in the layout window at the bottom
@@ -5914,8 +6105,7 @@ async function saveGestureEdge(select) {
     if (classic) return Math.max(0, GRID_ROWS - 2);
     const inWindow = typeof layoutWindow !== 'undefined' && layoutWindow;
     const key = inWindow ? layoutWindow.key : typeof ACTIVE_LAYOUT === 'string' ? ACTIVE_LAYOUT : 'classic';
-    const rows = inWindow ? LAYOUTS[key].rows : placeRows(tab);
-    return Math.max(0, rows - (key === 'portrait' ? 3 : 2));
+    return screensaverFirstRow(key, inWindow ? LAYOUTS[key].rows : placeRows(tab));
   }
   function restoreCurrentTileSelectionUi() {
     if (currentTileIndex === -1 || !currentTileTab) return;
@@ -6500,7 +6690,7 @@ async function saveGestureEdge(select) {
   // Switch and Cover show their state (tile_geometry::compact_switch,
   // compact_cover).
   function supportsHalfSize(type) {
-    return isCompactSensorType(type) || isEditableValueType(type) || [2, 4, 5, 7, 8, 9, 10, 17, 18, 19, 24, 25, 26].includes(Number(type));
+    return isCompactSensorType(type) || isEditableValueType(type) || [2, 4, 5, 7, 8, 9, 10, 17, 18, 19, 24, 25, 26, 27, 29].includes(Number(type));
   }
   // Every type resizes in half steps from 1x1; only half-size types may be half
   // a row high (mirrors tile_geometry::supported).
@@ -6518,24 +6708,52 @@ async function saveGestureEdge(select) {
     if (value === '2') return 24;
     return ['3', '4', '5'].includes(value) ? 28 : 20;
   }
-  // The value size choices a tile shows: Default, 24 and 28 in half-height
-  // tiles; Default, 20, 24, 32 and 40 otherwise (28 is the default there).
-  // A choice the other size lacks moves to the one that looks the same.
-  function syncCompactValueFontOptions(select, halfHeight) {
+  // The value size choices a tile shows: Default, 24 and 28 in the header
+  // row beside the disc (`compact`: half-height tiles, the Sensor graph);
+  // Default, 20, 24, 32 and 40 otherwise (28 is the default there). With
+  // the panel's sizes on the select (value_size_attrs.h) each choice is named
+  // by the size it draws there and each size is offered once: the lists
+  // named the 1280x800 sizes, so a graph tile's "28 (Default)" was its 20 px
+  // title size (user 2026-10-27). A choice the shape lacks moves to the one
+  // that looks the same, else to the nearest size.
+  // `inside`: a value inside a Sensor look's arc or ring (1 one row high,
+  // 2 taller), whose Default is the 20 or 24 of the full sizes; every other
+  // size stays offered (types/sensor/renderer.cpp).
+  function syncCompactValueFontOptions(select, compact, inside = 0) {
     if (!select?.options) return;
-    const shown = halfHeight ? ['0', '2', '5'] : ['0', '1', '2', '3', '4'];
-    for (const option of Array.from(select.options)) {
-      const hidden = !shown.includes(option.value);
+    const allowed = inside ? ['0', '1', '2', '5', '3', '4'] : compact ? ['0', '2', '5'] : ['0', '1', '2', '3', '4'];
+    const sizes = String(select.dataset?.[compact && !inside ? 'compactSizes' : 'sizes'] || '').split(',').map(Number);
+    if (inside && sizes.length > 5) sizes[0] = sizes[inside === 2 ? 2 : 1];
+    const known = sizes.length > 5 && sizes.every(size => size > 0);
+    const defaultLabel = select.dataset?.defaultLabel || '';
+    const options = Array.from(select.options);
+    const seen = [];
+    for (const option of options) {
+      const size = known ? sizes[Number(option.value)] : 0;
+      const hidden = !allowed.includes(option.value) || (known && seen.includes(size));
       option.hidden = hidden;
       option.disabled = hidden;
-      if (option.value === '0') {
-        option.textContent = option.textContent.replace(/^\d+(?= )/, halfHeight ? '20' : '28');
-      }
+      if (!hidden) seen.push(size);
+      if (known) option.textContent = option.value === '0' && defaultLabel ? size + ' (' + defaultLabel + ')' : String(size);
+      else if (option.value === '0') option.textContent = option.textContent.replace(/^\d+(?= )/, compact ? '20' : '28');
     }
-    const value = select.value;
-    if (halfHeight && value === '1') select.value = '0';
-    else if (halfHeight && (value === '3' || value === '4')) select.value = '5';
-    else if (!halfHeight && value === '5') select.value = '0';
+    const current = options.find(option => option.value === String(select.value));
+    if (!current?.hidden) return;
+    if (!known) {
+      const value = select.value;
+      if (compact && value === '1') select.value = '0';
+      else if (compact && (value === '3' || value === '4')) select.value = '5';
+      else if (!compact && value === '5') select.value = '0';
+      return;
+    }
+    const want = sizes[Number(current.value)];
+    let best = null;
+    for (const option of options) {
+      if (option.hidden) continue;
+      const distance = Math.abs(sizes[Number(option.value)] - want);
+      if (!best || distance < best.distance) best = {value: option.value, distance};
+    }
+    if (best) select.value = best.value;
   }
   // Number, Select and Date/Time value sizes (1 = 20, 2 = 24, 0 = 28, 3 = 32,
   // 4 = 40): half-height tiles offer 20, 24 and 28 (editable_display_tile).
@@ -6561,7 +6779,8 @@ async function saveGestureEdge(select) {
     // (if any) centered beside it.
     const compactIconTitle = [2, 4, 7, 8, 18].includes(Number(type)) && halfHeight;
     // Half-height Switch: icon, title and state like a compact Sensor.
-    const compactSwitch = [5, 17, 19, 24, 25, 26].includes(Number(type)) && halfHeight;
+    // A half-height Calendar: the next event's time and title (compact_calendar).
+    const compactSwitch = [5, 17, 19, 24, 25, 26, 27, 29].includes(Number(type)) && halfHeight;
     // Number, Select and Date/Time like a compact Sensor.
     const compactEditable = isEditableValueType(type) && halfHeight;
     if (compactEditable) valueFont = editableCompactValueFont(valueFont);
@@ -6575,20 +6794,44 @@ async function saveGestureEdge(select) {
     // (switch_layout::sensor_look).
     // The Cover position bar uses the same header (tile_header.h).
     // Lock, Alarm panel and Fan too (types/device).
-    const switchHeader = [5, 19, 24, 25, 26].includes(Number(type)) && el.classList.contains('switch-bar');
-    const switchTall = switchHeader && Number(layout?.span_h) > 1;
+    const switchHeader = [5, 19, 24, 25, 26, 29].includes(Number(type)) && el.classList.contains('switch-bar');
+    // An upright bar keeps the header beside the disc (bar_orientation.h).
+    // A two-by-two Vacuum takes the tall title and state size too; its state
+    // stands beside its map (render_vacuum_tile, applyVacuumPreview).
+    const switchTall = switchHeader && Number(layout?.span_h) > 1 && !el.classList.contains('switch-upright');
     el.classList.toggle('switch-tall', switchTall);
     if (switchTall) el.style?.setProperty?.('--switch-span-h', String(Number(layout.span_h)));
     else el.style?.removeProperty?.('--switch-span-h');
     const tallSize = switchTall ? ({1: 20, 2: 24, 3: 32, 4: 40}[Number(valueFont)] || 28) : 0;
     for (const size of [20, 24, 32, 40]) el.classList.toggle('switch-value-' + size, tallSize === size);
-    const valueSize = (compact && !compactIconTitle) || (switchHeader && !switchTall) ? compactValueSize(valueFont) : 20;
+    // A Sensor graph tile (display mode 2) has the Switch header beside the
+    // disc at the half-height value sizes (types/sensor/renderer.cpp); its
+    // graph needs the Bridge's history, so the box below stays empty like
+    // the panel's before the history arrives. An Energy tile with bars has
+    // the same header and box (types/energy/renderer.cpp).
+    const sensorGraph = (Number(type) === 1 || Number(type) === 14) && Number(mode) === 2 && !halfHeight;
+    el.classList.toggle('sensor-graph', sensorGraph);
+    // The looks below the header (types/sensor/sensor_look.h, admin-look.js):
+    // the graph's header with the value beside the disc, or the title alone
+    // right-aligned with the value inside the arc or ring.
+    const sensorLook = Number(type) === 1 && !halfHeight && typeof isSensorLookMode === 'function' && isSensorLookMode(mode);
+    const lookInside = sensorLook && sensorLookValueInside(mode);
+    el.classList.toggle('sensor-look-head', sensorLook && !lookInside);
+    el.classList.toggle('sensor-look-inside', lookInside);
+    if (el.dataset) {
+      el.dataset.lookTall = Number(layout?.span_h) > 1 ? '1' : '0';
+      el.dataset.lookFont = String(Number(valueFont) || 0);
+    }
+    if (typeof setSensorLookData === 'function') setSensorLookData(el, sensorLook ? mode : 0, layout);
+    const valueSize = (compact && !compactIconTitle) || (switchHeader && !switchTall) || sensorGraph ||
+      (sensorLook && !lookInside) ? compactValueSize(valueFont) : 20;
     el.classList.toggle('compact-value-24', valueSize === 24);
     el.classList.toggle('compact-value-28', valueSize === 28);
     el.classList.toggle('clock-compact', Number(type) === 9 && halfHeight);
     // A half-height Text tile: the text alone (tile_geometry::compact_text).
     el.classList.toggle('text-compact', Number(type) === 10 && halfHeight);
     if (Number(type) === 9) fitCompactClockPreview(el);
+    if (typeof renderSensorLookPreview === 'function') renderSensorLookPreview(el);
   }
 
   // Every bound is the shown grid (placeCols/placeRows, the server's
@@ -6799,6 +7042,8 @@ async function saveGestureEdge(select) {
   // Smallest size a type accepts (Media needs 2x2, half-size types 1x0.5).
   function minimumTileSize(type) {
     if (Number(type) === MEDIA_TILE_TYPE) return [Math.min(MEDIA_TILE_MIN_SPAN, placeCols()), Math.min(MEDIA_TILE_MIN_SPAN, placeRows())];
+    // The Power flow needs room for its four nodes (types/power_flow).
+    if (Number(type) === 28) return [Math.min(2, placeCols()), Math.min(2, placeRows())];
     return [1, supportsHalfSize(type) ? 0.5 : 1];
   }
 
@@ -7479,6 +7724,7 @@ async function saveGestureEdge(select) {
       const energyDecimalsInput = document.getElementById(prefix + '_energy_decimals');
       const energyValueFontSelect = document.getElementById(prefix + '_energy_value_font');
       const energyPopupModeSelect = document.getElementById(prefix + '_energy_popup_open_mode');
+      const energyDisplayModeSelect = document.getElementById(prefix + '_energy_display_mode');
       const energyValueYOffsetInput = document.getElementById(prefix + '_energy_value_y_offset');
       const sceneInput = document.getElementById(prefix + '_scene_alias');
     const textInput = document.getElementById(prefix + '_text_value');
@@ -7633,14 +7879,19 @@ async function saveGestureEdge(select) {
     bindLive(energyDecimalsInput, 'input', 'energyDecimals', () => { updateEnergyValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(energyValueFontSelect, 'change', 'energyValueFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(energyPopupModeSelect, 'change', 'energyPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
+    bindLive(energyDisplayModeSelect, 'change', 'energyDisplayMode', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(energyValueYOffsetInput, 'input', 'energyValueYOffset', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(unitInput, 'input', 'sensorUnit', () => { updateSensorValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(decimalsInput, 'input', 'sensorDecimals', () => { updateSensorValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(valueFontSelect, 'change', 'sensorValueFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(sensorPopupModeSelect, 'change', 'sensorPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(displayModeSelect, 'change', 'sensorDisplayMode', () => { syncGaugeUi(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
-    bindLive(gaugeMinInput, 'input', 'sensorGaugeMin', () => { updateDraft(tab); scheduleAutoSave(tab); });
-    bindLive(gaugeMaxInput, 'input', 'sensorGaugeMax', () => { updateDraft(tab); scheduleAutoSave(tab); });
+    // The Sensor menu's choices set the display mode (admin-editor.js).
+    for (const field of ['sensor_layout', 'sensor_form', 'sensor_orientation', 'sensor_ring', 'sensor_place']) {
+      bindLive(document.getElementById(prefix + '_' + field), 'change', 'sensorChoice_' + field, () => applySensorLayoutChoices(tab));
+    }
+    bindLive(gaugeMinInput, 'input', 'sensorGaugeMin', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    bindLive(gaugeMaxInput, 'input', 'sensorGaugeMax', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(gaugeArcInput, 'input', 'sensorGaugeArc', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(gaugeSizeInput, 'input', 'sensorGaugeSize', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(gaugeYOffsetInput, 'input', 'sensorGaugeYOffset', () => { updateDraft(tab); scheduleAutoSave(tab); });
@@ -7671,6 +7922,17 @@ async function saveGestureEdge(select) {
     });
     bindLive(switchSelect, 'change', 'switchEntity', () => { maybeFillTitleFromSwitch(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(switchStyleSelect, 'change', 'switchStyle', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    // The bar upright (bar_orientation.h): Switch and Fan.
+    for (const id of ['_switch_orientation', '_fan_orientation']) {
+      bindLive(document.getElementById(prefix + id), 'change', id === '_fan_orientation' ? 'fanOrientation' : 'switchOrientation',
+        () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    }
+    // The Vacuum popup's layout (map left or centred).
+    bindLive(document.getElementById(prefix + '_vacuum_layout'), 'change', 'vacuumLayout', () => { updateDraft(tab); scheduleAutoSave(tab); });
+    // The Vacuum's map (empty: the map the Bridge finds on its device).
+    bindLive(document.getElementById(prefix + '_vacuum_map'), 'change', 'vacuumMap', () => { updateDraft(tab); scheduleAutoSave(tab); });
+    // A camera map's interval.
+    bindLive(document.getElementById(prefix + '_vacuum_every'), 'change', 'vacuumEvery', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(switchPopupModeSelect, 'change', 'switchPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(mediaSelect, 'change', 'mediaEntity', () => { maybeFillTitleFromMedia(tab); updateTilePreview(tab); updateMediaValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(climateSelect, 'change', 'climateEntity', () => {
@@ -7698,8 +7960,8 @@ async function saveGestureEdge(select) {
       updateDraft(tab);
       scheduleAutoSave(tab);
     });
-    // Lock, Alarm panel and Fan: entity, state size and popup gesture.
-    for (const kind of ['lock', 'alarm', 'fan']) {
+    // Lock, Alarm panel, Fan and Vacuum: entity, state size and popup gesture.
+    for (const kind of ['lock', 'alarm', 'fan', 'vacuum']) {
       const select = document.getElementById(prefix + '_' + kind + '_entity');
       bindLive(document.getElementById(prefix + '_' + kind + '_value_font'), 'change', kind + 'ValueFont', () => {
         updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
@@ -7715,6 +7977,33 @@ async function saveGestureEdge(select) {
         scheduleAutoSave(tab);
       });
     }
+    // Power flow: the node sensors and the options (types/power_flow).
+    for (const field of ['flow_pv_entity', 'flow_grid_entity', 'flow_battery_entity', 'flow_battery_charge_entity',
+                         'flow_home_entity', 'flow_header', 'flow_card', 'flow_grid_invert', 'flow_battery_invert']) {
+      bindLive(document.getElementById(prefix + '_' + field), 'change', field, () => {
+        if (field === 'flow_header') powerFlowHeaderTitle(prefix);
+        updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
+      });
+    }
+    // Calendar: up to four calendars, the view, the first day of the week and
+    // the popup gesture (types/calendar).
+    CALENDAR_FIELDS.forEach((field, i) => {
+      bindLive(document.getElementById(prefix + '_' + field), 'change', 'calendarEntity' + i, () => {
+        if (i === 0) maybeFillTitleFromEntity(tab, '_calendar_entity');
+        updateTilePreview(tab);
+        updateDraft(tab);
+        scheduleAutoSave(tab);
+      });
+    });
+    for (const [field, key] of [['_calendar_view', 'calendarView'], ['_calendar_week_start', 'calendarWeekStart']]) {
+      bindLive(document.getElementById(prefix + field), 'change', key, () => {
+        updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
+      });
+    }
+    bindLive(document.getElementById(prefix + '_calendar_popup_open_mode'), 'change', 'calendarPopupMode', () => {
+      updateDraft(tab);
+      scheduleAutoSave(tab);
+    });
     bindLive(cameraSelect, 'change', 'cameraEntity', () => {
       maybeFillTitleFromEntity(tab, '_camera_entity');
       syncCameraFields(tab);
@@ -7941,6 +8230,20 @@ async function saveGestureEdge(select) {
     // stays in the size fields (page-fields.js).
     const pageTile = tileElem.classList.contains('page-field-tile');
     const tileSpan = name => pageTile ? 1 : Number(document.getElementById(prefix + '_tile_' + name)?.value || 1);
+    // The edited tile's size, and for a Sensor look its gauge range and
+    // color record from the editor (admin-look.js setSensorLookData).
+    const sensorLookLayout = () => {
+      const layout = {span_w: tileSpan('span_w'), span_h: tileSpan('span_h')};
+      if (document.getElementById(prefix + '_tile_type')?.value !== '1') return layout;
+      const number = id => {
+        const raw = document.getElementById(prefix + id)?.value;
+        return raw === undefined || String(raw).trim() === '' ? undefined : Number(raw);
+      };
+      layout.sensor_gauge_min = number('_sensor_gauge_min');
+      layout.sensor_gauge_max = number('_sensor_gauge_max');
+      layout.icon_colors = typeof collectIconColorRecord === 'function' ? collectIconColorRecord(tab) : '';
+      return layout;
+    };
 
     const wasActive = currentTileTab === tab && currentTileIndex >= 0;
     const typeWas = tileElem.dataset.type || '0';
@@ -7950,11 +8253,32 @@ async function saveGestureEdge(select) {
     const meta = getTileTypeMeta(type);
     const iconInput = document.getElementById(prefix + '_tile_icon');
     const switchStyle = document.getElementById(prefix + '_switch_style')?.value || '0';
+    // The bar upright (bar_orientation.h): Switch and Fan.
+    const switchUpright = document.getElementById(prefix + '_switch_orientation')?.value === '1';
+    const fanUpright = document.getElementById(prefix + '_fan_orientation')?.value === '1';
     const isEnergyType = type === '14';
     // Half-height tiles offer only the value sizes that fit.
     const halfHeight = tileSpan('span_h') === 0.5;
-    for (const id of ['_sensor_value_font', '_binary_sensor_value_font', '_energy_value_font'])
-      syncCompactValueFontOptions(document.getElementById(prefix + id), halfHeight);
+    // An Energy tile with bars has its value beside the disc like the Sensor
+    // graph tile (types/energy/renderer.cpp).
+    const energyBars = isEnergyType && document.getElementById(prefix + '_energy_display_mode')?.value === '2';
+    syncCompactValueFontOptions(document.getElementById(prefix + '_binary_sensor_value_font'), halfHeight);
+    syncCompactValueFontOptions(document.getElementById(prefix + '_energy_value_font'), halfHeight || energyBars);
+    // The display mode the previews take: the Energy tile keeps its own field.
+    const previewDisplayMode = document.getElementById(prefix + (isEnergyType ? '_energy_display_mode' : '_sensor_display_mode'))?.value || 0;
+    // A Sensor graph tile, and a look with its value in the head, shows its
+    // value in the header row beside the disc like a half-height tile
+    // (types/sensor/renderer.cpp).
+    const sensorMode = document.getElementById(prefix + '_sensor_display_mode')?.value || '0';
+    const sensorGraph = type === '1' && (sensorMode === '2' ||
+      (typeof isSensorLookMode === 'function' && isSensorLookMode(sensorMode) && !sensorLookValueInside(sensorMode)));
+    // A value inside a look's arc or ring offers every size, its Default the
+    // 20 or 24 the panel draws there.
+    const sensorInside = type === '1' && !halfHeight && typeof isSensorLookMode === 'function' &&
+      isSensorLookMode(sensorMode) && sensorLookValueInside(sensorMode);
+    syncCompactValueFontOptions(document.getElementById(prefix + '_sensor_value_font'), halfHeight || sensorGraph,
+                                sensorInside ? (tileSpan('span_h') > 1 ? 2 : 1) : 0);
+    if (type === '1' || isEnergyType) syncSwitchChoices(tab);
     for (const kind of ['number', 'select', 'datetime'])
       syncEditableValueFontOptions(document.getElementById(prefix + '_' + kind + '_value_font'), halfHeight);
     if (type === '5') {
@@ -7962,7 +8286,7 @@ async function saveGestureEdge(select) {
       // state of a tall tile the full-size ones.
       const spanH = tileSpan('span_h');
       syncCompactValueFontOptions(document.getElementById(prefix + '_switch_value_font'),
-                                  !switchSensorLook(switchStyle, spanH));
+                                  !switchSensorLook(switchStyle, spanH, switchUpright));
       syncSwitchChoices(tab);
     }
     const deviceKind = typeof devicePreviewKind === 'function' ? devicePreviewKind(type) : '';
@@ -7971,7 +8295,7 @@ async function saveGestureEdge(select) {
       // the full-size ones (tile_header.h).
       const spanH = tileSpan('span_h');
       syncCompactValueFontOptions(document.getElementById(prefix + (deviceKind ? '_' + deviceKind : '_cover') +
-        '_value_font'), !(spanH > 1));
+        '_value_font'), !(spanH > 1 && !(deviceKind === 'fan' && fanUpright)));
       syncSwitchChoices(tab);
     }
     const previewKind = meta.preview || 'none';
@@ -8011,6 +8335,7 @@ async function saveGestureEdge(select) {
                 : (previewKind === 'camera' ? cameraEntity : '')))))));
     if (isEditablePreview(previewKind)) iconEntity = document.getElementById(prefix + '_' + previewKind + '_entity')?.value || '';
     if (deviceKind) iconEntity = document.getElementById(prefix + '_' + deviceKind + '_entity')?.value || '';
+    const calendarTile = previewKind === 'calendar' ? calendarTileFromInputs(tab, tileSpan('span_w'), tileSpan('span_h')) : null;
     if (type === '2') {
       const alias = document.getElementById(prefix + '_scene_alias')?.value || '';
       iconEntity = sceneEntityOf(alias);
@@ -8046,9 +8371,10 @@ async function saveGestureEdge(select) {
     if (deviceKind) {
       devicePreviewState = parseDevicePreviewPayload(deviceDetailPayload(iconEntity));
       if (!normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) {
-        iconName = devicePreviewIcon(deviceKind, devicePreviewState);
+        iconName = devicePreviewIcon(deviceKind, devicePreviewState, '', iconName);
       }
     }
+    if (calendarTile && !normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) iconName = 'calendar';
     let binarySensorPreviewState = null;
     if (previewKind === 'binary_sensor') {
       binarySensorPreviewState = parseBinarySensorPreviewPayload(
@@ -8064,7 +8390,7 @@ async function saveGestureEdge(select) {
     }
 
     resetTileClasses(tileElem, meta.css ? ['tile', meta.css] : ['tile']);
-    if (type === '5') applySwitchPreviewLayout(tileElem, switchStyle, halfHeight);
+    if (type === '5') applySwitchPreviewLayout(tileElem, switchStyle, halfHeight, switchUpright);
     tileElem.style.background = '';
     delete tileElem.dataset.bgOpacity;
     tileElem.dataset.type = type;
@@ -8082,9 +8408,7 @@ async function saveGestureEdge(select) {
       applyTileAriaLabel(tileElem, '', type);
       if (wasActive) tileElem.classList.add('active');
       updateLayoutFromInputs(tab);
-    applyCompactSensorPreview(tileElem, type, {span_w:tileSpan('span_w'),
-      span_h:tileSpan('span_h')},
-      document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
+    applyCompactSensorPreview(tileElem, type, sensorLookLayout(), previewDisplayMode, sensorValueFont);
       return;
     }
 
@@ -8157,8 +8481,11 @@ async function saveGestureEdge(select) {
               ? devicePreviewColor(deviceKind, devicePreviewState)
               : (previewKind === 'binary_sensor'
                 ? binarySensorPreviewColor(binarySensorPreviewState)
-                : ''))), ruleFill);
+                : (calendarTile ? calendarPreviewIconColor(calendarTile) : '')))), ruleFill);
       if (typeof setPreviewRuleFill === 'function') setPreviewRuleFill(tileElem, ruleFill);
+      // A matching rule shows its own icon (tile_rule_icon.h); weather icons
+      // keep their own.
+      if (ruleFill.icon && previewKind !== 'weather' && !lockIsIcon) iconName = ruleFill.icon;
       const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
       html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '>' +
         (locked && !lockIsIcon ? PREVIEW_LOCK_MARK : '') + '</i>';
@@ -8169,6 +8496,7 @@ async function saveGestureEdge(select) {
       displayTitle = sensorMetaCache.names[cameraEntity] ||
         titleFromEntity(cameraEntity);
     }
+    if (calendarTile) displayTitle = calendarPreviewTitle(calendarTile, displayTitle);
     if (displayTitle) {
       html += '<div class="tile-title" id="' + tileId + '-title">' +
         tileTitleHtml(displayTitle) + '</div>';
@@ -8185,7 +8513,7 @@ async function saveGestureEdge(select) {
       tileElem.classList.toggle('climate-header', climateValue && !climateHalf);
       if (climateHalf || climateValue) {
         html += '<div class="tile-value tile-switch-state">' +
-          escapeHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
+          unitTextHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
       }
       if (!climateHalf) {
         html += climatePreviewSlots(
@@ -8198,6 +8526,7 @@ async function saveGestureEdge(select) {
     }
     if (previewKind === 'cover') html += coverPreviewExtraHtml(coverPreviewState, halfHeight);
     if (deviceKind) html += devicePreviewExtraHtml(deviceKind, devicePreviewState, halfHeight);
+    if (calendarTile) html += calendarPreviewExtraHtml(calendarTile);
     if (previewKind === 'binary_sensor') {
       html += '<div class="tile-value tile-binary-sensor-value ' + (Number(sensorValueFont) ? sensorValueClass : '') + '" id="' +
         tileId + '-value">' +
@@ -8205,7 +8534,7 @@ async function saveGestureEdge(select) {
         '</div>';
     }
 
-    if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + escapeHtml(editablePreviewText(iconEntity, previewKind)) + '</div>';
+    if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + editablePreviewHtml(iconEntity, previewKind) + '</div>';
 
     if (previewKind === 'sensor') {
       const entitySelect = document.getElementById(prefix + (isEnergyType ? '_energy_entity' : '_sensor_entity'));
@@ -8287,6 +8616,18 @@ async function saveGestureEdge(select) {
         span_h: tileSpan('span_h')
       }, iconName, mediaEntity ? (sensorMetaCache.names?.[mediaEntity] || '') : '');
     }
+    if (previewKind === 'power_flow' && typeof applyPowerFlowPreview === 'function') {
+      applyPowerFlowPreview(tileElem, {
+        flow_entities: powerFlowRecordFromInputs(prefix),
+        key_code: powerFlowOptionsFromInputs(prefix),
+        span_w: tileSpan('span_w'),
+        span_h: tileSpan('span_h'),
+        title,
+        icon_name: iconInput?.value || ''
+      }, sensorMetaCache);
+    } else {
+      tileElem.classList.remove('power-flow-tile', 'power-flow-no-card');
+    }
     if (typeof applyTileRulesTint === 'function' && typeof collectIconColorRecord === 'function' &&
         typeof iconColorOwnEntity === 'function') {
       applyTileRulesTint(tileElem, type, collectIconColorRecord(prefix), iconColorOwnEntity(prefix, String(type)), sensorMetaCache);
@@ -8304,7 +8645,10 @@ async function saveGestureEdge(select) {
         span_w: tileSpan('span_w')});
     }
     if (previewKind === 'cover') applyCoverPreview(tileElem, coverPreviewState, halfHeight);
-    if (deviceKind) applyDevicePreview(tileElem, deviceKind, devicePreviewState, halfHeight);
+    if (deviceKind) {
+      applyDevicePreview(tileElem, deviceKind, devicePreviewState, halfHeight, fanUpright,
+        {w: tileSpan('span_w'), h: tileSpan('span_h')});
+    }
     if (wasActive) tileElem.classList.add('active');
     if (typeWas !== type && wasActive) {
       tileElem.classList.add('active');
@@ -8313,9 +8657,7 @@ async function saveGestureEdge(select) {
     }
     if (type === '5') updateSwitchValuePreview(tab);
     updateLayoutFromInputs(tab);
-    applyCompactSensorPreview(tileElem, type, {span_w:tileSpan('span_w'),
-      span_h:tileSpan('span_h')},
-      document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
+    applyCompactSensorPreview(tileElem, type, sensorLookLayout(), previewDisplayMode, sensorValueFont);
     // The analog and the wall clock place their face once the tile has its
     // size and classes again (updateLayoutFromInputs, applyCompactSensorPreview):
     // before them the tile measured 1 x 1 in the middle of its rebuild, and the
@@ -8502,7 +8844,41 @@ async function saveGestureEdge(select) {
     syncTileSizePolicy(tab);
     syncIconDiscFields(tab);
     placeTileEntityField(tab);
+    placeTileTypeParts(tab);
     syncTileAdvancedCaption(tab);
+  }
+
+  // Type options marked data-tile-place (Power flow, user 2026-10-26) move
+  // to their place in the settings: "head" under Title and Icon, "top" at the
+  // start of the settings, "color" into Color. They return to their type
+  // fields when another type is shown. The shown type may also name the Auto
+  // title and icon of a tile without an entity of its own.
+  function placeTileTypeParts(tab) {
+    const places = ['head', 'top', 'color'];
+    for (const place of places) {
+      const slot = document.getElementById(tab + '_tile_' + place + '_slot');
+      for (const part of [...(slot?.children || [])]) document.getElementById(part.dataset.placeHome || '')?.append(part);
+    }
+    const fields = document.querySelector('#' + tab + 'Settings .type-fields.show');
+    for (const part of fields?.querySelectorAll(':scope > [data-tile-place]') || []) {
+      const slot = places.includes(part.dataset.tilePlace) && document.getElementById(tab + '_tile_' + part.dataset.tilePlace + '_slot');
+      if (!slot) continue;
+      part.dataset.placeHome = fields.id;
+      slot.append(part);
+    }
+    const typeAuto = (element, key, value) => {
+      if (!element) return;
+      if (value) {
+        element.dataset[key] = value;
+        element.dataset.typeAuto = '1';
+      } else if (element.dataset.typeAuto) {
+        delete element.dataset[key];
+        delete element.dataset.typeAuto;
+      }
+    };
+    typeAuto(document.getElementById(tab + '_tile_title_auto'), 'autoTitle', fields?.dataset.autoTitle || '');
+    typeAuto(document.getElementById(tab + '_tile_icon'), 'autoIcon', fields?.dataset.autoIcon || '');
+    if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons(tab);
   }
 
   // "Advanced" only above options the type shows (user 2026-10-11): its
@@ -9870,6 +10246,8 @@ async function saveGestureEdge(select) {
         ? tile.switch_style
         : (tile.sensor_decimals === 1 ? 1 : 0);
       fd.append('switch_style', style);
+      // The bar upright (bar_orientation.h); older exports have none.
+      fd.append('bar_orientation', Number(tile.bar_orientation) === 1 ? '1' : '0');
       fd.append('sensor_value_font', tile.sensor_value_font ?? 0);
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
@@ -9911,6 +10289,13 @@ async function saveGestureEdge(select) {
       if (tile.sensor_value_y_offset !== undefined && tile.sensor_value_y_offset !== null && String(tile.sensor_value_y_offset).length > 0) {
         fd.append('sensor_value_y_offset', tile.sensor_value_y_offset);
       }
+      // The bars below the header (2); the screensaver shows the value alone.
+      const screensaverEnergy = Number(folderId) === Number(SCREENSAVER_FOLDER_ID);
+      fd.append('sensor_display_mode', !screensaverEnergy && Number(tile.sensor_display_mode) === 2 ? '2' : '0');
+    } else if (safeType === 28) {
+      fd.append('flow_entities', tile.flow_entities || '');
+      const bits = Number(tile.key_code) || 0;
+      for (const [name, bit] of POWER_FLOW_OPTIONS) fd.append(name, (bits & bit) ? '1' : '0');
     } else if (safeType === MEDIA_TILE_TYPE) {
       fd.append('media_entity', tile.sensor_entity || tile.media_entity || '');
       fd.append('media_layout', Number(tile.sensor_display_mode) === 1 ? '1' : '0');
@@ -9935,9 +10320,24 @@ async function saveGestureEdge(select) {
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }
-    } else if (safeType === 24 || safeType === 25 || safeType === 26) {
+    } else if (safeType === 27) {
+      // The calendars, view and first day of the week (types/calendar/web.cpp).
+      const calendars = calendarEntitiesOf(tile.sensor_entity || tile.calendar_entities || '');
+      CALENDAR_FIELDS.forEach((field, i) => fd.append(field, calendars[i] || ''));
+      fd.append('calendar_view', String(Number(tile.sensor_display_mode) || 0));
+      fd.append('calendar_week_start', String(tile.sensor_decimals ?? 255));
+      if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
+        fd.append('popup_open_mode', tile.popup_open_mode);
+      }
+    } else if (safeType === 24 || safeType === 25 || safeType === 26 || safeType === 29) {
       const kind = devicePreviewKind(safeType);
       fd.append(kind + '_entity', tile.sensor_entity || tile[kind + '_entity'] || '');
+      if (safeType === 26) fd.append('bar_orientation', Number(tile.bar_orientation) === 1 ? '1' : '0');
+      if (safeType === 29) {
+        fd.append('vacuum_layout', Number(tile.sensor_display_mode) === 1 ? '1' : '0');
+        fd.append('vacuum_map', tile.vacuum_map || '');
+        fd.append('vacuum_every', String(Math.max(3, Math.min(60, Number(tile.image_slideshow_sec) || 5))));
+      }
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }
@@ -10339,14 +10739,15 @@ async function saveGestureEdge(select) {
     const hue = rgb[0] !== rgb[1] || rgb[1] !== rgb[2];
     return seed.L > 0.9 && (!hue || seed.C < 0.08);
   }
-  // tone_color::light_accent(): the light theme's light color.
+  // tone_color::light_accent(): a light's color as Home Assistant shows it,
+  // in both themes (#130).
   function toneLightAccent(rgb) {
-    return panelLight() ? toneHaLightColor(rgb) : rgb;
+    return toneHaLightColor(rgb);
   }
-  // switch_state_icon_color() (tile_renderer.cpp): the light theme shows a
-  // light's color as Home Assistant does, white light in its light grey.
+  // switch_state_icon_color() (tile_renderer.cpp): a light's color as Home
+  // Assistant shows it, in both themes (#130), white light in its light grey.
   function toneLightShown(hex) {
-    if (!panelThemeLight() || !/^#[0-9a-f]{6}$/i.test(String(hex))) return hex;
+    if (!/^#[0-9a-f]{6}$/i.test(String(hex))) return hex;
     const rgb = [1, 3, 5].map(i => parseInt(String(hex).slice(i, i + 2), 16));
     return toneHex(toneHaLightColor(rgb)).toUpperCase();
   }
@@ -10443,8 +10844,10 @@ async function saveGestureEdge(select) {
       // An icon without a color (white, almost white light) never tints the
       // card (tile_icon_source without_white).
       if (choice && toneNoColor(given)) choice = null;
-      // White light fills in the neutral grey (tile_icon_source with_white).
-      if (!choice && given && tileElem.dataset.followTint === '1' && toneNoColor(given) && toneOklch(given).L <= 0.95) {
+      // White light fills in the neutral grey (tile_icon_source with_white):
+      // the light theme's filled tiles, every tile of the dark theme (#130).
+      if (!choice && given && (tileElem.dataset.followTint === '1' || !panelThemeLight()) && toneNoColor(given) &&
+          toneOklch(given).L <= 0.95) {
         choice = { color: givenHex.toUpperCase(), percent: fill };
       }
       if (choice) {
@@ -10521,6 +10924,34 @@ async function saveGestureEdge(select) {
     // color whenever it is tinted, in every tile color; else the neutral step.
     const controls = tinted || lightCircle ? tone : toneFill(card, given || [255, 255, 255], false, glowPct, seeThrough);
     tileElem.style.setProperty('--control-fill', rgba(controls.controlColor, controls.controlOpa));
+    // A Sensor look with a color bar (admin-look.js): every place in the
+    // colors this tile gives an icon of that color, the steps above for
+    // another icon color.
+    tileElem.sensorLookTones = rgb => {
+      const placeTinted = glow && iconDiscTinted('rgb(' + rgb.join(',') + ')');
+      let placeCircle = card;
+      if (placeTinted && !(fill > 0) && !seeThrough && typeof tileTintBackground === 'function') {
+        const base = String(getComputedStyle(tileElem).getPropertyValue('--tile-card') || '').trim();
+        const familyHex = tileTintBackground(base || '#1A1A1A', toneHex(rgb), ICON_FILL_DEFAULT);
+        placeCircle = [1, 3, 5].map(i => parseInt(familyHex.slice(i, i + 2), 16));
+      }
+      let placeTone = toneFill(placeCircle, rgb, placeTinted, glowPct, seeThrough);
+      if (lightCircle) {
+        const shown = toneReadableIcon(rgb);
+        const picked = placeTinted || !iconDiscTinted('rgb(' + shown.join(',') + ')') ? shown : (panelRole('icon') || shown);
+        const over = toneNoColor(picked) ? [189, 189, 189] : picked;
+        const share = Number(panelVar('--pv-light-circle', '0.8'));
+        const amount = glowPct * (Number.isFinite(share) ? share : 0.8) / 100;
+        placeTone = { controlColor: toneBlend(card, over, Math.round(Math.min(1, Math.max(amount, 0.1)) * 255)), controlOpa: 255 };
+      }
+      if (placeTinted && !seeThrough && tileElem.dataset.surface === 'jewel' && typeof toneJewelFill === 'function') {
+        placeTone = toneJewelFill(card, rgb, glowPct, Number(tileElem.dataset.jewelStrength) || 20);
+      }
+      const placeControls = placeTinted || lightCircle ? placeTone : toneFill(card, rgb, false, glowPct, seeThrough);
+      return { lit: toneHex(toneReadableIcon(rgb)), off: rgba(placeControls.controlColor, placeControls.controlOpa) };
+    };
+    tileElem.style.setProperty('--icon-shown', given ? toneHex(toneReadableIcon(given)) : 'currentColor');
+    if (typeof renderSensorLookPreview === 'function') renderSensorLookPreview(tileElem);
     // The icon, readable like on the device (the same with every tile color,
     // Circle strength and circle option).
     if (!given) return;
@@ -10663,8 +11094,12 @@ async function saveGestureEdge(select) {
   // (resolveIconColorRecord, same result as the firmware), else `fallback`.
   // `out`, when given, receives the matching state line's own "Fuellen"
   // (`fill`: 1, 0, or -1 when "Ausfuellen" decides).
+  // `out.icon`: the matching stop's or line's own icon ('' without one).
   function previewIconColor(typeValue, record, entity, meta, binaryState, fallback, out = null) {
-    if (out) out.fill = -1;
+    if (out) {
+      out.fill = -1;
+      out.icon = '';
+    }
     if (!record || typeof tileTypeHasIconColors !== 'function' ||
         !tileTypeHasIconColors(typeValue)) return fallback;
     const type = String(typeValue ?? '0');
@@ -10786,8 +11221,9 @@ async function saveGestureEdge(select) {
     } else {
       delete el.dataset.followTint;
     }
-    // A tile with "Fill" shows the neutral grey without a tint (kNeutralIdle).
-    if (el.dataset.followTint === '1' && tileFillOf(tile?.icon_colors) > 0) {
+    // A tile with "Fill" shows the neutral grey without a tint (kNeutralIdle);
+    // a Switch tile (type 5) only fills while on (tile_surface_rule_of, #130).
+    if (el.dataset.followTint === '1' && tileFillOf(tile?.icon_colors) > 0 && surfaceType !== '5') {
       el.dataset.neutralIdle = '1';
     } else {
       delete el.dataset.neutralIdle;
@@ -10815,7 +11251,9 @@ async function saveGestureEdge(select) {
     if (meta.css) cls.push(meta.css);
     if (typeValue === '0' && (!meta.css || meta.css !== 'empty')) cls.push('empty');
     resetTileClasses(el, cls);
-    if (typeValue === '5') applySwitchPreviewLayout(el, tile.switch_style, Number(tile.span_h) === 0.5);
+    if (typeValue === '5') {
+      applySwitchPreviewLayout(el, tile.switch_style, Number(tile.span_h) === 0.5, Number(tile.bar_orientation) === 1);
+    }
     el.dataset.type = typeValue;
     // Every circle shows, in its icon's color (user 2026-10-11: no circle options).
     el.dataset.iconDisc = '0';
@@ -10898,8 +11336,11 @@ async function saveGestureEdge(select) {
       if (deviceKind) {
         devicePreviewState = parseDevicePreviewPayload(deviceDetailPayload(tile.sensor_entity || '', sensorMeta));
         if (!normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) {
-          iconName = devicePreviewIcon(deviceKind, devicePreviewState);
+          iconName = devicePreviewIcon(deviceKind, devicePreviewState, '', iconName);
         }
+      }
+      if (previewKind === 'calendar' && !normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) {
+        iconName = 'calendar';
       }
       let binarySensorPreviewState = null;
       if (previewKind === 'binary_sensor') {
@@ -10931,8 +11372,11 @@ async function saveGestureEdge(select) {
                 ? devicePreviewColor(deviceKind, devicePreviewState)
                 : (previewKind === 'binary_sensor'
                   ? binarySensorPreviewColor(binarySensorPreviewState)
-                  : ''))), ruleFill);
+                  : (previewKind === 'calendar' ? calendarPreviewIconColor(tile) : '')))), ruleFill);
         if (typeof setPreviewRuleFill === 'function') setPreviewRuleFill(el, ruleFill);
+        // A matching rule shows its own icon (tile_rule_icon.h); weather
+        // icons keep their own.
+        if (ruleFill.icon && previewKind !== 'weather' && !lockIsIcon) iconName = ruleFill.icon;
         const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
         html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '>' +
           (locked && !lockIsIcon ? PREVIEW_LOCK_MARK : '') + '</i>';
@@ -10943,6 +11387,7 @@ async function saveGestureEdge(select) {
         displayTitle = metaNames[tile.sensor_entity] ||
           titleFromEntity(tile.sensor_entity);
       }
+      if (previewKind === 'calendar') displayTitle = calendarPreviewTitle(tile, displayTitle, sensorMeta);
       if (displayTitle.length) {
         html += '<div class="tile-title" id="' + tab + '-tile-' + index + '-title">' +
           tileTitleHtml(displayTitle) + '</div>';
@@ -10967,7 +11412,7 @@ async function saveGestureEdge(select) {
         el.classList.toggle('climate-header', climateValue && !climateHalf);
         if (climateHalf || climateValue) {
           html += '<div class="tile-value tile-switch-state">' +
-            escapeHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
+            unitTextHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
         }
         if (!climateHalf) {
           html += climatePreviewSlots(
@@ -10982,13 +11427,14 @@ async function saveGestureEdge(select) {
       }
       if (previewKind === 'cover') html += coverPreviewExtraHtml(coverPreviewState, Number(tile.span_h) === 0.5);
       if (deviceKind) html += devicePreviewExtraHtml(deviceKind, devicePreviewState, Number(tile.span_h) === 0.5);
+      if (previewKind === 'calendar') html += calendarPreviewExtraHtml(tile, sensorMeta);
       if (previewKind === 'binary_sensor') {
         html += '<div class="tile-value tile-binary-sensor-value ' + (Number(tile.sensor_value_font) ? sensorValueClass : '') + '" id="' +
           tab + '-tile-' + index + '-value">' +
           escapeHtml(binarySensorPreviewStateText(binarySensorPreviewState)) +
           '</div>';
       }
-      if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + escapeHtml(editablePreviewText(iconEntity, previewKind, sensorMeta)) + '</div>';
+      if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + editablePreviewHtml(iconEntity, previewKind, sensorMeta) + '</div>';
       if (previewKind === 'clock') {
         const flags = normalizeClockFlags(tile.sensor_decimals);
         const clockTimeFont = tile.key_code || 40;
@@ -11032,6 +11478,11 @@ async function saveGestureEdge(select) {
           tile.sensor_entity ? (sensorMeta?.mediaValues?.[tile.sensor_entity] ?? '') : ''),
           tile, iconName, tile.sensor_entity ? (metaNames[tile.sensor_entity] || '') : '');
       }
+      if (previewKind === 'power_flow' && typeof applyPowerFlowPreview === 'function') {
+        applyPowerFlowPreview(el, tile, sensorMeta);
+      } else {
+        el.classList.remove('power-flow-tile', 'power-flow-no-card');
+      }
       if (typeof applyTileRulesTint === 'function') {
         applyTileRulesTint(el, typeValue, tile.icon_colors, tile.sensor_entity || '', sensorMeta);
       }
@@ -11049,7 +11500,8 @@ async function saveGestureEdge(select) {
         applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
       }
       if (deviceKind) {
-        applyDevicePreview(el, deviceKind, devicePreviewState, Number(tile.span_h) === 0.5);
+        applyDevicePreview(el, deviceKind, devicePreviewState, Number(tile.span_h) === 0.5,
+          Number(tile.bar_orientation) === 1, {w: Number(tile.span_w) || 1, h: Number(tile.span_h) || 1});
         applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
       }
       if (typeValue === '9') {
@@ -13434,10 +13886,13 @@ async function saveGestureEdge(select) {
     return {cols: Math.max(...cols, Math.min(...cols) + 2),
       rows: Math.max(...rows, Math.min(...rows) + 2) + (layoutWindow?.extraRows || 0)};
   }
-  function layoutInside(tile, key) {
+  // On the layout's screen; a screensaver tile (`tab`) only in its rows at
+  // the bottom, the panel refuses a place above them (/api/layouts).
+  function layoutInside(tile, key, tab) {
     const L = LAYOUTS[key];
+    const top = tab !== undefined && isScreensaverTileTab(tab) ? screensaverFirstRow(key, L.rows) : 0;
     return tile.col >= -1e-6 && tile.col + tile.span_w <= L.cols + 1e-6 &&
-      tile.row >= -1e-6 && tile.row + tile.span_h <= L.rows + 1e-6;
+      tile.row >= top - 1e-6 && tile.row + tile.span_h <= L.rows + 1e-6;
   }
   // The head on the layout's screen: the X and the time keep their distance
   // to its right edge.
@@ -13649,11 +14104,15 @@ async function saveGestureEdge(select) {
     const L = LAYOUTS[key];
     const tiles = layoutBase(tab);
     const shift = isScreensaverTileTab(tab) ? L.rows - LAYOUTS[from].rows : 0;
+    // The screensaver's rows at the bottom: three upright, two otherwise. A
+    // tile above them there goes to the storage, as the panel leaves it out
+    // (screensaver_places::find).
+    const top = isScreensaverTileTab(tab) ? screensaverFirstRow(key, L.rows) : 0;
     if (from === 'classic') {
       tiles.forEach(tile => {
         if (!layoutUsed(tile)) return;
-        if (classicHidden(tab, tile.view_id)) tile._unplaced = true;
         tile.row += shift;
+        if (classicHidden(tab, tile.view_id) || tile.row < top - 1e-6) tile._unplaced = true;
       });
     } else {
       // The other layout as its window shows it: saved, or its first take-over.
@@ -13661,7 +14120,7 @@ async function saveGestureEdge(select) {
       tiles.forEach((tile, index) => {
         const p = source[index];
         if (!layoutUsed(tile)) return;
-        if (layoutShown(p) && layoutInside(p, from)) {
+        if (layoutShown(p) && layoutInside(p, from, tab) && p.row + shift >= top - 1e-6) {
           Object.assign(tile, {col: p.col, row: p.row + shift, span_w: p.span_w, span_h: p.span_h});
           delete tile._unplaced;
         } else if (!layoutBarHidden(tile, tab)) {
@@ -13937,15 +14396,15 @@ async function saveGestureEdge(select) {
   // Red: half over the screen's edge, or a folder or the Settings tile
   // without a place (it could not be reached); a tile wholly in the storage
   // is only dimmed.
-  function layoutRed(tile, key) {
-    return !layoutInside(tile, key) && (layoutMustReach(tile.type) || !layoutParked(tile, key));
+  function layoutRed(tile, key, tab) {
+    return !layoutInside(tile, key, tab) && (layoutMustReach(tile.type) || !layoutParked(tile, key));
   }
   function redCount(tab) {
-    return getTilesData(tab).filter(tile => layoutShown(tile) && layoutRed(tile, layoutWindow.key)).length;
+    return getTilesData(tab).filter(tile => layoutShown(tile) && layoutRed(tile, layoutWindow.key, tab)).length;
   }
   function parkedCount(tab) {
-    return getTilesData(tab).filter(tile => layoutShown(tile) && !layoutRed(tile, layoutWindow.key) &&
-      !layoutInside(tile, layoutWindow.key)).length;
+    return getTilesData(tab).filter(tile => layoutShown(tile) && !layoutRed(tile, layoutWindow.key, tab) &&
+      !layoutInside(tile, layoutWindow.key, tab)).length;
   }
   // A folder's list holds one entry per classic cell plus the storage's
   // entries (grid_slots.h). With no more tiles than that in a layout's
@@ -13960,9 +14419,9 @@ async function saveGestureEdge(select) {
         el.dataset.col !== undefined
         ? {type: el.dataset.type, col: Number(el.dataset.col), row: Number(el.dataset.row),
           span_w: Number(el.dataset.spanW), span_h: Number(el.dataset.spanH)} : null;
-      const red = !!place && layoutRed(place, layoutWindow.key);
+      const red = !!place && layoutRed(place, layoutWindow.key, tab);
       el.classList.toggle('setup-red', red);
-      el.classList.toggle('setup-parked', !!place && !red && !layoutInside(place, layoutWindow.key));
+      el.classList.toggle('setup-parked', !!place && !red && !layoutInside(place, layoutWindow.key, tab));
     });
     // Folders and the Settings tile carry a badge on their top right corner
     // like the page tabs: a green tick when they have a place (still
@@ -15961,6 +16420,32 @@ function maybeFillTitleFromSensor(tab) {
     maybeFillTitleFromEntity(tab, '_sensor_entity');
   }
 
+  // A finished text with its unit after a number ("21,5 °C", "Open · 58 %")
+  // as HTML, the unit a step smaller (.tile-unit), like the panel's
+  // value_unit::show_text (value_unit_rules.h split_unit): the last word, or
+  // the letters after the last digit, without a digit, right after a digit
+  // (one space allowed), on one line; any other text escaped as it is.
+  function unitTextHtml(text) {
+    const value = String(text ?? '');
+    const match = /^([^\n]*\d) ?([^ \d\n]+)$/.exec(value);
+    const bytes = match ? [...match[2]].reduce((n, c) => n + (c.codePointAt(0) < 0x80 ? 1 : c.codePointAt(0) < 0x800 ? 2 : c.codePointAt(0) < 0x10000 ? 3 : 4), 0) : 0;
+    if (!match || bytes > 12) return escapeHtml(value);
+    return escapeHtml(match[1]) + '<span class="tile-unit">' + escapeHtml(match[2]) + '</span>';
+  }
+
+  // A unit's inline size for a number of `valuePx` panel pixels, the step
+  // the panel takes (value_unit_rules.h unit_px over VALUE_UNIT_FONTS, its
+  // thin gap and the digits' tops meeting); the .tile-unit rule (80 %)
+  // stands in where the number's size is not known.
+  function valueUnitStyle(valuePx) {
+    const sizes = typeof VALUE_UNIT_FONTS !== 'undefined' && VALUE_UNIT_FONTS.length ? VALUE_UNIT_FONTS : [16, 20, 24, 28, 32];
+    let unit = sizes[0];
+    for (const size of sizes) if (size < valuePx && size * 10 <= valuePx * 8) unit = size;
+    const ratio = unit / valuePx;
+    return 'font-size:' + ratio.toFixed(4) + 'em;margin-left:' + (Math.floor((unit + 3) / 6) / unit).toFixed(4) +
+      'em;vertical-align:' + (0.727 * (1 - ratio) / ratio).toFixed(4) + 'em';
+  }
+
   function formatSensorValue(value, decimals) {
     if (value === undefined || value === null) return '--';
     let text = String(value).trim();
@@ -15974,6 +16459,327 @@ function maybeFillTitleFromSensor(tab) {
     if (isNaN(num) || !isFinite(num)) return text;
     const d = Math.max(0, Math.min(6, parseInt(decimals, 10) || 0));
     return formatLocalizedNumber(num, d, false);
+  }
+  // The Sensor tile's looks below its header (types/sensor/sensor_look.h,
+  // gauge lab build/design-mockups/gauge-media/lab.html, 2026-10-28): the
+  // panel's box, arc fit, shapes and value place, drawn as SVG in panel
+  // pixels over the card and scaled like the rest of the preview
+  // (--radius-preview-scale). Lit places take the icon's shown color
+  // (--icon-shown), the track and the unlit places the controls' fill
+  // (--control-fill); with a color bar every place takes its own colors,
+  // which applyIconDiscTint hands over (tile.sensorLookTones).
+  const SENSOR_LOOK_VALUE_INSIDE = [8, 10, 11, 12];
+  let sensorLookClipSeq = 0;
+
+  function isSensorLookMode(mode) {
+    const m = Number(mode);
+    return m >= 3 && m <= 14;
+  }
+
+  function sensorLookValueInside(mode) {
+    return SENSOR_LOOK_VALUE_INSIDE.includes(Number(mode));
+  }
+
+  function sensorLookRootValue(name, fallback) {
+    if (typeof getComputedStyle !== 'function' || typeof document === 'undefined') return fallback;
+    const value = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  // The look's sizes in panel pixels (tile_layout::scale of the lab's 12,
+  // 16, 6, 5 and 11), from web_admin_styles.cpp.
+  function sensorLookMetrics() {
+    const raw = typeof getComputedStyle === 'function' && typeof document !== 'undefined'
+      ? String(getComputedStyle(document.documentElement).getPropertyValue('--sensor-look-metrics')).trim() : '';
+    const parts = raw.split(/\s+/).map(Number);
+    const [stroke, band, stripe, gap, pitch] = parts.length === 5 && parts.every(Number.isFinite)
+      ? parts : [12, 16, 6, 5, 11];
+    return {stroke, band, stripe, gap, pitch};
+  }
+
+  // ---- The arc fit (sensor_look::fit_arc / auto_arc) ----
+
+  function sensorLookColumn(box, m, x) {
+    if (x < m - 1e-4 || x > box.w - m + 1e-4) return null;
+    let top = m, bottom = box.h - m;
+    const dx = Math.max(box.r - x, x - (box.w - box.r), 0);
+    if (dx > 0) {
+      const inner = box.r - m;
+      if (inner <= 0 || dx > inner + 1e-4) return null;
+      const s = Math.sqrt(Math.max(0, inner * inner - dx * dx));
+      top = Math.max(top, box.r - s);
+      bottom = Math.min(bottom, box.h - box.r + s);
+    }
+    return top <= bottom + 1e-4 ? [top, bottom] : null;
+  }
+
+  function sensorLookFitArc(box, angle, sw) {
+    const half = angle / 2 * Math.PI / 180, cx = box.w / 2, samples = 72;
+    const sines = [], cosines = [];
+    for (let k = 0; k <= samples; ++k) {
+      const a = -half + 2 * half * k / samples;
+      sines.push(Math.sin(a));
+      cosines.push(Math.cos(a));
+    }
+    const heights = r => {
+      let lo = -1e9, hi = 1e9;
+      for (let k = 0; k <= samples; ++k) {
+        const column = sensorLookColumn(box, sw / 2, cx + r * sines[k]);
+        if (!column) return null;
+        lo = Math.max(lo, column[0] + r * cosines[k]);
+        hi = Math.min(hi, column[1] + r * cosines[k]);
+        if (lo > hi) return null;
+      }
+      return [lo, hi];
+    };
+    let lo = 5, hi = 2 * Math.max(box.w, box.h);
+    if (!heights(lo)) return null;
+    for (let i = 0; i < 24; ++i) {
+      const mid = (lo + hi) / 2;
+      if (heights(mid)) lo = mid;
+      else hi = mid;
+    }
+    const range = heights(lo);
+    return {cx, cy: (range[0] + range[1]) / 2, r: lo, half, sw};
+  }
+
+  function sensorLookAutoArc(box, sw) {
+    let best = null, bestScore = -1;
+    for (let angle = 40; angle <= 300; angle += 10) {
+      const arc = sensorLookFitArc(box, angle, sw);
+      if (!arc) continue;
+      const w = 2 * arc.r * (arc.half >= Math.PI / 2 ? 1 : Math.sin(arc.half)) + arc.sw;
+      const h = arc.r * (1 - Math.cos(Math.min(arc.half, Math.PI))) + arc.sw;
+      const score = (w / box.w) * (h / box.h);
+      if (score > bestScore) { bestScore = score; best = arc; }
+    }
+    return best;
+  }
+
+  function sensorLookArc(mode, box, m) {
+    mode = Number(mode);
+    if (mode === 7 || mode === 8) return sensorLookAutoArc(box, m.stroke);
+    if (mode === 9 || mode === 10) return sensorLookAutoArc(box, m.band);
+    if (mode >= 11 && mode <= 14) {
+      const sw = mode === 11 || mode === 13 ? m.stroke : m.band;
+      const r = (Math.min(box.w, box.h) - sw) / 2;
+      return r > sw / 2 ? {cx: box.w / 2, cy: box.h / 2, r, half: Math.PI, sw} : null;
+    }
+    return null;
+  }
+
+  // sensor_look::value_top: open arcs put the standard size's top at the
+  // middle of their inside and keep its centre for a chosen size, a closed
+  // ring centres its digits on the ring's centre.
+  function sensorLookValueTop(mode, arc, size, standard) {
+    mode = Number(mode);
+    if (mode >= 11 && mode <= 14) return arc.cy - size * 0.5;
+    const bottom = Math.min(arc.cy + arc.r - arc.sw / 2, arc.cy - arc.r * Math.cos(arc.half));
+    return (arc.cy - arc.r + arc.sw / 2 + bottom) / 2 + (standard - size) / 2;
+  }
+
+  // ---- Shapes as SVG (the lab's drawing, box-local coordinates) ----
+
+  const sensorLookNum = v => (Math.round(v * 100) / 100).toString();
+
+  // Stripes (sensor_look::emit_stripes): round ends on the box, in the
+  // corners following the corner curve; each stripe shrunk by r and stroked
+  // 2r wide with round joins.
+  function sensorLookStripes(box, m, fraction, up, colorOf) {
+    const sw = m.stripe, rc = sw / 2, U = up ? box.h : box.w, V = up ? box.w : box.h, R = box.r;
+    const n = Math.floor((U + m.gap) / (sw + m.gap));
+    if (n < 1) return '';
+    const gap = n > 1 ? (U - n * sw) / (n - 1) : 0;
+    const lit = Math.round(n * fraction);
+    const edge = (u, r, dir) => {
+      const off = Math.max(0, R - u, up ? 0 : u - (U - R)), ri = R - r;
+      if (off <= 0) return dir > 0 ? V - r : r;
+      const d = Math.sqrt(Math.max(0, ri * ri - off * off));
+      return dir > 0 ? V - R + d : R - d;
+    };
+    const map = (u, v) => up ? `${sensorLookNum(v)} ${sensorLookNum(U - u)}` : `${sensorLookNum(u)} ${sensorLookNum(v)}`;
+    let body = '';
+    for (let i = 0; i < n; ++i) {
+      const su = i * (sw + gap), drop = Math.abs(edge(su, 0, 1) - edge(su + sw, 0, 1));
+      const r = drop > sw ? sw / 3 : rc, a = su + r, b = su + sw - r;
+      let d = '';
+      for (let k = 0; k <= 8; ++k) { const u = a + (b - a) * k / 8; d += `${k ? 'L' : 'M'}${map(u, edge(u, r, -1))}`; }
+      for (let k = 0; k <= 8; ++k) { const u = b - (b - a) * k / 8; d += `L${map(u, edge(u, r, 1))}`; }
+      const color = colorOf(i < lit, (i + 0.5) / n);
+      body += `<path d="${d}Z" style="fill:${color};stroke:${color}" stroke-width="${sensorLookNum(2 * r)}" stroke-linejoin="round"/>`;
+    }
+    return body;
+  }
+
+  // A level (sensor_look::emit_level): the track is the whole box, the fill
+  // as long as the value with its moving end rounded, inside the box.
+  function sensorLookLevel(box, end, fraction, up, colorOf) {
+    const r = box.r, id = 'sensorLookClip' + (++sensorLookClipSeq);
+    let body = `<rect width="${sensorLookNum(box.w)}" height="${sensorLookNum(box.h)}" rx="${sensorLookNum(r)}" style="fill:${colorOf(false, 0.5)}"/>`;
+    if (!(fraction > 0)) return body;
+    body += `<clipPath id="${id}"><rect width="${sensorLookNum(box.w)}" height="${sensorLookNum(box.h)}" rx="${sensorLookNum(r)}"/></clipPath>`;
+    let d;
+    if (up) {
+      const length = box.h * fraction, e = Math.min(end, length, box.w / 2), y = box.h - length;
+      d = `M0 ${sensorLookNum(box.h)}V${sensorLookNum(y + e)}A${e} ${e} 0 0 1 ${sensorLookNum(e)} ${sensorLookNum(y)}` +
+        `H${sensorLookNum(box.w - e)}A${e} ${e} 0 0 1 ${sensorLookNum(box.w)} ${sensorLookNum(y + e)}V${sensorLookNum(box.h)}Z`;
+    } else {
+      const length = box.w * fraction, e = Math.min(end, length, box.h / 2);
+      d = `M0 0H${sensorLookNum(length - e)}A${e} ${e} 0 0 1 ${sensorLookNum(length)} ${sensorLookNum(e)}` +
+        `V${sensorLookNum(box.h - e)}A${e} ${e} 0 0 1 ${sensorLookNum(length - e)} ${sensorLookNum(box.h)}H0Z`;
+    }
+    return body + `<path d="${d}" clip-path="url(#${id})" style="fill:${colorOf(true, fraction)}"/>`;
+  }
+
+  // An arc or ring (sensor_look::emit_arc): track, fill to the value with
+  // round ends; with a color bar small pieces in their colors and round ends.
+  function sensorLookArcBody(arc, fraction, closed, places, colorOf) {
+    const {cx, cy, r, sw} = arc;
+    const a0 = closed ? 0 : -arc.half, a1 = closed ? 2 * Math.PI : arc.half;
+    const at = a => `${sensorLookNum(cx + r * Math.sin(a))} ${sensorLookNum(cy - r * Math.cos(a))}`;
+    const path = (p, q) => q - p > Math.PI
+      ? `M${at(p)}A${r} ${r} 0 0 1 ${at((p + q) / 2)}A${r} ${r} 0 0 1 ${at(q)}`
+      : `M${at(p)}A${r} ${r} 0 0 1 ${at(q)}`;
+    const aOf = p => a0 + (a1 - a0) * p;
+    const cap = (p, color) => {
+      const a = aOf(p);
+      return `<circle cx="${sensorLookNum(cx + r * Math.sin(a))}" cy="${sensorLookNum(cy - r * Math.cos(a))}" r="${sw / 2}" style="fill:${color}"/>`;
+    };
+    let body = '';
+    if (!places) {
+      body += `<path d="${path(a0, a1)}" style="stroke:${colorOf(false, 0.5)}" stroke-width="${sw}" fill="none" stroke-linecap="${closed ? 'butt' : 'round'}"/>`;
+      if (fraction > 0) {
+        body += `<path d="${path(a0, Math.max(aOf(Math.min(1, fraction)), a0 + 1e-4))}" style="stroke:${colorOf(true, fraction)}" stroke-width="${sw}" fill="none" stroke-linecap="round"/>`;
+      }
+      return body;
+    }
+    const pieces = 48, colorAt = p => colorOf(p < fraction, p);
+    if (!closed) body += cap(0, colorOf(fraction > 0, 0)) + cap(1, colorOf(fraction >= 1, 1));
+    for (let k = 0; k < pieces; ++k) {
+      const p0 = k / pieces, p1 = Math.min(1, (k + 1.2) / pieces);
+      body += `<path d="${path(aOf(p0), aOf(p1))}" style="stroke:${colorAt((k + 0.5) / pieces)}" stroke-width="${sw}" fill="none"/>`;
+    }
+    if (fraction > 0) body += cap(0, colorOf(true, 0));
+    if (fraction > 0 && fraction < 1) body += cap(fraction, colorOf(true, fraction));
+    return body;
+  }
+
+  // Round stripes across an arc or ring (sensor_look::emit_ticks).
+  function sensorLookTicks(arc, m, fraction, closed, colorOf) {
+    const halfW = m.stripe / 2, r0 = arc.r - m.band / 2 + halfW, r1 = arc.r + m.band / 2 - halfW;
+    const n = closed ? Math.floor(2 * Math.PI * arc.r / m.pitch)
+      : Math.max(2, Math.floor(arc.r * 2 * arc.half / m.pitch) + 1);
+    if (n < 2) return '';
+    const lit = Math.round(n * fraction);
+    let body = '';
+    for (let i = 0; i < n; ++i) {
+      const a = closed ? 2 * Math.PI * i / n : -arc.half + 2 * arc.half * i / (n - 1);
+      const sn = Math.sin(a), cs = Math.cos(a);
+      body += `<line x1="${sensorLookNum(arc.cx + r0 * sn)}" y1="${sensorLookNum(arc.cy - r0 * cs)}" ` +
+        `x2="${sensorLookNum(arc.cx + r1 * sn)}" y2="${sensorLookNum(arc.cy - r1 * cs)}" ` +
+        `style="stroke:${colorOf(i < lit, (i + 0.5) / n)}" stroke-width="${sensorLookNum(m.stripe)}" stroke-linecap="round"/>`;
+    }
+    return body;
+  }
+
+  // ---- The tile ----
+
+  // The look's data on the tile element (applyCompactSensorPreview): the
+  // mode, the gauge range and the tile's color record.
+  function setSensorLookData(el, mode, data) {
+    if (!el?.dataset) return;
+    if (!isSensorLookMode(mode)) {
+      delete el.dataset.lookMode;
+      return;
+    }
+    el.dataset.lookMode = String(Number(mode));
+    let min = Number(data?.sensor_gauge_min), max = Number(data?.sensor_gauge_max);
+    if (!Number.isFinite(min)) min = 0;
+    if (!Number.isFinite(max) || max <= min) { min = 0; max = 100; }
+    el.dataset.lookMin = String(min);
+    el.dataset.lookMax = String(max);
+    el.dataset.lookRecord = String(data?.icon_colors || '');
+  }
+
+  // The color bar that colors the icon from the tile's own state
+  // (tile_icon_colors::own_bar), or null.
+  function sensorLookBar(record) {
+    if (!record || typeof parseIconColorRecord !== 'function') return null;
+    if (typeof iconColorOwnStateColorsIcon === 'function' && !iconColorOwnStateColorsIcon(record)) return null;
+    const parsed = parseIconColorRecord(record);
+    return parsed?.bar || null;
+  }
+
+  function sensorLookShownValue(el) {
+    const value = el.querySelector(':scope > .tile-value');
+    const text = value?.firstChild?.nodeType === 3 ? value.firstChild.nodeValue : (value?.textContent || '');
+    const number = parseFloat(String(text).replace(',', '.'));
+    return Number.isFinite(number) ? number : NaN;
+  }
+
+  function renderSensorLookPreview(el) {
+    if (!el?.querySelector) return;
+    let svg = el.querySelector(':scope > .sensor-look-svg');
+    const mode = Number(el.dataset.lookMode);
+    if (!isSensorLookMode(mode)) {
+      svg?.remove();
+      return;
+    }
+    const scale = sensorLookRootValue('--radius-preview-scale', 1) || 1;
+    const W = el.offsetWidth / scale, H = el.offsetHeight / scale;
+    if (!(W > 8 && H > 8)) return;
+    const inset = sensorLookRootValue('--climate-margin-x', 6 * scale) / scale;
+    const top = sensorLookRootValue('--climate-slots-top', 78 * scale) / scale;
+    const radius = sensorLookRootValue('--tile-radius-device', 31) - inset;
+    const box = {x: inset, y: top, w: W - 2 * inset, h: H - inset - top};
+    box.r = Math.max(0, Math.min(radius, box.w / 2, box.h / 2));
+    if (box.w < 8 || box.h < 8) { svg?.remove(); return; }
+    const m = sensorLookMetrics();
+    const end = Math.max(1, Math.round(sensorLookRootValue('--switch-bar-height', 68 * scale) / scale / 4));
+    const min = Number(el.dataset.lookMin) || 0, max = Number(el.dataset.lookMax) || 100;
+    const value = sensorLookShownValue(el);
+    const fraction = Number.isFinite(value) ? Math.min(1, Math.max(0, (value - min) / (max - min))) : 0;
+    // A color bar colors every place of stripes, arcs and rings.
+    const bar = mode >= 5 ? sensorLookBar(el.dataset.lookRecord) : null;
+    const tones = typeof el.sensorLookTones === 'function' ? el.sensorLookTones : null;
+    const colorOf = (lit, place) => {
+      if (bar && tones && typeof iconColorBarColor === 'function') {
+        const rgb = iconColorBarColor(bar, min + (max - min) * place);
+        const tone = tones([(rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255]);
+        return lit ? tone.lit : tone.off;
+      }
+      return lit ? 'var(--icon-shown, currentColor)' : 'var(--control-fill, rgba(255,255,255,0.12))';
+    };
+    let body = '';
+    if (mode === 3 || mode === 4) body = sensorLookLevel(box, end, fraction, mode === 4, colorOf);
+    else if (mode === 5 || mode === 6) body = sensorLookStripes(box, m, fraction, mode === 6, colorOf);
+    const arc = sensorLookArc(mode, box, m);
+    const closed = mode >= 11;
+    if (arc && [7, 8, 11, 13].includes(mode)) body = sensorLookArcBody(arc, fraction, closed, !!(bar && tones), colorOf);
+    if (arc && [9, 10, 12, 14].includes(mode)) body = sensorLookTicks(arc, m, fraction, closed, colorOf);
+    if (!svg) {
+      el.insertAdjacentHTML('afterbegin', '<svg class="sensor-look-svg" aria-hidden="true"></svg>');
+      svg = el.querySelector(':scope > .sensor-look-svg');
+    }
+    svg.setAttribute('viewBox', `0 0 ${sensorLookNum(W)} ${sensorLookNum(H)}`);
+    svg.innerHTML = `<g transform="translate(${sensorLookNum(box.x)} ${sensorLookNum(box.y)})">${body}</g>`;
+    // The value inside the arc or ring: Default 20 on one-row tiles, 24 on
+    // taller ones, or the chosen value size (tile_layout::value_font_for_choice);
+    // its em box's top where the panel puts it.
+    const valueEl = el.querySelector(':scope > .tile-value');
+    if (valueEl && sensorLookValueInside(mode) && arc) {
+      const taller = Number(el.dataset.lookTall) === 1;
+      const standardSize = taller ? 24 : 20;
+      const chosen = {1: 20, 2: 24, 3: 32, 4: 40, 5: 28}[Number(el.dataset.lookFont)] || standardSize;
+      const fontPx = sensorLookRootValue('--fs' + chosen, chosen * scale);
+      const size = fontPx / scale;
+      const standard = sensorLookRootValue('--fs' + standardSize, standardSize * scale) / scale;
+      valueEl.style.top = sensorLookNum((box.y + sensorLookValueTop(mode, arc, size, standard)) * scale - 3) + 'px';
+      valueEl.style.fontSize = sensorLookNum(fontPx) + 'px';
+    } else if (valueEl) {
+      valueEl.style.removeProperty('top');
+      valueEl.style.removeProperty('font-size');
+    }
   }
 
   const BINARY_SENSOR_ICON_PAIRS = Object.freeze({
@@ -16147,25 +16953,112 @@ function maybeFillTitleFromSensor(tab) {
     el.classList.add(getSensorValueFontClass(value));
   }
 
+  // The Sensor menu's choices (web_html.cpp, mockup sensor-menu) and the
+  // stored Tile::sensor_display_mode (sensor_look.h). Layout 0 value,
+  // 1 graph, 2 bar, 3 ring, 4 the old gauge; Form 0 fill or line, 1 stripes;
+  // Orientation 0 horizontal, 1 upright; Ring 0 open, 1 closed; Value 0 in
+  // the head, 1 inside the ring.
+  const SENSOR_LAYOUT_FIELDS = ['sensor_layout', 'sensor_form', 'sensor_orientation', 'sensor_ring', 'sensor_place'];
+
+  function sensorModeFromChoices(c) {
+    if (c.layout === 1) return 2;
+    if (c.layout === 4) return 1;
+    if (c.layout === 2) return 3 + (c.form ? 2 : 0) + (c.orientation ? 1 : 0);
+    if (c.layout === 3) {
+      if (c.ring) return (c.place ? 11 : 13) + (c.form ? 1 : 0);
+      return 7 + (c.form ? 2 : 0) + (c.place ? 1 : 0);
+    }
+    return 0;
+  }
+
+  function sensorChoicesFromMode(mode) {
+    mode = Number(mode) || 0;
+    const c = {layout: 0, form: 0, orientation: 0, ring: 0, place: 1};
+    if (mode === 1) c.layout = 4;
+    else if (mode === 2) c.layout = 1;
+    else if (mode >= 3 && mode <= 6) Object.assign(c, {layout: 2, form: mode >= 5 ? 1 : 0, orientation: (mode - 3) % 2});
+    else if (mode >= 7 && mode <= 10) Object.assign(c, {layout: 3, form: mode >= 9 ? 1 : 0, place: (mode - 7) % 2});
+    else if (mode === 11 || mode === 12) Object.assign(c, {layout: 3, ring: 1, form: mode - 11, place: 1});
+    else if (mode === 13 || mode === 14) Object.assign(c, {layout: 3, ring: 1, form: mode - 13, place: 0});
+    return c;
+  }
+
+  // Shows a stored mode in the choices; the old gauge's button only on a
+  // tile that has it (`gauge`).
+  function setSensorLayoutChoices(tab, mode, gauge) {
+    const c = sensorChoicesFromMode(mode);
+    const values = {sensor_layout: c.layout, sensor_form: c.form, sensor_orientation: c.orientation,
+      sensor_ring: c.ring, sensor_place: c.place};
+    for (const field of SENSOR_LAYOUT_FIELDS) {
+      const select = document.getElementById(tab + '_' + field);
+      if (select) select.value = String(values[field]);
+    }
+    const layout = document.getElementById(tab + '_sensor_layout');
+    if (layout?.dataset) layout.dataset.gauge = gauge ? '1' : '0';
+  }
+
+  // A choice changed: the stored mode follows and its change event runs the
+  // preview, draft and autosave.
+  function applySensorLayoutChoices(tab) {
+    const read = field => Number(document.getElementById(tab + '_' + field)?.value || 0);
+    const mode = String(sensorModeFromChoices({layout: read('sensor_layout'), form: read('sensor_form'),
+      orientation: read('sensor_orientation'), ring: read('sensor_ring'), place: read('sensor_place')}));
+    const select = document.getElementById(tab + '_sensor_display_mode');
+    if (select && String(select.value) !== mode) {
+      select.value = mode;
+      if (typeof select.dispatchEvent === 'function') select.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+    syncGaugeUi(tab);
+  }
+
   function syncGaugeUi(tab) {
     const prefix = tab;
     const typeValue = document.getElementById(prefix + '_tile_type')?.value || '0';
     const gaugeWrap = document.getElementById(prefix + '_sensor_gauge_fields');
     const graphWrap = document.getElementById(prefix + '_sensor_graph_fields');
+    // The graph fills its box; its old height field stays hidden.
+    if (graphWrap) graphWrap.classList.add('hidden');
     if (typeValue !== '1') {
       if (gaugeWrap) gaugeWrap.classList.add('hidden');
-      if (graphWrap) graphWrap.classList.add('hidden');
       return;
     }
     const displayMode = document.getElementById(prefix + '_sensor_display_mode')?.value || '0';
-    if (gaugeWrap) {
-      if (displayMode === '1') gaugeWrap.classList.remove('hidden');
-      else gaugeWrap.classList.add('hidden');
-    }
-    if (graphWrap) {
-      if (displayMode === '2') graphWrap.classList.remove('hidden');
-      else graphWrap.classList.add('hidden');
-    }
+    const c = sensorChoicesFromMode(displayMode);
+    const row = (field, shown) => {
+      const label = typeof document.querySelector === 'function'
+        ? document.querySelector('label[for="' + prefix + '_' + field + '"]') : null;
+      if (label) label.classList.toggle('hidden', !shown);
+      document.getElementById(prefix + '_' + field + '_choices')?.classList.toggle('hidden', !shown);
+    };
+    const bar = c.layout === 2, ring = c.layout === 3, gauge = c.layout === 4;
+    row('sensor_form', bar || ring);
+    row('sensor_orientation', bar);
+    row('sensor_ring', ring);
+    row('sensor_place', ring);
+    // A bar's first form is its fill, a ring's its line.
+    const form = document.getElementById(prefix + '_sensor_form');
+    const first = form?.options?.[0];
+    const firstName = bar ? form?.dataset?.level : form?.dataset?.line;
+    if (first && firstName) first.textContent = firstName;
+    // The old gauge stays offered on a tile that has it.
+    const layout = document.getElementById(prefix + '_sensor_layout');
+    const gaugeOption = layout?.options ? Array.from(layout.options).find(o => o.value === '4') : null;
+    if (gaugeOption) gaugeOption.hidden = layout.dataset?.gauge !== '1' && !gauge;
+    // The range belongs to the gauge and every look; the arc, size and
+    // offset to the gauge alone.
+    if (gaugeWrap) gaugeWrap.classList.toggle('hidden', !(bar || ring || gauge));
+    const shapeWrap = document.getElementById(prefix + '_sensor_gauge_shape_fields');
+    if (shapeWrap) shapeWrap.classList.toggle('hidden', !gauge);
+    // The value size everywhere: alone, in the head, inside an arc or ring
+    // (its Default there the look's 20 or 24).
+    row('sensor_value_font', true);
+    // The value's Y offset with the old gauge only (user 2026-10-28).
+    const offsetShown = gauge;
+    const offsetLabel = typeof document.querySelector === 'function'
+      ? document.querySelector('label[for="' + prefix + '_sensor_value_y_offset"]') : null;
+    if (offsetLabel) offsetLabel.classList.toggle('hidden', !offsetShown);
+    document.getElementById(prefix + '_sensor_value_y_offset')?.classList.toggle('hidden', !offsetShown);
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
 
   function loadSensorFields(tab, data) {
@@ -16183,6 +17076,7 @@ function maybeFillTitleFromSensor(tab) {
     if (popupModeEl) popupModeEl.value = (data.popup_open_mode !== undefined) ? String(data.popup_open_mode) : '1';
     const displayModeEl = document.getElementById(prefix + '_sensor_display_mode');
     if (displayModeEl) displayModeEl.value = (data.sensor_display_mode !== undefined) ? String(data.sensor_display_mode) : '0';
+    setSensorLayoutChoices(tab, displayModeEl?.value || 0, Number(data.sensor_display_mode) === 1);
     const gaugeMinEl = document.getElementById(prefix + '_sensor_gauge_min');
     if (gaugeMinEl) gaugeMinEl.value = (data.sensor_gauge_min !== undefined && data.sensor_gauge_min !== null) ? String(data.sensor_gauge_min) : '';
     const gaugeMaxEl = document.getElementById(prefix + '_sensor_gauge_max');
@@ -16236,6 +17130,7 @@ function maybeFillTitleFromSensor(tab) {
     if (popupModeEl) popupModeEl.value = '1';
     const displayModeEl = document.getElementById(prefix + '_sensor_display_mode');
     if (displayModeEl) displayModeEl.value = '0';
+    setSensorLayoutChoices(tab, 0, false);
     const gaugeMinEl = document.getElementById(prefix + '_sensor_gauge_min');
     if (gaugeMinEl) gaugeMinEl.value = '';
     const gaugeMaxEl = document.getElementById(prefix + '_sensor_gauge_max');
@@ -16337,10 +17232,15 @@ function maybeFillTitleFromEnergy(tab) {
     if (decEl) decEl.value = (data.sensor_decimals !== undefined && data.sensor_decimals >= 0) ? data.sensor_decimals : '1';
     const fontEl = document.getElementById(prefix + '_energy_value_font');
     if (fontEl) fontEl.value = (data.sensor_value_font !== undefined) ? String(data.sensor_value_font) : '0';
+    // The value alone (0) or today's hours as bars below the header (2).
+    const displayEl = document.getElementById(prefix + '_energy_display_mode');
+    if (displayEl) displayEl.value = Number(data.sensor_display_mode) === 2 ? '2' : '0';
     const popupModeEl = document.getElementById(prefix + '_energy_popup_open_mode');
     if (popupModeEl) popupModeEl.value = (data.popup_open_mode !== undefined) ? String(data.popup_open_mode) : '1';
     const valueYOffsetEl = document.getElementById(prefix + '_energy_value_y_offset');
     if (valueYOffsetEl) valueYOffsetEl.value = (data.sensor_value_y_offset !== undefined && data.sensor_value_y_offset !== null) ? String(data.sensor_value_y_offset) : '';
+    // The segmented choices show the loaded values (types/switch/admin.js).
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromEnergy(tab);
   }
 
@@ -16354,6 +17254,7 @@ function maybeFillTitleFromEnergy(tab) {
     formData.append('sensor_unit', document.getElementById(prefix + '_energy_unit')?.value || '');
     formData.append('sensor_decimals', document.getElementById(prefix + '_energy_decimals')?.value || '1');
     formData.append('sensor_value_font', document.getElementById(prefix + '_energy_value_font')?.value || '0');
+    formData.append('sensor_display_mode', document.getElementById(prefix + '_energy_display_mode')?.value || '0');
     formData.append('popup_open_mode', document.getElementById(prefix + '_energy_popup_open_mode')?.value || '1');
     formData.append('sensor_value_y_offset', document.getElementById(prefix + '_energy_value_y_offset')?.value || '');
   }
@@ -16369,10 +17270,450 @@ function maybeFillTitleFromEnergy(tab) {
     if (decEl) decEl.value = '1';
     const fontEl = document.getElementById(prefix + '_energy_value_font');
     if (fontEl) fontEl.value = '0';
+    const displayEl = document.getElementById(prefix + '_energy_display_mode');
+    if (displayEl) displayEl.value = '0';
     const popupModeEl = document.getElementById(prefix + '_energy_popup_open_mode');
     if (popupModeEl) popupModeEl.value = '1';
     const valueYOffsetEl = document.getElementById(prefix + '_energy_value_y_offset');
     if (valueYOffsetEl) valueYOffsetEl.value = '';
+  }
+  // Power flow tile (types/power_flow): the node sensors, the options and
+  // the previews. The record (Tile::flow_entities) holds one entity per line
+  // in Home Assistant's order; lines after the five pickers are kept.
+  const POWER_FLOW_TILE_TYPE = 28;
+  const POWER_FLOW_FIELDS = Object.freeze(['flow_pv_entity', 'flow_grid_entity', 'flow_battery_entity',
+    'flow_battery_charge_entity', 'flow_home_entity']);
+  // key_code bits (tile_config.h kFlow*Bit); the card checkbox is the
+  // inverse of the stored "no card" bit.
+  const POWER_FLOW_OPTIONS = Object.freeze([['flow_header', 1], ['flow_no_card', 2], ['flow_grid_invert', 4],
+    ['flow_battery_invert', 8]]);
+
+  function powerFlowLines(record) {
+    return String(record || '').split('\n');
+  }
+
+  function powerFlowRecordFromInputs(tab) {
+    const container = document.getElementById(tab + '_power_flow_fields');
+    const lines = powerFlowLines(container?.dataset.flowRecord || '');
+    POWER_FLOW_FIELDS.forEach((field, i) => {
+      lines[i] = String(document.getElementById(tab + '_' + field)?.value || '').trim();
+    });
+    while (lines.length && !lines[lines.length - 1]) lines.pop();
+    return lines.join('\n');
+  }
+
+  function powerFlowOptionsFromInputs(tab) {
+    let bits = 0;
+    if (document.getElementById(tab + '_flow_header')?.checked) bits |= 1;
+    if (document.getElementById(tab + '_flow_card')?.checked === false) bits |= 2;
+    if (document.getElementById(tab + '_flow_grid_invert')?.checked) bits |= 4;
+    if (document.getElementById(tab + '_flow_battery_invert')?.checked) bits |= 8;
+    return bits;
+  }
+
+  function powerFlowSetOptions(tab, bits) {
+    const set = (field, on) => { const box = document.getElementById(tab + '_' + field); if (box) box.checked = on; };
+    set('flow_header', (bits & 1) !== 0);
+    set('flow_card', (bits & 2) === 0);
+    set('flow_grid_invert', (bits & 4) !== 0);
+    set('flow_battery_invert', (bits & 8) !== 0);
+  }
+
+  function loadPowerFlowFields(tab, data) {
+    const record = String(data?.flow_entities || '');
+    const container = document.getElementById(tab + '_power_flow_fields');
+    if (container) container.dataset.flowRecord = record;
+    const lines = powerFlowLines(record);
+    POWER_FLOW_FIELDS.forEach((field, i) => {
+      const input = document.getElementById(tab + '_' + field);
+      if (input) input.value = lines[i] || '';
+    });
+    // Stored tiles carry key_code, copied form data (clipboard.js) the
+    // option fields.
+    powerFlowSetOptions(tab, data && Object.prototype.hasOwnProperty.call(data, 'flow_header')
+      ? powerFlowOptionBits(data) : (Number(data?.key_code) || 0));
+  }
+
+  function savePowerFlowFields(tab, formData) {
+    formData.append('flow_entities', powerFlowRecordFromInputs(tab));
+    const bits = powerFlowOptionsFromInputs(tab);
+    for (const [name, bit] of POWER_FLOW_OPTIONS) formData.append(name, (bits & bit) ? '1' : '0');
+  }
+
+  function resetPowerFlowFields(tab) {
+    const container = document.getElementById(tab + '_power_flow_fields');
+    if (container) delete container.dataset.flowRecord;
+    for (const field of POWER_FLOW_FIELDS) {
+      const input = document.getElementById(tab + '_' + field);
+      if (input) input.value = '';
+    }
+    powerFlowSetOptions(tab, 0);
+  }
+
+  // "Show title and icon" with an empty title puts the type's name in, like
+  // Auto (type-selection.js placeTileTypeParts names it).
+  function powerFlowHeaderTitle(tab) {
+    if (!document.getElementById(tab + '_flow_header')?.checked) return;
+    const title = document.getElementById(tab + '_tile_title');
+    const name = document.getElementById(tab + '_tile_title_auto')?.dataset.autoTitle || '';
+    if (!title || String(title.value || '').trim() || !name) return;
+    title.value = normalizeTileTitle(name);
+    title.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  // The stored key_code of a snapshot's options (snapshots.js, import).
+  function powerFlowOptionBits(source) {
+    let bits = 0;
+    for (const [name, bit] of POWER_FLOW_OPTIONS) {
+      if (['1', 'true', 'on'].includes(String(source?.[name] ?? '0'))) bits |= bit;
+    }
+    return bits;
+  }
+
+  // ----- Geometry: flow_geometry.h line for line --------------------------
+  const POWER_FLOW_BEND_SEGMENTS = 16;
+
+  function powerFlowPolyline() {
+    return { p: [], along: [], bend: null, bendFirst: 0, bendLast: 0 };
+  }
+
+  function powerFlowAdd(line, x, y) {
+    const n = line.p.length;
+    line.along.push(n ? line.along[n - 1] + Math.hypot(x - line.p[n - 1][0], y - line.p[n - 1][1]) : 0);
+    line.p.push([x, y]);
+  }
+
+  function powerFlowCircleOffset(radius, d) {
+    const q = radius * radius - d * d;
+    return q > 0 ? Math.sqrt(q) : 0;
+  }
+
+  // C's lroundf: halves away from zero.
+  function powerFlowRound(value) {
+    return value < 0 ? -Math.round(-value) : Math.round(value);
+  }
+
+  // Down (or up) from the source's disc, a quarter circle on whole pixels,
+  // along the lane to the target's disc.
+  function powerFlowLeg(l, from, dir, to, laneY, spacing) {
+    const line = powerFlowPolyline();
+    const down = from === 'pv';
+    const x = powerFlowRound(l.node.pv[0] + dir * spacing);
+    const lane = powerFlowRound(laneY);
+    const y0 = l.node[from][1] + (down ? 1 : -1) * powerFlowCircleOffset(l.disc, x - l.node[from][0]);
+    const endX = l.node[to][0] - dir * powerFlowCircleOffset(l.disc, lane - l.node[to][1]);
+    const sign = lane >= y0 ? 1 : -1;
+    const radius = powerFlowRound(Math.min(Math.abs(lane - y0), Math.abs(endX - x)));
+    const fromAngle = dir > 0 ? 180 : 0;
+    const toAngle = sign > 0 ? 90 : (dir > 0 ? 270 : -90);
+    const bend = { cx: x + dir * radius, cy: lane - sign * radius, radius, fromAngle, toAngle };
+    powerFlowAdd(line, x, y0);
+    if (Math.abs(bend.cy - y0) > 0.5) powerFlowAdd(line, x, bend.cy);
+    line.bendFirst = line.p.length - 1;
+    if (radius > 0) {
+      line.bend = bend;
+      for (let i = 1; i <= POWER_FLOW_BEND_SEGMENTS; ++i) {
+        const angle = (fromAngle + (toAngle - fromAngle) * i / POWER_FLOW_BEND_SEGMENTS) * Math.PI / 180;
+        powerFlowAdd(line, bend.cx + radius * Math.cos(angle), bend.cy + radius * Math.sin(angle));
+      }
+    }
+    line.bendLast = line.p.length - 1;
+    if (Math.abs(endX - bend.cx) > 0.5) powerFlowAdd(line, endX, lane);
+    return line;
+  }
+
+  // `top`: the header's room (flow_geometry.h header_top), the flow below it.
+  function powerFlowLayout(width, height, m, top = 0) {
+    const ox = width / 2, oy = (top + height) / 2;
+    const l = { width, height, ring: m.ring, disc: m.disc, node: {
+      pv: [ox, top + m.insetY + m.ring], grid: [m.insetX + m.ring, oy],
+      home: [width - m.insetX - m.ring, oy], battery: [ox, height - m.insetY - m.ring] } };
+    const spacing = Math.min(m.spacing, m.disc * 0.8);
+    const gridHome = powerFlowPolyline();
+    powerFlowAdd(gridHome, l.node.grid[0] + m.disc, oy);
+    powerFlowAdd(gridHome, l.node.home[0] - m.disc, oy);
+    const pvBattery = powerFlowPolyline();
+    powerFlowAdd(pvBattery, ox, l.node.pv[1] + m.disc);
+    powerFlowAdd(pvBattery, ox, l.node.battery[1] - m.disc);
+    l.lines = {
+      gridHome, pvBattery,
+      pvHome: powerFlowLeg(l, 'pv', 1, 'home', oy - spacing, spacing),
+      pvGrid: powerFlowLeg(l, 'pv', -1, 'grid', oy - spacing, spacing),
+      batHome: powerFlowLeg(l, 'battery', 1, 'home', oy + spacing, spacing),
+      batGrid: powerFlowLeg(l, 'battery', -1, 'grid', oy + spacing, spacing),
+    };
+    return l;
+  }
+
+  function powerFlowPointAt(line, distance) {
+    const n = line.p.length;
+    if (!n) return [0, 0];
+    if (distance <= 0) return line.p[0];
+    for (let i = 1; i < n; ++i) {
+      if (distance > line.along[i]) continue;
+      const piece = line.along[i] - line.along[i - 1];
+      const t = piece > 0 ? (distance - line.along[i - 1]) / piece : 0;
+      return [line.p[i - 1][0] + (line.p[i][0] - line.p[i - 1][0]) * t,
+        line.p[i - 1][1] + (line.p[i][1] - line.p[i - 1][1]) * t];
+    }
+    return line.p[n - 1];
+  }
+
+  // ----- Flows: flow_model.h ------------------------------------------------
+  const POWER_FLOW_IDLE_WATTS = 10;
+
+  function powerFlowCompute(input) {
+    const pos = v => v > 0 ? v : 0;
+    const solar = input.hasPv ? pos(input.pv) : 0;
+    const gridIn = input.hasGrid ? pos(input.grid) : 0;
+    const gridOut = input.hasGrid ? pos(-input.grid) : 0;
+    const batOut = input.hasBattery ? pos(input.battery) : 0;
+    const batIn = input.hasBattery ? pos(-input.battery) : 0;
+    const pvGrid = Math.min(solar, gridOut);
+    const batGrid = Math.min(batOut, gridOut - pvGrid);
+    const solarLeft = solar - pvGrid;
+    const pvBattery = Math.min(solarLeft, batIn);
+    const gridBattery = Math.min(gridIn, pos(batIn - pvBattery));
+    const pvHome = solarLeft - pvBattery;
+    const gridHome = gridIn - gridBattery;
+    const batHome = batOut - batGrid;
+    const idle = v => v >= POWER_FLOW_IDLE_WATTS ? v : 0;
+    const gridToBattery = gridBattery > batGrid;
+    const into = [['pv', pvHome], ['grid', gridHome], ['battery', batHome]];
+    let best = POWER_FLOW_IDLE_WATTS, homeSource = '';
+    for (const [node, watts] of into) if (watts >= best) { best = watts; homeSource = node; }
+    return {
+      watts: { gridHome: idle(gridHome), pvBattery: idle(pvBattery), pvHome: idle(pvHome), pvGrid: idle(pvGrid),
+        batHome: idle(batHome), batGrid: idle(gridToBattery ? gridBattery : batGrid) },
+      gridToBattery,
+      home: input.hasHome ? pos(input.home) : pvHome + gridHome + batHome,
+      homeKnown: input.hasHome || input.hasPv || input.hasGrid || input.hasBattery,
+      homeSource,
+    };
+  }
+
+  function powerFlowUnitFactor(unit) {
+    const u = String(unit || '').trim();
+    if (/^[kK]W$/.test(u)) return 1000;
+    if (u === 'MW') return 1e6;
+    if (u === 'GW') return 1e9;
+    if (u === 'mW') return 0.001;
+    return 1;
+  }
+
+  function powerFlowNumber(value) {
+    const text = String(value ?? '').trim().replace(',', '.');
+    if (!text) return null;
+    const number = Number.parseFloat(text);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  // A power's amount and unit, as the panel shows them (renderer.cpp
+  // show_power): the unit a step smaller after it (.tile-unit).
+  function powerFlowPower(watts) {
+    const a = Math.abs(watts);
+    if (a >= 999950) return [formatLocalizedNumber(a / 1e6, 1), 'MW'];
+    if (a >= 999.5) return [formatLocalizedNumber(a / 1000, 1), 'kW'];
+    return [formatLocalizedNumber(a, 0), 'W'];
+  }
+
+  // While the battery charges: Home Assistant's charging icon for its level,
+  // as on the panel (renderer.cpp charging_icon).
+  function powerFlowChargingIcon(level) {
+    if (level === null) return 'battery-charging';
+    if (level < 10) return 'battery-charging-outline';
+    return 'battery-charging-' + Math.min(10, Math.round(level / 10)) * 10;
+  }
+
+  // ----- Preview --------------------------------------------------------------
+  const POWER_FLOW_COLORS = Object.freeze({ pv: '#FF9800', grid: '#488FC2', gridReturn: '#8353D1', battery: '#F06292',
+    batteryOut: '#4DB6AC', header: '#F29C06' });
+
+  function powerFlowHexRgb(hex) {
+    return [1, 3, 5].map(i => parseInt(String(hex).slice(i, i + 2), 16));
+  }
+
+  // The plain tile disc of an icon color on the card (tile_icon_disc::tile_fill).
+  function powerFlowDisc(card, hex) {
+    const rgb = powerFlowHexRgb(hex);
+    const glowRaw = String(getComputedStyle(document.documentElement).getPropertyValue('--icon-glow-pct')).trim();
+    const glowValue = glowRaw === '' ? 25 : Number(glowRaw);
+    const glow = Math.min(100, Math.max(0, Number.isFinite(glowValue) ? glowValue : 25));
+    if (panelLight()) {
+      const share = Number(panelVar('--pv-light-circle', '0.8'));
+      const amount = glow * (Number.isFinite(share) ? share : 0.8) / 100;
+      return toneHex(toneBlend(card, toneReadableIcon(rgb), Math.round(Math.min(1, amount) * 255)));
+    }
+    return toneHex(toneFill(card, rgb, true, glow, false).disc);
+  }
+
+  // Draws the tile like render_power_flow_tile() in display pixels, scaled
+  // to the preview tile. `tile`: flow_entities, key_code, span_w, span_h,
+  // title, icon_name.
+  function applyPowerFlowPreview(el, tile, meta) {
+    if (!el || typeof POWER_FLOW_LAYOUT === 'undefined') return;
+    const L = POWER_FLOW_LAYOUT;
+    el.querySelectorAll(':scope > .tile-icon, :scope > .tile-title, :scope > .tile-value, :scope > .power-flow-preview')
+      .forEach(node => node.remove());
+    const rootStyle = getComputedStyle(el.isConnected ? el : document.documentElement);
+    const scale = parseFloat(rootStyle.getPropertyValue('--radius-preview-scale')) || 0.5;
+    const spanW = Math.max(1, Number(tile?.span_w) || 1);
+    const spanH = Math.max(1, Number(tile?.span_h) || 1);
+    const cellW = parseFloat(rootStyle.getPropertyValue('--preview-cell-w'));
+    const cellH = parseFloat(rootStyle.getPropertyValue('--preview-cell-h'));
+    const previewGap = parseFloat(rootStyle.getPropertyValue('--preview-gap')) || 0;
+    const width = (cellW > 0 ? spanW * (cellW + previewGap) - previewGap : el.offsetWidth) / scale;
+    const height = (cellH > 0 ? spanH * (cellH + previewGap) - previewGap : el.offsetHeight) / scale;
+    const bits = Number(tile?.key_code) || 0;
+    const onCard = (bits & 2) === 0;
+    el.classList.add('power-flow-tile');
+    el.classList.toggle('power-flow-no-card', !onCard);
+    if (!onCard) el.style.setProperty('--tile-border-tint', 'transparent');
+
+    const lines = powerFlowLines(tile?.flow_entities);
+    const entity = { pv: lines[0] || '', grid: lines[1] || '', bat: lines[2] || '', charge: lines[3] || '', home: lines[4] || '' };
+    const values = meta?.values || {}, units = meta?.units || {}, icons = meta?.icons || {};
+    const watts = id => {
+      if (!id) return null;
+      const n = powerFlowNumber(values[id]);
+      return n === null ? null : n * powerFlowUnitFactor(units[id]);
+    };
+    const pv = watts(entity.pv), grid = watts(entity.grid), bat = watts(entity.bat), home = watts(entity.home);
+    const input = { hasPv: pv !== null, hasGrid: grid !== null, hasBattery: bat !== null, hasHome: home !== null,
+      pv: pv || 0, grid: ((bits & 4) ? -1 : 1) * (grid || 0), battery: ((bits & 8) ? -1 : 1) * (bat || 0), home: home || 0 };
+    const flows = powerFlowCompute(input);
+
+    const l = powerFlowLayout(width, height, L, (bits & 1) ? 2 * L.ring - L.insetY : 0);
+    const light = panelLight();
+    const cardHex = String(rootStyle.getPropertyValue('--tile-card') || '').trim() || (light ? '#FFFFFF' : '#1A1A1A');
+    const cardRgb = /^#[0-9a-f]{6}$/i.test(cardHex) ? powerFlowHexRgb(cardHex) : (light ? [255, 255, 255] : [26, 26, 26]);
+    const idle = !light ? '#3C3C3C' : onCard ? '#DCDEE2' : '#CDD0D5';
+    const text = panelRoleHex('text', light ? '#1A1A1A' : '#FFFFFF');
+    // The home joins with the first sensor: a tile without any shows no node
+    // (user 2026-10-26).
+    const shown = { pv: !!entity.pv, grid: !!entity.grid, battery: !!(entity.bat || entity.charge),
+      home: Object.values(entity).some(Boolean) };
+    const lineShown = { gridHome: shown.grid, pvBattery: shown.pv && shown.battery, pvHome: shown.pv,
+      pvGrid: shown.pv && shown.grid, batHome: shown.battery, batGrid: shown.battery && shown.grid };
+    const source = { gridHome: 'grid', pvBattery: 'pv', pvHome: 'pv', pvGrid: 'pv', batHome: 'battery',
+      batGrid: flows.gridToBattery ? 'grid' : 'battery' };
+    // A node's color now, like the panel (renderer.cpp node_color): the grid
+    // purple while it takes the feed-in, the battery magenta only while it
+    // charges.
+    const colorOf = { pv: POWER_FLOW_COLORS.pv,
+      grid: input.hasGrid && -input.grid >= POWER_FLOW_IDLE_WATTS ? POWER_FLOW_COLORS.gridReturn : POWER_FLOW_COLORS.grid,
+      battery: input.hasBattery && -input.battery >= POWER_FLOW_IDLE_WATTS ? POWER_FLOW_COLORS.battery : POWER_FLOW_COLORS.batteryOut };
+    const r = n => Math.round(n);
+    let svg = '';
+    // Straight pieces and the bend as a true circle arc, like the panel.
+    const path = line => {
+      const points = line.bend ? [...line.p.slice(0, line.bendFirst + 1), ...line.p.slice(line.bendLast)] : line.p;
+      let d = '';
+      points.forEach((p, i) => {
+        if (line.bend && i === line.bendFirst + 1) {
+          const b = line.bend;
+          d += ' A' + b.radius + ' ' + b.radius + ' 0 0 ' + (b.toAngle > b.fromAngle ? 1 : 0) + ' ' + r(p[0]) + ' ' + r(p[1]);
+          return;
+        }
+        d += (i ? ' L' : 'M') + r(p[0]) + ' ' + r(p[1]);
+      });
+      return d;
+    };
+    const live = name => lineShown[name] && flows.watts[name] > 0;
+    for (const pass of [false, true]) {
+      for (const name of Object.keys(l.lines)) {
+        if (!lineShown[name] || live(name) !== pass) continue;
+        const color = pass ? colorOf[source[name]] : idle;
+        svg += '<path d="' + path(l.lines[name]) + '" fill="none" stroke="' + color + '" stroke-width="' + L.lineWidth +
+          '" stroke-linecap="round" stroke-linejoin="round"/>';
+      }
+    }
+    // One dot halfway along every flow (the device moves it).
+    for (const name of Object.keys(l.lines)) {
+      if (!live(name)) continue;
+      const line = l.lines[name];
+      const p = powerFlowPointAt(line, line.along[line.along.length - 1] / 2);
+      svg += '<circle cx="' + r(p[0]) + '" cy="' + r(p[1]) + '" r="' + L.dotRadius + '" fill="' + colorOf[source[name]] + '"/>';
+    }
+    // The global frame line (display-borders.js marks the grid) on the rings
+    // only without a card.
+    const frame = !onCard && !!el.closest?.('.tile-grid')?.classList.contains('tiles-bordered');
+    const frameColor = light ? '#DDDDDD' : '#292929';
+    let html = '';
+    // A node is the corner of a 1x1 tile (renderer.cpp create_node): the
+    // tile's corner disc in a ring shaped like the card corner.
+    const square = (cx, cy, half, corner, attributes) => {
+      const side = 2 * half;
+      return '<rect x="' + (r(cx) - half) + '" y="' + (r(cy) - half) + '" width="' + side + '" height="' + side +
+        '" rx="' + Math.min(corner, half) + '" ' + attributes + '/>';
+    };
+    const node = (cx, cy, hex, icon, mirrored = false) => {
+      svg += square(cx, cy, L.ring, L.ringCorner, 'fill="' + toneHex(cardRgb) + '"');
+      if (frame) {
+        svg += square(cx, cy, L.ring - 0.5, L.ringCorner - 0.5, 'fill="none" stroke="' + frameColor + '" stroke-width="1"');
+      }
+      svg += square(cx, cy, L.disc, L.discCorner, 'fill="' + powerFlowDisc(cardRgb, hex) + '"');
+      html += '<i class="mdi mdi-' + escapeHtml(icon) + '" style="position:absolute;left:' + r(cx - L.iconPx / 2) +
+        'px;top:' + r(cy - L.iconPx / 2) + 'px;width:' + L.iconPx + 'px;height:' + L.iconPx + 'px;font-size:' + L.iconPx +
+        'px;line-height:' + L.iconPx + 'px;text-align:center;color:' + hex + (mirrored ? ';transform:scaleX(-1)' : '') +
+        '"></i>';
+    };
+    // `parts`: the amount and its unit ('' for none).
+    const label = (x, w, cy, parts, align) => {
+      html += '<div style="position:absolute;left:' + r(x) + 'px;top:' + r(cy - L.valueLine / 2) + 'px;width:' + r(w) +
+        'px;height:' + L.valueLine + 'px;line-height:' + L.valueLine + 'px;font-size:' + L.valuePx + 'px;text-align:' +
+        align + ';color:' + text + ';white-space:nowrap;overflow:hidden">' + escapeHtml(parts[0]) +
+        (parts[1] ? '<span class="tile-unit">' + escapeHtml(parts[1]) + '</span>' : '') + '</div>';
+    };
+    const power = (known, watts) => known ? powerFlowPower(watts) : ['--', ''];
+    const iconOf = id => String(icons[id] || '').replace(/^mdi:/, '');
+    const homeColor = colorOf[flows.homeSource || 'grid'];
+    if (shown.pv) node(l.node.pv[0], l.node.pv[1], POWER_FLOW_COLORS.pv, 'solar-power');
+    // The grid's direction past the idle threshold, as on the panel: while
+    // it supplies "export" (the arrow leaves the mast towards the lines),
+    // while feeding in "import" mirrored (the arrow comes from the lines).
+    const supplying = input.hasGrid && input.grid >= POWER_FLOW_IDLE_WATTS;
+    const feeding = input.hasGrid && -input.grid >= POWER_FLOW_IDLE_WATTS;
+    const gridIcon = supplying ? 'transmission-tower-export' : feeding ? 'transmission-tower-import' : 'transmission-tower';
+    if (shown.grid) node(l.node.grid[0], l.node.grid[1], colorOf.grid, gridIcon, feeding);
+    if (shown.home) node(l.node.home[0], l.node.home[1], homeColor, 'home-lightning-bolt');
+    const level = entity.charge ? powerFlowNumber(values[entity.charge]) : null;
+    const charging = input.hasBattery && -input.battery >= POWER_FLOW_IDLE_WATTS;
+    if (shown.battery) node(l.node.battery[0], l.node.battery[1], colorOf.battery,
+      charging ? powerFlowChargingIcon(level) : iconOf(entity.charge || entity.bat) || 'battery');
+
+    const gap = r(l.ring) + L.valueGap;
+    const below = gap + L.valueBelow - (L.valueLine - L.valueBase) + L.valueLine / 2;
+    if (shown.pv) label(r(l.node.pv[0]) + gap, width - L.edge - r(l.node.pv[0]) - gap, l.node.pv[1],
+      power(input.hasPv, pv), 'left');
+    if (shown.grid) label(L.edge, 2 * (r(l.node.grid[0]) - L.edge), l.node.grid[1] + below,
+      power(input.hasGrid, grid), 'center');
+    const homeHalf = r(width - l.node.home[0]) - L.edge;
+    const homeKnown = entity.home ? input.hasHome : flows.homeKnown;
+    if (shown.home) label(r(l.node.home[0]) - homeHalf, 2 * homeHalf, l.node.home[1] + below,
+      power(homeKnown, flows.home), 'center');
+    if (shown.battery) {
+      label(r(l.node.battery[0]) + gap, width - L.edge - r(l.node.battery[0]) - gap, l.node.battery[1],
+        power(input.hasBattery, bat), 'left');
+      const charge = powerFlowNumber(values[entity.charge]);
+      label(L.edge, r(l.node.battery[0]) - gap - L.edge, l.node.battery[1],
+        entity.charge && charge !== null ? [formatLocalizedNumber(charge, 0), '%'] : ['--', ''], 'right');
+    }
+    if (bits & 1) {
+      node(l.ring, l.ring, POWER_FLOW_COLORS.header,
+        normalizeMdiIconName(tile?.icon_name || '') || 'lightning-bolt');
+      if (tile?.title) {
+        const right = width - L.titleRight;
+        const left = r(l.ring * 2) + L.valueGap;
+        html += '<div style="position:absolute;left:' + r(left) + 'px;top:' + r(L.titleTop) + 'px;width:' +
+          r(right - left) + 'px;line-height:' + L.valueLine + 'px;font-size:' + L.valuePx + 'px;text-align:right;color:' +
+          text + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(tile.title) + '</div>';
+      }
+    }
+    el.insertAdjacentHTML('afterbegin', '<div class="power-flow-preview" style="position:absolute;left:0;top:0;width:' +
+      width.toFixed(2) + 'px;height:' + height.toFixed(2) + 'px;transform:scale(' + scale + ');transform-origin:0 0;' +
+      'pointer-events:none"><svg width="' + width.toFixed(2) + '" height="' + height.toFixed(2) +
+      '" style="position:absolute;left:0;top:0">' + svg + '</svg>' + html + '</div>');
   }
 // Generated by tools/generate-weather-icon-fonts.mjs from
 // tools/weather-icons/parts.mjs. Do not edit by hand.
@@ -16627,7 +17968,7 @@ function maybeFillTitleFromWeather(tab) {
   // as fit the card's real width with even room between and around their
   // widest text (textW, measured by the device in its language).
   function weatherForecastGap(textW) {
-    return Math.trunc(textW * 85 / 100);
+    return Math.trunc(textW * 50 / 100);
   }
   function weatherForecastCount(cardW, textW) {
     const gap = weatherForecastGap(textW);
@@ -16753,15 +18094,22 @@ function maybeFillTitleFromWeather(tab) {
     }
     const showForecast = cardH >= L.forecastMinH;
     const rowCenter = showForecast ? (gridCellH / 2 + L.valueDy) * scale : height / 2 + L.valueDy * scale;
-    const textSpan = (cls, text, f, extra = '') => '<span class="' + cls + '" style="' + fontCss(f) +
-      'top:' + f.shift.toFixed(2) + 'px;' + extra + '">' + escapeHtml(text) + '</span>';
+    const htmlSpan = (cls, inner, f, extra = '') => '<span class="' + cls + '" style="' + fontCss(f) +
+      'top:' + f.shift.toFixed(2) + 'px;' + extra + '">' + inner + '</span>';
+    const textSpan = (cls, text, f, extra = '') => htmlSpan(cls, escapeHtml(text), f, extra);
+    // The temperature's unit a step smaller after it, as on the panel
+    // (value_unit.h); with the humidity behind it one size for both.
+    const tempHtml = hasTemp && state.unit && !state.humidity
+      ? escapeHtml(weatherPreviewTemp(state.temperature)) + '<span class="tile-unit" style="' + valueUnitStyle(L.value.px) +
+        '">' + escapeHtml(state.unit) + '</span>'
+      : escapeHtml(tempText);
     let html = '<div class="weather-preview-row" style="top:' + (rowCenter - valueFont.line / 2 - 3).toFixed(2) +
       'px;height:' + valueFont.line.toFixed(2) + 'px;gap:' + px(L.valueGap) + '">';
     if (showCondition) {
       html += textSpan('weather-preview-condition', conditionText, valueFont, 'max-width:' + Math.max(0, room).toFixed(2) + 'px;');
       if (tempText !== '--') html += textSpan('weather-preview-separator', '|', valueFont);
     }
-    html += textSpan('weather-preview-temp', tempText, valueFont) + '</div>';
+    html += htmlSpan('weather-preview-temp', tempHtml, valueFont) + '</div>';
 
     // Forecast columns, spread evenly over the card, the row anchored to the
     // card's bottom like on the device.
@@ -17147,8 +18495,9 @@ function maybeFillTitleFromSwitch(tab) {
 
   // switch_layout::sensor_look: from 1.5 rows a header layout looks like a
   // Sensor tile with the bar below.
-  function switchSensorLook(style, spanH) {
-    return switchLayoutValue(style) !== 0 && Number(spanH) > 1;
+  // An upright bar keeps the header beside the disc (bar_orientation.h).
+  function switchSensorLook(style, spanH, upright = false) {
+    return switchLayoutValue(style) !== 0 && Number(spanH) > 1 && !upright;
   }
 
   // The segmented choices of the Switch fields (like Tile color). The hidden
@@ -17157,8 +18506,11 @@ function maybeFillTitleFromSwitch(tab) {
   // The Climate tile's Layout and the Camera tile's choices use the same
   // segmented choice.
   const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode', 'climate_view', 'media_layout',
-    'cover_value_font', 'lock_value_font', 'alarm_value_font', 'fan_value_font', 'camera_display', 'camera_fit',
-    'camera_head', 'camera_tap'];
+    'cover_value_font', 'lock_value_font', 'alarm_value_font', 'fan_value_font', 'vacuum_value_font', 'vacuum_layout',
+    'camera_display', 'camera_fit',
+    'camera_head', 'camera_tap', 'switch_orientation', 'fan_orientation', 'sensor_layout', 'sensor_form',
+    'sensor_orientation', 'sensor_ring', 'sensor_place', 'sensor_value_font', 'sensor_popup_open_mode',
+    'energy_value_font', 'energy_display_mode', 'energy_popup_open_mode'];
 
   function syncSwitchChoices(tab) {
     for (const field of SWITCH_CHOICE_FIELDS) {
@@ -17168,10 +18520,23 @@ function maybeFillTitleFromSwitch(tab) {
       const options = select.options ? Array.from(select.options) : [];
       for (const button of group.querySelectorAll('button[data-value]')) {
         button.classList.toggle('active', button.dataset.value === String(select.value));
-        // Value sizes this tile size does not offer stay hidden.
+        // Value sizes this tile size does not offer stay hidden; the others
+        // carry the size this panel draws (syncCompactValueFontOptions), the
+        // Default button only its word so the row keeps its width.
         const option = options.find(o => o.value === button.dataset.value);
         button.classList.toggle('hidden', !!option?.hidden);
+        const name = option?.value === '0' && select.dataset?.defaultLabel ? select.dataset.defaultLabel : option?.textContent;
+        if (name && button.textContent !== name) button.textContent = name;
       }
+    }
+    // The Switch tile's Orientation row only with a bar (not the icon button).
+    const style = document.getElementById(tab + '_switch_style');
+    if (style) {
+      const hide = switchLayoutValue(style.value) === 0;
+      const label = typeof document.querySelector === 'function'
+        ? document.querySelector('label[for="' + tab + '_switch_orientation"]') : null;
+      label?.classList?.toggle('hidden', hide);
+      document.getElementById(tab + '_switch_orientation_choices')?.classList?.toggle('hidden', hide);
     }
   }
 
@@ -17219,10 +18584,13 @@ function maybeFillTitleFromSwitch(tab) {
   }
 
   // The tile classes and layout of a Switch preview (live and cached grid).
-  function applySwitchPreviewLayout(tileElem, style, halfHeight) {
+  // `upright`: the bar stands below the header (bar_orientation.h).
+  function applySwitchPreviewLayout(tileElem, style, halfHeight, upright = false) {
     if (!tileElem) return;
     tileElem.dataset.switchLayout = String(switchLayoutValue(style));
-    tileElem.classList.toggle('switch-bar', switchUsesHeader(style, halfHeight) && !halfHeight);
+    const bar = switchUsesHeader(style, halfHeight) && !halfHeight;
+    tileElem.classList.toggle('switch-bar', bar);
+    tileElem.classList.toggle('switch-upright', bar && !!upright);
   }
 
   // switch_layout::Dimmer: the fill stays inside the bar's shape; its end
@@ -17446,7 +18814,7 @@ function maybeFillTitleFromSwitch(tab) {
       if (el.classList.contains('tile-switch-state') || el.classList.contains('tile-switch')) el.remove();
     }
     preview.insertAdjacentHTML('beforeend', switchPreviewExtraHtml(data.switch_style, half));
-    applySwitchPreviewLayout(preview, data.switch_style, half);
+    applySwitchPreviewLayout(preview, data.switch_style, half, Number(data.bar_orientation) === 1);
   }
 
   // Once the copy is in the grid (the bar measures itself): the state from
@@ -17516,7 +18884,13 @@ function maybeFillTitleFromSwitch(tab) {
     if (!available) on = false;
     // A dimmable light on without a reported brightness: On without a level.
     const level = on ? (state.hasBrightness ? Math.max(1, state.brightness) : (dimmable ? 0 : 100)) : 0;
-    if (label) label.textContent = switchPreviewStateText(state, dimmable && level > 0, level, on);
+    if (label) {
+      // A level's percent a step smaller after it (unitTextHtml); words as text.
+      const text = switchPreviewStateText(state, dimmable && level > 0, level, on);
+      const html = unitTextHtml(text);
+      if (html === escapeHtml(text)) label.textContent = text;
+      else label.innerHTML = html;
+    }
     if (!bar) return;
     const kind = switchBarKind(style, halfHeight, dimmable);
     bar.dataset.bar = kind;
@@ -17582,18 +18956,27 @@ function maybeFillTitleFromSwitch(tab) {
     const {kind, level} = drawn;
     const width = bar.clientWidth;
     const height = bar.clientHeight;
-    const radius = Math.min(parseFloat(getComputedStyle(bar).borderTopLeftRadius) || 0, height / 2);
     const base = parseFloat(getComputedStyle(bar).getPropertyValue('--switch-bar-height')) || height;
-    const geometry = switchDimmerGeometry(width, height, radius, Math.min(base, height));
+    // An upright bar (level_bar::upright_geometry): along its height, with
+    // the one-row bar as its thickness; the fill rises from the bottom.
+    const upright = !!bar.parentElement?.classList?.contains('switch-upright');
+    const thickness = upright ? Math.min(base, width) : Math.min(base, height);
+    const radius = Math.min(parseFloat(getComputedStyle(bar).borderTopLeftRadius) || 0, (upright ? width : height) / 2);
+    const geometry = upright ? switchDimmerGeometry(height, thickness, radius, thickness)
+      : switchDimmerGeometry(width, height, radius, thickness);
     const fillWidth = kind === 'dimmer' ? geometry.fillWidth(level) : 0;
     const endRadius = geometry.endRadiusFor(fillWidth);
-    // The fill element starts one end radius left of the bar, so only the
-    // bar's round start shows (overflow hidden).
-    fill.style.width = (fillWidth ? fillWidth + endRadius : 0) + 'px';
+    // The fill element starts one end radius past the bar's start, so only
+    // the bar's round start shows (overflow hidden).
+    const size = (fillWidth ? fillWidth + endRadius : 0) + 'px';
+    fill.style.width = upright ? '' : size;
+    fill.style.height = upright ? size : '';
     bar.style.setProperty('--switch-end-radius', endRadius + 'px');
     bar.style.setProperty('--switch-handle-margin', geometry.margin + 'px');
     bar.style.setProperty('--switch-handle-w', geometry.handleWidth + 'px');
-    bar.style.setProperty('--switch-handle-h', geometry.handleHeight + 'px');
+    // Upright: the Light popup's handle for its slider width
+    // (switch_layout::upright_handle_length).
+    bar.style.setProperty('--switch-handle-h', (upright ? Math.floor(width * 46 / 160) : geometry.handleHeight) + 'px');
   }
 
   function updateSwitchValuePreview(tab) {
@@ -17625,6 +19008,8 @@ function maybeFillTitleFromSwitch(tab) {
       styleEl.value = (data.switch_style !== undefined && data.switch_style !== null)
         ? String(switchLayoutValue(data.switch_style)) : '0';
     }
+    const orientationEl = document.getElementById(prefix + '_switch_orientation');
+    if (orientationEl) orientationEl.value = Number(data.bar_orientation) === 1 ? '1' : '0';
     const fontEl = document.getElementById(prefix + '_switch_value_font');
     if (fontEl) fontEl.value = switchValueFont(data.sensor_value_font);
     const popupModeEl = document.getElementById(prefix + '_switch_popup_open_mode');
@@ -17641,6 +19026,7 @@ function maybeFillTitleFromSwitch(tab) {
     formData.append('switch_entity', document.getElementById(prefix + '_switch_entity')?.value || '');
     const styleEl = document.getElementById(prefix + '_switch_style');
     formData.append('switch_style', styleEl ? String(switchLayoutValue(styleEl.value)) : '0');
+    formData.append('bar_orientation', document.getElementById(prefix + '_switch_orientation')?.value === '1' ? '1' : '0');
     formData.append('sensor_value_font', switchValueFont(document.getElementById(prefix + '_switch_value_font')?.value));
     formData.append('popup_open_mode', document.getElementById(prefix + '_switch_popup_open_mode')?.value || '1');
   }
@@ -17652,6 +19038,8 @@ function maybeFillTitleFromSwitch(tab) {
     if (entityEl) entityEl.value = '';
     const styleEl = document.getElementById(prefix + '_switch_style');
     if (styleEl) styleEl.value = SWITCH_LAYOUT_NEW_TILE;
+    const orientationEl = document.getElementById(prefix + '_switch_orientation');
+    if (orientationEl) orientationEl.value = '0';
     const fontEl = document.getElementById(prefix + '_switch_value_font');
     if (fontEl) fontEl.value = '0';
     const popupModeEl = document.getElementById(prefix + '_switch_popup_open_mode');
@@ -17790,7 +19178,7 @@ function maybeFillTitleFromSwitch(tab) {
       return '<div class="tile-value tile-cover-value">' + escapeHtml(coverPreviewStateText(state)) +
         '<br>' + escapeHtml(value) + '</div>';
     }
-    let html = '<div class="tile-value tile-switch-state">' + escapeHtml(coverPreviewStateLine(state)) + '</div>';
+    let html = '<div class="tile-value tile-switch-state">' + unitTextHtml(coverPreviewStateLine(state)) + '</div>';
     if (!halfHeight) {
       html += '<div class="tile-switch" data-bar="dimmer">' +
         '<div class="tile-switch-fill"><span class="tile-switch-handle"></span></div></div>';
@@ -17877,10 +19265,12 @@ function maybeFillTitleFromSwitch(tab) {
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
   // Lock (24), Alarm panel (25) and Fan (26): the Switch tile's header with
-  // a control bar (types/device/device_tile.cpp). The preview mirrors the
+  // a control bar (types/device/device_tile.cpp); Vacuum (29) with its
+  // buttons and map (types/vacuum/vacuum_tile.cpp). The preview mirrors the
   // device: the state colors and icons of device_visual.h, the bar of
   // bar_model() and the words of DEVICE_I18N (types/device/web.cpp).
-  const DEVICE_COLORS = {green: '#4CAF50', red: '#F44336', orange: '#FF9800', grey: '#9E9E9E', cyan: '#00BCD4'};
+  const DEVICE_COLORS = {green: '#4CAF50', red: '#F44336', orange: '#FF9800', grey: '#9E9E9E', cyan: '#00BCD4',
+    vacuum: '#29B6F6'};
   // Home Assistant's alarm modes: state, feature bit, icon.
   const DEVICE_ALARM_MODES = [
     ['armed_home', 1, 'home'], ['armed_away', 2, 'lock'], ['armed_night', 4, 'moon-waning-crescent'],
@@ -17889,7 +19279,8 @@ function maybeFillTitleFromSwitch(tab) {
 
   function devicePreviewKind(type) {
     const value = String(type);
-    return value === '24' ? 'lock' : (value === '25' ? 'alarm' : (value === '26' ? 'fan' : ''));
+    return value === '24' ? 'lock' : (value === '25' ? 'alarm' : (value === '26' ? 'fan' :
+      (value === '29' ? 'vacuum' : '')));
   }
 
   // The retained detail state (/api/sensor_values device_values).
@@ -17900,7 +19291,7 @@ function maybeFillTitleFromSwitch(tab) {
   // device_detail::parse(): a missing state stays apart from a known one.
   function parseDevicePreviewPayload(value) {
     const out = {valid: false, available: false, state: '', features: 0, percentage: null,
-      step: null, preset: ''};
+      step: null, preset: '', battery: null, area: null, areaUnit: ''};
     const text = value === undefined || value === null ? '' : String(value).trim();
     if (!text.startsWith('{')) return out;
     try {
@@ -17917,6 +19308,17 @@ function maybeFillTitleFromSwitch(tab) {
         out.step = obj.percentage_step;
       }
       out.preset = typeof obj.preset_mode === 'string' ? obj.preset_mode : '';
+      // Vacuum (vacuum_detail::parse): the battery stays apart from 0.
+      if (typeof obj.battery === 'number' && Number.isFinite(obj.battery)) {
+        out.battery = Math.max(0, Math.min(100, Math.round(obj.battery)));
+      }
+      // The cleaned area needs its value and its unit.
+      const area = obj.cleaned_area;
+      if (area && typeof area.value === 'number' && Number.isFinite(area.value) && area.value >= 0 &&
+          typeof area.unit === 'string' && area.unit) {
+        out.area = area.value;
+        out.areaUnit = area.unit;
+      }
     } catch (e) {}
     return out;
   }
@@ -17938,7 +19340,8 @@ function maybeFillTitleFromSwitch(tab) {
   // device_visual::visual(): label, icon and state color.
   function devicePreviewVisual(kind, d) {
     const words = typeof DEVICE_I18N === 'object' ? (DEVICE_I18N[kind] || {}) : {};
-    const out = {label: '--', icon: kind === 'lock' ? 'lock' : (kind === 'alarm' ? 'shield' : 'fan-off'),
+    const out = {label: '--', icon: kind === 'lock' ? 'lock' : (kind === 'alarm' ? 'shield' :
+      (kind === 'vacuum' ? 'robot-vacuum' : 'fan-off')),
       color: panelRoleHex('icon-inactive', DEVICE_COLORS.grey), waiting: false};
     if (!d.valid) return out;
     const state = d.available ? d.state : 'unavailable';
@@ -17960,6 +19363,23 @@ function maybeFillTitleFromSwitch(tab) {
         out.color = DEVICE_COLORS.red;
         out.waiting = true;
       }
+      return out;
+    }
+    if (kind === 'vacuum') {
+      // vacuum_visual::visual(): the vacuum's blue in every reported state,
+      // red on an error; the state and the battery, the state alone.
+      out.label = words[state] || words.unknown || state;
+      out.state = out.label;
+      if (!d.available) {
+        out.icon = 'robot-vacuum-off';
+        return out;
+      }
+      out.color = DEVICE_COLORS.vacuum;
+      if (state === 'error') {
+        out.icon = 'robot-vacuum-alert';
+        out.color = DEVICE_COLORS.red;
+      }
+      if (d.battery !== null && d.battery !== undefined) out.label += ' · ' + d.battery + ' %';
       return out;
     }
     if (kind === 'alarm') {
@@ -18004,7 +19424,10 @@ function maybeFillTitleFromSwitch(tab) {
     return out;
   }
 
-  function devicePreviewIcon(kind, d, fallback = '') {
+  // The Vacuum's automatic icon is Home Assistant's icon of the entity
+  // (vacuum_visual::icon_name): `entityIcon` when known.
+  function devicePreviewIcon(kind, d, fallback = '', entityIcon = '') {
+    if (kind === 'vacuum' && entityIcon) return entityIcon;
     return fallback || devicePreviewVisual(kind, d).icon;
   }
 
@@ -18014,7 +19437,11 @@ function maybeFillTitleFromSwitch(tab) {
 
   // The state line beside the disc and, for full tiles, the bar.
   function devicePreviewExtraHtml(kind, d, halfHeight) {
-    let html = '<div class="tile-value tile-switch-state">' + escapeHtml(devicePreviewVisual(kind, d).label) + '</div>';
+    let html = '<div class="tile-value tile-switch-state">' + unitTextHtml(devicePreviewVisual(kind, d).label) + '</div>';
+    if (kind === 'vacuum') {
+      if (!halfHeight) html += '<div class="tile-vacuum"></div>';
+      return html;
+    }
     if (!halfHeight) {
       html += '<div class="tile-switch" data-bar="none">' +
         '<div class="tile-switch-fill"><span class="tile-switch-handle"></span></div>' +
@@ -18029,10 +19456,121 @@ function maybeFillTitleFromSwitch(tab) {
       (icon ? '<i class="mdi mdi-' + escapeHtml(icon) + '"></i>' : '') + '</span>';
   }
 
-  // bar_model(): the bar the device draws for this state.
-  function applyDevicePreview(tileElem, kind, d, halfHeight) {
-    if (!tileElem) return;
+  // vacuum_visual::values_line(): the battery and the cleaned area, only
+  // what the vacuum reports.
+  function vacuumValuesLine(d) {
+    if (!d.valid || !d.available) return '';
+    const parts = [];
+    if (d.battery !== null && d.battery !== undefined) parts.push(d.battery + ' %');
+    if (d.area !== null && d.area !== undefined) {
+      const number = localizeNumericText(d.area.toFixed(d.area < 10 ? 1 : 0));
+      parts.push(number + ' ' + d.areaUnit);
+    }
+    return parts.join(' \u00b7 ');
+  }
+
+  // render_vacuum_tile(): equal buttons with icon and text across the row,
+  // one column Clean, two Clean and Dock, from three Clean, Stop and Dock;
+  // two columns and rows the Media tile's arrangement: the title top right,
+  // the map in the cover's place, the state alone and the values line right
+  // of it (placeVacuumMapPreview).
+  function applyVacuumPreview(tileElem, d, halfHeight, spans) {
     tileElem.classList.toggle('switch-bar', !halfHeight);
+    const box = tileElem.querySelector('.tile-vacuum');
+    const w = Number(spans?.w) || 1;
+    const h = Number(spans?.h) || 1;
+    const withMap = !!box && w >= 2 && h >= 2;
+    tileElem.classList.toggle('vacuum-map', withMap);
+    let mapEl = tileElem.querySelector(':scope > .tile-vacuum-map');
+    let values = tileElem.querySelector(':scope > .tile-vacuum-values');
+    if (!withMap) {
+      mapEl?.remove();
+      values?.remove();
+    }
+    if (!box) return;
+    const words = typeof DEVICE_I18N === 'object' ? (DEVICE_I18N.vacuum || {}) : {};
+    const count = w >= 3 ? 3 : (w >= 2 ? 2 : 1);
+    const pauses = d.state === 'cleaning' && (d.features & 4);
+    const ready = d.valid && d.available;
+    const button = (icon, text, on) => '<span class="tile-vacuum-button' + (on ? '' : ' off') + '">' +
+      '<i class="mdi mdi-' + icon + '"></i><span>' + escapeHtml(text) + '</span></span>';
+    let html = button(pauses ? 'pause' : 'play', pauses ? (words.pause || 'Pause') : (words.clean || 'Clean'),
+      ready && (pauses || (d.features & 8192)));
+    if (count === 3) html += button('stop', words.stop || 'Stop', ready && (d.features & 8));
+    if (count >= 2) html += button('home-import-outline', words.dock || 'Dock', ready && (d.features & 16));
+    box.innerHTML = html;
+    box.dataset.count = String(count);
+    if (!withMap) return;
+    if (!mapEl) {
+      mapEl = document.createElement('span');
+      mapEl.className = 'tile-vacuum-map';
+      mapEl.innerHTML = '<i class="mdi mdi-map-outline"></i>';
+      tileElem.appendChild(mapEl);
+    }
+    if (!values) {
+      values = document.createElement('div');
+      values.className = 'tile-value tile-vacuum-values';
+      tileElem.appendChild(values);
+    }
+    const state = tileElem.querySelector(':scope > .tile-switch-state');
+    if (state) state.innerHTML = unitTextHtml(devicePreviewVisual('vacuum', d).state || '--');
+    const line = vacuumValuesLine(d);
+    values.innerHTML = unitTextHtml(line);
+    values.hidden = !line;
+    placeVacuumMapPreview(tileElem);
+    if (typeof ResizeObserver === 'function' && !tileElem.__vacuumObserved) {
+      tileElem.__vacuumObserved = true;
+      new ResizeObserver(() => {
+        if (tileElem.classList.contains('vacuum-map')) placeVacuumMapPreview(tileElem);
+      }).observe(tileElem);
+    }
+  }
+
+  // render_vacuum_tile's Map layout: the map one inset in from the card,
+  // from the content top down to one gap above the row, at most 42 % of the
+  // card's width (the Media cover's share); state and values one Media
+  // text gap right of it, the two lines centred on the map. Positions from
+  // the card's edge less the preview's 3 px frame line.
+  function placeVacuumMapPreview(tileElem) {
+    const style = getComputedStyle(tileElem);
+    const value = name => parseFloat(style.getPropertyValue(name)) || 0;
+    const inset = value('--climate-margin-x');
+    const button = value('--switch-bar-height');
+    const gap = value('--climate-grid-gap');
+    const top = value('--climate-slots-top');
+    const textGap = value('--vacuum-text-gap');
+    const discInset = value('--compact-inset');
+    const tileWidth = tileElem.offsetWidth;
+    const tileHeight = tileElem.offsetHeight;
+    if (!tileWidth || !tileHeight) return;
+    const rowTop = tileHeight - inset - button;
+    const edge = Math.max(0, Math.min(rowTop - gap - top, Math.floor(tileWidth * 42 / 100)));
+    const map = tileElem.querySelector(':scope > .tile-vacuum-map');
+    if (map) Object.assign(map.style, {left: (inset - 3) + 'px', top: (top - 3) + 'px',
+      width: edge + 'px', height: edge + 'px'});
+    const textX = inset + edge + textGap;
+    const state = tileElem.querySelector(':scope > .tile-switch-state');
+    const values = tileElem.querySelector(':scope > .tile-vacuum-values');
+    const stateH = state ? state.offsetHeight : 0;
+    const valuesH = values && !values.hidden ? values.offsetHeight : 0;
+    const blockTop = top + edge / 2 - (stateH + valuesH) / 2;
+    const right = Math.max(0, 2 * discInset - 3) + 'px';
+    if (state) Object.assign(state.style, {left: (textX - 3) + 'px', right, top: (blockTop - 3) + 'px'});
+    if (values) Object.assign(values.style, {left: (textX - 3) + 'px', right,
+      top: (blockTop + stateH - 3) + 'px'});
+  }
+
+  // bar_model(): the bar the device draws for this state. `upright`: a
+  // Fan's bar stands below the header (bar_orientation.h). `spans`: the
+  // tile's size ({w, h}), for the Vacuum's layouts.
+  function applyDevicePreview(tileElem, kind, d, halfHeight, upright = false, spans = null) {
+    if (!tileElem) return;
+    if (kind === 'vacuum') {
+      applyVacuumPreview(tileElem, d, halfHeight, spans);
+      return;
+    }
+    tileElem.classList.toggle('switch-bar', !halfHeight);
+    tileElem.classList.toggle('switch-upright', !halfHeight && kind === 'fan' && !!upright);
     const bar = tileElem.querySelector('.tile-switch');
     if (!bar) return;
     const visual = devicePreviewVisual(kind, d);
@@ -18082,7 +19620,7 @@ function maybeFillTitleFromSwitch(tab) {
         // the bar's width, also when the tile is resized or laid out later
         // (a 2x1 tile kept the three slots of 1x1 and lit none).
         onResize = () => {
-          if (fitNow() !== fit) applyDevicePreview(tileElem, kind, d, halfHeight);
+          if (fitNow() !== fit) applyDevicePreview(tileElem, kind, d, halfHeight, upright);
         };
         const modes = DEVICE_ALARM_MODES.filter(mode => d.features & mode[1]).slice(0, fit - 1);
         const slots = [['disarmed', 0, 'shield-off'], ...modes.reverse()];
@@ -18132,6 +19670,17 @@ function maybeFillTitleFromSwitch(tab) {
     if (font) font.value = switchValueFont(data.sensor_value_font);
     const popup = document.getElementById(tab + '_' + prefix + '_popup_open_mode');
     if (popup) popup.value = data.popup_open_mode !== undefined ? String(data.popup_open_mode) : '1';
+    // A Fan's bar upright (bar_orientation.h).
+    const orientation = document.getElementById(tab + '_' + prefix + '_orientation');
+    if (orientation) orientation.value = Number(data.bar_orientation) === 1 ? '1' : '0';
+    // A Vacuum's popup layout (sensor_display_mode: 0 map left, 1 centred).
+    const layout = document.getElementById(tab + '_' + prefix + '_layout');
+    if (layout) layout.value = Number(data.sensor_display_mode) === 1 ? '1' : '0';
+    // A Vacuum's chosen map (empty: the map the Bridge finds on its device).
+    const map = document.getElementById(tab + '_' + prefix + '_map');
+    if (map) map.value = data.vacuum_map || '';
+    const every = document.getElementById(tab + '_' + prefix + '_every');
+    if (every) every.value = String(Math.max(3, Math.min(60, Number(data.image_slideshow_sec) || 5)));
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromEntity(tab, '_' + prefix + '_entity');
   }
@@ -18145,6 +19694,14 @@ function maybeFillTitleFromSwitch(tab) {
       switchValueFont(document.getElementById(tab + '_' + prefix + '_value_font')?.value));
     const popup = document.getElementById(tab + '_' + prefix + '_popup_open_mode');
     if (popup) formData.append('popup_open_mode', popup.value || '1');
+    const orientation = document.getElementById(tab + '_' + prefix + '_orientation');
+    if (orientation) formData.append('bar_orientation', orientation.value === '1' ? '1' : '0');
+    const layout = document.getElementById(tab + '_' + prefix + '_layout');
+    if (layout) formData.append('vacuum_layout', layout.value === '1' ? '1' : '0');
+    const map = document.getElementById(tab + '_' + prefix + '_map');
+    if (map) formData.append('vacuum_map', map.value || '');
+    const every = document.getElementById(tab + '_' + prefix + '_every');
+    if (every) formData.append('vacuum_every', String(Math.max(3, Math.min(60, Number(every.value) || 5))));
   }
 
   function resetDeviceFields(tab, prefix) {
@@ -18155,6 +19712,14 @@ function maybeFillTitleFromSwitch(tab) {
     if (font) font.value = '0';
     const popup = document.getElementById(tab + '_' + prefix + '_popup_open_mode');
     if (popup) popup.value = '1';
+    const orientation = document.getElementById(tab + '_' + prefix + '_orientation');
+    if (orientation) orientation.value = '0';
+    const layout = document.getElementById(tab + '_' + prefix + '_layout');
+    if (layout) layout.value = '0';
+    const map = document.getElementById(tab + '_' + prefix + '_map');
+    if (map) map.value = '';
+    const every = document.getElementById(tab + '_' + prefix + '_every');
+    if (every) every.value = '5';
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
 
@@ -18168,6 +19733,420 @@ function maybeFillTitleFromSwitch(tab) {
   function loadFanFields(tab, data) { loadDeviceFields(tab, data, 'fan'); }
   function saveFanFields(tab, formData) { saveDeviceFields(tab, formData, 'fan'); }
   function resetFanFields(tab) { resetDeviceFields(tab, 'fan'); }
+  function loadVacuumFields(tab, data) { loadDeviceFields(tab, data, 'vacuum'); }
+  function saveVacuumFields(tab, formData) { saveDeviceFields(tab, formData, 'vacuum'); }
+  function resetVacuumFields(tab) { resetDeviceFields(tab, 'vacuum'); }
+  // Calendar (27): up to four Home Assistant calendars in their own colors
+  // (types/calendar/calendar_tile.cpp). The preview mirrors the device: the
+  // events payload of /api/sensor_values calendar_values (calendar_events.h),
+  // the layouts of layout_of() and the words of CALENDAR_I18N (types/calendar/web.cpp).
+  const CALENDAR_FIELDS = ['calendar_entity', 'calendar_entity_2', 'calendar_entity_3', 'calendar_entity_4'];
+  // calendar_model::calendar_color(): dark and light theme.
+  const CALENDAR_COLORS = [['#5B9BF0', '#2F6FD0'], ['#4DB6AC', '#00897B'], ['#B388FF', '#7E57C2'], ['#FFA65C', '#E07020']];
+  // i18n::CalendarLabel order.
+  const CALENDAR_LABEL = {
+    type: 0, entity: 1, calendarN: 2, view: 3, agenda: 4, week: 5, month: 6, weekStart: 7, automatic: 8,
+    allDay: 9, noEvents: 10, nothingPlanned: 11, inDays: 12, inHours: 13, inHoursMinutes: 14, inMinutes: 15,
+    now: 16, until: 17, upNext: 18, eventCount: 19, oneEvent: 20, list: 21, noData: 22, today: 23, next: 24
+  };
+  const CALENDAR_AGENDA_DAYS = 31;
+
+  function calendarI18n() { return typeof CALENDAR_I18N === 'object' ? CALENDAR_I18N : {}; }
+  function calendarLabel(key, ...args) {
+    let text = String(calendarI18n().labels?.[CALENDAR_LABEL[key]] ?? '');
+    for (const arg of args) text = text.replace(/%[us]/, String(arg));
+    return text;
+  }
+  function calendarColor(index) {
+    const light = typeof panelLight === 'function' && panelLight();
+    return CALENDAR_COLORS[index % CALENDAR_COLORS.length][light ? 1 : 0];
+  }
+
+  // calendar_store::split_entities(): at most four calendar ids, no duplicates.
+  function calendarEntitiesOf(list) {
+    const out = [];
+    for (const raw of String(list || '').split(',')) {
+      const id = raw.trim();
+      if (/^calendar\.[a-z0-9_]+$/.test(id) && !out.includes(id) && out.length < 4) out.push(id);
+    }
+    return out;
+  }
+
+  // Days since 1970-01-01 (calendar_events::days_from_civil).
+  function calendarDay(y, m, d) { return Math.floor(Date.UTC(y, m - 1, d) / 86400000); }
+  function calendarCivil(day) {
+    const date = new Date(day * 86400000);
+    return {y: date.getUTCFullYear(), m: date.getUTCMonth() + 1, d: date.getUTCDate()};
+  }
+  function calendarWeekday(day) { return new Date(day * 86400000).getUTCDay(); }
+  // "2026-10-24" or "2026-10-24T10:05" -> {day, minute} (minute -1: all day).
+  function calendarStamp(text) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(String(text || ''));
+    if (!match) return null;
+    const [y, m, d] = [Number(match[1]), Number(match[2]), Number(match[3])];
+    if (m < 1 || m > 12 || d < 1 || d > new Date(Date.UTC(y, m, 0)).getUTCDate()) return null;
+    if (match[4] === undefined) return {day: calendarDay(y, m, d), minute: -1};
+    const hh = Number(match[4]), mm = Number(match[5]);
+    if (hh > 23 || mm > 59) return null;
+    return {day: calendarDay(y, m, d), minute: hh * 60 + mm};
+  }
+
+  // calendar_events::parse(): a missing payload stays apart from an empty one.
+  function parseCalendarPreviewPayload(value) {
+    const out = {valid: false, available: false, from: 0, to: -1, events: []};
+    const text = value === undefined || value === null ? '' : String(value).trim();
+    if (!text.startsWith('{')) return out;
+    let obj;
+    try { obj = JSON.parse(text); } catch (e) { return out; }
+    if (!obj || obj.v !== 1) return out;
+    const from = calendarStamp(obj.from), to = calendarStamp(obj.to);
+    if (!from || !to || to.day < from.day) return out;
+    out.valid = true;
+    out.available = typeof obj.state === 'string' && obj.state !== 'unavailable';
+    out.from = from.day;
+    out.to = to.day;
+    for (const item of Array.isArray(obj.e) ? obj.e.slice(0, 96) : []) {
+      if (!item || typeof item !== 'object') continue;
+      const s = calendarStamp(item.s), e = calendarStamp(item.e);
+      if (!s || !e || (s.minute < 0) !== (e.minute < 0)) continue;
+      const event = {startDay: s.day, startMin: s.minute, endDay: e.day, endMin: e.minute,
+        title: String(item.t || ''), location: String(item.l || '')};
+      if (s.minute < 0) {
+        event.endDay = e.day > s.day ? e.day - 1 : s.day;
+      } else {
+        if (e.day < s.day || (e.day === s.day && e.minute < s.minute)) { event.endDay = s.day; event.endMin = s.minute; }
+        if (event.endMin === 0 && event.endDay > s.day) { event.endDay -= 1; event.endMin = 1440; }
+      }
+      out.events.push(event);
+    }
+    out.events.sort((a, b) => a.startDay - b.startDay || a.startMin - b.startMin || a.title.localeCompare(b.title));
+    return out;
+  }
+
+  function calendarPreviewSources(entities, meta = sensorMetaCache) {
+    return entities.map(id => parseCalendarPreviewPayload(meta?.calendarValues?.[id] ?? ''));
+  }
+  function calendarItemsOn(sources, day) {
+    const items = [];
+    sources.forEach((source, calendar) => {
+      if (!source.valid) return;
+      for (const event of source.events) {
+        if (event.startDay > day) break;
+        if (event.endDay >= day) items.push({event, calendar});
+      }
+    });
+    const start = item => item.event.startMin < 0 ? -1 : (item.event.startDay === day ? item.event.startMin : 0);
+    return items.sort((a, b) => start(a) - start(b) || a.calendar - b.calendar || a.event.title.localeCompare(b.event.title));
+  }
+  function calendarNow() {
+    const now = new Date();
+    return {today: calendarDay(now.getFullYear(), now.getMonth() + 1, now.getDate()), minute: now.getHours() * 60 + now.getMinutes()};
+  }
+  function calendarClock(minute) {
+    const value = ((minute % 1440) + 1440) % 1440;
+    const pad = n => String(n).padStart(2, '0');
+    return pad(Math.floor(value / 60)) + ':' + pad(value % 60);
+  }
+  function calendarDayLabel(day, now) {
+    const t = calendarI18n();
+    if (day === now.today) return t.today || 'Today';
+    if (day === now.today + 1) return t.tomorrow || 'Tomorrow';
+    const c = calendarCivil(day);
+    const date = String(t.shortDate || '{d} {m}').replace('{d}', String(c.d)).replace('{m}', t.monthsShort?.[c.m - 1] || '');
+    return (t.weekdaysShort?.[calendarWeekday(day)] || '') + ' ' + date;
+  }
+  // calendar_model::next_event() within the agenda's days.
+  function calendarNextEvent(sources, now) {
+    let best = null;
+    const rank = n => n.ongoing && n.event.startMin >= 0 ? 0 : (n.ongoing ? 1 : 2);
+    sources.forEach((source, calendar) => {
+      if (!source.valid) return;
+      for (const event of source.events) {
+        if (event.startDay > now.today + CALENDAR_AGENDA_DAYS) break;
+        if (event.endDay < now.today) continue;
+        if (event.startMin >= 0 && event.endDay === now.today && event.endMin <= now.minute) continue;
+        const ongoing = event.startDay < now.today ||
+          (event.startDay === now.today && (event.startMin < 0 || event.startMin <= now.minute));
+        const candidate = {event, calendar, ongoing, day: ongoing ? now.today : event.startDay};
+        if (!best || rank(candidate) < rank(best) ||
+            (rank(candidate) === rank(best) && rank(candidate) === 2 &&
+             (candidate.day < best.day || (candidate.day === best.day && event.startMin < best.event.startMin)))) {
+          best = candidate;
+        }
+      }
+    });
+    return best;
+  }
+  function calendarCountdown(minutes) {
+    if (minutes < 60) return calendarLabel('inMinutes', Math.max(1, minutes));
+    const h = Math.floor(minutes / 60), m = minutes % 60;
+    return m ? calendarLabel('inHoursMinutes', h, m) : calendarLabel('inHours', h);
+  }
+  // calendar_text::when_line().
+  function calendarWhenLine(next, now, brief) {
+    if (!next) return '';
+    const e = next.event;
+    const dot = ' · ';
+    if (next.ongoing) {
+      if (e.startMin < 0) return e.endDay > now.today ? calendarLabel('until', calendarDayLabel(e.endDay, now)) : calendarLabel('allDay');
+      return calendarLabel('until', e.endDay === now.today ? calendarClock(e.endMin) : calendarDayLabel(e.endDay, now));
+    }
+    const days = next.day - now.today;
+    const time = e.startMin < 0 ? '' : calendarClock(e.startMin);
+    if (days === 0) {
+      if (brief || e.startMin < 0) return e.startMin < 0 ? calendarLabel('allDay') : time;
+      return time + dot + calendarCountdown(e.startMin - now.minute);
+    }
+    if (days === 1) return calendarDayLabel(next.day, now) + (time ? dot + time : '');
+    if (days < 7) return (calendarI18n().weekdaysShort?.[calendarWeekday(next.day)] || '') + (time ? dot + time : '');
+    return brief ? calendarDayLabel(next.day, now) : calendarDayLabel(next.day, now) + dot + calendarLabel('inDays', days);
+  }
+  // calendar_text::event_count().
+  function calendarEventCount(count) {
+    if (!count) return calendarLabel('noEvents');
+    return count === 1 ? calendarLabel('oneEvent') : calendarLabel('eventCount', count);
+  }
+  // calendar_model::remaining_today().
+  function calendarRemainingToday(sources, now) {
+    return calendarItemsOn(sources, now.today).filter(item => !(item.event.startMin >= 0 &&
+      item.event.endDay === now.today && item.event.endMin <= now.minute)).length;
+  }
+  function calendarMinutesUntil(next, now) {
+    const start = next.event.startMin < 0 ? 0 : next.event.startMin;
+    return Math.max(0, (next.day - now.today) * 1440 + start - now.minute);
+  }
+  // calendar_text::chip_lines(): the half-height tile's two lines.
+  function calendarChipLines(next, now, wide) {
+    const e = next.event;
+    const dot = ' · ';
+    const title = e.title || '--';
+    if (next.ongoing || !wide) {
+      return {top: calendarLabel(next.ongoing ? 'now' : 'next') + dot + calendarWhenLine(next, now, true), value: title};
+    }
+    const days = next.day - now.today;
+    let when;
+    if (days === 0) when = calendarCountdown(calendarMinutesUntil(next, now));
+    else if (days === 1) when = calendarDayLabel(next.day, now);
+    else if (days < 7) when = calendarI18n().weekdaysShort?.[calendarWeekday(next.day)] || '';
+    else when = calendarDayLabel(next.day, now) + dot + calendarLabel('inDays', days);
+    return {top: calendarLabel('next') + dot + when, value: e.startMin < 0 ? title : title + dot + calendarClock(e.startMin)};
+  }
+  // calendar_text::countdown_lines(): the 1x1 tile's large day and countdown.
+  function calendarCountdownLines(next, now) {
+    const e = next.event;
+    const days = next.day - now.today;
+    if (next.ongoing) {
+      return {top: e.startMin < 0 ? calendarDayLabel(now.today, now) : calendarLabel('now'), value: calendarWhenLine(next, now, true)};
+    }
+    if (days === 0) return {top: calendarDayLabel(now.today, now), value: calendarCountdown(calendarMinutesUntil(next, now))};
+    if (days === 1) return {top: calendarDayLabel(next.day, now), value: e.startMin < 0 ? calendarLabel('allDay') : calendarClock(e.startMin)};
+    return {
+      top: days < 7 ? (calendarI18n().weekdays?.[calendarWeekday(next.day)] || '') : calendarDayLabel(next.day, now),
+      value: calendarLabel('inDays', days)
+    };
+  }
+  function calendarWeekStart(stored) {
+    const value = Number(stored);
+    if ([0, 1, 6].includes(value)) return value;
+    const fallback = Number(calendarI18n().firstWeekday);
+    return fallback >= 0 && fallback <= 6 ? fallback : 1;
+  }
+
+  // calendar_tile.cpp layout_of().
+  function calendarPreviewLayout(tile) {
+    const w = Number(tile.span_w) || 1, h = Number(tile.span_h) || 1;
+    const view = Number(tile.sensor_display_mode) || 0;
+    if (h === 0.5) return view === 3 ? 'count' : 'compact';
+    if (view === 2 && calendarI18n().monthView && w >= 2 && h >= 2) return 'month';
+    if (view === 1 && w >= 1.5) return 'week';
+    if (h >= 2) return 'agenda';
+    return w >= 2 ? 'next' : 'countdown';
+  }
+  // The title the tile shows: the month's on the month view, the next event's
+  // on the countdown, none at half height.
+  function calendarPreviewTitle(tile, title, meta = sensorMetaCache) {
+    const layout = calendarPreviewLayout(tile);
+    if (layout === 'compact' || layout === 'count') return '';
+    if (layout === 'countdown') {
+      const sources = calendarPreviewSources(calendarEntitiesOf(tile.sensor_entity), meta);
+      const next = sources.some(source => source.valid) ? calendarNextEvent(sources, calendarNow()) : null;
+      return next ? (next.event.title || '--') : title;
+    }
+    if (layout === 'month') {
+      const c = calendarCivil(calendarNow().today);
+      return (calendarI18n().months?.[c.m - 1] || '') + ' ' + c.y;
+    }
+    return title;
+  }
+  function calendarPreviewIconColor(tile) {
+    return calendarEntitiesOf(tile.sensor_entity).length ? calendarColor(0) : '';
+  }
+
+  function calendarGridHtml(sources, first, rows, now, month, weekStart) {
+    const t = calendarI18n();
+    let html = '<div class="calendar-preview-grid' + (month ? ' month' : ' week') + '" style="--calendar-rows:' + rows + '">';
+    if (month) {
+      for (let i = 0; i < 7; ++i) html += '<span class="calendar-preview-dow">' + escapeHtml(t.weekdaysShort?.[(weekStart + i) % 7] || '') + '</span>';
+    }
+    const shownMonth = calendarCivil(now.today).m;
+    for (let i = 0; i < rows * 7; ++i) {
+      const day = first + i;
+      const c = calendarCivil(day);
+      const cls = ['calendar-preview-day'];
+      if (day === now.today) cls.push('today');
+      if (day === now.today && !month) cls.push('strip-today');
+      else if (month && c.m !== shownMonth) cls.push('outside');
+      else if (day < now.today) cls.push('past');
+      const dots = month && c.m !== shownMonth ? [] : [...new Set(calendarItemsOn(sources, day).map(item => item.calendar))]
+        .sort().map(index => '<i style="background:' + calendarColor(index) + '"></i>').join('');
+      const tint = day === now.today && !month && sources.length ? ' style="--calendar-tint:' + calendarColor(0) + '"' : '';
+      html += '<span class="' + cls.join(' ') + '"' + tint + '>' +
+        (month ? '' : '<small>' + escapeHtml(t.weekdaysShort?.[calendarWeekday(day)] || '') + '</small>') +
+        '<b>' + c.d + '</b><span class="calendar-preview-dots">' + dots + '</span></span>';
+    }
+    return html + '</div>';
+  }
+
+  // The content below the header (or the two lines of a half-height tile).
+  function calendarPreviewExtraHtml(tile, meta = sensorMetaCache) {
+    const entities = calendarEntitiesOf(tile.sensor_entity);
+    const sources = calendarPreviewSources(entities, meta);
+    const layout = calendarPreviewLayout(tile);
+    const now = calendarNow();
+    const hasData = sources.some(source => source.valid);
+    const message = !entities.length ? '--' : (!hasData ? calendarLabel('noData') : '');
+    if (layout === 'count') {
+      const what = !entities.length ? '--' : (!hasData ? calendarLabel('noData') : calendarEventCount(calendarRemainingToday(sources, now)));
+      return '<div class="tile-title calendar-preview-when">' + escapeHtml(calendarI18n().today || 'Today') + '</div>' +
+        '<div class="tile-value calendar-preview-what">' + escapeHtml(what) + '</div>';
+    }
+    if (layout === 'compact' || layout === 'next' || layout === 'countdown') {
+      const next = message ? null : calendarNextEvent(sources, now);
+      let what = message || (next ? next.event.title : calendarLabel('nothingPlanned'));
+      let when = next ? calendarWhenLine(next, now, false) : '';
+      if (next && layout === 'compact') {
+        const lines = calendarChipLines(next, now, Number(tile.span_w) >= 2);
+        when = lines.top;
+        what = lines.value;
+      } else if (next && layout === 'countdown') {
+        const lines = calendarCountdownLines(next, now);
+        what = lines.top;
+        when = lines.value;
+      }
+      if (layout === 'compact') {
+        return '<div class="tile-title calendar-preview-when">' + escapeHtml(when) + '</div>' +
+          '<div class="tile-value calendar-preview-what">' + escapeHtml(what) + '</div>';
+      }
+      if (layout === 'countdown') {
+        return '<div class="calendar-preview-body countdown">' +
+          '<div class="calendar-preview-what">' + escapeHtml(what) + '</div>' +
+          '<div class="calendar-preview-when">' + escapeHtml(when) + '</div></div>';
+      }
+      return '<div class="calendar-preview-body next' + (Number(tile.span_w) >= 2 ? ' wide' : '') + '">' +
+        (next ? '<span class="calendar-preview-bar" style="background:' + calendarColor(next.calendar) + '"></span>' : '') +
+        '<div class="calendar-preview-what">' + escapeHtml(what) + '</div>' +
+        '<div class="calendar-preview-when">' + escapeHtml(when) + '</div></div>';
+    }
+    if (layout === 'week' || layout === 'month') {
+      const weekStart = calendarWeekStart(tile.sensor_decimals);
+      let first, rows = 1;
+      if (layout === 'month') {
+        const c = calendarCivil(now.today);
+        const day1 = calendarDay(c.y, c.m, 1);
+        first = day1 - (calendarWeekday(day1) - weekStart + 7) % 7;
+        const last = calendarDay(c.y, c.m, new Date(Date.UTC(c.y, c.m, 0)).getUTCDate());
+        rows = Math.floor((last - first) / 7) + 1;
+      } else if ((Number(tile.span_h) || 1) < 2) {
+        // calendar_model::strip_first_day(): a one-row strip starts today.
+        first = now.today;
+      } else {
+        first = now.today - (calendarWeekday(now.today) - weekStart + 7) % 7;
+      }
+      return '<div class="calendar-preview-body">' + calendarGridHtml(sources, first, rows, now, layout === 'month', weekStart) + '</div>';
+    }
+    // Agenda: the coming days with events (cut by the tile's height in CSS).
+    let html = '<div class="calendar-preview-body agenda">';
+    if (message) return html + '<div class="calendar-preview-message">' + escapeHtml(message) + '</div></div>';
+    let rows = 0;
+    const limit = Math.max(2, Math.round((Number(tile.span_h) || 2) * 3));
+    for (let day = now.today; day <= now.today + CALENDAR_AGENDA_DAYS && rows < limit; ++day) {
+      const items = calendarItemsOn(sources, day).filter(item => !(day === now.today && item.event.startMin >= 0 &&
+        item.event.endDay === day && item.event.endMin <= now.minute));
+      if (!items.length) continue;
+      html += '<div class="calendar-preview-daylabel">' + escapeHtml(calendarDayLabel(day, now)) + '</div>';
+      for (const item of items) {
+        if (rows >= limit) break;
+        const start = item.event.startMin < 0 ? calendarLabel('allDay')
+          : calendarClock(item.event.startDay === day ? item.event.startMin : 0);
+        html += '<div class="calendar-preview-row"><span class="calendar-preview-time">' + escapeHtml(start) + '</span>' +
+          '<span class="calendar-preview-bar" style="background:' + calendarColor(item.calendar) + '"></span>' +
+          '<span class="calendar-preview-title">' + escapeHtml(item.event.title) + '</span></div>';
+        ++rows;
+      }
+    }
+    if (!rows) html += '<div class="calendar-preview-message">' + escapeHtml(calendarLabel('nothingPlanned')) + '</div>';
+    return html + '</div>';
+  }
+
+  // The tile the live preview draws from the open fields.
+  function calendarTileFromInputs(tab, spanW, spanH) {
+    return {
+      sensor_entity: calendarEntityList(tab),
+      sensor_display_mode: Number(document.getElementById(tab + '_calendar_view')?.value || 0),
+      sensor_decimals: Number(document.getElementById(tab + '_calendar_week_start')?.value ?? 255),
+      span_w: spanW,
+      span_h: spanH
+    };
+  }
+
+  function calendarEntityList(tab) {
+    return calendarEntitiesOf(CALENDAR_FIELDS.map(field => document.getElementById(tab + '_' + field)?.value || '').join(','))
+      .join(',');
+  }
+
+  function loadCalendarFields(tab, data) {
+    const entities = calendarEntitiesOf(data.sensor_entity || data.calendar_entities || '');
+    CALENDAR_FIELDS.forEach((field, i) => {
+      const input = document.getElementById(tab + '_' + field);
+      if (input) input.value = entities[i] || '';
+    });
+    const view = document.getElementById(tab + '_calendar_view');
+    if (view) {
+      const value = String(Number(data.sensor_display_mode) || 0);
+      view.value = Array.from(view.options || []).some(option => option.value === value) ? value : '0';
+    }
+    const weekStart = document.getElementById(tab + '_calendar_week_start');
+    if (weekStart) {
+      const value = Number(data.sensor_decimals);
+      weekStart.value = [0, 1, 6].includes(value) ? String(value) : '255';
+    }
+    const popup = document.getElementById(tab + '_calendar_popup_open_mode');
+    if (popup) popup.value = data.popup_open_mode !== undefined ? String(data.popup_open_mode) : '1';
+    maybeFillTitleFromEntity(tab, '_calendar_entity');
+  }
+
+  function saveCalendarFields(tab, formData) {
+    const entities = calendarEntityList(tab).split(',').filter(Boolean);
+    CALENDAR_FIELDS.forEach((field, i) => formData.append(field, entities[i] || ''));
+    formData.append('sensor_entity', entities.join(','));
+    formData.append('calendar_view', document.getElementById(tab + '_calendar_view')?.value || '0');
+    formData.append('calendar_week_start', document.getElementById(tab + '_calendar_week_start')?.value || '255');
+    const popup = document.getElementById(tab + '_calendar_popup_open_mode');
+    if (popup) formData.append('popup_open_mode', popup.value || '1');
+  }
+
+  function resetCalendarFields(tab) {
+    for (const field of CALENDAR_FIELDS) {
+      const input = document.getElementById(tab + '_' + field);
+      if (input) input.value = '';
+    }
+    const view = document.getElementById(tab + '_calendar_view');
+    if (view) view.value = '0';
+    const weekStart = document.getElementById(tab + '_calendar_week_start');
+    if (weekStart) weekStart.value = '255';
+    const popup = document.getElementById(tab + '_calendar_popup_open_mode');
+    if (popup) popup.value = '1';
+  }
 
 function maybeFillTitleFromMedia(tab) {
     maybeFillTitleFromEntity(tab, '_media_entity');
@@ -22034,6 +24013,18 @@ function getClockPreviewLanguage() {
     }
   }
   function isEditablePreview(kind) { return ['number', 'select', 'datetime'].includes(kind); }
+  // The preview's value as HTML: a number's unit a step smaller after it
+  // (.tile-unit, like the panel's value_unit::show).
+  function editablePreviewHtml(entity, kind, meta = sensorMetaCache) {
+    let value = meta?.editableValues?.[entity];
+    if (typeof value === 'string') { try { value = JSON.parse(value); } catch (_) { value = null; } }
+    const text = editablePreviewText(entity, kind, meta);
+    const unit = value && value.kind === 'number' && value.unit && value.available && value.state !== 'unavailable' &&
+      value.state !== 'unknown' && String(value.state).trim() && Number.isFinite(Number(value.state)) ? String(value.unit) : '';
+    if (!unit || !text.endsWith(' ' + unit)) return escapeHtml(text);
+    return escapeHtml(text.slice(0, -unit.length - 1)) + '<span class="tile-unit">' + escapeHtml(unit) + '</span>';
+  }
+
   function editablePreviewText(entity, kind, meta = sensorMetaCache) {
     let value = meta?.editableValues?.[entity];
     if (typeof value === 'string') { try { value = JSON.parse(value); } catch (_) { return '--'; } }

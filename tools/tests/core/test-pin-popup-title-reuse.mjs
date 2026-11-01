@@ -6,6 +6,7 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 import {lvglHost} from '../../lib/lvgl-host.mjs';
+import {valueUnitSource} from '../../lib/value-unit-source.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
@@ -72,6 +73,7 @@ LV_FONT_DECLARE(mdi_icons_48);
 LV_FONT_DECLARE(ui_font_48); LV_FONT_DECLARE(ui_font_56); LV_FONT_DECLARE(ui_font_64);
 LV_FONT_DECLARE(ui_font_72); LV_FONT_DECLARE(ui_font_80); LV_FONT_DECLARE(ui_font_96);
 }
+${valueUnitSource(root)}
 #if defined(DEVICE_LAYOUT_480X480)
 #define FONT_MDI_ICONS (&mdi_icons_32)
 #else
@@ -101,7 +103,7 @@ ${definition('src/core/config/pin_access.cpp', 'secureClear')}
 ${definition('src/tiles/runtime/tile_renderer_shared.h', 'disable_pressed_button_animation')}
 void hide_light_popup() {} void hide_climate_popup() {} void hide_cover_popup() {}
 void hide_sensor_popup() {} void hide_weather_popup() {} void hide_energy_popup() {}
-void hide_media_popup() {} void hide_camera_popup() {} void hide_device_popup() {}
+void hide_media_popup() {} void hide_camera_popup() {} void hide_device_popup() {} void hide_calendar_popup() {} void hide_vacuum_popup() {}
 namespace pin_test {
 ${stripIncludes(read('src/ui/popups/pin/pin_keypad_geometry.h'))}
 ${stripIncludes(read('src/ui/popups/pin/pin_popup.h'))}

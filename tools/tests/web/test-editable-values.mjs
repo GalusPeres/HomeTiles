@@ -223,7 +223,7 @@ for (const [index,[kind, camel, entity, state, unit]] of types.entries()) {
   for (const [language,unknown,unavailable] of [['de','Unbekannt','Nicht verfügbar'],['en','Unknown','Unavailable'],['fr','Inconnu','Indisponible']]) {
     sandbox.APP_LOCALE=language; document.documentElement.lang=language;
     sandbox[kind.toUpperCase()+'_I18N']={unknown,unavailable};
-    for (const [current,available,expected] of [[state,true,state+(unit?' '+unit:'')],['unknown',true,unknown],['unavailable',false,unavailable],[null,false,'--']]) {
+    for (const [current,available,expected] of [[state,true,state+(unit?'<span class="tile-unit">'+unit+'</span>':'')],['unknown',true,unknown],['unavailable',false,unavailable],[null,false,'--']]) {
       sandbox.testMeta={editable_values:{[entity]:JSON.stringify({version:1,kind:kind==='datetime'?'time':kind,state:current,available,unit})},
         values:{[entity]:'legacy-must-not-overwrite'},icons:{[entity]:'mdi:tune'},names:{[entity]:'Entity'}};
       // The periodic refresh receives an already normalized cache from fetch.

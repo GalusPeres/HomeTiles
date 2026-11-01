@@ -8,7 +8,10 @@
 // The keyboard of the WiFi entry (mockup keyboard()): four rows of rounded
 // keys on a ten-key grid. Letters in the panel's layout (QWERTY, QWERTZ,
 // AZERTY), Shift, Backspace, ?123, the accent key, space, the dot and the
-// check that connects. Nothing the former keyboard could type is lost: the
+// check that connects. The Russian JCUKEN layout has eleven letters in its
+// first two rows and nine beside Shift, on an eleven-key grid like the
+// common Russian phone keyboards; its accent key switches to QWERTY and
+// back (ABC / АБВ), since Wi-Fi passwords and addresses are Latin. Nothing the former keyboard could type is lost: the
 // accent key shows the language's accented letters in the letter rows (as
 // the former keyboard's language key did, user 2026-10-06), holding a letter
 // offers its accented forms too, and Shift on the ?123 page opens a second
@@ -17,7 +20,7 @@
 namespace settings_keyboard {
 
 // The values of LocaleProfile::keyboard_layout.
-enum class Layout : uint8_t { Qwerty, Qwertz, Azerty };
+enum class Layout : uint8_t { Qwerty, Qwertz, Azerty, Jcuken };
 
 struct Geometry {
   int x;        // left edge of the rows

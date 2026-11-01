@@ -20,6 +20,9 @@ struct SwitchBarView {
   bool available = true;
   // Half-height tile: the Sensor compact layout sets the state font.
   bool compact = false;
+  // The bar stands upright (bar_orientation.h): toggle on at the top, the
+  // dimmer filled from the bottom.
+  bool upright = false;
   // Width the state line may use before its font steps down (full tiles).
   int16_t state_width = 0;
   // The chosen state size (Tile::sensor_value_font): a half-height Sensor

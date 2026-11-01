@@ -6,6 +6,8 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 import {lvglHost} from '../../lib/lvgl-host.mjs';
+import {valueUnitSource} from '../../lib/value-unit-source.mjs';
+import {ruleIconSource} from '../../lib/rule-icon-source.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
@@ -33,6 +35,7 @@ const cpp = String.raw`
 #include "src/ui/popups/popup_first_frame.h"
 #include "src/ui/popups/popup_body.h"
 extern "C" {LV_FONT_DECLARE(ui_font_12);LV_FONT_DECLARE(ui_font_14);LV_FONT_DECLARE(ui_font_16);LV_FONT_DECLARE(ui_font_20);LV_FONT_DECLARE(ui_font_24);LV_FONT_DECLARE(ui_font_28);LV_FONT_DECLARE(ui_font_32);LV_FONT_DECLARE(ui_font_40);LV_FONT_DECLARE(ui_font_48);LV_FONT_DECLARE(ui_font_56);LV_FONT_DECLARE(ui_font_64);LV_FONT_DECLARE(ui_font_72);LV_FONT_DECLARE(ui_font_80);LV_FONT_DECLARE(ui_font_96);LV_FONT_DECLARE(mdi_icons_32);LV_FONT_DECLARE(mdi_icons_40);LV_FONT_DECLARE(mdi_icons_48);}
+${valueUnitSource(root)}
 #if defined(DEVICE_LAYOUT_480X480)
 #define FONT_MDI_ICONS (&mdi_icons_32)
 #elif defined(DEVICE_LAYOUT_1024X600)
@@ -77,10 +80,10 @@ struct Tile{String title="Weather",sensor_entity="weather.home",icon_name="weath
 // No temperature/humidity sensors here (test-weather-sensor-overrides.mjs).
 namespace weather_sensors { inline uint32_t mix_hash(const String&,const String&,uint32_t h){return h;} inline void apply_temperature(const String&,const String&,float&,bool&){} inline void append_humidity(const String&,String&){} }
 ${read('src/tiles/config/tile_config.h').match(/static constexpr uint8_t SENSOR_VALUE_FONT_MAX = \d+;/)[0]}
-namespace tile_icon_source { inline lv_obj_t* card_icon(lv_obj_t*) { return nullptr; } inline void refresh_card(lv_obj_t*, const Tile&) {} inline uint32_t popup_background(lv_obj_t*, uint32_t fallback) { return fallback; } }
+namespace tile_icon_source { inline lv_obj_t* card_icon(lv_obj_t*) { return nullptr; } inline void refresh_card(lv_obj_t*, const Tile&) {} inline uint32_t popup_background(lv_obj_t*, uint32_t fallback) { return fallback; } inline void refresh_controls(lv_obj_t*) {} }
 constexpr int TILE_POPUP_OPEN_SHORT_PRESS=1;
 int getTilePopupOpenMode(const Tile&t){return t.popup_open_mode;}
-struct Logger{void println(const char*){}}Serial;
+struct Logger{void println(const char*){}template<class... T>void printf(const char*,T...){}}Serial;
 struct Bridge{String findSensorName(const String&){return "Home";}String findEntityIcon(const String&){return "weather-sunny";}String findSensorUnit(const String&){return "";}String findSensorInitialValue(const String&){return "98";}String findSensorStateKind(const String&){return "number";}String findEditableValue(const String&){return "";}}haBridgeConfig;
 uint32_t tileDefaultBgColor(){return 0x2A2A2A;}uint32_t tileBgColorOrDefault(const Tile&,uint32_t c){return c;}
 bool isMdiIconDisabled(const String&){return false;}String normalizeMdiIconName(const String&s){return s;}
@@ -98,6 +101,7 @@ ${fn(read('src/tiles/runtime/tile_renderer_shared.h'),'place_tile_card')}
 #include "src/types/climate/layout.h"
 #include "src/tiles/runtime/tile_press.h"
 ${strip(read('src/tiles/runtime/tile_icon_disc.h'))}
+${ruleIconSource(root, {codepoint: true})}
 ${strip(read('src/tiles/runtime/compact_sensor_layout.h'))}
 PopupShellParts popup;int opens=0,completed_opens=0,sensor_opens=0;
 // Execute the production opening function with a small resident body. Forecast
@@ -105,9 +109,11 @@ PopupShellParts popup;int opens=0,completed_opens=0,sensor_opens=0;
 struct WeatherPopupContext{lv_obj_t*card=nullptr,*overlay=nullptr,*location_label=nullptr,*icon_label=nullptr,*close_button=nullptr;bool has_rendered_data=false;String rendered_entity_id,entity_id,title;uint32_t bg_color=0;};
 WeatherPopupContext* g_weather_popup_ctx=nullptr;PopupBody g_weather_body;
 WeatherPopupInit g_pending_weather_init;bool g_weather_open_pending=false;
-void hide_pin_popup(){}void hide_camera_popup(){}void hide_climate_popup(){}void hide_cover_popup(){}void hide_light_popup(){}void hide_sensor_popup(){}void hide_energy_popup(){}void hide_media_popup(){}void hide_device_popup(){}
+void hide_pin_popup(){}void hide_camera_popup(){}void hide_climate_popup(){}void hide_cover_popup(){}void hide_light_popup(){}void hide_sensor_popup(){}void hide_energy_popup(){}void hide_media_popup(){}void hide_device_popup(){}void hide_calendar_popup(){}void hide_vacuum_popup(){}
 void viewNavigationPopupShown(lv_obj_t*,const char*){++opens;}
 void finish_weather_popup_open(){++completed_opens;g_weather_open_pending=false;g_weather_body.restore();g_weather_popup_ctx->has_rendered_data=true;g_weather_popup_ctx->rendered_entity_id=g_weather_popup_ctx->entity_id;}
+// The kept body's colors before the first frame (test-popup-kept-body-colors.mjs).
+int recolors=0;void apply_init_to_context(WeatherPopupContext*,const WeatherPopupInit&){++recolors;}
 void build_popup_ui(WeatherPopupContext*ctx,const WeatherPopupInit&){popup=create_popup_body([](lv_event_t*){hide_popup_shell(popup.card);},nullptr,0x223344);ctx->card=popup.card;ctx->overlay=popup.overlay;ctx->location_label=popup.title;ctx->icon_label=popup.icon;ctx->close_button=popup.close;}
 ${fn(read('src/ui/popups/weather/weather_popup.cpp'),'show_weather_popup')}
 ${strip(read('src/types/weather/renderer.cpp')).replace('render_weather_tile(', 'render_weather_tile_content(')}
@@ -125,7 +131,14 @@ constexpr int GAUGE_ARC_STEPS=1000;
 bool tileTypeIsEditableValue(int){return false;}
 struct EditableValue{String state,unit,kind;};EditableValue parse_editable_value(const String&){return {};}
 bool sensor_popup_should_use_state_history(const String&,const String&){return false;}
-void show_sensor_popup(const SensorPopupInit&){++sensor_opens;}void request_tile_graph_history(const char*){}
+void show_sensor_popup(const SensorPopupInit&){++sensor_opens;}void sensor_popup_prefetch_history(const String&){}void request_tile_graph_history(const char*){}
+// The graph tile's header and area (types/sensor/renderer.cpp).
+${strip(read('src/tiles/runtime/tile_header.h'))}
+${strip(read('src/tiles/runtime/tile_graph_box.h'))}
+${strip(read('src/ui/shared/area_graph.h'))}
+${strip(read('src/types/sensor/sensor_look.h'))}
+${strip(read('src/types/sensor/look_view.h'))}
+${strip(read('src/types/sensor/look_view.cpp'))}
 ${strip(read('src/types/sensor/renderer.cpp')).replace('render_sensor_tile(', 'render_sensor_tile_content(')}
 lv_obj_t* render_sensor_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint8_t index, GridType grid_type) {
  auto* card = render_sensor_tile_content(parent,col,row,tile,index,grid_type);
@@ -134,6 +147,10 @@ lv_obj_t* render_sensor_tile(lv_obj_t* parent, int col, int row, const Tile& til
 }
 ${strip(read('src/ui/popups/energy/energy_popup.h'))}
 void show_energy_popup(const EnergyPopupInit&){}void energy_request_period(const char*,bool){}
+// The Energy tile's bars read the day from the cache (types/energy/energy_data.h).
+${read('src/types/energy/energy_data.h').match(/static constexpr uint8_t ENERGY_VALUES_MAX = \d+;/)[0]}
+${read('src/types/energy/energy_data.h').match(/struct EnergyEntryData \{[\s\S]*?\n\};/)[0]}
+bool energy_find_entry(const String&,const char*,EnergyEntryData&){return false;}
 String energy_source_icon(const String& id){return haBridgeConfig.findEntityIcon(id);}
 ${strip(read('src/types/energy/renderer.cpp')).replaceAll('is_disabled_token','energy_is_disabled_token')}
 void check_energy_layout() {

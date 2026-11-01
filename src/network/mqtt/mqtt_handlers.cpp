@@ -1,5 +1,6 @@
 #include "src/types/value/value_control.h"
 #include "src/types/device/device_control.h"
+#include "src/types/calendar/calendar_store.h"
 #include "src/ui/navigation/view_navigation.h"
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/network/secure/command_channel.h"
@@ -21,6 +22,7 @@
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/core/config/config_manager.h"
+#include "src/core/config/week_start.h"
 #include "src/core/display/display_manager.h"
 #include "src/core/i18n/i18n.h"
 #include "src/network/bridge/device_entities.h"
@@ -31,6 +33,7 @@
 #include "src/io/hardware_io.h"
 #include "src/network/bridge/entity_search.h"
 #include "src/network/bridge/bridge_images.h"
+#include "src/types/vacuum/vacuum_map.h"
 #include "src/web/server/web_admin.h"
 #include "src/video/local_camera/local_camera.h"
 #include "src/audio/speaker.h"
@@ -256,10 +259,13 @@ static String build_external_temp_history_payload(const char* entity_id,
   }
   if (points == 0) points = 1;
 
-  const uint16_t samples_per_bucket = static_cast<uint16_t>(
-      (period_minutes + kExternalTempHistorySampleMinutes - 1U) / kExternalTempHistorySampleMinutes);
+  // The samples (one per kExternalTempHistorySampleMinutes) the buckets
+  // cover by time: a bucket shorter than a sample (the popup's 6H asks for
+  // minutes) shares its sample with its neighbours instead of taking one of
+  // its own, which drew 30 hours as six.
   const uint32_t requested_base_points =
-      static_cast<uint32_t>(points) * static_cast<uint32_t>(samples_per_bucket);
+      (static_cast<uint32_t>(points) * period_minutes + kExternalTempHistorySampleMinutes - 1U) /
+      kExternalTempHistorySampleMinutes;
   const uint16_t clamped_base_points = static_cast<uint16_t>(
       requested_base_points > kExternalTempHistoryPoints ? kExternalTempHistoryPoints : requested_base_points);
   const uint16_t available_base_points =
@@ -295,9 +301,13 @@ static String build_external_temp_history_payload(const char* entity_id,
 
     float sum = 0.0f;
     uint16_t valid_count = 0;
-    for (uint16_t sample = 0; sample < samples_per_bucket; ++sample) {
-      const uint32_t virtual_index =
-          static_cast<uint32_t>(bucket) * static_cast<uint32_t>(samples_per_bucket) + sample;
+    const uint32_t first_sample =
+        static_cast<uint32_t>(bucket) * period_minutes / kExternalTempHistorySampleMinutes;
+    const uint32_t end_sample = std::max<uint32_t>(
+        first_sample + 1U,
+        ((static_cast<uint32_t>(bucket) + 1U) * period_minutes + kExternalTempHistorySampleMinutes - 1U) /
+            kExternalTempHistorySampleMinutes);
+    for (uint32_t virtual_index = first_sample; virtual_index < end_sample; ++virtual_index) {
       if (virtual_index < missing_base_points) continue;
 
       const uint32_t local_offset = virtual_index - missing_base_points;
@@ -461,23 +471,39 @@ static void store_history_replay(const PendingHistoryRequest& request,
   slot->length = length;
 }
 
-static bool replay_history_response(const char* entity_id, uint16_t hours,
-                                    uint16_t period_minutes, uint16_t points) {
+// The stored answer for the entity and range while it is fresh, else null.
+static const HistoryReplayEntry* fresh_history_replay(const char* entity_id, uint16_t hours,
+                                                      uint16_t period_minutes, uint16_t points) {
   const uint32_t now = millis();
-  for (auto& entry : g_history_replay) {
+  for (const auto& entry : g_history_replay) {
     if (!entry.payload || !entry.entity_id.equalsIgnoreCase(entity_id) ||
         entry.hours != hours || entry.period_minutes != period_minutes ||
         entry.points != points) {
       continue;
     }
-    if (now - entry.stored_ms >= history_replay_max_age_ms(entry.period_minutes)) return false;
-    Serial.printf("[History] Reusing answer for %s (%lu s old)\n", entity_id,
-                  static_cast<unsigned long>((now - entry.stored_ms) / 1000));
-    queue_sensor_popup_history(nullptr, entry.payload, entry.length);
-    queue_tile_graph_history(nullptr, entry.payload, entry.length);
-    return true;
+    return now - entry.stored_ms < history_replay_max_age_ms(entry.period_minutes) ? &entry : nullptr;
   }
-  return false;
+  return nullptr;
+}
+
+static bool replay_history_response(const char* entity_id, uint16_t hours,
+                                    uint16_t period_minutes, uint16_t points) {
+  const HistoryReplayEntry* entry = fresh_history_replay(entity_id, hours, period_minutes, points);
+  if (!entry) return false;
+  Serial.printf("[History] Reusing answer for %s (%lu s old)\n", entity_id,
+                static_cast<unsigned long>((millis() - entry->stored_ms) / 1000));
+  queue_sensor_popup_history(nullptr, entry->payload, entry->length);
+  queue_tile_graph_history(nullptr, entry->payload, entry->length);
+  return true;
+}
+
+// The same range for the entity was asked and has no answer yet (a pending
+// entry ends with its answer or after kHistoryHaResponseTimeoutMs).
+static bool history_request_on_its_way(const char* entity_id, uint16_t hours,
+                                       uint16_t period_minutes, uint16_t points) {
+  const PendingHistoryRequest* request = find_pending_history_request(entity_id);
+  return request && request->hours == hours && request->period_minutes == period_minutes &&
+         request->points == points;
 }
 
 static void clear_pending_history_request(const char* entity_id) {
@@ -1480,6 +1506,7 @@ void mqttSetTilePictures(const String* entities, const String* suffixes, size_t 
 
 static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
   routes.clear();
+  vacuum_map::prefetch_clear();
 
   auto add_route = [&](const String& entity, int slot_index, const char* suffix = "state") {
     String ent = entity;
@@ -1525,7 +1552,12 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
     const char* suffix;
   } offered[] = {{&cfg.numbers_text, "control"}, {&cfg.selects_text, "control"},
                  {&cfg.datetimes_text, "control"}, {&cfg.locks_text, "detail"},
-                 {&cfg.alarm_panels_text, "detail"}, {&cfg.fans_text, "detail"}};
+                 {&cfg.alarm_panels_text, "detail"}, {&cfg.fans_text, "detail"},
+                 {&cfg.vacuums_text, "detail"},
+                 // Calendar tiles read the events of every offered calendar.
+                 {&cfg.calendars_text, "events"}};
+  // Events of calendars the Bridge stopped offering go.
+  calendar_store::forget_except(cfg.calendars_text);
   for (const auto& entry : offered) {
     const String& list = *entry.list;
     int start = 0;
@@ -1550,8 +1582,9 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
       const FolderEntitySlotView& slot = slots[i];
       // Rules on another entity (tile_icon_colors.h).
       if (slot.rule_entity[0]) add_route(String(slot.rule_entity), -1, "state");
-      // Weather temperature/humidity sensors, one entity per line.
-      for (const char* extra = slot.extra_entities; *extra;) {
+      // Weather temperature/humidity sensors, one entity per line (a
+      // Vacuum's chosen map comes as a picture, not as a state).
+      for (const char* extra = slot.type == TILE_VACUUM ? "" : slot.extra_entities; *extra;) {
         const char* end = strchr(extra, '\n');
         const size_t length = end ? static_cast<size_t>(end - extra) : strlen(extra);
         if (length) add_route(String(extra).substring(0, length), -1, "state");
@@ -1566,6 +1599,8 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
                   : tileTypeIsDeviceControl(slot.type) ? "detail"
                                                        : "state");
         if (tileTypeIsEditableValue(slot.type)) has_media_tiles = true;
+        // A Vacuum's map picture from the start, like a player's cover.
+        if (slot.type == TILE_VACUUM) vacuum_map::prefetch(slot.entity, slot.extra_entities);
         if (slot.type == TILE_MEDIA) {
           has_media_tiles = true;
           // New bridges publish cover-free state changes here first. Keep the
@@ -1720,6 +1755,10 @@ static bool tryHandleDynamicSensor(const char* topic, const char* payload,
       }
       if (route.topic.endsWith("/detail")) {
         device_control::queue_detail(route.entity_id, payload, payload_len);
+        return true;
+      }
+      if (route.topic.endsWith("/events")) {
+        calendar_store::queue(route.entity_id, payload, payload_len);
         return true;
       }
       if (route.entity_id.startsWith("binary_sensor.") &&
@@ -2136,6 +2175,7 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
     if (haBridgeConfig.applyIconUpdate(large_buf)) {
       tiles_request_icon_refresh();
       queue_sensor_popup_icon_refresh();
+      device_control::refresh_all();
     }
     return;
   }
@@ -2914,6 +2954,40 @@ void mqttPublishLightCommand(const char* entity_id,
   Serial.printf("Light command -> '%s' (%s)\n", topic, queued ? "queued" : "queue-full");
 }
 
+static void normalize_history_range(uint16_t& hours, uint16_t& period_minutes, uint16_t& points) {
+  if (hours == 0) hours = 24;
+  if (period_minutes == 0) period_minutes = 5;
+  if (points == 0) {
+    points = static_cast<uint16_t>((static_cast<uint32_t>(hours) * 60U) / period_minutes);
+  }
+  if (points == 0) points = 1;
+}
+
+// Sends a numeric history request ahead of the queued commands and marks it
+// pending; false when the queue is full.
+static bool send_history_request(const char* history_topic, const char* entity_id, uint16_t hours,
+                                 uint16_t period_minutes, uint16_t points) {
+  String payload = "{\"entity_id\":\"";
+  payload += entity_id;
+  payload += "\",\"hours\":";
+  payload += String(hours);
+  payload += ",\"period_minutes\":";
+  payload += String(period_minutes);
+  payload += ",\"points\":";
+  payload += String(points);
+  payload += ",\"stat\":\"mean\"}";
+  // The user is waiting for this graph. A route reload can leave many
+  // safely paced subscribe commands ahead of the history request. Appending
+  // it behind that burst would let the 2-second fallback empty the graph
+  // before the request was even sent.
+  bool ok = networkManager.mqttEnqueuePublishWithLargeBuffer(
+      history_topic, payload.c_str(), false, 20000, true);
+  Serial.printf("History request -> '%s' (%s, priority)\n",
+                history_topic, ok ? "queued" : "queue-full");
+  if (ok) mark_pending_history_request(entity_id, millis(), hours, period_minutes, points);
+  return ok;
+}
+
 void mqttPublishHistoryRequest(const char* entity_id,
                                uint16_t hours,
                                uint16_t period_minutes,
@@ -2923,12 +2997,7 @@ void mqttPublishHistoryRequest(const char* entity_id,
   // Do not start unnecessary HA history requests for panel I/O.
   if (hardwareIo.isLocalEntityId(entity_id)) return;
 
-  if (hours == 0) hours = 24;
-  if (period_minutes == 0) period_minutes = 5;
-  if (points == 0) {
-    points = static_cast<uint16_t>((static_cast<uint32_t>(hours) * 60U) / period_minutes);
-  }
-  if (points == 0) points = 1;
+  normalize_history_range(hours, period_minutes, points);
 
   const bool mqtt_online = networkManager.isMqttConnected();
   const char* history_topic = networkManager.getHistoryRequestTopic();
@@ -2940,6 +3009,15 @@ void mqttPublishHistoryRequest(const char* entity_id,
     return;
   }
 
+  // Already asked (the finger on the tile asked first,
+  // mqttPrefetchHistoryRequest): its answer comes to the popup and the tile
+  // graphs like this one's would; asked again, a second answer came and was
+  // applied once more.
+  if (can_request_ha && history_request_on_its_way(entity_id, hours, period_minutes, points)) {
+    Serial.printf("[History] Request for %s already on its way\n", entity_id);
+    return;
+  }
+
   // Discard previous pending entries for the same entity.
   clear_pending_history_request(entity_id);
 
@@ -2948,28 +3026,7 @@ void mqttPublishHistoryRequest(const char* entity_id,
     if (!time_valid && is_internal_tab5_entity(entity_id)) {
       Serial.printf("[History] Local time invalid, requesting HA history for %s\n", entity_id);
     }
-
-    String payload = "{\"entity_id\":\"";
-    payload += entity_id;
-    payload += "\",\"hours\":";
-    payload += String(hours);
-    payload += ",\"period_minutes\":";
-    payload += String(period_minutes);
-    payload += ",\"points\":";
-    payload += String(points);
-    payload += ",\"stat\":\"mean\"}";
-    // The user is waiting for this graph. A route reload can leave many
-    // safely paced subscribe commands ahead of the history request. Appending
-    // it behind that burst would let the 2-second fallback empty the graph
-    // before the request was even sent.
-    bool ok = networkManager.mqttEnqueuePublishWithLargeBuffer(
-        history_topic, payload.c_str(), false, 20000, true);
-    Serial.printf("History request -> '%s' (%s, priority)\n",
-                  history_topic, ok ? "queued" : "queue-full");
-    if (ok) {
-      mark_pending_history_request(entity_id, millis(), hours, period_minutes, points);
-      return;
-    }
+    if (send_history_request(history_topic, entity_id, hours, period_minutes, points)) return;
     queue_history_fallback_for_entity(entity_id, time_valid, "HA publish failed",
                                       hours, period_minutes, points);
     return;
@@ -2985,6 +3042,24 @@ void mqttPublishHistoryRequest(const char* entity_id,
   } else if (!history_topic || !*history_topic) {
     Serial.printf("History request skipped (no topic): %s\n", entity_id);
   }
+}
+
+void mqttPrefetchHistoryRequest(const char* entity_id,
+                                uint16_t hours,
+                                uint16_t period_minutes,
+                                uint16_t points) {
+  if (!entity_id || !*entity_id || hardwareIo.isLocalEntityId(entity_id)) return;
+  normalize_history_range(hours, period_minutes, points);
+  const char* history_topic = networkManager.getHistoryRequestTopic();
+  if (!networkManager.isMqttConnected() || !history_topic || !*history_topic) return;
+  // A fresh answer is replayed by the popup's own request; nothing here
+  // reaches a popup or a tile graph.
+  if (fresh_history_replay(entity_id, hours, period_minutes, points) ||
+      history_request_on_its_way(entity_id, hours, period_minutes, points)) {
+    return;
+  }
+  clear_pending_history_request(entity_id);
+  send_history_request(history_topic, entity_id, hours, period_minutes, points);
 }
 
 static void mqttPublishDiscreteHistoryRequest(const char* entity_id,
@@ -3071,7 +3146,7 @@ void mqttPublishWeatherRequest(const char* entity_id) {
 
 bool mqttPublishEnergyRequest(const char* period) {
   const char* p = (period && *period) ? period : "day";
-  if (strcmp(p, "week") != 0 && strcmp(p, "month") != 0) {
+  if (strcmp(p, "week") != 0 && strcmp(p, "month") != 0 && strcmp(p, "year") != 0) {
     p = "day";
   }
 
@@ -3088,7 +3163,14 @@ bool mqttPublishEnergyRequest(const char* period) {
 
   String payload = "{\"period\":\"";
   payload += p;
-  payload += "\"}";
+  payload += "\"";
+  // The week runs from the panel's first weekday (tm_wday); a Bridge before
+  // v0.9.6b3 ignores it and answers the last seven days.
+  if (strcmp(p, "week") == 0) {
+    payload += ",\"week_start\":";
+    payload += String(week_start::panel());
+  }
+  payload += "}";
 
   // Changing the selected range is interactive like a history request.
   // Queue it ahead of a long subscribe burst without touching the client

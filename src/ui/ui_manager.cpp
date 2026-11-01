@@ -13,6 +13,8 @@
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/device/device_popup.h"
+#include "src/ui/popups/vacuum/vacuum_popup.h"
+#include "src/ui/popups/calendar/calendar_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/core/display/display_manager.h"
@@ -36,6 +38,8 @@
 #include "src/ui/popups/popup_surface.h"
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/tile_press.h"
+#include "src/types/power_flow/renderer.h"
+#include "src/types/sensor/renderer.h"
 #include "src/core/config/tile_radius.h"
 
 #include <time.h>
@@ -176,6 +180,8 @@ void UIManager::preloadPopups() {
   preload_climate_popup();
   preload_cover_popup();
   preload_device_popup();
+  preload_vacuum_popup();
+  preload_calendar_popup();
   preload_pin_popup();
   preload_camera_popup();
 }
@@ -459,6 +465,7 @@ void UIManager::switchToTab(uint8_t index) {
   if (index == 3) settings_prepare_show();
   if (tab_panels[index]) {
     lv_obj_clear_flag(tab_panels[index], LV_OBJ_FLAG_HIDDEN);
+    if (index == 0) power_flow_shown(tab_panels[index]);
   }
   if (tab_buttons[index]) {
     lv_obj_set_style_bg_opa(tab_buttons[index], LV_OPA_COVER, 0);
@@ -473,40 +480,16 @@ void UIManager::switchToTab(uint8_t index) {
     camera_indicator::refreshNow();
 
     const uint32_t switch_started_ms = millis();
-#if defined(DEVICE_ESP32_S3_RGB_480)
-    // The S3 log showed 70 small flushes and about 172 ms for the settings
-    // switch. Invalidating each child separately fragments the refresh and
-    // repeatedly rotates/copies into the live PSRAM framebuffer. One panel
-    // invalidation lets LVGL merge the work into the configured display bands.
+    // One invalidation of the whole page lets LVGL draw it in its full-width
+    // bands, the camera stripe on the top layer with them. The S3 log showed
+    // 70 small flushes and about 172 ms with one area per child; the V2 (b588)
+    // took 147 ms with the dark theme's black fill (39 ms) and one area per
+    // control, whose narrow flushes cost 38 ms against 22 ms for the whole
+    // screen (user 2026-10-28). The light theme drew the whole page already
+    // (black gaps, square corners after a fill, user 2026-10-10).
     lv_obj_invalidate(tab_panels[index]);
     const uint32_t cleared_ms = switch_started_ms;
     const uint32_t child_count = lv_obj_get_child_count(tab_panels[index]);
-#else
-    uint32_t cleared_ms = switch_started_ms;
-    const uint32_t child_count = lv_obj_get_child_count(tab_panels[index]);
-    const bool fill = !ui_theme::light();
-    if (!fill) {
-      // The light theme lets LVGL draw the whole page: after the black fill
-      // the gaps between the controls stayed black, and a fill in the screen
-      // color showed square corners until the screen corners were drawn
-      // again (user 2026-10-10).
-      lv_obj_invalidate(tab_panels[index]);
-    } else {
-      BoardHAL::displayFillScreen(0x0000);
-      cleared_ms = millis();
-
-      // The cleared framebuffer also lost the camera stripe on the top layer.
-      // LVGL draws the dirty areas in this order: the stripe first, so its
-      // faded ends do not appear only after the Settings controls.
-      camera_indicator::invalidateVisible();
-      for (uint32_t i = 0; i < child_count; ++i) {
-        lv_obj_t* child = lv_obj_get_child(tab_panels[index], static_cast<int32_t>(i));
-        if (child && !lv_obj_has_flag(child, LV_OBJ_FLAG_HIDDEN)) {
-          lv_obj_invalidate(child);
-        }
-      }
-    }
-#endif
     lv_refr_now(disp);
 
     const uint32_t finished_ms = millis();
@@ -516,13 +499,7 @@ void UIManager::switchToTab(uint8_t index) {
         static_cast<unsigned long>(cleared_ms - switch_started_ms),
         static_cast<unsigned long>(finished_ms - cleared_ms),
         static_cast<unsigned long>(finished_ms - switch_started_ms),
-        static_cast<unsigned long>(child_count),
-#if defined(DEVICE_ESP32_S3_RGB_480)
-        "s3-panel"
-#else
-        fill ? "children" : "panel"
-#endif
-    );
+        static_cast<unsigned long>(child_count), "panel");
     return;
   }
 
@@ -1183,6 +1160,10 @@ void UIManager::settings_gesture_indev_event_cb(lv_event_t* event) {
       lv_indev_stop_processing(input);
       self->touch_press_obj = pressed_object;
       self->touch_press_ms = lv_tick_get();
+      // A sensor graph's history goes out with the finger, 43-138 ms before
+      // the tap (b611 log); a swipe's request is answered and kept for 5 min.
+      sensor_tile_touch_down(pressed_object);
+      power_flow_touch_down(pressed_object);
     }
     if (edge == swipe_gestures::kEdgeOff && !page_swipe) {
       if (!self->touch_watched) return;

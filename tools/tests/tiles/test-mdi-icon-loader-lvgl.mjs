@@ -67,10 +67,14 @@ static bool same(const lv_font_t* loaded, uint32_t letter, const lv_font_t* full
       a.ofs_y != b.ofs_y || a.gid.index != b.gid.index) return false;
   memset(g_buf_a->data, 0, g_buf_a->data_size);
   memset(g_buf_b->data, 0, g_buf_b->data_size);
-  const void* ra = lv_font_get_glyph_bitmap(&a, g_buf_a);
-  const void* rb = lv_font_get_glyph_bitmap(&b, g_buf_b);
+  // LVGL draws from the returned buffer (lv_draw_sw_letter.c); a cached glyph
+  // comes in the glyph cache's own buffer, not copied into the one passed.
+  const auto* ra = static_cast<const lv_draw_buf_t*>(lv_font_get_glyph_bitmap(&a, g_buf_a));
+  const auto* rb = static_cast<const lv_draw_buf_t*>(lv_font_get_glyph_bitmap(&b, g_buf_b));
   if ((ra == nullptr) != (rb == nullptr)) return false;
-  return memcmp(g_buf_a->data, g_buf_b->data, g_buf_a->data_size) == 0;
+  if (!ra) return true;
+  const uint32_t stride = lv_draw_buf_width_to_stride(a.box_w, LV_COLOR_FORMAT_A8);
+  return memcmp(ra->data, rb->data, stride * a.box_h) == 0;
 }
 
 static bool drawn(const lv_font_t* font, uint32_t letter) {

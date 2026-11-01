@@ -45,12 +45,14 @@ assert.equal(t3e.installer.status, 'validation-pending');
 assert.match(t3e.installer.hardwareCheck, /ESP32-S3-WROOM-1/);
 assert.match(t3e.installer.hardwareCheck, /PCB revision v2\.3/);
 assert.match(t3e.installer.hardwareCheck, /v1\.23/, 'The check names the unsupported first revision');
-// The T3E is not the newest profile any more: the BTT Panda Touch joined the
-// catalog later. The T3E still builds after every profile that predates it.
-const newerThanT3e = releaseProfiles.filter(profile => profile !== t3e && profile.ciOrder > t3e.ciOrder)
-  .map(profile => profile.key);
-assert.deepEqual(newerThanT3e, ['btt_panda_touch'],
-  'The T3E builds after every release profile except the newer BTT Panda Touch');
+// Profiles added after the T3E (the Waveshare 4.3/8 v3 images, #135/#140,
+// and the community BTT Panda Touch) build later.
+const addedAfterT3e = new Set(['waveshare_touch_lcd_4_3_rev3', 'waveshare_touch_lcd_8_rev3', 'btt_panda_touch']);
+assert.ok(releaseProfiles.every(profile => profile === t3e || addedAfterT3e.has(profile.key) ||
+  profile.ciOrder < t3e.ciOrder),
+  'The T3E builds after every release profile that existed before it');
+assert.ok([...addedAfterT3e].every(key => releaseProfiles.find(profile => profile.key === key).ciOrder > t3e.ciOrder),
+  'Later profiles keep the existing CI order');
 for (const field of ['key', 'metadataDeviceKey', 'define', 'buildProfile', 'legacySlug']) {
   assert.notEqual(t3e[field], guition[field], `${field} must differ from the Guition S3`);
 }

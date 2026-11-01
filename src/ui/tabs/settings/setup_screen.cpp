@@ -6,6 +6,7 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/ui/tabs/settings/settings_entry.h"
 #include "src/ui/tabs/settings/settings_model.h"
+#include "src/core/memory/psram_static.h"
 #include "src/ui/tabs/settings/settings_parts.h"
 #include "src/ui/tabs/settings/settings_screen.h"
 #include "src/ui/tabs/settings/settings_style.h"
@@ -90,7 +91,9 @@ lv_obj_t* g_countdown = nullptr;
 uint32_t g_scan_at = 0;
 int g_spin_angle = 0;
 // The networks listed (a tap names one by its index).
-settings_model::WifiNetwork g_networks[24] = {};
+// In PSRAM, not in internal RAM: the S3 draw band gets what internal RAM
+// leaves above its reserve (psram_static.h).
+settings_model::WifiNetwork (&g_networks)[24] = psram_static_array<settings_model::WifiNetwork, 24>();
 uint8_t g_network_count = 0;
 
 Colors colors() { return settings_style::colors(g_built_card); }

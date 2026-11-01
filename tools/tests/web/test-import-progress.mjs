@@ -16,7 +16,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\
 // The text in every language, with both numbers, reaches the page.
 const strings = read('src/core/i18n/i18n.cpp');
 const languages = [...strings.matchAll(/^static const Strings kStrings(\w+) = \{/gm)].map(m => m[1]);
-assert.equal(languages.length, 7, 'seven languages');
+assert.equal(languages.length, 8, 'eight languages');
 const progressTexts = strings.split('\n').filter(line => line.includes('{done}') && line.includes('{total}'));
 assert.equal(progressTexts.length, languages.length, 'the progress text in every language');
 assert.match(read('src/core/i18n/i18n.h'), /const char\* js_import_progress;/);

@@ -19,6 +19,8 @@
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/device/device_popup.h"
+#include "src/ui/popups/vacuum/vacuum_popup.h"
+#include "src/ui/popups/calendar/calendar_popup.h"
 #include "src/ui/popups/energy/energy_popup.h"
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/popup_shell.h"
@@ -88,7 +90,7 @@ bool auto_color(const String& domain, const char* payload, uint32_t& rgb, bool& 
 // "rules": the bar and state colors on the entity state; Binary sensors also
 // match their translated On/Off label like the Binary sensor tile.
 bool rules_color(const String& record, const String& domain, const char* payload, uint32_t& rgb,
-                 tile_icon_colors::RowFill* fill) {
+                 tile_icon_colors::RowFill* fill, tile_icon_colors::Icon* icon) {
   const String state = payload_state(payload);
   if (!state_known(state)) return false;
   const char* display = nullptr;
@@ -100,7 +102,7 @@ bool rules_color(const String& record, const String& domain, const char* payload
                                                 String(parsed.device_class));
     }
   }
-  return tile_icon_colors::resolve(record.c_str(), state.c_str(), display, rgb, false, fill);
+  return tile_icon_colors::resolve(record.c_str(), state.c_str(), display, rgb, false, fill, icon);
 }
 
 // Tile types whose own state path already applies the fixed icon color
@@ -236,13 +238,15 @@ uint32_t disc_icon_rgb(lv_obj_t* disc) {
   return icon ? tile_icon_disc::icon_color(icon) : ui_theme::text();
 }
 
-// The light theme fills a tile "From icon" in the neutral grey while its
-// icon shows white or almost white light (user 2026-10-10); tile_tint::choose
-// gives no tint for a color without a hue.
+// A tile "From icon" fills in the neutral grey while its icon shows white or
+// almost white light: the light theme's filled tiles (user 2026-10-10) and,
+// since #130 (2026-10-26), every tile with "Ausfuellen" of the dark theme, so
+// a light that is on always fills; tile_tint::choose gives no tint for a
+// color without a hue.
 tile_tint::Choice with_white(lv_obj_t* card, tile_tint::Choice choice, uint8_t fill, lv_obj_t* disc) {
+  if (choice.percent || !fill || !disc || !tile_icon_disc::icon_of(disc)) return choice;
   uint8_t base = 0, flags = 0;
-  if (choice.percent || !fill || !disc || !tile_icon_disc::icon_of(disc) || !tile_surface::rule_of(card, base, flags) ||
-      !(flags & tile_surface::kFollowTint)) {
+  if (ui_theme::theme_light() && (!tile_surface::rule_of(card, base, flags) || !(flags & tile_surface::kFollowTint))) {
     return choice;
   }
   const uint32_t icon = disc_icon_rgb(disc);
@@ -328,6 +332,8 @@ void follow_open_popup(lv_obj_t* card) {
   light_popup_follow_tile_color(color);
   cover_popup_follow_tile_color(color);
   device_popup_follow_tile_color(color);
+  vacuum_popup_follow_tile_color(color);
+  calendar_popup_follow_tile_color(color);
   sensor_popup_follow_tile_color(color);
   energy_popup_follow_tile_color(color);
   weather_popup_follow_tile_color(color);
@@ -554,8 +560,9 @@ String rule_entity(const Tile& tile) {
   return layer_entity(tile, tile_icon_colors::source_of(tile.icon_colors.c_str()));
 }
 
-bool rule_color(const Tile& tile, uint32_t& rgb, tile_icon_colors::RowFill* fill) {
+bool rule_color(const Tile& tile, uint32_t& rgb, tile_icon_colors::RowFill* fill, tile_icon_colors::Icon* icon) {
   if (fill) *fill = tile_icon_colors::RowFill::Inherit;
+  if (icon) *icon = tile_icon_colors::Icon{};
   if (!tileTypeHasIconColors(tile.type) || !tile.icon_colors.length()) return false;
   const tile_icon_colors::Source layer = tile_icon_colors::source_of(tile.icon_colors.c_str());
   const String entity = layer_entity(tile, layer);
@@ -567,14 +574,14 @@ bool rule_color(const Tile& tile, uint32_t& rgb, tile_icon_colors::RowFill* fill
     const EditableValue value = parse_editable_value(haBridgeConfig.findEditableValue(entity));
     if (!value.valid || !value.has_state || !value.available || value.state == "unknown") return false;
     return tile_icon_colors::resolve(tile.icon_colors.c_str(), value.state.c_str(),
-                                     editable_display_value(value).c_str(), rgb, false, fill);
+                                     editable_display_value(value).c_str(), rgb, false, fill, icon);
   }
   String payload;
   if (!cached_payload(entity, payload)) return false;
   String domain;
   const int dot = entity.indexOf('.');
   if (dot > 0) domain = entity.substring(0, dot);
-  if (!automatic) return rules_color(tile.icon_colors, domain, payload.c_str(), rgb, fill);
+  if (!automatic) return rules_color(tile.icon_colors, domain, payload.c_str(), rgb, fill, icon);
   bool running = true;
   return auto_color(domain, payload.c_str(), rgb, running);
 }
@@ -829,8 +836,9 @@ void refresh_card(lv_obj_t* card, const Tile& tile) {
   const tile_icon_colors::Source layer = tile_icon_colors::source_of(tile.icon_colors.c_str());
   uint32_t rgb = 0;
   tile_icon_colors::RowFill row_fill = tile_icon_colors::RowFill::Inherit;
-  const bool colored =
-      layer.mode != tile_icon_colors::SourceMode::None && layer.enabled && rule_color(tile, rgb, &row_fill);
+  tile_icon_colors::Icon rule_glyph;
+  const bool colored = layer.mode != tile_icon_colors::SourceMode::None && layer.enabled &&
+                       rule_color(tile, rgb, &row_fill, &rule_glyph);
   // "From cover" exists on Media tiles only; every other type keeps its path.
   const tile_icon_colors::Cover cover =
       tile.type == TILE_MEDIA ? tile_icon_colors::cover_of(tile.icon_colors.c_str()) : tile_icon_colors::Cover{};
@@ -854,6 +862,13 @@ void refresh_card(lv_obj_t* card, const Tile& tile) {
     // A colored weather icon shows a forced color on all its layers.
     if (tile.type == TILE_WEATHER && weatherColoredIcons(tile)) {
       weather_icons::follow_icon_color(icon, rule_icon || force_fixed);
+    }
+    // The layer's matching rule shows its own icon (tile_rule_icon.h); rules
+    // on the tile's own state without a layer line set it on their state
+    // updates (tile_icon_color_rules::apply_icon). Weather icons keep their
+    // own layered glyphs.
+    if (layer.mode != tile_icon_colors::SourceMode::None && tile.type != TILE_WEATHER) {
+      tile_rule_icon::show(icon, rule_icon ? rule_glyph : tile_icon_colors::Icon{});
     }
   }
   // "Ausfuellen" (tile_icon_colors::fills) fills the tile with the color the

@@ -75,14 +75,19 @@ Arduino IDE:
 
 Used for:
 - `src/devices/waveshare_touch_lcd_4_3`
-- build profile `waveshare_4_3`
+- build profile `waveshare_4_3` for ESP32-P4 before v3.0 (1–199)
+- build profile `waveshare_4_3_rev3` for ESP32-P4 v3.1 or newer (301–399)
 
 Important:
 - This profile is only for the exact `ESP32-P4-WIFI6-Touch-LCD-4.3` product.
 - The native panel is a `480x800` ST7701 MIPI-DSI display. HomeTiles renders
   it as an `800x480` landscape dashboard.
 - The tested board reports ESP32-P4 revision v1.3 and uses the pre-v3
-  revisions 1–199 firmware contract.
+  revisions 1–199 firmware contract. Boards with ESP32-P4 v3.1 or newer
+  (#135, v3.2) use `waveshare_4_3_rev3` with `Chip Variant: v3.00 or newer`;
+  the same code then selects the default MIPI DSI PHY clock that v3 silicon
+  accepts. Check the revision with `esptool chip-id` first. The v3 build is
+  experimental and not yet hardware-tested.
 - Touch uses GT911 on SDA GPIO7 and SCL GPIO8 without interrupt or reset pins.
 - The active-low backlight is GPIO26 and the active-low panel reset is GPIO27.
 - The microSD interface uses SDMMC slot 0 on GPIO39-44 and P4 LDO channel 4.
@@ -165,8 +170,8 @@ Used for:
 - `src/devices/waveshare_touch_lcd_7`
 - `src/devices/waveshare_touch_lcd_8`
 - `src/devices/waveshare_touch_lcd_10_1`
-- build profiles `waveshare_7`, `waveshare_8`, `waveshare_10_1`, and
-  `waveshare_10_1_rev3`
+- build profiles `waveshare_7`, `waveshare_8`, `waveshare_8_rev3`,
+  `waveshare_10_1`, and `waveshare_10_1_rev3`
 
 Important:
 - The 8-inch profile is hardware-confirmed. The 7-inch and 10.1-inch profiles
@@ -181,9 +186,12 @@ Important:
 - Leave `Partition Scheme` on the normal 32MB ESP32-P4 setting.
 - The actual partition layout still comes from the shared repo `partitions.csv`.
 - The `Chip Variant` must be set to `Before v3.00` for this hardware, except
-  for 10.1-inch boards with ESP32-P4 v3.1 or newer: use `waveshare_10_1_rev3`
-  with `v3.00 or newer`. Check the revision with `esptool chip-id` first. The
-  v3 build is experimental and contributor-tested on v3.2 only.
+  for 8-inch and 10.1-inch boards with ESP32-P4 v3.1 or newer: use
+  `waveshare_8_rev3` (#140, v3.2) or `waveshare_10_1_rev3` with
+  `v3.00 or newer`; the same code then selects the default MIPI DSI PHY clock
+  that v3 silicon accepts. Check the revision with `esptool chip-id` first.
+  The v3 builds are experimental; the 10.1 one is contributor-tested on v3.2,
+  the 8-inch one is not yet hardware-tested.
 
 Arduino IDE:
 - Board: `ESP32P4 Dev Module`

@@ -56,7 +56,7 @@ const char* binary_sensor_state_label(const char* language,const char* state,con
 }
 constexpr size_t EDITABLE_PAYLOAD_MAX=24576;
 ${valueStruct}
-${['finite_json','editable_entity_matches','parse_editable_value','editable_display_value'].map(n=>fn(control,n)).join('\n')}
+${['finite_json','editable_entity_matches','parse_editable_value','editable_display_unit','editable_display_number','editable_display_value'].map(n=>fn(control,n)).join('\n')}
 namespace Device { constexpr int kGridGap = SCREEN_WIDTH == 480 ? 10 : 16; }  // the profile's grid gap (popup header rule)
 ${geometry}
 struct Obj {int y=0,w=0,h=0;unsigned flags=0;};using lv_obj_t=Obj;
@@ -75,7 +75,7 @@ void lv_obj_update_layout(Obj*){} void lv_obj_add_flag(Obj*o,unsigned f){o->flag
 // ESP32's int32_t is long, unlike the host's int32_t. Match the firmware
 // signature here so mixed-type template arguments fail before a full build.
 void lv_obj_remove_flag(Obj*o,unsigned f){o->flags&=~f;} long lv_font_get_line_height(const int*h){return *h;}
-constexpr int kChartHeight=popup_layout::contentScale(325),kTimeAxisMarkerCount=8;
+constexpr int kTimeLabelGap=popup_layout::scale480(12),kTimeLabelExtra=kTimeLabelGap-popup_layout::scale480(8),kChartHeight=popup_layout::contentScale(325)-kTimeLabelExtra,kTimeAxisMarkerCount=8,kChartLinePad=(popup_layout::scale(4)+1)/2;
 #if defined(DEVICE_LAYOUT_480X480)
 constexpr int kContentLiftY=6,kBinaryTimelineHeight=22,kBinaryActivityRowHeight=42,kTimeAxisHeight=20;
 #elif defined(DEVICE_LAYOUT_1024X600)
@@ -92,6 +92,8 @@ struct SensorPopupContext {
  Obj* chart=nullptr; Obj* y_min_label=nullptr; Obj* y_min_line=nullptr; Obj* time_lines[8]={}; Obj* time_labels[8]={}; int chart_height=kChartHeight;
 };
 ${fn(control,'editable_control_height')}
+// The zero line's label is covered by test-editable-history-lvgl.mjs.
+void place_zero_label(SensorPopupContext*){}
 ${fn(popup,'resize_editable_chart')}
 void update_binary_time_axis(SensorPopupContext*){}
 ${fn(popup,'editable_control_top')}

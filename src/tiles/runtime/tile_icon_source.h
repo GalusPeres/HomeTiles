@@ -25,8 +25,10 @@ bool cached_payload(const String& entity, String& payload);
 
 // The rule color of a tile from the cached state of its rule entity; false
 // without an enabled rule, a known state or a result.
-// `fill`, when set, receives the matching state line's own "Fuellen".
-bool rule_color(const Tile& tile, uint32_t& rgb, tile_icon_colors::RowFill* fill = nullptr);
+// `fill`, when set, receives the matching state line's own "Fuellen";
+// `icon` the matching stop's or line's own icon.
+bool rule_color(const Tile& tile, uint32_t& rgb, tile_icon_colors::RowFill* fill = nullptr,
+                tile_icon_colors::Icon* icon = nullptr);
 
 // The entity whose state drives the tile's enabled rules (own or other), or
 // "" without enabled rules.

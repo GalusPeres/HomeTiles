@@ -35,7 +35,7 @@ These types show or control a Home Assistant entity.
 
 ### Sensor
 
-Shows a numeric or text-valued `sensor.*` entity. Configure the unit, decimals, value size, and an optional gauge with a minimum and maximum.
+Shows a numeric or text-valued `sensor.*` entity. Configure the unit, decimals, and value size. **Display mode** adds a gauge, a graph of the last 24 hours, a bar, an arc, or a ring below the header with a minimum and maximum: filled, as a line, or striped, with the value in the header or inside the arc or ring.
 
 <div class="ht-type-shots ht-type-pair" markdown>
 <div class="ht-type-stack" markdown>
@@ -49,12 +49,27 @@ Shows a numeric or text-valued `sensor.*` entity. Configure the unit, decimals, 
 </figure>
 </div>
 <figure class="ht-screenshot ht-popup">
-<img style="width:420px" src="../images/v09-popup-sensor.png" alt="Sensor history over 24 hours with a read value" width="800" height="800" loading="lazy">
+<img style="width:420px" src="../images/v09-popup-sensor.png" alt="Solar power over 24 hours with a read value" width="800" height="800" loading="lazy">
 <figcaption>Popup, 24 hours</figcaption>
 </figure>
 </div>
 
-**Popup:** the current value in the header and a **7D** or **24H** history: a graph for numbers, or a timeline and Activity list for text states. Touch the graph and move your finger to read an earlier value; the time and value appear above the graph, and the marker stays where you let go.
+<div class="ht-type-shots" markdown>
+<figure class="ht-screenshot">
+<img style="width:232px" src="../images/tile-sensor-graph.png" alt="Sensor tile with the solar power of the day as a graph" width="299" height="152" loading="lazy">
+<figcaption>Graph</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:232px" src="../images/tile-sensor-stripes.png" alt="Sensor tile with a striped bar" width="299" height="152" loading="lazy">
+<figcaption>Stripes</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:232px" src="../images/tile-sensor-arc.png" alt="Battery tile with a striped arc and the value inside" width="299" height="152" loading="lazy">
+<figcaption>Striped arc</figcaption>
+</figure>
+</div>
+
+**Popup:** the current value in the header and its history: a graph for numbers with **30D**, **7D**, **24H**, **6H**, and **1H**, or a timeline and Activity list for text states with **7D** or **24H**. The **30D** and **1H** ranges need HomeTiles Bridge v0.9.6 or newer. Touch the graph and move your finger to read an earlier value; the time and value appear above the graph, and the marker stays where you let go.
 
 A local [DS18B20 input](hardware-io.md) can also supply the value without Home Assistant; local inputs have no Home Assistant history popup.
 
@@ -144,7 +159,7 @@ Slider edits are sent on release; step and time edits are grouped after a short 
 
 ### Energy
 
-Shows Home Assistant **Energy Dashboard** statistics for electricity, gas, water, or cost. Enable the matching [Bridge energy category](bridge.md#energy-dashboard). Configure the energy entity, unit, decimals, and value size.
+Shows Home Assistant **Energy Dashboard** statistics for electricity, gas, water, or cost. Enable the matching [Bridge energy category](bridge.md#energy-dashboard). Configure the energy entity, unit, decimals, and value size. **Display mode: Graph** shows today's hours as bars below the header.
 
 <div class="ht-type-shots" markdown>
 <figure class="ht-screenshot">
@@ -154,6 +169,10 @@ Shows Home Assistant **Energy Dashboard** statistics for electricity, gas, water
 <figure class="ht-screenshot">
 <img style="width:101px" src="../images/tile-energy-yield-half.png" alt="Half-height energy tile with today's solar yield" width="168" height="64" loading="lazy">
 <figcaption>Half height</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:232px" src="../images/tile-energy-graph.png" alt="Energy tile with today's solar yield as hourly bars" width="299" height="152" loading="lazy">
+<figcaption>Graph</figcaption>
 </figure>
 </div>
 
@@ -168,7 +187,20 @@ Shows Home Assistant **Energy Dashboard** statistics for electricity, gas, water
 </figure>
 </div>
 
-**Popup:** hourly bars for the day and daily bars for the week. Tap a bar to read its time and value; a dot marks the bar you read.
+**Popup:** **Year** (a bar per month), **Month** and **Week** (a bar per day), and **Today** (a bar per hour), each from its start up to now. The week starts on the day chosen under **Web Admin → Localization → First day of the week**. Tap a bar to read its time and value; a dot marks the bar you read. **Year** and **Week** need HomeTiles Bridge v0.9.6 or newer.
+
+### Power Flow
+
+Shows the power of the solar panels, the grid, a battery, and the home as nodes, with dots that move along the lines in the direction the power flows and faster when more power flows. Choose a power sensor for each node; a node without a sensor stays hidden. **Invert sign** turns around a grid or battery sensor that counts the other way, and a battery charge sensor adds its level to the battery node. **Show title and icon** adds the tile header, and **Show card** draws the tile's card behind the nodes.
+
+<div class="ht-type-shots" markdown>
+<figure class="ht-screenshot">
+<img style="width:312px" src="../images/tile-power-flow.png" alt="Power flow tile: the battery supplies the home with 4.1 kW" width="404" height="320" loading="lazy">
+<figcaption>Battery to home</figcaption>
+</figure>
+</div>
+
+Tap a node to open its sensor's popup.
 
 ### Switch
 
@@ -180,6 +212,8 @@ Toggles a compatible entity and reflects its state. Choose the entity, **Layout*
 | **Dimmer** | A brightness bar across the tile: press or drag to set the level, like the popup's brightness slider. Lights without dimming get the switch bar. |
 | **Switch** | An on/off bar with a thumb, like the popup's switch. |
 | **Icon button** | No bar: tap the tile to toggle. |
+
+**Orientation:** **Horizontal** lays the bar across the tile; **Upright** stands it up next to the header, the dimmer filling from the bottom and the switch on at the top.
 
 The tile shows the state (`On`, `Off`, or the brightness) under its title. Half-height tiles show the state only; tap toggles, and the other gesture opens the popup. Commands while dragging are paced like Home Assistant, and the last level is always sent. A light fills its tile in its own color.
 
@@ -387,7 +421,7 @@ Configure mini-tiles for temperatures, humidity, targets, and mode, or choose **
 
 Controls a `fan` entity.
 
-The tile shows the state and speed. Its bar sets the speed: stepless like the Switch dimmer, in segments for fans with only a few speeds, or as an on/off switch for fans without speed control. Tap or long press, whichever does not open the popup, switches the fan on or off.
+The tile shows the state and speed. Its bar sets the speed: stepless like the Switch dimmer, in segments for fans with only a few speeds, or as an on/off switch for fans without speed control. **Orientation: Upright** stands the bar up like the Switch tile's, the speeds stacking from the bottom. Tap or long press, whichever does not open the popup, switches the fan on or off.
 
 <div class="ht-type-shots ht-type-pair" markdown>
 <div class="ht-type-stack" markdown>
@@ -508,6 +542,40 @@ Shows a `camera` or `image` entity. The camera can also be the [built-in camera]
 </div>
 
 ESP32-P4 displays play the video at up to 30 frames per second, in the popup and full screen; ESP32-S3 displays at about 4. Allow local TCP access to the Home Assistant host on ports `8124`–`8131`. See [Camera connection](bridge.md#experimental-camera-transport) for requirements and performance notes. A doorbell automation can open a camera full screen with the display's [View entity](bridge.md#control-the-displayed-view).
+
+### Calendar
+
+Shows up to four `calendar` entities, each in its own color (blue, teal, purple, orange, in the order of the calendar fields). Requires a Bridge with calendar support; select the calendars under **Calendars** in the [Bridge options](bridge.md#entity-configuration).
+
+What the tile shows depends on its size and **View**:
+
+- **Half height:** the next event: "Next · 10:00" above its title ("Now" while it runs). Two cells wide, the top line counts down ("Next · in 1 h 30 min") and the start time follows the title.
+- **Half height, View Today:** "Today" above the number of events left today ("3 events", "No events").
+- **1×1:** a countdown: the next event's title at the top, its day large in the middle ("Today", "Tomorrow", "Monday") and how far away it is below ("in 1 h 30 min", "in 2 days").
+- **Two cells wide, one row:** **Up next**: the event running now or the next one, with its time and a countdown.
+- **Two rows or more:** the agenda: the coming days with their events; all-day events first.
+- **Week:** a dot per calendar with events and today's column tinted. One row high, the strip shows the seven days from today; taller, the week from its first day.
+- **Month:** the month grid with today and a dot per calendar. Only on displays larger than 480×480 and on tiles of at least 2×2; elsewhere the tile shows the agenda.
+
+**Week starts on:** **Automatic** follows **Web Admin → Localization → First day of the week**, whose own **Automatic** follows the display language (Sunday in English, Monday otherwise); or choose Monday, Sunday, or Saturday for this tile. The tile and its popup use it.
+
+**Popup:** with two or more calendars, their names and colors on top; then the month with a dot per calendar; tap a day to see its events below. **List** shows the coming four weeks instead. The arrows move by month (or week in the list) as far as the Bridge sent events, and **Today** jumps back.
+
+The display shows the events in Home Assistant's time zone. Events edited in Home Assistant appear within 15 minutes; an event that starts or ends updates the tile at once.
+
+### Vacuum
+
+Controls a `vacuum` entity. Requires HomeTiles Bridge v0.9.7 or newer; select the vacuums under **Vacuums** in the [Bridge options](bridge.md#entity-configuration).
+
+- **Half height:** the name and the state with the battery.
+- **One row:** the name and the state ("Docked · 84 %") beside the icon, the buttons below: **Clean** (**Pause** while cleaning) on one column, **Clean** and **Dock** on two, **Clean**, **Stop** and **Dock** from three columns. From 1.5 rows the state stands in the middle.
+- **Two columns and two rows or more:** the map on the left, the state, battery and cleaned area beside it, the buttons below.
+
+Only the buttons the vacuum supports are active.
+
+**Map:** **Automatic** takes the image or camera entity of the vacuum's device; or choose one. **Refresh (s)** sets how often a camera map is fetched (3 to 60 seconds); an image entity sends a new map when it changes.
+
+**Popup:** the map (**Map left** or **Map centre**), cleaned area, cleaning time and battery, **Clean**, **Stop** and **Dock**, and a menu (⋯) with the suction power, the rooms to clean and **Locate**. Rooms are the Home Assistant areas mapped to the vacuum; they need Home Assistant 2026.3 or newer and the area mapping in the vacuum's entity settings.
 
 ## Local Tiles
 

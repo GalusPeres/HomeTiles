@@ -26,6 +26,7 @@
 #include "src/core/firmware/firmware_version.h"
 #include "src/core/i18n/i18n.h"
 #include "src/devices/device.h"
+#include "src/types/calendar/calendar_model.h"
 #include "src/types/clock/clock_format.h"
 #include "src/types/clock/web_html.h"
 #include "src/types/binary_sensor/renderer.h"
@@ -109,6 +110,34 @@ static String buildGlobalDateFormatOptionsHtml(uint8_t selected_format, const i1
   html += "<option value=\"3\"";
   if (selected_format == clock_tile::DATE_FORMAT_YMD) html += " selected";
   html += ">YYYY/MM/DD</option>";
+  return html;
+}
+
+// The first day of the week, the Calendar tile's choices (types/calendar
+// web.cpp): Automatic names the language's day, then Monday, Sunday and
+// Saturday (tm_wday values; Automatic is calendar_model::kWeekStartAuto).
+static String buildWeekStartOptionsHtml(uint8_t selected, const char* language) {
+  selected = calendar_model::normalize_week_start(selected);
+  const i18n::LocaleProfile& loc = i18n::locale(language);
+  String html;
+  html.reserve(256);
+  auto append = [&](uint8_t value, const char* label) {
+    html += "<option value=\"";
+    html += String(value);
+    html += "\"";
+    if (value == selected) html += " selected";
+    html += ">";
+    appendHtmlEscaped(html, label);
+    html += "</option>";
+  };
+  String automatic = i18n::calendar_label(language, i18n::CalendarLabel::Automatic);
+  automatic += " (";
+  automatic += loc.weekday_names[loc.first_weekday <= 6 ? loc.first_weekday : 1];
+  automatic += ")";
+  append(calendar_model::kWeekStartAuto, automatic.c_str());
+  append(1, loc.weekday_names[1]);
+  append(0, loc.weekday_names[0]);
+  append(6, loc.weekday_names[6]);
   return html;
 }
 
@@ -649,6 +678,7 @@ static void appendTileTabHTML(
     if (tile_geometry::compact_switch(tile.type, span_w, span_h) ||
         tile_geometry::compact_cover(tile.type, span_w, span_h) ||
         tile_geometry::compact_device_control(tile.type, span_w, span_h) ||
+        tile_geometry::compact_calendar(tile.type, span_w, span_h) ||
         tile_geometry::compact_climate(tile.type, span_w, span_h) ||
         tile_geometry::compact_editable(tile.type, span_w, span_h)) {
       cssClass += " sensor-compact sensor-half";
@@ -804,7 +834,15 @@ static void appendTileTabHTML(
       html += tile.sensor_value_font == 1 ? "20" : tile.sensor_value_font == 2 ? "24" :
               tile.sensor_value_font == 3 ? "32" : tile.sensor_value_font == 4 ? "40" : "default";
       html += "\">";
-      appendHtmlEscaped(html, editable_display_value(parse_editable_value(haBridgeConfig.findEditableValue(tile.sensor_entity))));
+      // The unit a step smaller after the number, as the panel shows it.
+      const EditableValue editable = parse_editable_value(haBridgeConfig.findEditableValue(tile.sensor_entity));
+      appendHtmlEscaped(html, editable_display_number(editable));
+      const String editable_unit = editable_display_unit(editable);
+      if (editable_unit.length()) {
+        html += "<span class=\"tile-unit\">";
+        appendHtmlEscaped(html, editable_unit);
+        html += "</span>";
+      }
       html += "</div>";
     }
     if (binary_sensor_preview) {
@@ -1406,14 +1444,27 @@ static void appendTileTabHTML(
   html += R"html(_tile_icon" data-tile-icon><button type="button" class="tile-icon-picker" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_picker" aria-haspopup="listbox"></button></div></div>
+)html";
+  // Places for type options that belong elsewhere (data-tile-place,
+  // type-selection.js placeTileTypeParts): under Title and Icon, at the top
+  // of the settings and in Color.
+  html += R"html(<div class="tile-place-slot" id=")html";
+  html += tab_id;
+  html += R"html(_tile_head_slot"></div>
 </div>
 <div class="tile-settings-body">
+<div class="tile-place-slot" id=")html";
+  html += tab_id;
+  html += R"html(_tile_top_slot"></div>
 
 <div class="tile-settings-group">)html";
   // Two sections (user 2026-10-11): Color (icon color, tile color, Fill),
   // then Advanced (the type's options); "Icon" and "Tile" apart did not fit.
   appendHtmlEscaped(html, tr.tile_group_color);
   html += R"html(</div>
+<div class="tile-place-slot" id=")html";
+  html += tab_id;
+  html += R"html(_tile_color_slot"></div>
 )html";
   append_tile_icon_color_fixed_html(html, tab_id);
   html += R"html(            <div class="tile-icon-disc-fields" id=")html";
@@ -1911,6 +1962,14 @@ data-dhcp-note=")html";
   html += R"html(</label>
 <select id="locale_date_format" name="locale_date_format">)html";
   html += buildGlobalDateFormatOptionsHtml(cfg.global_date_format, tr);
+  html += R"html(</select>
+</div>
+<div>
+<label for="locale_week_start">)html";
+  appendHtmlEscaped(html, tr.week_start_label);
+  html += R"html(</label>
+<select id="locale_week_start" name="locale_week_start">)html";
+  html += buildWeekStartOptionsHtml(cfg.week_start, cfg.language);
   html += R"html(</select>
 </div>
 </div>

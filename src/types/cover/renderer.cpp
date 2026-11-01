@@ -15,6 +15,7 @@
 #include "src/tiles/runtime/tile_header.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_source.h"
+#include "src/tiles/runtime/tile_rule_icon.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/ui/shared/tone_color.h"
@@ -497,8 +498,7 @@ void apply_state(GridType grid_type, uint8_t index, const char* payload) {
     tile_icon_disc::set_icon_color(
         widget.icon_label, lv_color_hex(cover_icon_color(state)));
     if (widget.dynamic_icon) {
-      lv_label_set_text(
-          widget.icon_label, getMdiChar(fallback_icon(state)).c_str());
+      tile_rule_icon::set_glyph(widget.icon_label, getMdiChar(fallback_icon(state)).c_str());
     }
     set_icon_pulse(widget.icon_label, cover_state_moving(state));
   }

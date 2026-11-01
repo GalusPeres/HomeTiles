@@ -96,14 +96,15 @@ int main() {
       {"off", "on", "left", "center", "right", "swing", "wide"}));
     if (mask >= 8) assert(std::strcmp(climatePresetName(mask), "") == 0);
   }
-  // Forecast days follow the card's real width with even room (85 % of the
-  // widest text) between and around them: 4B and V2 3 x 2 = 5 days, the old
-  // V2 cells (168 px) keep 2 cells = 2 and 3 cells = 4 days.
-  assert(weather_forecast_gap(59) == 50);
-  assert(weather_forecast_count(680) == 5 && weather_forecast_count(611) == 5);
-  assert(weather_forecast_count(402) == 3 && weather_forecast_count(193) == 1);
-  assert(weather_forecast_count(352) == 2 && weather_forecast_count(536) == 4);
-  assert(weather_forecast_count(1088) == 8 && weather_forecast_count(40) == 1);
+  // Forecast days follow the card's real width with even room (half the
+  // widest text, user 2026-10-27; 85 % before) between and around them: one
+  // day more on every card, the V2 2 x 2 (344 px) 3 days instead of 2, its
+  // 2.5 x 2 (434) 4, its 3 x 2 (524) 5, its 4 x 2 (704) 7.
+  assert(weather_forecast_gap(59) == 29);
+  assert(weather_forecast_count(344) == 3 && weather_forecast_count(434) == 4);
+  assert(weather_forecast_count(524) == 5 && weather_forecast_count(704) == 7);
+  assert(weather_forecast_count(680) == 7 && weather_forecast_count(611) == 6);
+  assert(weather_forecast_count(193) == 1 && weather_forecast_count(1088) == 8 && weather_forecast_count(40) == 1);
   for (lv_coord_t width = 1; width < 1400; ++width) {
     assert(weather_forecast_count(width) >= weather_forecast_count(width - 1));
   }

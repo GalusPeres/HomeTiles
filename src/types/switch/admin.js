@@ -23,8 +23,9 @@ function maybeFillTitleFromSwitch(tab) {
 
   // switch_layout::sensor_look: from 1.5 rows a header layout looks like a
   // Sensor tile with the bar below.
-  function switchSensorLook(style, spanH) {
-    return switchLayoutValue(style) !== 0 && Number(spanH) > 1;
+  // An upright bar keeps the header beside the disc (bar_orientation.h).
+  function switchSensorLook(style, spanH, upright = false) {
+    return switchLayoutValue(style) !== 0 && Number(spanH) > 1 && !upright;
   }
 
   // The segmented choices of the Switch fields (like Tile color). The hidden
@@ -33,8 +34,11 @@ function maybeFillTitleFromSwitch(tab) {
   // The Climate tile's Layout and the Camera tile's choices use the same
   // segmented choice.
   const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode', 'climate_view', 'media_layout',
-    'cover_value_font', 'lock_value_font', 'alarm_value_font', 'fan_value_font', 'camera_display', 'camera_fit',
-    'camera_head', 'camera_tap'];
+    'cover_value_font', 'lock_value_font', 'alarm_value_font', 'fan_value_font', 'vacuum_value_font', 'vacuum_layout',
+    'camera_display', 'camera_fit',
+    'camera_head', 'camera_tap', 'switch_orientation', 'fan_orientation', 'sensor_layout', 'sensor_form',
+    'sensor_orientation', 'sensor_ring', 'sensor_place', 'sensor_value_font', 'sensor_popup_open_mode',
+    'energy_value_font', 'energy_display_mode', 'energy_popup_open_mode'];
 
   function syncSwitchChoices(tab) {
     for (const field of SWITCH_CHOICE_FIELDS) {
@@ -44,10 +48,23 @@ function maybeFillTitleFromSwitch(tab) {
       const options = select.options ? Array.from(select.options) : [];
       for (const button of group.querySelectorAll('button[data-value]')) {
         button.classList.toggle('active', button.dataset.value === String(select.value));
-        // Value sizes this tile size does not offer stay hidden.
+        // Value sizes this tile size does not offer stay hidden; the others
+        // carry the size this panel draws (syncCompactValueFontOptions), the
+        // Default button only its word so the row keeps its width.
         const option = options.find(o => o.value === button.dataset.value);
         button.classList.toggle('hidden', !!option?.hidden);
+        const name = option?.value === '0' && select.dataset?.defaultLabel ? select.dataset.defaultLabel : option?.textContent;
+        if (name && button.textContent !== name) button.textContent = name;
       }
+    }
+    // The Switch tile's Orientation row only with a bar (not the icon button).
+    const style = document.getElementById(tab + '_switch_style');
+    if (style) {
+      const hide = switchLayoutValue(style.value) === 0;
+      const label = typeof document.querySelector === 'function'
+        ? document.querySelector('label[for="' + tab + '_switch_orientation"]') : null;
+      label?.classList?.toggle('hidden', hide);
+      document.getElementById(tab + '_switch_orientation_choices')?.classList?.toggle('hidden', hide);
     }
   }
 
@@ -95,10 +112,13 @@ function maybeFillTitleFromSwitch(tab) {
   }
 
   // The tile classes and layout of a Switch preview (live and cached grid).
-  function applySwitchPreviewLayout(tileElem, style, halfHeight) {
+  // `upright`: the bar stands below the header (bar_orientation.h).
+  function applySwitchPreviewLayout(tileElem, style, halfHeight, upright = false) {
     if (!tileElem) return;
     tileElem.dataset.switchLayout = String(switchLayoutValue(style));
-    tileElem.classList.toggle('switch-bar', switchUsesHeader(style, halfHeight) && !halfHeight);
+    const bar = switchUsesHeader(style, halfHeight) && !halfHeight;
+    tileElem.classList.toggle('switch-bar', bar);
+    tileElem.classList.toggle('switch-upright', bar && !!upright);
   }
 
   // switch_layout::Dimmer: the fill stays inside the bar's shape; its end
@@ -322,7 +342,7 @@ function maybeFillTitleFromSwitch(tab) {
       if (el.classList.contains('tile-switch-state') || el.classList.contains('tile-switch')) el.remove();
     }
     preview.insertAdjacentHTML('beforeend', switchPreviewExtraHtml(data.switch_style, half));
-    applySwitchPreviewLayout(preview, data.switch_style, half);
+    applySwitchPreviewLayout(preview, data.switch_style, half, Number(data.bar_orientation) === 1);
   }
 
   // Once the copy is in the grid (the bar measures itself): the state from
@@ -392,7 +412,13 @@ function maybeFillTitleFromSwitch(tab) {
     if (!available) on = false;
     // A dimmable light on without a reported brightness: On without a level.
     const level = on ? (state.hasBrightness ? Math.max(1, state.brightness) : (dimmable ? 0 : 100)) : 0;
-    if (label) label.textContent = switchPreviewStateText(state, dimmable && level > 0, level, on);
+    if (label) {
+      // A level's percent a step smaller after it (unitTextHtml); words as text.
+      const text = switchPreviewStateText(state, dimmable && level > 0, level, on);
+      const html = unitTextHtml(text);
+      if (html === escapeHtml(text)) label.textContent = text;
+      else label.innerHTML = html;
+    }
     if (!bar) return;
     const kind = switchBarKind(style, halfHeight, dimmable);
     bar.dataset.bar = kind;
@@ -458,18 +484,27 @@ function maybeFillTitleFromSwitch(tab) {
     const {kind, level} = drawn;
     const width = bar.clientWidth;
     const height = bar.clientHeight;
-    const radius = Math.min(parseFloat(getComputedStyle(bar).borderTopLeftRadius) || 0, height / 2);
     const base = parseFloat(getComputedStyle(bar).getPropertyValue('--switch-bar-height')) || height;
-    const geometry = switchDimmerGeometry(width, height, radius, Math.min(base, height));
+    // An upright bar (level_bar::upright_geometry): along its height, with
+    // the one-row bar as its thickness; the fill rises from the bottom.
+    const upright = !!bar.parentElement?.classList?.contains('switch-upright');
+    const thickness = upright ? Math.min(base, width) : Math.min(base, height);
+    const radius = Math.min(parseFloat(getComputedStyle(bar).borderTopLeftRadius) || 0, (upright ? width : height) / 2);
+    const geometry = upright ? switchDimmerGeometry(height, thickness, radius, thickness)
+      : switchDimmerGeometry(width, height, radius, thickness);
     const fillWidth = kind === 'dimmer' ? geometry.fillWidth(level) : 0;
     const endRadius = geometry.endRadiusFor(fillWidth);
-    // The fill element starts one end radius left of the bar, so only the
-    // bar's round start shows (overflow hidden).
-    fill.style.width = (fillWidth ? fillWidth + endRadius : 0) + 'px';
+    // The fill element starts one end radius past the bar's start, so only
+    // the bar's round start shows (overflow hidden).
+    const size = (fillWidth ? fillWidth + endRadius : 0) + 'px';
+    fill.style.width = upright ? '' : size;
+    fill.style.height = upright ? size : '';
     bar.style.setProperty('--switch-end-radius', endRadius + 'px');
     bar.style.setProperty('--switch-handle-margin', geometry.margin + 'px');
     bar.style.setProperty('--switch-handle-w', geometry.handleWidth + 'px');
-    bar.style.setProperty('--switch-handle-h', geometry.handleHeight + 'px');
+    // Upright: the Light popup's handle for its slider width
+    // (switch_layout::upright_handle_length).
+    bar.style.setProperty('--switch-handle-h', (upright ? Math.floor(width * 46 / 160) : geometry.handleHeight) + 'px');
   }
 
   function updateSwitchValuePreview(tab) {
@@ -501,6 +536,8 @@ function maybeFillTitleFromSwitch(tab) {
       styleEl.value = (data.switch_style !== undefined && data.switch_style !== null)
         ? String(switchLayoutValue(data.switch_style)) : '0';
     }
+    const orientationEl = document.getElementById(prefix + '_switch_orientation');
+    if (orientationEl) orientationEl.value = Number(data.bar_orientation) === 1 ? '1' : '0';
     const fontEl = document.getElementById(prefix + '_switch_value_font');
     if (fontEl) fontEl.value = switchValueFont(data.sensor_value_font);
     const popupModeEl = document.getElementById(prefix + '_switch_popup_open_mode');
@@ -517,6 +554,7 @@ function maybeFillTitleFromSwitch(tab) {
     formData.append('switch_entity', document.getElementById(prefix + '_switch_entity')?.value || '');
     const styleEl = document.getElementById(prefix + '_switch_style');
     formData.append('switch_style', styleEl ? String(switchLayoutValue(styleEl.value)) : '0');
+    formData.append('bar_orientation', document.getElementById(prefix + '_switch_orientation')?.value === '1' ? '1' : '0');
     formData.append('sensor_value_font', switchValueFont(document.getElementById(prefix + '_switch_value_font')?.value));
     formData.append('popup_open_mode', document.getElementById(prefix + '_switch_popup_open_mode')?.value || '1');
   }
@@ -528,6 +566,8 @@ function maybeFillTitleFromSwitch(tab) {
     if (entityEl) entityEl.value = '';
     const styleEl = document.getElementById(prefix + '_switch_style');
     if (styleEl) styleEl.value = SWITCH_LAYOUT_NEW_TILE;
+    const orientationEl = document.getElementById(prefix + '_switch_orientation');
+    if (orientationEl) orientationEl.value = '0';
     const fontEl = document.getElementById(prefix + '_switch_value_font');
     if (fontEl) fontEl.value = '0';
     const popupModeEl = document.getElementById(prefix + '_switch_popup_open_mode');

@@ -6,6 +6,7 @@
 
 #include <Arduino.h>
 #include <LittleFS.h>
+#include <cmath>
 #include <cstring>
 #include <utility>
 #include <driver/gpio.h>
@@ -22,9 +23,11 @@
 #include <driver/ppa.h>
 #include <hal/lcd_types.h>
 
+#include "src/core/display/display_flush_gate.h"
 #include "src/devices/common/p4_dsi_ui_ppa.h"
 #include "src/devices/common/p4_dsi_camera_presenter.h"
 #include "src/devices/common/p4_dsi_cpu_rotate.h"
+#include "src/devices/common/touch_one_euro.h"
 #include "src/devices/guition_jc8012p4a1_v2/vendor/displays_config.h"
 #include "src/devices/guition_jc8012p4a1_v2/vendor/gsl3680_touch.h"
 #include "src/devices/guition_jc8012p4a1_v2/vendor/guition_sdmmc.h"
@@ -47,10 +50,12 @@ constexpr uint32_t kPanelLaneCount = 2;
 constexpr uint32_t kPanelFrameBufferCount = 2;
 constexpr size_t kFillChunkRows = 40;
 constexpr uintptr_t kCacheLineSize = 64;
+// The largest span flush_framebuffer_rect writes back in one call (about 40
+// framebuffer rows).
+constexpr size_t kSingleWritebackMaxBytes = 64 * 1024;
 constexpr uint32_t kPpaPreviewTimeoutMs = 200;
 constexpr uint32_t kPpaPreviewGraceMs = 800;
 constexpr uint8_t kTouchReleaseDebounceReads = 0;
-constexpr int32_t kTouchJitterThresholdPx = 2;
 constexpr uint8_t kTouchSamplePointCount = 2;
 constexpr uint8_t kInvalidTouchTrackId = 0xFF;
 
@@ -94,6 +99,13 @@ bool g_touch_active = false;
 uint8_t g_touch_release_reads = 0;
 int32_t g_touch_stable_x = 0;
 int32_t g_touch_stable_y = 0;
+// The newest point, reported with the next read (getTouch).
+int32_t g_touch_next_x = 0;
+int32_t g_touch_next_y = 0;
+// The touch point's smoothing per axis and the time of the last read.
+TouchOneEuro g_touch_filter_x;
+TouchOneEuro g_touch_filter_y;
+uint32_t g_touch_last_ms = 0;
 uint8_t g_touch_active_track_id = kInvalidTouchTrackId;
 
 void log_step(const char* message) {
@@ -304,9 +316,19 @@ void flush_framebuffer_rect(const uint16_t* fb, int32_t x, int32_t y, int32_t w,
 
   const size_t stride = display_cfg.width;
   const size_t row_bytes = static_cast<size_t>(w) * sizeof(uint16_t);
+  const uint16_t* first = fb + (static_cast<size_t>(y) * stride) + static_cast<size_t>(x);
+  // A short region (a small UI area turned by the CPU) takes one write-back
+  // over its rows' whole span: every esp_cache_msync call costs about 20 us,
+  // the clean lines between the rows almost nothing. One call per row cost
+  // ~0.3 ms per moving Power flow dot (b536 log: 2.3 flushes, 0.73 ms per
+  // frame). Wide regions keep one call per row.
+  const size_t span_bytes = ((static_cast<size_t>(h) - 1) * stride + static_cast<size_t>(w)) * sizeof(uint16_t);
+  if (h > 1 && span_bytes <= kSingleWritebackMaxBytes) {
+    flush_cache_for_dma(first, span_bytes);
+    return;
+  }
   for (int32_t row = 0; row < h; ++row) {
-    flush_cache_for_dma(fb + (static_cast<size_t>(y + row) * stride) + static_cast<size_t>(x),
-                        row_bytes);
+    flush_cache_for_dma(first + static_cast<size_t>(row) * stride, row_bytes);
   }
 }
 
@@ -736,6 +758,31 @@ bool init_display() {
   return true;
 }
 
+// A band's PPA rotation runs on while LVGL walks the next band
+// (display_flush_gate.h). Only the landscape PPA path: the upright layout and
+// the CPU rotation of small areas stay synchronous in displayPushPixels().
+bool async_rotate_begin(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t* data) {
+  if (!data || w <= 0 || h <= 0 || g_camera_presenter.upright()) return false;
+  const int32_t logical_w = display_cfg.height;
+  const int32_t logical_h = display_cfg.width;
+  if (x < 0 || y < 0 || (x + w) > logical_w || (y + h) > logical_h) return false;
+  if (g_ui_ppa.rotateBegin(g_camera_presenter, display_cfg.width, display_cfg.height,
+                           x, y, w, h, data, g_rotation) != p4_dsi_ui_ppa::Result::Drawn) {
+    return false;
+  }
+  // As draw_landscape_area marks a drawn rotation.
+  if (g_rotation & 0x02) {
+    mark_dirty_rect(y, logical_w - x - w, h, w);
+  } else {
+    mark_dirty_rect(logical_h - y - h, x, h, w);
+  }
+  return true;
+}
+
+bool async_rotate_done() { return g_ui_ppa.rotateDone(); }
+
+void async_rotate_finish() { g_ui_ppa.rotateFinish(g_camera_presenter); }
+
 bool init_touch() {
   if (g_touch) {
     return true;
@@ -780,6 +827,8 @@ bool DeviceGuitionJC8012P4A1V2::init() {
   if (!init_display()) {
     return false;
   }
+  // The display manager puts the gate into LVGL's draw dispatch.
+  display_flush_gate::set_backend({async_rotate_begin, async_rotate_done, async_rotate_finish});
   Serial.println("[Device/Guition JC8012P4A1 V2] Display OK");
 
   if (!init_touch()) {
@@ -997,25 +1046,43 @@ bool DeviceGuitionJC8012P4A1V2::getTouch(int16_t& x, int16_t& y) {
   if (mapped_x >= logical_w) mapped_x = logical_w - 1;
   if (mapped_y >= logical_h) mapped_y = logical_h - 1;
 
+  const uint32_t now = millis();
+  const bool fresh = !g_touch_active;
   if (!g_touch_active) {
+    g_touch_filter_x.reset(static_cast<float>(mapped_x));
+    g_touch_filter_y.reset(static_cast<float>(mapped_y));
     g_touch_stable_x = mapped_x;
     g_touch_stable_y = mapped_y;
     g_touch_active = true;
   } else {
-    const int32_t dx = mapped_x - g_touch_stable_x;
-    const int32_t dy = mapped_y - g_touch_stable_y;
-    const int32_t adx = dx >= 0 ? dx : -dx;
-    const int32_t ady = dy >= 0 ? dy : -dy;
-
-    if (adx <= kTouchJitterThresholdPx && ady <= kTouchJitterThresholdPx) {
-    } else {
-      g_touch_stable_x = mapped_x;
-      g_touch_stable_y = mapped_y;
+    // The 1-euro filter (touch_one_euro.h) in place of a dead zone: a
+    // dragged 5 px dead zone (b566) stopped the jitter but made sliders
+    // start late and move in small bursts (user 2026-10-27). Whole pixels
+    // with a pixel of hysteresis, so a value resting near a half pixel does
+    // not flip between two pixels.
+    const float dt_s = static_cast<float>(now - g_touch_last_ms) / 1000.0f;
+    const float step_s = dt_s < 0.001f ? 0.001f : dt_s > 0.05f ? 0.05f : dt_s;
+    const float fx = g_touch_filter_x.filter(static_cast<float>(mapped_x), step_s);
+    const float fy = g_touch_filter_y.filter(static_cast<float>(mapped_y), step_s);
+    if (fabsf(fx - static_cast<float>(g_touch_stable_x)) >= 1.0f) {
+      g_touch_stable_x = static_cast<int32_t>(lroundf(fx));
+    }
+    if (fabsf(fy - static_cast<float>(g_touch_stable_y)) >= 1.0f) {
+      g_touch_stable_y = static_cast<int32_t>(lroundf(fy));
     }
   }
+  g_touch_last_ms = now;
 
-  x = static_cast<int16_t>(g_touch_stable_x);
-  y = static_cast<int16_t>(g_touch_stable_y);
+  // One read late (about 9 ms): the newest point waits for the next read,
+  // and a finger lifting drops it. The GSL3680 moves its last point before
+  // a lift by 2 to 20 px (b564 log, e.g. 648,487 -> 652,489 just before the
+  // release), and sliders and the graph cursor kept that as their value.
+  const int32_t shown_x = fresh ? g_touch_stable_x : g_touch_next_x;
+  const int32_t shown_y = fresh ? g_touch_stable_y : g_touch_next_y;
+  g_touch_next_x = g_touch_stable_x;
+  g_touch_next_y = g_touch_stable_y;
+  x = static_cast<int16_t>(shown_x);
+  y = static_cast<int16_t>(shown_y);
 
   static uint32_t touch_log_counter = 0;
   if (++touch_log_counter % 20 == 1) {

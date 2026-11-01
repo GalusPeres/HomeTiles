@@ -25,6 +25,7 @@
 #include "src/tiles/config/tile_geometry.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/shared/ui_theme.h"
+#include "src/ui/shared/value_unit.h"
 
 namespace {
 const char* label(unsigned index) {
@@ -48,6 +49,21 @@ String request_id() {
 String pending_entities[8];
 uint8_t pending_count = 0;
 uint32_t value_generation = 1;
+uint32_t configuration_generation = 1;
+
+// What a value label shows: the payload in the panel language and the current
+// editable configuration (FNV-1a, never 0).
+uint32_t shown_signature(const String& payload, const char* language) {
+  uint32_t hash = 2166136261u;
+  const auto mix = [&hash](const char* text) {
+    for (; text && *text; ++text) hash = (hash ^ static_cast<uint8_t>(*text)) * 16777619u;
+    hash = (hash ^ 0xFFu) * 16777619u;
+  };
+  mix(payload.c_str());
+  mix(language);
+  hash ^= configuration_generation * 0x9E3779B1u;
+  return hash ? hash : 1u;
+}
 }
 
 bool editable_entity_matches(TileType type, const String& entity) {
@@ -112,6 +128,20 @@ EditableValue parse_editable_value(const String& payload) {
 }
 
 String editable_display_value(const EditableValue& value) {
+  const String unit = editable_display_unit(value);
+  return unit.length() ? editable_display_number(value) + " " + unit : editable_display_number(value);
+}
+
+String editable_display_unit(const EditableValue& value) {
+  if (!value.valid || !value.has_state || !value.available || value.state == "unknown" || value.kind != "number")
+    return String();
+  char* end = nullptr;
+  const double number = strtod(value.state.c_str(), &end);
+  if (!end || *end || end == value.state.c_str() || !std::isfinite(number)) return String();
+  return value.unit;
+}
+
+String editable_display_number(const EditableValue& value) {
   if (!value.valid || !value.has_state) return "--";
   const char* language = configManager.getConfig().language;
   if (!value.available || value.state == "unknown")
@@ -123,7 +153,6 @@ String editable_display_value(const EditableValue& value) {
       return i18n::binary_sensor_state_label(language, "unknown", "");
     String text = value.state;
     if (i18n::locale(language).decimal_separator[0] == ',') text.replace('.', ',');
-    if (value.unit.length()) text += " " + value.unit;
     return text;
   }
   return value.state;
@@ -155,14 +184,22 @@ void refresh_editable_tile(GridType grid, uint8_t index) {
   if (!tile || !tileTypeIsEditableValue(tile->type)) return;
   SensorTileWidgets* widgets = tile_renderer_get_sensor_widgets(grid);
   if (!widgets || !widgets[index].value_label) return;
-  const EditableValue value = parse_editable_value(haBridgeConfig.findEditableValue(tile->sensor_entity));
+  const String payload = haBridgeConfig.findEditableValue(tile->sensor_entity);
+  // A page turn re-applies every cached state (V2 b598: page 1's four
+  // editable tiles took 6-8 ms of each turn): a label that already shows this
+  // payload, in this language and configuration, keeps it.
+  const uint32_t shown = shown_signature(payload, configManager.getConfig().language);
+  if (widgets[index].editable_hash == shown) return;
+  widgets[index].editable_hash = shown;
+  const EditableValue value = parse_editable_value(payload);
   const String display = editable_display_value(value);
   // One line: a long value (a Select option) ends in dots instead of
   // wrapping into the title.
   lv_obj_t* label = widgets[index].value_label;
   lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
   lv_obj_set_height(label, lv_font_get_line_height(lv_obj_get_style_text_font(label, LV_PART_MAIN)));
-  lv_label_set_text(label, display.c_str());
+  // A number's unit a step smaller after it (value_unit.h, user 2026-10-26).
+  value_unit::show(label, widgets[index].unit_label, editable_display_number(value), editable_display_unit(value));
   // Per-tile icon colors: Number uses the color bar on the raw number; Select
   // and Date/Time state colors match the raw state or its displayed text.
   if (widgets[index].icon_label && tile->icon_colors.length()) {
@@ -189,7 +226,12 @@ void queue_editable_value(const String& entity, const char* payload) {
 }
 
 uint32_t editable_value_generation() { return value_generation; }
-void editable_configuration_changed() { ++value_generation; pending_entities[0] = "*"; pending_count = 1; }
+void editable_configuration_changed() {
+  ++value_generation;
+  ++configuration_generation;
+  pending_entities[0] = "*";
+  pending_count = 1;
+}
 
 void process_editable_updates(uint8_t budget) {
   uint8_t processed = 0;

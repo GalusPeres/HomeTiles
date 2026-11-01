@@ -65,7 +65,9 @@ assert.ok(renderer.includes('const ui_theme::SurfaceScope scope(surface_theme >=
   renderer.includes('if (tile_surface_rule_of(tile, grid_type) & tile_surface::kNeutralIdle) return tile_surface::kJewel;') &&
   renderer.includes('return tone_color::light_surface(own) ? tile_surface::kLight : tile_surface::kDark;'),
   'render_tile: the surface from the tile color');
-assert.ok(renderer.includes('if (ui_theme::theme_light()) rgb = tone_color::ha_light_color(rgb);'), 'lights as Home Assistant');
+// Both themes since #130 (user 2026-10-26).
+assert.match(renderer, /uint32_t switch_state_icon_color\(const SwitchState& state\) \{[\s\S]*?\n  return tone_color::ha_light_color\(rgb\);\n\}/,
+  'lights as Home Assistant');
 assert.doesNotMatch(renderer, /kDarkDesign|dark_design|media_follow_playback/, 'no dark design any more');
 const disc = read('src/tiles/runtime/tile_icon_disc.h');
 assert.ok(disc.includes('const ui_theme::SurfaceScope surface = tile_surface::scope(disc);') &&
@@ -269,10 +271,11 @@ for (const row of lightRows.slice(5)) {
 for (const row of lightRows) assert.equal(row[3], row[1], `icon = accent #${row[0].toString(16)}`);
 // The handle line on a light fill is the card's color (white here).
 assert.equal(lightRows[2][4], 0xFFFFFF, 'handle line on amber: the card');
-// The dark theme keeps its cut-out on light accents and colors, no accent.
+// The dark theme shows a light as Home Assistant does too (#130, user
+// 2026-10-26): accent and icon are the light theme's.
 const darkRows = rows('dark');
-assert.deepEqual(darkRows.map(row => row[1]), accents, 'no light accent in the dark theme');
-assert.deepEqual(darkRows.map(row => row[3]), accents, 'no light icon in the dark theme');
+assert.deepEqual(darkRows.map(row => row[1]), lightRows.map(row => row[5]), 'the dark theme\'s light accent is Home Assistant\'s');
+assert.deepEqual(darkRows.map(row => row[3]), lightRows.map(row => row[5]), 'the dark theme\'s light icon is Home Assistant\'s');
 assert.equal(value('restored')[0], 1, 'the surface scope closes again');
 // The white card's circle: 20 % amber; a white light's grey: 20 % #BDBDBD.
 const tileRow = icon => rows('tile').find(r => r[0] === icon);

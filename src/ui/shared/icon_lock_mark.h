@@ -92,17 +92,24 @@ inline void draw(lv_layer_t* layer, lv_obj_t* icon, lv_color_t rim_color) {
   static constexpr int8_t kRing[16][2] = {{100, 0},   {92, 38},   {71, 71},   {38, 92},   {0, 100},  {-38, 92},
                                           {-71, 71},  {-92, 38},  {-100, 0},  {-92, -38}, {-71, -71}, {-38, -92},
                                           {0, -100},  {38, -92},  {71, -71},  {92, -38}};
+  // A copy outside the draw band would draw nothing, but each is a text task
+  // of its own: 25 per band the icon touches made a PIN Folder tile the most
+  // expensive tile of its page (V2 b596: 7.5 ms).
+  const lv_area_t& band = layer->_clip_area;
+  const auto in_band = [&band](const lv_area_t& a) {
+    return a.x1 <= band.x2 && a.x2 >= band.x1 && a.y1 <= band.y2 && a.y2 >= band.y1;
+  };
   const int32_t reaches[2] = {rim, rim / 2};
   for (const int32_t reach : reaches) {
     for (size_t i = 0; i < 16; i += reach == rim ? 1 : 2) {
       const auto round_div = [](int32_t value) { return (value >= 0 ? value + 50 : value - 50) / 100; };
       lv_area_t shifted = area;
       lv_area_move(&shifted, round_div(kRing[i][0] * reach), round_div(kRing[i][1] * reach));
-      lv_draw_label(layer, &dsc, &shifted);
+      if (in_band(shifted)) lv_draw_label(layer, &dsc, &shifted);
     }
   }
   dsc.color = lv_obj_get_style_text_color(icon, LV_PART_MAIN);
-  lv_draw_label(layer, &dsc, &area);
+  if (in_band(area)) lv_draw_label(layer, &dsc, &area);
 }
 
 }  // namespace icon_lock_mark

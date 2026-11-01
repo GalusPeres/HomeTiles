@@ -17,6 +17,7 @@ struct BinarySensorPopupInit {
   String icon_colors;
   bool forced_icon = false;
   uint32_t forced_icon_color = 0xFFFFFF;
+  uint32_t forced_icon_glyph = 0;
 };
 
 // Binary sensors reuse the established Sensor popup surface and lifecycle.

@@ -17,6 +17,7 @@ void show_binary_sensor_popup(const BinarySensorPopupInit& init) {
   sensor_init.icon_colors = init.icon_colors;
   sensor_init.forced_icon = init.forced_icon;
   sensor_init.forced_icon_color = init.forced_icon_color;
+  sensor_init.forced_icon_glyph = init.forced_icon_glyph;
   show_sensor_popup(sensor_init);
 }
 

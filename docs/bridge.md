@@ -49,6 +49,8 @@ Older display configurations, entity selections, aliases, and MQTT topic names r
 
 **Fans**, **Locks**, and **Alarm panels** feed the [Fan](tiles.md#fan), [Lock](tiles.md#lock), and [Alarm Panel](tiles.md#alarm-panel) tiles (Bridge v0.8.0). Locks and alarm panels can only be operated from a [paired](#encrypted-commands) display with a Web Admin password. **Codes for locks and alarm panels** lets the Bridge check the codes of devices that ignore a wrong code; **Allow opening without a code** is only for devices without their own code. Fans also remain selectable as switchable entities.
 
+**Calendars** feed the [Calendar](tiles.md#calendar) tile. The Bridge reads their events from Home Assistant and publishes them retained on `ha_prefix/calendar/<object>/events`: when an event starts or ends, and every 15 minutes.
+
 Bridge v0.9.0 remains compatible with older firmware and existing configurations. New features require the corresponding firmware; no reset or re-pairing is needed for a normal update.
 
 ## Display Settings { data-toc-label="Display settings" }

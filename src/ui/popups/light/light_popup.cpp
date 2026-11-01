@@ -10,6 +10,8 @@
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/device/device_popup.h"
+#include "src/ui/popups/vacuum/vacuum_popup.h"
+#include "src/ui/popups/calendar/calendar_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/popup_layout.h"
 #include "src/ui/popups/popup_nav_style.h"
@@ -23,11 +25,13 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
+#include "src/types/switch/renderer.h"
 #include "src/ui/shared/command_pacer.h"
 #include "esp_heap_caps.h"
 #include <lvgl_private.h>
 #include <math.h>
 #include "src/ui/shared/ui_theme.h"
+#include "src/ui/shared/value_unit.h"
 
 namespace {
 
@@ -105,6 +109,10 @@ struct LightPopupContext {
   lv_obj_t* icon_label = nullptr;
   lv_obj_t* title_label = nullptr;
   lv_obj_t* top_value_label = nullptr;
+  // The values' units, a step smaller after them (value_unit.h).
+  lv_obj_t* top_value_unit = nullptr;
+  lv_obj_t* val_value_unit = nullptr;
+  lv_obj_t* temp_value_unit = nullptr;
   lv_obj_t* main_panel = nullptr;
   lv_obj_t* brightness_panel = nullptr;
   lv_obj_t* color_panel = nullptr;
@@ -362,15 +370,11 @@ static void update_popup_language(LightPopupContext* ctx) {
   (void)ctx;
 }
 
-static void update_value_label(lv_obj_t* label, int value, const char* suffix) {
+// A value with its unit a step smaller after it (value_unit.h, user
+// 2026-10-26).
+static void update_value_label(lv_obj_t* label, lv_obj_t*& unit, int value, const char* suffix) {
   if (!label) return;
-  char buf[24];
-  if (suffix && suffix[0]) {
-    snprintf(buf, sizeof(buf), "%d%s", value, suffix);
-  } else {
-    snprintf(buf, sizeof(buf), "%d", value);
-  }
-  lv_label_set_text(label, buf);
+  value_unit::show(label, unit, String(value), suffix ? suffix : "");
 }
 
 static uint8_t brightness_value_from_point(const lv_area_t& area, const lv_point_t& point) {
@@ -522,27 +526,23 @@ static const char* get_switch_slider_icon_name(const LightPopupContext* ctx) {
 static void update_top_value_label(LightPopupContext* ctx) {
   if (!ctx || !ctx->top_value_label) return;
   if (!ctx->available) {
-    lv_label_set_text(ctx->top_value_label, get_unavailable_text());
+    value_unit::show(ctx->top_value_label, ctx->top_value_unit, get_unavailable_text(), String());
     return;
   }
-  char buf[24];
   if (!ctx->is_on || (ctx->supports_brightness && ctx->val == 0)) {
-    lv_label_set_text(ctx->top_value_label, get_off_text());
+    value_unit::show(ctx->top_value_label, ctx->top_value_unit, get_off_text(), String());
     return;
   }
   if (ctx->supports_brightness) {
-    snprintf(buf, sizeof(buf), "%u %%", ctx->val);
-    lv_label_set_text(ctx->top_value_label, buf);
+    update_value_label(ctx->top_value_label, ctx->top_value_unit, ctx->val, "%");
     return;
   }
-  lv_label_set_text(ctx->top_value_label, get_on_text());
+  value_unit::show(ctx->top_value_label, ctx->top_value_unit, get_on_text(), String());
 }
 
 static void update_temperature_value_label(LightPopupContext* ctx) {
   if (!ctx || !ctx->temp_value_label) return;
-  char buf[24];
-  snprintf(buf, sizeof(buf), "%u K", static_cast<unsigned>(ctx->color_temp_kelvin));
-  lv_label_set_text(ctx->temp_value_label, buf);
+  update_value_label(ctx->temp_value_label, ctx->temp_value_unit, static_cast<int>(ctx->color_temp_kelvin), "K");
 }
 
 static bool is_visible_obj(lv_obj_t* obj) {
@@ -577,8 +577,12 @@ static uint32_t header_icon_rgb(const LightPopupContext* ctx, uint32_t icon_rgb)
 // the header circle's color (popup_shell_control_fill), the neutral step for
 // an off light or a white icon. The card stays neutral: tinting it restyled
 // the whole popup on every step of a dragged color.
+// They are computed for the color the header icon shows (shown_icon_rgb, the
+// one apply_header_disc_tint reads): the raw light color made a white
+// light's controls grey under a tinted circle (#130, user 2026-10-26).
 static void control_fill(const LightPopupContext* ctx, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa) {
-  popup_nav_style::fill(popup_surface::card(ctx->card_bg), lv_color_hex(header_icon_rgb(ctx, icon_rgb)), color, opa);
+  popup_nav_style::fill(popup_surface::card(ctx->card_bg), lv_color_hex(shown_icon_rgb(ctx, header_icon_rgb(ctx, icon_rgb))),
+                        color, opa);
 }
 
 // The mode buttons follow the circle color whenever the icon color changes:
@@ -848,16 +852,10 @@ static void update_brightness_fill(LightPopupContext* ctx) {
       ctx, old_active, old_center_y, new_active, new_center_y);
 }
 
-// The brightness handle line has the color of the bound tile's own handle
-// line (its card, tinted with the tile color "From icon"), read at draw
-// time; without a tile the card's.
-static lv_color_t brightness_dash_color(const LightPopupContext* ctx) {
-  uint32_t rgb = 0;
-  if (ctx->has_tile_ref && switch_tile_card_color(static_cast<GridType>(ctx->tile_grid), ctx->tile_index, rgb)) {
-    return lv_color_hex(rgb);
-  }
-  return popup_surface::card(ctx->card_bg);
-}
+// The brightness handle line: the popup card's color, like the handle line
+// of the tile without "Ausfuellen" (its card). The popup is never filled, so
+// it shows that tile's colors, not a filled tile's (#130, user 2026-10-26).
+static lv_color_t brightness_dash_color(const LightPopupContext* ctx) { return popup_surface::card(ctx->card_bg); }
 
 static void on_brightness_slider_draw(lv_event_t* e) {
   if (lv_event_get_code(e) != LV_EVENT_DRAW_MAIN) return;
@@ -1228,6 +1226,16 @@ static void sync_bound_tile_from_popup(LightPopupContext* ctx) {
   update_switch_tile_state(static_cast<GridType>(ctx->tile_grid), ctx->tile_index, payload.c_str());
 }
 
+// The tile the popup was opened from keeps the popup's on/off and level
+// against Home Assistant's echoes while the popup changes them
+// (switch_tile_hold_from_popup).
+static void hold_bound_tile(LightPopupContext* ctx, bool released) {
+  if (!ctx || !ctx->available || !ctx->has_tile_ref || ctx->tile_index >= TILES_PER_GRID) return;
+  const bool level = ctx->is_light && ctx->supports_brightness;
+  const uint8_t value = level ? (ctx->is_on ? ctx->val : 0) : (ctx->is_on ? 1 : 0);
+  switch_tile_hold_from_popup(static_cast<GridType>(ctx->tile_grid), ctx->tile_index, value, level, released);
+}
+
 static bool can_live_publish(const LightPopupContext* ctx) {
   if (!ctx || !ctx->available || !ctx->user_dragging || !ctx->drag_moved ||
       !ctx->is_light || !ctx->entity_id.length()) {
@@ -1337,6 +1345,7 @@ static void final_publish_timer_cb(lv_timer_t* timer) {
 static void commit_paced(LightPopupContext* ctx, LightPublishKind kind) {
   if (!ctx) return;
   cancel_pending_live_publish(ctx);
+  hold_bound_tile(ctx, true);
   sync_bound_tile_from_popup(ctx);
   const bool repeat = kind != LightPublishKind::State &&
                       ctx->pacer.final_redundant(publish_signature(ctx, kind));
@@ -1494,7 +1503,7 @@ static void update_preview(LightPopupContext* ctx) {
   }
   update_top_value_label(ctx);
   if (is_visible_obj(ctx->val_value)) {
-    update_value_label(ctx->val_value, ctx->val, "%");
+    update_value_label(ctx->val_value, ctx->val_value_unit, ctx->val, "%");
   }
   if (is_visible_obj(ctx->temperature_panel)) {
     update_temperature_slider_visuals(ctx, true);
@@ -2074,8 +2083,12 @@ static void apply_brightness_point(LightPopupContext* ctx, const lv_point_t& poi
     update_header_and_power_visuals(ctx, icon_rgb);
   }
 
-  if (commit) commit_brightness(ctx);
-  else maybe_live_publish_brightness(ctx);
+  if (commit) {
+    commit_brightness(ctx);
+  } else {
+    hold_bound_tile(ctx, false);
+    maybe_live_publish_brightness(ctx);
+  }
 }
 
 // Diagnostics for the color wheel and the Kelvin/brightness sliders: one line per drag
@@ -2464,6 +2477,8 @@ void show_light_popup(const LightPopupInit& init) {
   hide_energy_popup();
   hide_media_popup();
   hide_device_popup();
+  hide_vacuum_popup();
+  hide_calendar_popup();
 
   if (g_light_popup_ctx && g_light_popup_ctx->overlay && g_light_popup_ctx->card) {
     prepare_light_popup_open(init);
@@ -2508,6 +2523,9 @@ void show_light_popup(const LightPopupInit& init) {
   lv_obj_clear_flag(value_box, LV_OBJ_FLAG_SCROLLABLE);
 
   ctx->top_value_label = lv_label_create(value_box);
+  ctx->top_value_unit = nullptr;
+  ctx->val_value_unit = nullptr;
+  ctx->temp_value_unit = nullptr;
   lv_obj_set_width(ctx->top_value_label, LV_PCT(100));
   lv_obj_set_height(ctx->top_value_label, kTopValueHeight);
   lv_obj_set_style_text_align(ctx->top_value_label, LV_TEXT_ALIGN_CENTER, 0);

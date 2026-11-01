@@ -21,6 +21,7 @@
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/core/config/swipe_gestures.h"
 #include "src/ui/screensaver/image_screensaver.h"
+#include "src/types/calendar/calendar_model.h"
 #include "src/types/clock/clock_format.h"
 #include "src/web/server/web_admin_utils.h"
 #include <stdlib.h>
@@ -177,6 +178,9 @@ void WebAdminServer::handleSaveMQTT() {
   if (server.hasArg("locale_date_format")) {
     cfg.global_date_format =
         clock_tile::normalize_date_format(server.arg("locale_date_format").toInt());
+  }
+  if (server.hasArg("locale_week_start")) {
+    cfg.week_start = calendar_model::normalize_week_start(server.arg("locale_week_start").toInt());
   }
   bool access_changed = false;
   bool settings_visibility_changed = false;

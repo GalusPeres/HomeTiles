@@ -140,6 +140,8 @@ A tile's color comes from its icon. Rules change the icon color while an entity 
 
 While a rule matches, it wins. Otherwise the settings above apply. Without a state, for example while Home Assistant is offline, the tile keeps its icon color.
 
+Every color in a rule can also bring its own icon: the icon button next to a state row's color, or below a marker's value, picks it. While the rule matches, that icon replaces the tile's icon, in the tile and in its popup header; afterwards the tile's own icon comes back.
+
 ### Icon Color by Value { data-toc-label="By value" }
 
 For Sensor, Energy, and Number tiles: a color bar between **Min** and **Max**. **Smooth** blends the colors, **Steps** changes at each marker. Start from **Cold → Warm**, **Traffic light**, **Battery**, **Humidity**, or **Single color**. Drag a marker to move it, click it to choose its color, and double-click the bar to add one (up to six). The tile's **Fill** fills it in the current color.
@@ -225,7 +227,7 @@ See the [Screensaver guide](screensaver.md) for images, activation, and availabl
 **Settings** lists the same pages as the display:
 
 - **WiFi:** WiFi credentials, connection type on Ethernet-capable devices, and an optional static IP shared by WiFi and Ethernet.
-- **Localization:** language, time zone, and date/time formats.
+- **Localization:** language, time zone, date/time formats, and the first day of the week for the Energy popup, the Calendar, and the 30-day graph lines.
 - **System:** firmware update, the [icon file](#icons), the connection to Home Assistant, pairing, and the [Web Admin password](#web-admin-password). The **MQTT** settings are folded in here; while the direct link is active they stay saved but unused.
 - **I/O:** [local hardware](hardware-io.md).
 - **Built-in camera:** on displays with a camera, see below.

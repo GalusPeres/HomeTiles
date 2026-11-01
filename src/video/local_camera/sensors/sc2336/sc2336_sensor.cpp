@@ -13,6 +13,8 @@
 
 #if defined(HOMETILES_CAMERA_SENSOR_SC2336)
 
+#include <stddef.h>
+
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 

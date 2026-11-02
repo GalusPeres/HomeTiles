@@ -51,6 +51,7 @@
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/core/config/tile_radius.h"
+#include "src/ui/screensaver/frosted_backdrop.h"
 
 namespace {
 
@@ -110,6 +111,10 @@ struct ScreensaverState {
   uint8_t built_opacity = 0;
   // When the clock and tiles last moved (screensaver_pixel_shift.h).
   uint32_t last_shift_ms = 0;
+#if defined(HOMETILES_FROSTED_TILES)
+  // The slide blurred at a quarter of its size (frosted_backdrop.h).
+  lv_image_dsc_t* frosted = nullptr;
+#endif
   ~ScreensaverState() { delete shown_grid; }
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
   // Prepare a complete LVGL frame for smooth slide transitions: wallpaper,
@@ -130,6 +135,11 @@ ScreensaverState* g_state = nullptr;
 // starting from the same place.
 uint32_t g_shift_step = 0;
 screensaver_pixel_shift::Offset g_shift;
+#if defined(HOMETILES_FROSTED_TILES)
+// What the see-through tile cards draw under their fill; the cards hold its
+// address, so it lives as long as the firmware.
+frosted_backdrop::Backdrop g_backdrop;
+#endif
 // show_image_screensaver() is building the overlay (image_screensaver_covers_ui).
 bool g_opening = false;
 // Web Admin saves run in loopTask, but LVGL changes wait until the next
@@ -1338,6 +1348,61 @@ void rebuild_global_clock(ScreensaverState* st) {
 }
 
 // Shows a decoded picture in the overlay at once.
+#if defined(HOMETILES_FROSTED_TILES)
+// The slide blurred once at a quarter of its size for the see-through tiles.
+// The copy is reused while the size stays; LVGL caches images by address,
+// so its entry is dropped before the pixels change.
+void update_frosted_backdrop(ScreensaverState* st, const lv_image_dsc_t* picture) {
+  g_backdrop.picture = st->image;
+  const bool swapped = picture && picture->header.cf == LV_COLOR_FORMAT_RGB565_SWAPPED;
+  if (!picture || !picture->data || (picture->header.cf != LV_COLOR_FORMAT_RGB565 && !swapped)) {
+    g_backdrop.image = nullptr;
+    return;
+  }
+  const int w = picture->header.w;
+  const int h = picture->header.h;
+  const int sw = frosted_backdrop::shrunk(w);
+  const int sh = frosted_backdrop::shrunk(h);
+  if (st->frosted && (st->frosted->header.w != static_cast<uint32_t>(sw) ||
+                      st->frosted->header.h != static_cast<uint32_t>(sh))) {
+    free_screensaver_dsc(st->frosted);
+  }
+  const size_t bytes = static_cast<size_t>(sw) * sh * sizeof(uint16_t);
+  if (!st->frosted) {
+    uint8_t* data = static_cast<uint8_t*>(alloc_prefer_psram(bytes));
+    lv_image_dsc_t* dsc = data ? static_cast<lv_image_dsc_t*>(calloc(1, sizeof(lv_image_dsc_t))) : nullptr;
+    if (!dsc) {
+      free(data);
+      g_backdrop.image = nullptr;
+      return;
+    }
+    dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
+    dsc->header.cf = LV_COLOR_FORMAT_RGB565;
+    dsc->header.w = sw;
+    dsc->header.h = sh;
+    dsc->header.stride = sw * sizeof(uint16_t);
+    dsc->data_size = bytes;
+    dsc->data = data;
+    st->frosted = dsc;
+  }
+  uint16_t* scratch = static_cast<uint16_t*>(alloc_prefer_psram(bytes));
+  if (!scratch) {
+    g_backdrop.image = nullptr;
+    return;
+  }
+  lv_image_cache_drop(st->frosted);
+  const uint32_t started = millis();
+  frosted_backdrop::shrink_and_blur(reinterpret_cast<const uint16_t*>(picture->data), w, h,
+                                    static_cast<int>(picture->header.stride / sizeof(uint16_t)), swapped,
+                                    reinterpret_cast<uint16_t*>(const_cast<uint8_t*>(st->frosted->data)), scratch);
+  free(scratch);
+  g_backdrop.image = st->frosted;
+  ++g_backdrop.generation;
+  Serial.printf("[Screensaver] Frosted backdrop %dx%d in %u ms\n", sw, sh,
+                static_cast<unsigned>(millis() - started));
+}
+#endif
+
 void present_picture(ScreensaverState* st, lv_image_dsc_t* dsc, const String& name,
                      bool cache_hit) {
   // Change the source internally without triggering a full-screen LVGL
@@ -1345,6 +1410,9 @@ void present_picture(ScreensaverState* st, lv_image_dsc_t* dsc, const String& na
   // frame off-screen; only that frame is then passed to PPA.
   set_image_src_without_invalidation(st->image, dsc);
   lv_obj_remove_flag(st->image, LV_OBJ_FLAG_HIDDEN);
+#if defined(HOMETILES_FROSTED_TILES)
+  update_frosted_backdrop(st, dsc);
+#endif
   // A new picture redraws the whole screen anyway: the clock and tiles take
   // their next pixel shift step in the same frame.
   if (pixel_shift_due(st, screensaver_pixel_shift::kMinIntervalMs)) {
@@ -1618,6 +1686,9 @@ lv_obj_t* build_slot_tile(ScreensaverState* st, size_t i, const Tile& tile) {
   if (opacity < LV_OPA_COVER) {
     tile_icon_disc::refresh_fills(tile_obj);
     tile_icon_source::refresh_controls(tile_obj);
+#if defined(HOMETILES_FROSTED_TILES)
+    frosted_backdrop::attach(tile_obj, &g_backdrop);
+#endif
   }
   lv_obj_remove_flag(tile_obj, LV_OBJ_FLAG_EVENT_BUBBLE);
   return tile_obj;
@@ -2054,6 +2125,10 @@ void on_global_overlay_delete(lv_event_t* e) {
     free(st->composite_storage);
     st->composite_storage = nullptr;
   }
+#endif
+#if defined(HOMETILES_FROSTED_TILES)
+  if (g_backdrop.image == st->frosted) g_backdrop = frosted_backdrop::Backdrop{};
+  free_screensaver_dsc(st->frosted);
 #endif
   delete st;
 }

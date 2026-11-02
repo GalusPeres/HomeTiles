@@ -713,6 +713,9 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
           CoverEventData* data = static_cast<CoverEventData*>(
               lv_event_get_user_data(event));
           if (!data) return;
+          // Its values on the tile's screen (tile_screen.h).
+          const ui_theme::SurfaceScope screen =
+              tile_screen::scope(static_cast<lv_obj_t*>(lv_event_get_current_target(event)));
           const Tile* tile =
               tile_renderer_get_tile_config(data->grid_type, data->index);
           CoverPopupInit init = popup_init(data->grid_type, data->index);

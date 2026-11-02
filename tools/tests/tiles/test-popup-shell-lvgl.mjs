@@ -196,6 +196,17 @@ int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SC
   first_flush_y=-1;lv_refr_now(d);
   assert(first_flush_y>=0&&first_flush_y<SCREEN_HEIGHT/2&&"The recolored popup is drawn before its tile");
   hide_popup_shell(a.body);lv_obj_delete(tile);lv_refr_now(d);}
+ // A light screensaver over the dark panel (tile_screen.h): its popup was
+ // built with the panel's dark theme, its head takes the light design's text
+ // (the copied white title stayed white on the light card, b655).
+ {auto c=make();wire(c);popup_surface::g_open_screen=1;lv_obj_set_style_bg_color(c.body,lv_color_hex(ui_theme::kLight.popup_card),0);
+  show(c,"Light screensaver");sync_popup_shell();
+  const bool light_title=lv_color_eq(lv_obj_get_style_text_color(shell.title,LV_PART_MAIN),lv_color_hex(ui_theme::kLight.text));
+  if(!light_title)std::cerr<<"screensaver popup title keeps the dark theme's white\n";
+  assert(light_title&&"a light screen's popup head has the light design's text");
+  popup_surface::g_open_screen=-1;show(c,"Dark panel");sync_popup_shell();
+  assert(lv_color_eq(lv_obj_get_style_text_color(shell.title,LV_PART_MAIN),lv_color_hex(ui_theme::kDark.text))&&"back on the panel: its text");
+  hide_popup_shell(c.body);lv_obj_delete(c.owner);lv_refr_now(d);}
  show(a,"Screen replacement");auto*old=lv_screen_active();auto*next=lv_obj_create(nullptr);lv_screen_load(next);lv_obj_delete(old);assert(!shell.overlay&&!PopupFirstFrame::any_pending());assert(lv_obj_is_valid(a.body)&&lv_obj_get_parent(a.body)==a.owner);
  show(a,"Owner deletion");lv_obj_delete(a.owner);assert(!shell.active&&!PopupFirstFrame::any_pending());assert(allocations==1);lv_obj_delete(b.owner);assert(allocations==0);
  lv_deinit();assert(allocations==0&&!PopupFirstFrame::any_pending());std::cout<<"Shared frame identity, header, cache reuse, no redraw on unchanged sync, first-frame gate, close/back/PIN, cancellation, screen/owner deletion and allocation failure passed\n";

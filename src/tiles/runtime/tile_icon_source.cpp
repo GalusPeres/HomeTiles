@@ -471,10 +471,12 @@ void recolor_roles(lv_obj_t* obj, const ui_theme::Roles& from, const ui_theme::R
   // The shown color and the colors an icon keeps (given, shown, requested,
   // forced: tile_icon_disc kIcon*), so no later refresh brings back a role
   // of the old surface (user 2026-10-10: dark icons on the grey tiles).
-  // Also a control's selected row, arrow and items (a roller, a dropdown).
+  // Also a control's selected row, arrow and items (a roller, a dropdown),
+  // and a pressed text (a popup's mode buttons keep their text pressed).
   static constexpr lv_style_selector_t kTexts[] = {
-      LV_PART_MAIN, tile_icon_disc::kIconGiven, tile_icon_disc::kIconShown, tile_icon_disc::kIconRequested,
-      tile_icon_disc::kIconForced, LV_PART_SELECTED, LV_PART_INDICATOR, LV_PART_ITEMS};
+      LV_PART_MAIN, LV_PART_MAIN | LV_STATE_PRESSED, tile_icon_disc::kIconGiven, tile_icon_disc::kIconShown,
+      tile_icon_disc::kIconRequested, tile_icon_disc::kIconForced, LV_PART_SELECTED, LV_PART_INDICATOR,
+      LV_PART_ITEMS};
   const bool glyph = icon_glyph(obj);
   for (const lv_style_selector_t selector : kTexts) {
     if (lv_obj_get_local_style_prop(obj, LV_STYLE_TEXT_COLOR, &value, selector) != LV_STYLE_RES_FOUND) continue;

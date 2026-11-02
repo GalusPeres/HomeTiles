@@ -872,10 +872,15 @@ void sync_popup_shell() {
   set_title_single_line(shell.title, with_value);
   // The header's title and value take the text of the open popup's surface
   // (white on a filled tile's color in the light theme).
+  // A title in either design's text takes it: a popup built with the panel's
+  // theme opens on a screen in the other (a light screensaver over the dark
+  // panel, tile_screen.h), and its copied white title stayed white on the
+  // light card (user 2026-11-02, b655).
   const lv_color_t header_text = lv_color_hex(ui_theme::text());
-  if (lv_color_eq(lv_obj_get_style_text_color(shell.title, LV_PART_MAIN),
-                  lv_color_hex(ui_theme::roles_of(ui_theme::kThemeSurface).text)) &&
-      !lv_color_eq(header_text, lv_obj_get_style_text_color(shell.title, LV_PART_MAIN))) {
+  const lv_color_t title_now = lv_obj_get_style_text_color(shell.title, LV_PART_MAIN);
+  const bool theme_text = lv_color_eq(title_now, lv_color_hex(ui_theme::kDark.text)) ||
+                          lv_color_eq(title_now, lv_color_hex(ui_theme::kLight.text));
+  if (theme_text && !lv_color_eq(header_text, title_now)) {
     lv_obj_set_style_text_color(shell.title, header_text, 0);
   }
   if (!lv_color_eq(lv_obj_get_style_text_color(shell.value, LV_PART_MAIN), header_text)) {

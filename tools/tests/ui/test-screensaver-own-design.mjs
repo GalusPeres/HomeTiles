@@ -116,6 +116,21 @@ for (const file of ['src/ui/popups/calendar/calendar_popup.cpp', 'src/ui/popups/
 assert.match(read('src/ui/popups/media/media_popup.cpp'), /return ui_theme::SurfaceScope\(drawn, nullptr, popup_surface::drawn_screen\(drawn\)\);/);
 assert.match(read('src/ui/popups/weather/weather_popup.cpp'), /open_surface \? popup_surface::g_open_screen\s*: popup_surface::drawn_screen\(drawn\)\);/);
 
+// The neutral popups (Light, Climate, Cover) take their values in the tile's
+// screen: the Switch tile handed the Light popup the dark panel's card while
+// the popup drew light text on it (user 2026-11-02, b655: dark panel, light
+// screensaver).
+for (const [file, before] of [['src/types/switch/renderer.cpp', 'LightPopupInit init = build_light_popup_init(data);'],
+  ['src/types/cover/renderer.cpp', 'CoverPopupInit init = popup_init(data->grid_type, data->index);'],
+  ['src/types/climate/renderer.cpp', 'ClimatePopupInit init = popup_init_for(data);']]) {
+  const text = read(file);
+  const at = text.indexOf(before);
+  const scope = text.lastIndexOf('const ui_theme::SurfaceScope screen =', at);
+  assert.ok(at > 0 && scope > 0 && at - scope < 400 &&
+    /const ui_theme::SurfaceScope screen =\s*tile_screen::scope\(static_cast<lv_obj_t\*>\(lv_event_get_current_target\(e(vent)?\)\)\);/.test(text.slice(scope, at)),
+    `${file}: the popup's values on the tile's screen`);
+}
+
 // ---- The Web Admin preview: the same rules ----------------------------------
 const preview = read('src/web/admin/tiles/grid-preview.js');
 assert.match(preview, /function designLight\(\) \{\n    const screen = globalThis\.hometilesPreviewScreen;/);

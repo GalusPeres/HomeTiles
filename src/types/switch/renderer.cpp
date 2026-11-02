@@ -843,6 +843,10 @@ lv_obj_t* render_switch_tile(lv_obj_t* parent, int col, int row, const Tile& til
             if (code != LV_EVENT_SHORT_CLICKED && code != LV_EVENT_LONG_PRESSED) return;
             SwitchEventData* data = static_cast<SwitchEventData*>(lv_event_get_user_data(e));
             if (!data) return;
+            // Its values on the tile's screen (a screensaver tile in its own
+            // Light over a dark panel: the light card, tile_screen.h).
+            const ui_theme::SurfaceScope screen =
+                tile_screen::scope(static_cast<lv_obj_t*>(lv_event_get_current_target(e)));
             LightPopupInit init = build_light_popup_init(data);
             // For now the popup keeps the global tile color and does not follow
             // the tile: following a light color dragged in the popup restyled it

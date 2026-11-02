@@ -17,9 +17,9 @@
 // LVGL's own fill and opaque frame line are left out under the glass, so
 // the rounded corners mix with the picture, not with an opaque line
 // (frayed corners, b648); and the screenshot's ARGB8888 snapshot shows the
-// glass like the panel. Its shadow is told the card covers it: LVGL masked
-// every shadow pixel of a see-through card and the kept shadow left it to
-// LVGL (10-30 ms per card per popup close, b649).
+// glass like the panel. The shadow stays LVGL's see-through one (drawn as
+// covered it went under the whole card, slower, b650). The glass sums its
+// own time for the screensaver's once-a-second log.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -224,6 +224,7 @@ int main() {
   std::memset(tasks, 0, sizeof(tasks));
   lv_refr_now(d);
   std::printf("glass_tasks %d %d %d %d\n", tasks[0], tasks[1], tasks[2], tasks[3]);
+  std::printf("stats %u %u\n", frosted_backdrop::g_stats.draws, frosted_backdrop::g_stats.fills);
   const uint16_t edge = frame[90 * W + 40];
   const uint16_t inner = frame[90 * W + 42];
   std::printf("line %d %d %d\n", edge != 0xffff, (edge >> 5 & 0x3f) > (inner >> 5 & 0x3f), edge != inner);
@@ -307,7 +308,7 @@ assert.ok(Math.abs(tinted - plain / 2) <= 2, `a 50 % black tint halves the frost
 assert.equal(Number(rows.shadow[0]), 0, `the shadow stays out of the card${why}`);
 assert.ok(Number(rows.shadow[1]) > 0, `and shows around it${why}`);
 const [shadows, covered] = rows.shadow_tasks.map(Number);
-assert.ok(shadows > 0 && covered === shadows, `the shadow of a frosted card is drawn as covered by the card${why}`);
+assert.ok(shadows > 0 && covered === 0, `the shadow of a frosted card stays LVGL's see-through one${why}`);
 assert.deepEqual(rows.line, ['1', '1', '1'], `the frame line is translucent at the card's opacity${why}`);
 assert.deepEqual(rows.opaque, ['1'], `an opaque card draws no backdrop${why}`);
 // Under the glass LVGL's own fill and opaque frame line are left out: the
@@ -316,6 +317,7 @@ const [fills, fillsOut, lines, linesOut] = rows.glass_tasks.map(Number);
 assert.ok(fills > 0 && fillsOut === fills && lines > 0 && linesOut === lines,
   `LVGL's fill and frame line of a frosted card are left out${why}`);
 assert.ok(Number(rows.opaque_tasks[0]) > 0 && rows.opaque_tasks[1] === '0', `an opaque card keeps its fill${why}`);
+assert.ok(Number(rows.stats[0]) > 0 && Number(rows.stats[1]) === 2, `the glass counts its draws and computed values${why}`);
 const [ringRed, cornerRed] = rows.corners.map(Number);
 assert.ok(cornerRed <= ringRed + 1, `the rounded corners mix with the picture, not with LVGL's opaque line${why}`);
 assert.equal(rows.band[0], '1', `the band copy gate is in place${why}`);

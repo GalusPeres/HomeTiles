@@ -401,6 +401,19 @@ struct CardGlass {
 // How often a card's values were computed (host tests).
 inline uint32_t g_kept_fills = 0;
 
+// The glass's own time, summed until the screensaver logs and clears it
+// (once a second while cards were drawn): waiting for the band copy,
+// computing kept values, drawing them. Closing a popup stayed slow after the
+// kept values (V2 b649/b650); this tells the glass's share apart from LVGL's.
+struct Stats {
+  uint32_t draws = 0;
+  uint32_t fills = 0;
+  uint32_t wait_us = 0;
+  uint32_t fill_us = 0;
+  uint32_t draw_us = 0;
+};
+inline Stats g_stats;
+
 inline uint32_t look_key(const CardLook& look) {
   if (look.tint_opa == 0) return 0;  // no tint: its color does not matter
   return (static_cast<uint32_t>(look.tint[0]) << 24) | (static_cast<uint32_t>(look.tint[1]) << 16) |
@@ -434,7 +447,10 @@ inline const uint16_t* kept_values(CardGlass& glass, int32_t px, int32_t py, con
   }
   k->valid = false;
   if (!k->px) return nullptr;
+  const uint32_t fill_started = display_flush_gate::clock_us();
   fill(b.copy, px, py, look, card.x1, card.x2, card.y1, card.y2, k->px, w);
+  g_stats.fill_us += display_flush_gate::clock_us() - fill_started;
+  ++g_stats.fills;
   ++g_kept_fills;
   k->valid = true;
   k->generation = b.generation;
@@ -475,28 +491,21 @@ inline bool paints(const CardGlass* glass, lv_obj_t* card, const lv_layer_t* lay
 // LVGL's own fill and frame line of a card the glass paints are left out:
 // the glass draws both itself, and its rounded edge mixed with them instead
 // of the picture under the card (the opaque line showed through the corners,
-// frayed, user 2026-11-02 b648). A line drawn over the children stays
-// (border_post, Camera tiles). The shadow stays and is told that the card
-// covers it, as the glass does: under a see-through card LVGL masked every
-// shadow pixel against the card's rounded shape, and the kept shadow
-// (kept_shadow.h) left it to LVGL, about 10-30 ms per card when a popup
-// closed (V2 b649).
+// frayed, user 2026-11-02 b648). The shadow stays as LVGL draws it for a
+// see-through card (told the card covers it, LVGL drew it under the whole
+// card: composing a slide took 35 ms more, closing a popup no less, V2
+// b650), and so does a line drawn over the children (border_post, Camera
+// tiles).
 inline void on_card_task(lv_event_t* e) {
   lv_draw_task_t* task = lv_event_get_draw_task(e);
   lv_obj_t* card = lv_event_get_current_target_obj(e);
   if (!task || !card) return;
-  auto* base = static_cast<lv_draw_dsc_base_t*>(lv_draw_task_get_draw_dsc(task));
+  const auto* base = static_cast<const lv_draw_dsc_base_t*>(lv_draw_task_get_draw_dsc(task));
   if (!base || base->obj != card || base->part != LV_PART_MAIN) return;
   const lv_draw_task_type_t type = lv_draw_task_get_type(task);
   const bool fill_task = type == LV_DRAW_TASK_TYPE_FILL;
   const bool line_task = type == LV_DRAW_TASK_TYPE_BORDER && !lv_obj_get_style_border_post(card, LV_PART_MAIN);
-  const bool shadow_task = type == LV_DRAW_TASK_TYPE_BOX_SHADOW;
-  if ((!fill_task && !line_task && !shadow_task) ||
-      !paints(static_cast<CardGlass*>(lv_event_get_user_data(e)), card, base->layer)) {
-    return;
-  }
-  if (shadow_task) {
-    static_cast<lv_draw_box_shadow_dsc_t*>(static_cast<void*>(base))->bg_cover = 1;
+  if ((!fill_task && !line_task) || !paints(static_cast<CardGlass*>(lv_event_get_user_data(e)), card, base->layer)) {
     return;
   }
   // Done before it is drawn: LVGL's dispatch takes waiting tasks only and
@@ -547,7 +556,12 @@ inline void on_card_draw_end(lv_event_t* e) {
   lv_area_t area;
   if (!lv_area_intersect(&area, &layer->_clip_area, &card_area)) return;
   if (!lv_area_intersect(&area, &area, &layer->buf_area)) return;
-  if (!settled(layer)) return;
+  const uint32_t wait_started = display_flush_gate::clock_us();
+  const bool ready = settled(layer);
+  const uint32_t draw_started = display_flush_gate::clock_us();
+  g_stats.wait_us += draw_started - wait_started;
+  ++g_stats.draws;
+  if (!ready) return;
   lv_area_t picture;
   lv_obj_get_coords(b->picture, &picture);
   int32_t r = lv_obj_get_style_radius(card, LV_PART_MAIN);
@@ -560,6 +574,7 @@ inline void on_card_draw_end(lv_event_t* e) {
   } else {
     compose_area<uint16_t>(*glass, layer, card_area, area, r, look, picture.x1, picture.y1);
   }
+  g_stats.draw_us += display_flush_gate::clock_us() - draw_started;  // with any fill
 }
 
 inline void on_card_delete(lv_event_t* e) {

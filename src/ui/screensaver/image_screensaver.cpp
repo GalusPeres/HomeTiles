@@ -2094,6 +2094,18 @@ void refresh_live_background_and_clock(ScreensaverState* st,
 void global_screensaver_timer_cb(lv_timer_t* timer) {
   ScreensaverState* st = static_cast<ScreensaverState*>(lv_timer_get_user_data(timer));
   if (!st || st != g_state) return;
+#if defined(HOMETILES_FROSTED_TILES)
+  // The frosted cards' own time since the last tick, only when they drew.
+  frosted_backdrop::Stats& frosted = frosted_backdrop::g_stats;
+  if (frosted.draws) {
+    Serial.printf("[Frosted] %u card draws: band wait %u.%u ms, drawn %u.%u ms (%u computed in %u.%u ms)\n",
+                  static_cast<unsigned>(frosted.draws), static_cast<unsigned>(frosted.wait_us / 1000),
+                  static_cast<unsigned>(frosted.wait_us / 100 % 10), static_cast<unsigned>(frosted.draw_us / 1000),
+                  static_cast<unsigned>(frosted.draw_us / 100 % 10), static_cast<unsigned>(frosted.fills),
+                  static_cast<unsigned>(frosted.fill_us / 1000), static_cast<unsigned>(frosted.fill_us / 100 % 10));
+    frosted = frosted_backdrop::Stats{};
+  }
+#endif
   if (g_live_config_refresh_requested) {
     g_live_config_refresh_requested = false;
     String preview = g_live_preview_wallpaper;

@@ -63,8 +63,8 @@ assert.match(driver, /constexpr int8_t kPanelPclk = 5;/);
 assert.match(driver, /constexpr int8_t kPanelDe = 38;/);
 assert.match(driver, /constexpr int8_t kPanelReset = 46;/);
 assert.match(driver, /constexpr int8_t kBacklightPin = 21;/);
-assert.match(driver, /constexpr uint32_t kPanelPclkHz = 16 \* 1000 \* 1000;/,
-  'The pixel clock stays at the lowest rate the panel holds (12 MHz breaks it)');
+assert.match(driver, /constexpr uint32_t kPanelPclkHz = 14 \* 1000 \* 1000;/,
+  'The pixel clock stays at the rate the panel holds with the wide card');
 assert.match(driver, /config\.timings\.flags\.pclk_active_neg = true;/);
 assert.match(driver, /config\.hsync_gpio_num = GPIO_NUM_NC;/);
 assert.match(driver, /config\.vsync_gpio_num = GPIO_NUM_NC;/);

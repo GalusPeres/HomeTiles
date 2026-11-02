@@ -496,8 +496,9 @@ Important:
   port and stays unused by the firmware.
 - The panel needs no initialization sequence: only the reset on GPIO 46, the
   data enable on GPIO 38 and the pixel clock on GPIO 5. The pixel clock is
-  16 MHz with an active-low polarity (the vendor rate 23 MHz jitters under
-  load, 12 MHz falls below the panel's frame rate).
+  14 MHz with an active-low polarity (the vendor rate 23 MHz jitters under
+  load, 12 MHz falls below the panel's frame rate; 16 MHz needs the square
+  popup card, the wider 640 px card needs 14 MHz).
 - The RGB bus carries B3..B7, G2..G7 and R3..R7 on sixteen lines
   (17, 18, 48, 47, 39, 11, 12, 13, 14, 15, 16, 6, 7, 8, 9, 10).
 - The backlight is a plain LEDC PWM line on GPIO 21.

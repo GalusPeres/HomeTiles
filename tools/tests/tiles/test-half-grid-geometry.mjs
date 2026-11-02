@@ -84,6 +84,8 @@ int main(){
  assert(tile_layout::value_font_for_choice(3,nullptr)==tile_layout::content_font_32());
  assert(tile_layout::value_font_for_choice(4,nullptr)==tile_layout::content_font_40());
  assert(tile_layout::value_font_for_choice(6,nullptr)==tile_layout::content_font_48());
+ assert(tile_layout::value_font_for_choice(7,nullptr)==tile_layout::content_font_80());
+ assert(tile_layout::value_font_for_choice(6,nullptr)==tile_layout::content_font_48());
  for(int type:{TILE_SENSOR,TILE_BINARY_SENSOR,TILE_ENERGY,TILE_SETTINGS}) {
   for(float row:{0.f,0.5f,1.f,1.5f}) {
    Tile input{type,0.5f,row,2,0.5f};

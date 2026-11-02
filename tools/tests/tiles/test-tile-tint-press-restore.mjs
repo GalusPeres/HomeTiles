@@ -50,6 +50,7 @@ ${surfaceStyleHost(root)}
 constexpr int GRID_CELL_H=CELL_H,GRID_GAP=GAP;
 #include "src/types/climate/layout.h"
 #include "src/tiles/runtime/tile_press.h"
+#include "src/tiles/runtime/tile_glass.h"
 ${read('src/tiles/runtime/tile_icon_disc.h').replace(/^#.*$/gm, '')}
 #include "src/tiles/config/tile_tint.h"
 static uint32_t tileDefaultBgColor() { return 0x1A1A1A; }

@@ -41,7 +41,7 @@ constexpr int8_t kPanelData[16] = {17, 18, 48, 47, 39, 11, 12, 13,
 // A lower pixel clock gives the interrupt more time per line. 12 MHz is below
 // what this panel accepts (the picture falls apart), 16 MHz is stable and
 // still keeps the panel's own line timing.
-constexpr uint32_t kPanelPclkHz = 16 * 1000 * 1000;
+constexpr uint32_t kPanelPclkHz = 14 * 1000 * 1000;
 
 constexpr int8_t kBacklightPin = 21;
 // The backlight is a plain LEDC PWM line. A fast rate sits in the range the

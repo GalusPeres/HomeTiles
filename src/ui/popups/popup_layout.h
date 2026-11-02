@@ -252,6 +252,13 @@ inline int shadow_width_for(int radius) {
   return room <= 0 ? 0 : room < kCardShadowMax ? room : kCardShadowMax;
 }
 
+// The BTT Panda Touch is a 800x480 panel with no room to spare on the sides:
+// its card is wider than the square one (640 px, centred). A full-width
+// card brought the vertical shift and the white streaks back on this board.
+#if defined(DEVICE_BTT_PANDA_TOUCH)
+constexpr int kCardWidth = 640;
+constexpr int kCardHeight = (SCREEN_HEIGHT - (kCardMargin * 2));
+#else
 // The card is a square in the middle of the screen: of the screen height on
 // landscape panels, of the screen width on portrait ones (like the 480x480
 // panels; a card over the whole portrait height left the square content
@@ -262,6 +269,7 @@ constexpr int kCardWidth =
         : (SCREEN_WIDTH - (kCardMargin * 2));
 constexpr int kCardHeight =
     (SCREEN_HEIGHT > SCREEN_WIDTH) ? kCardWidth : (SCREEN_HEIGHT - (kCardMargin * 2));
+#endif
 // A card that fills a square screen: its shadow would lie outside it.
 constexpr bool kCardFillsScreen = kCardWidth == SCREEN_WIDTH && kCardHeight == SCREEN_HEIGHT;
 // PIN keypad keys at most this share of the card height, per mille. On the

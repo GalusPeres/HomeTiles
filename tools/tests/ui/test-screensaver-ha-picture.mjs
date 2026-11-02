@@ -53,7 +53,7 @@ assert.match(apply, /if \(!dsc\) \{[\s\S]*?if \(picture\) \{\s*if \(g_ha_retry_n
 assert.match(apply, /g_ha_retry_at_ms = 0;\s*st->active_wallpaper_name = source\.file_name;/, 'a decoded picture ends the retries');
 const timer = section(screensaver, 'void global_screensaver_timer_cb(', 'void on_global_screensaver_clicked(');
 assert.match(timer, /if \(g_ha_retry_at_ms && static_cast<int32_t>\(now - g_ha_retry_at_ms\) >= 0\) \{\s*g_ha_retry_at_ms = 0;\s*g_ha_picture_arrived = true;\s*\}/);
-assert.match(timer, /if \(g_ha_picture_arrived\) \{[\s\S]*?if \(since_activity >= kInteractionSettleBeforeSlideMs\) \{\s*g_ha_picture_arrived = false;[\s\S]*?apply_ha_picture\(st\);/);
+assert.match(timer, /if \(g_ha_picture_arrived\) \{[\s\S]*?if \(since_activity >= quiet_ms\) \{\s*g_ha_picture_arrived = false;[\s\S]*?apply_ha_picture\(st\);/);
 const preload = section(screensaver, 'void global_preload_timer_cb(', 'void schedule_preload(');
 assert.match(preload, /ha_picture_source\(source, picture\) && picture\) \{\s*get_or_decode_cached\(source, grid_layout::screen_w\(\), grid_layout::screen_h\(\),\s*nullptr, picture\);/);
 const refresh = section(screensaver, 'void refresh_live_background_and_clock(', 'void global_screensaver_timer_cb(');

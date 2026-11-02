@@ -11,7 +11,9 @@
 // The blur and the tint divide by multiplying (the P4 divides slowly, V2
 // b647: 290 ms blur per slide), exactly; a card drawn while the band before
 // is still copied to the panel waits for that copy instead of losing its
-// glass (after a popup closed, b647).
+// glass (after a popup closed, b647). A card keeps its values per look and
+// place: a shadow, a frame line or a redraw copy them, a new look, place or
+// copy computes them again (V2 b648: 69 ms for a 404x320 card per close).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -187,6 +189,7 @@ int main() {
   for (int y = 46; y < 130; ++y) for (int x = 66; x < 174; ++x) inner_changed += frame[y * W + x] != no_shadow[y * W + x];
   for (int x = 40; x < 200; ++x) outer_changed += frame[36 * W + x] != no_shadow[36 * W + x];
   std::printf("shadow %d %d\n", inner_changed, outer_changed);
+  const uint32_t fills_after_shadow = frosted_backdrop::g_kept_fills;
   lv_obj_set_style_shadow_width(card, 0, 0);
   // The frame line: white at the card's 50 %, not opaque.
   lv_obj_set_style_outline_width(card, 1, 0);
@@ -215,6 +218,17 @@ int main() {
   lv_obj_invalidate(card);
   lv_refr_now(d);
   std::printf("band %d %.1f\n", display_flush_gate::g_dispatch_gated, spread(100, 70, 16));
+  const uint32_t fills_after_band = frosted_backdrop::g_kept_fills;
+  // Moved (the pixel shift) or over a new copy: computed again, still glass.
+  lv_obj_set_pos(card, 44, 40);
+  lv_refr_now(d);
+  const uint32_t fills_after_move = frosted_backdrop::g_kept_fills;
+  const double moved = spread(100, 70, 16);
+  backdrop.generation++;
+  lv_obj_invalidate(card);
+  lv_refr_now(d);
+  std::printf("kept %u %u %u %u %.1f\n", fills_after_shadow, fills_after_band, fills_after_move,
+              frosted_backdrop::g_kept_fills, moved);
   return 0;
 }
 `);
@@ -246,4 +260,8 @@ assert.deepEqual(rows.line, ['1', '1', '1'], `the frame line is translucent at t
 assert.deepEqual(rows.opaque, ['1'], `an opaque card draws no backdrop${why}`);
 assert.equal(rows.band[0], '1', `the band copy gate is in place${why}`);
 assert.ok(Number(rows.band[1]) < outside / 20, `a card drawn while the band before is still copied keeps its glass${why}`);
+// Two looks so far (clear, then 50 % black): the shadow, the frame line, the
+// opaque detour and the band redraw copied the kept values.
+assert.deepEqual(rows.kept.slice(0, 4), ['2', '2', '3', '4'], `kept per look and place, computed again when moved or over a new copy${why}`);
+assert.ok(Number(rows.kept[4]) < outside / 20, `the moved card is glass${why}`);
 console.log('Frosted backdrop: blurred, tinted and dithered under see-through cards without divisions, shadow outside, translucent line, corners and surroundings untouched, opaque cards plain, glass kept while a band copy runs');

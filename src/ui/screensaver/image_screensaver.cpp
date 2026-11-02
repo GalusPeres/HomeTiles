@@ -77,6 +77,15 @@ uint16_t image_radius() {
 // a decode/composite pass due at the same time can block the loop before
 // LVGL has flushed the switch change to the panel.
 constexpr uint32_t kInteractionSettleBeforeSlideMs = 1500;
+// A touch pauses whatever composes a whole frame (the next slide, a new Home
+// Assistant picture, the pixel shift) until the screen was left alone for
+// one slide duration: a slide change 1.5 s after a touch blocked the next
+// touches for about a second (user 2026-11-02, V2 b648).
+uint32_t quiet_before_frame_ms() {
+  const uint32_t duration =
+      static_cast<uint32_t>(screensaverConfig.get().duration_seconds) * 1000U;
+  return duration > kInteractionSettleBeforeSlideMs ? duration : kInteractionSettleBeforeSlideMs;
+}
 #if defined(DEVICE_ESP32_S3_RGB_480)
 constexpr uint32_t kFailedWallpaperRetryMs = 60000;
 // Per image of the list, grown on the first failure (up to
@@ -1520,6 +1529,7 @@ void update_frosted_backdrop(ScreensaverState* st, const lv_image_dsc_t* picture
   lv_free(sums);
   st->frosted_generation = g_cache_generation;
   g_backdrop.copy = st->frosted;
+  ++g_backdrop.generation;  // the cards' kept values are stale
   Serial.printf("[Screensaver] Frosted backdrop %dx%d in %u ms\n", sw, sh,
                 static_cast<unsigned>(millis() - started));
 }
@@ -2112,18 +2122,19 @@ void global_screensaver_timer_cb(lv_timer_t* timer) {
   // A popup opened from a screensaver tile pauses the slides, the pixel
   // shift and new Home Assistant pictures (user 2026-10-31): no full-screen
   // frame is composed under it. Its values above keep updating; after it
-  // closes the slides wait for the touch to settle as after any touch.
+  // closes they stay paused as after any touch (quiet_before_frame_ms).
   if (popup_shell_over_screensaver()) return;
   const auto& config = screensaverConfig.get();
+  const uint32_t since_activity =
+      static_cast<uint32_t>(now - displayManager.getLastActivityTime());
+  const uint32_t quiet_ms = quiet_before_frame_ms();
   if (g_ha_retry_at_ms && static_cast<int32_t>(now - g_ha_retry_at_ms) >= 0) {
     g_ha_retry_at_ms = 0;
     g_ha_picture_arrived = true;
   }
   if (g_ha_picture_arrived) {
-    // Like a slide change: after a touch the tiles settle first.
-    const uint32_t since_activity =
-        static_cast<uint32_t>(now - displayManager.getLastActivityTime());
-    if (since_activity >= kInteractionSettleBeforeSlideMs) {
+    // Like a slide change: paused while the screen is being used.
+    if (since_activity >= quiet_ms) {
       g_ha_picture_arrived = false;
       if (config.use_wallpapers && screensaver_uses_ha_picture(config)) {
         apply_ha_picture(st);
@@ -2137,8 +2148,7 @@ void global_screensaver_timer_cb(lv_timer_t* timer) {
   const bool slide_due = config.use_wallpapers && st->active_wallpaper >= 0 &&
                          static_cast<int32_t>(now - st->next_wallpaper_ms) >= 0;
   if (!slide_due && pixel_shift_due(st, screensaver_pixel_shift::kMaxIntervalMs) &&
-      static_cast<uint32_t>(now - displayManager.getLastActivityTime()) >=
-          kInteractionSettleBeforeSlideMs) {
+      since_activity >= quiet_ms) {
     // Moving the full-screen tile grid invalidates the whole screen: present
     // it as one frame like a slide change, never as visible bands.
 #if defined(DEVICE_ESP32_S3_RGB_480)
@@ -2153,11 +2163,8 @@ void global_screensaver_timer_cb(lv_timer_t* timer) {
   }
   if (config.use_wallpapers && st->active_wallpaper >= 0 &&
       static_cast<int32_t>(now - st->next_wallpaper_ms) >= 0) {
-    const uint32_t since_activity =
-        static_cast<uint32_t>(now - displayManager.getLastActivityTime());
-    if (since_activity < kInteractionSettleBeforeSlideMs) {
-      st->next_wallpaper_ms =
-          now + (kInteractionSettleBeforeSlideMs - since_activity);
+    if (since_activity < quiet_ms) {
+      st->next_wallpaper_ms = now + (quiet_ms - since_activity);
       return;
     }
     const int next = next_enabled_wallpaper(st->active_wallpaper);

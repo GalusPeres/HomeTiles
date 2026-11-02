@@ -1,6 +1,7 @@
 #pragma once
 
 #include <math.h>
+#include <new>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -170,26 +171,22 @@ inline void shrink_and_blur(const uint16_t* src, int w, int h, int stride_px, bo
 }
 
 // What the tile cards draw: the blurred copy and the picture object it lies
-// over (scaled back up from the picture's top left).
+// over (scaled back up from the picture's top left). generation changes with
+// every new copy: the cards' kept pixels are stale then.
 struct Backdrop {
   Copy copy;
   lv_obj_t* picture = nullptr;
+  uint32_t generation = 0;
 };
 
-// The Bayer 8x8 thresholds of the area graphs (area_graph.h render_fade).
-inline uint8_t bayer(int32_t x, int32_t y) {
+// Row y of the Bayer 8x8 thresholds of the area graphs (area_graph.h
+// render_fade).
+inline const uint8_t* bayer_row(int32_t y) {
   static constexpr uint8_t kBayer[8][8] = {
       {0, 32, 8, 40, 2, 34, 10, 42},  {48, 16, 56, 24, 50, 18, 58, 26}, {12, 44, 4, 36, 14, 46, 6, 38},
       {60, 28, 52, 20, 62, 30, 54, 22}, {3, 35, 11, 43, 1, 33, 9, 41},  {51, 19, 59, 27, 49, 17, 57, 25},
       {15, 47, 7, 39, 13, 45, 5, 37},  {63, 31, 55, 23, 61, 29, 53, 21}};
-  return kBayer[y & 7][x & 7];
-}
-
-// An 8.8 channel value (0..255 in 8.8) dithered to `max` steps.
-inline uint32_t dither(uint32_t value88, uint32_t max, uint32_t threshold88) {
-  const uint32_t level88 = (value88 * max * 257) >> 16;  // value * max / 255, 8.8
-  const uint32_t step = (level88 + threshold88) >> 8;
-  return step > max ? max : step;
+  return kBayer[y & 7];
 }
 
 // Coverage (0..256) of pixel (x, y) by a card with corner radius r: full
@@ -269,30 +266,29 @@ inline uint32_t ring_coverage(const lv_area_t& card, int32_t r, int32_t x, int32
   return outer > in ? outer - in : 0;
 }
 
-// Writes the card's part of the copy into the RGB565 buffer `buf` (stride in
-// pixels, buf_area its place on the screen) over `area`: bilinear from the
-// copy (picture at px, py), the card's tint mixed in, dithered; the corners
-// anti-aliased against what lies under them and the frame line on the edge.
-inline void paint(const Copy& copy, int32_t px, int32_t py, const lv_area_t& card, int32_t r, const CardLook& look,
-                  uint16_t* buf, int32_t stride_px, const lv_area_t& buf_area, const lv_area_t& area) {
-  const int32_t first = area.x1 - px;
-  const int32_t last = area.x2 - px;
-  // Copy columns the row needs (u = 64 * X - 96 in 8.8: pixel centres).
-  const int32_t i_first = (64 * first - 96) >> 8;
-  const int32_t i_last = ((64 * last - 96) >> 8) + 1;
+// The card's values over columns x1..x2 of rows y1..y2 into `dst` (stride in
+// pixels): the copy (picture at px, py) scaled back up bilinearly, the card's
+// tint mixed in, dithered to RGB565. The tint and the step size are applied
+// to a row's samples of the copy before the horizontal interpolation (both
+// are linear), so a pixel takes one multiplication per channel.
+inline void fill(const Copy& copy, int32_t px, int32_t py, const CardLook& look, int32_t x1, int32_t x2,
+                 int32_t y1, int32_t y2, uint16_t* dst, int32_t dst_stride) {
+  // Copy columns the rows need (u = 64 * X - 96 in 8.8: pixel centres).
+  const int32_t i_first = (64 * (x1 - px) - 96) >> 8;
+  const int32_t i_last = ((64 * (x2 - px) - 96) >> 8) + 1;
   const int32_t span = i_last - i_first + 1;
-  // One row of the copy interpolated vertically, 8.8 per channel.
-  uint16_t stack_row[3 * 96];
-  uint16_t* row = span <= 96 ? stack_row : static_cast<uint16_t*>(lv_malloc(static_cast<size_t>(span) * 3 * sizeof(uint16_t)));
+  // One row's samples in RGB565 steps, 8.8 per channel.
+  int32_t stack_row[3 * 96];
+  int32_t* row = span <= 96 ? stack_row : static_cast<int32_t*>(lv_malloc(static_cast<size_t>(span) * 3 * sizeof(int32_t)));
   if (!row) return;
   auto clampi = [](int32_t v, int32_t hi) { return v < 0 ? 0 : (v > hi ? hi : v); };
   // The tint over the copy: value * (255 - opa) / 255 + tint * opa / 255, in
-  // 8.8; keep_mul is (255 - opa) / 255 in 0.16.
+  // 8.8; keep_mul is (255 - opa) / 255 in 0.16. Then value * max / 255.
   const uint32_t keep_mul = ((255 - look.tint_opa) * 65536 + 127) / 255;
   uint32_t tint88[3];
   for (int c = 0; c < 3; ++c) tint88[c] = look.tint[c] * look.tint_opa * 256 / 255;
-  const bool line = look.line_opa > 0;
-  for (int32_t y = area.y1; y <= area.y2; ++y) {
+  static constexpr uint32_t kMax[3] = {31, 63, 31};
+  for (int32_t y = y1; y <= y2; ++y) {
     const int32_t v = 64 * (y - py) - 96;
     const int32_t j0 = clampi(v >> 8, copy.h - 1);
     const int32_t j1 = clampi((v >> 8) + 1, copy.h - 1);
@@ -302,38 +298,125 @@ inline void paint(const Copy& copy, int32_t px, int32_t py, const lv_area_t& car
     for (int32_t k = 0; k < span; ++k) {
       const int32_t i = clampi(i_first + k, copy.w - 1);
       for (int c = 0; c < 3; ++c) {
-        row[3 * k + c] = static_cast<uint16_t>(a[3 * i + c] * (256 - fy) + b[3 * i + c] * fy);
+        const uint32_t frosted = a[3 * i + c] * (256 - fy) + b[3 * i + c] * fy;
+        const uint32_t value = ((frosted * keep_mul) >> 16) + tint88[c];
+        row[3 * k + c] = static_cast<int32_t>((value * kMax[c] * 257) >> 16);
       }
     }
-    uint16_t* out = buf + static_cast<size_t>(y - buf_area.y1) * stride_px + (area.x1 - buf_area.x1);
-    const bool edge_row = y <= card.y1 + r || y >= card.y2 - r;
-    for (int32_t x = area.x1; x <= area.x2; ++x, ++out) {
+    const uint8_t* thresholds = bayer_row(y);
+    uint16_t* out = dst + static_cast<size_t>(y - y1) * dst_stride;
+    for (int32_t x = x1; x <= x2; ++x) {
       const int32_t u = 64 * (x - px) - 96;
-      const int32_t k0 = (u >> 8) - i_first;
-      const uint32_t fx = static_cast<uint32_t>(u & 0xff);
-      const uint16_t* p0 = row + 3 * k0;
-      const uint16_t* p1 = p0 + 3;
-      const uint32_t threshold = bayer(x, y) * 4 + 2;
-      uint32_t value[3];
+      const int32_t* p0 = row + 3 * ((u >> 8) - i_first);
+      const int32_t fx = u & 0xff;
+      const int32_t threshold = thresholds[x & 7] * 4 + 2;
+      uint32_t step[3];
       for (int c = 0; c < 3; ++c) {
-        const uint32_t frosted = (p0[c] * (256 - fx) + p1[c] * fx) >> 8;
-        value[c] = ((frosted * keep_mul) >> 16) + tint88[c];
+        const int32_t level = p0[c] + (((p0[c + 3] - p0[c]) * fx) >> 8);
+        const uint32_t s = static_cast<uint32_t>(level + threshold) >> 8;
+        step[c] = s > kMax[c] ? kMax[c] : s;
       }
-      uint16_t pixel = static_cast<uint16_t>((dither(value[0], 31, threshold) << 11) |
-                                             (dither(value[1], 63, threshold) << 5) | dither(value[2], 31, threshold));
-      const bool edge = edge_row || x <= card.x1 + r || x >= card.x2 - r;
-      if (!edge) {
-        *out = pixel;
-        continue;
-      }
-      if (line) {
-        const uint32_t ring = ring_coverage(card, r, x, y);
-        if (ring) pixel = mix565(look.line, pixel, (ring * look.line_opa) / 255);
-      }
-      *out = mix565(pixel, *out, corner_coverage(card, r, x, y));
+      *out++ = static_cast<uint16_t>((step[0] << 11) | (step[1] << 5) | step[2]);
     }
   }
   if (row != stack_row) lv_free(row);
+}
+
+// One row y of the card's values (`values`, values[0] at screen column
+// values_x) over columns x1..x2 of `out` (the layer at x1): the inside copied,
+// the rounded edge and the frame line mixed with what lies under them.
+inline void compose_row(const uint16_t* values, int32_t values_x, const lv_area_t& card, int32_t r,
+                        const CardLook& look, int32_t y, int32_t x1, int32_t x2, uint16_t* out) {
+  auto edge = [&](int32_t x) {
+    uint16_t pixel = values[x - values_x];
+    if (look.line_opa) {
+      const uint32_t ring = ring_coverage(card, r, x, y);
+      if (ring) pixel = mix565(look.line, pixel, (ring * look.line_opa) / 255);
+    }
+    out[x - x1] = mix565(pixel, out[x - x1], corner_coverage(card, r, x, y));
+  };
+  // The inside of a row between the corner columns; none in a corner row.
+  const bool edge_row = y <= card.y1 + r || y >= card.y2 - r;
+  const int32_t in1 = edge_row ? x2 + 1 : LV_MAX(x1, card.x1 + r + 1);
+  const int32_t in2 = edge_row ? x2 : LV_MIN(x2, card.x2 - r - 1);
+  if (in1 > in2) {
+    for (int32_t x = x1; x <= x2; ++x) edge(x);
+    return;
+  }
+  for (int32_t x = x1; x < in1; ++x) edge(x);
+  memcpy(out + (in1 - x1), values + (in1 - values_x), static_cast<size_t>(in2 - in1 + 1) * sizeof(uint16_t));
+  for (int32_t x = in2 + 1; x <= x2; ++x) edge(x);
+}
+
+// A card's values over its whole area for one look (tint and opacity), at
+// one place over one copy: a press, a new value or a closing popup copies
+// them instead of computing every pixel again (a 404x320 card took 69 ms
+// when a popup closed, V2 b648). Two looks per card: pressed or not, on or
+// off.
+struct Kept {
+  uint16_t* px = nullptr;
+  size_t bytes = 0;
+  bool valid = false;
+  uint32_t generation = 0;
+  lv_area_t card{};
+  int32_t picture_x = 0;
+  int32_t picture_y = 0;
+  uint32_t look = 0;  // tint RGB888 << 8 | opacity
+  uint32_t used = 0;
+};
+
+struct CardGlass {
+  const Backdrop* backdrop = nullptr;
+  Kept kept[2];
+  uint32_t uses = 0;
+};
+
+// How often a card's values were computed (host tests).
+inline uint32_t g_kept_fills = 0;
+
+inline uint32_t look_key(const CardLook& look) {
+  if (look.tint_opa == 0) return 0;  // no tint: its color does not matter
+  return (static_cast<uint32_t>(look.tint[0]) << 24) | (static_cast<uint32_t>(look.tint[1]) << 16) |
+         (static_cast<uint32_t>(look.tint[2]) << 8) | look.tint_opa;
+}
+
+// The card's values for its look, kept or computed now; nullptr without
+// memory for them.
+inline const uint16_t* kept_values(CardGlass& glass, int32_t px, int32_t py, const lv_area_t& card,
+                                   const CardLook& look) {
+  const Backdrop& b = *glass.backdrop;
+  const uint32_t key = look_key(look);
+  ++glass.uses;
+  for (Kept& k : glass.kept) {
+    if (k.valid && k.generation == b.generation && k.look == key && k.picture_x == px && k.picture_y == py &&
+        k.card.x1 == card.x1 && k.card.y1 == card.y1 && k.card.x2 == card.x2 && k.card.y2 == card.y2) {
+      k.used = glass.uses;
+      return k.px;
+    }
+  }
+  // An empty entry, else the one used longer ago.
+  Kept* k = !glass.kept[0].valid ? &glass.kept[0]
+            : !glass.kept[1].valid ? &glass.kept[1]
+            : (glass.kept[0].used <= glass.kept[1].used ? &glass.kept[0] : &glass.kept[1]);
+  const int32_t w = lv_area_get_width(&card);
+  const size_t bytes = static_cast<size_t>(w) * lv_area_get_height(&card) * sizeof(uint16_t);
+  if (k->bytes != bytes) {
+    if (k->px) lv_free(k->px);
+    k->px = static_cast<uint16_t*>(lv_malloc(bytes));
+    k->bytes = k->px ? bytes : 0;
+  }
+  k->valid = false;
+  if (!k->px) return nullptr;
+  fill(b.copy, px, py, look, card.x1, card.x2, card.y1, card.y2, k->px, w);
+  ++g_kept_fills;
+  k->valid = true;
+  k->generation = b.generation;
+  k->card = card;
+  k->picture_x = px;
+  k->picture_y = py;
+  k->look = key;
+  k->used = glass.uses;
+  return k->px;
 }
 
 // The card's tint (its own fill at its own opacity) and frame line (LVGL's
@@ -360,7 +443,8 @@ inline CardLook look_of(lv_obj_t* card) {
 // too, which darkened the frosted edges, user 2026-11-02). The children
 // (icon, texts, circles) draw after it.
 inline void on_card_draw_end(lv_event_t* e) {
-  const Backdrop* b = static_cast<const Backdrop*>(lv_event_get_user_data(e));
+  CardGlass* glass = static_cast<CardGlass*>(lv_event_get_user_data(e));
+  const Backdrop* b = glass ? glass->backdrop : nullptr;
   lv_obj_t* card = lv_event_get_current_target_obj(e);
   lv_layer_t* layer = lv_event_get_layer(e);
   if (!b || !b->copy.rgb || !b->picture || !card || !layer) return;
@@ -375,20 +459,55 @@ inline void on_card_draw_end(lv_event_t* e) {
   lv_area_t picture;
   lv_obj_get_coords(b->picture, &picture);
   int32_t r = lv_obj_get_style_radius(card, LV_PART_MAIN);
-  const int32_t half = LV_MIN(lv_area_get_width(&card_area), lv_area_get_height(&card_area)) / 2;
+  const int32_t w = lv_area_get_width(&card_area);
+  const int32_t half = LV_MIN(w, lv_area_get_height(&card_area)) / 2;
   if (r > half) r = half;
-  paint(b->copy, picture.x1, picture.y1, card_area, r, look_of(card),
-        reinterpret_cast<uint16_t*>(layer->draw_buf->data),
-        static_cast<int32_t>(layer->draw_buf->header.stride / sizeof(uint16_t)), layer->buf_area, area);
+  const CardLook look = look_of(card);
+  uint16_t* buf = reinterpret_cast<uint16_t*>(layer->draw_buf->data);
+  const int32_t stride = static_cast<int32_t>(layer->draw_buf->header.stride / sizeof(uint16_t));
+  auto layer_row = [&](int32_t y) {
+    return buf + static_cast<size_t>(y - layer->buf_area.y1) * stride + (area.x1 - layer->buf_area.x1);
+  };
+  if (const uint16_t* values = kept_values(*glass, picture.x1, picture.y1, card_area, look)) {
+    for (int32_t y = area.y1; y <= area.y2; ++y) {
+      compose_row(values + static_cast<size_t>(y - card_area.y1) * w, card_area.x1, card_area, r, look, y,
+                  area.x1, area.x2, layer_row(y));
+    }
+    return;
+  }
+  // Without memory to keep them, this draw's rows are computed as it goes.
+  uint16_t* row = static_cast<uint16_t*>(lv_malloc(static_cast<size_t>(lv_area_get_width(&area)) * sizeof(uint16_t)));
+  if (!row) return;
+  for (int32_t y = area.y1; y <= area.y2; ++y) {
+    fill(b->copy, picture.x1, picture.y1, look, area.x1, area.x2, y, y, row, 0);
+    compose_row(row, area.x1, card_area, r, look, y, area.x1, area.x2, layer_row(y));
+  }
+  lv_free(row);
 }
 
-// A see-through card draws the backdrop under its tint from now on; only
-// its fill is glass: its circles, controls and graphs keep the colors of
-// an opaque card (user 2026-11-02, tile_glass.h).
+inline void on_card_delete(lv_event_t* e) {
+  CardGlass* glass = static_cast<CardGlass*>(lv_event_get_user_data(e));
+  if (!glass) return;
+  for (Kept& k : glass->kept) {
+    if (k.px) lv_free(k.px);
+  }
+  glass->~CardGlass();
+  lv_free(glass);
+}
+
+// A see-through card draws the backdrop under its tint from now on, with
+// its kept values (released with the card); only its fill is glass: its
+// circles, controls and graphs keep the colors of an opaque card (user
+// 2026-11-02, tile_glass.h).
 inline void attach(lv_obj_t* card, const Backdrop* backdrop) {
   if (!card || !backdrop) return;
+  void* memory = lv_malloc(sizeof(CardGlass));
+  if (!memory) return;
+  CardGlass* glass = new (memory) CardGlass();
+  glass->backdrop = backdrop;
   tile_glass::mark(card);
-  lv_obj_add_event_cb(card, on_card_draw_end, LV_EVENT_DRAW_MAIN_END, const_cast<Backdrop*>(backdrop));
+  lv_obj_add_event_cb(card, on_card_draw_end, LV_EVENT_DRAW_MAIN_END, glass);
+  lv_obj_add_event_cb(card, on_card_delete, LV_EVENT_DELETE, glass);
 }
 
 }  // namespace frosted_backdrop

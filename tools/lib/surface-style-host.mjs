@@ -20,8 +20,11 @@ export function toneColorHost(root) {
     strip(read(root, 'src/ui/shared/tone_color.h')) + '\n#endif\n';
 }
 
+// The frame line reads the design of its card's screen (tile_screen.h, a real
+// include: #pragma once, harnesses may include it themselves too).
 export function surfaceStyleHost(root) {
-  return toneColorHost(root) + `void image_screensaver_config_changed() {}\n` +
+  return toneColorHost(root) + '#include "src/tiles/runtime/tile_screen.h"\n' +
+    `void image_screensaver_config_changed() {}\n` +
     strip(read(root, 'src/ui/shared/ui_surface_style.h')) + '\n' +
     strip(read(root, 'src/ui/shared/ui_surface_style.cpp'));
 }

@@ -11,6 +11,7 @@
 #include "src/fonts/ui_fonts.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_source.h"
+#include "src/tiles/runtime/tile_screen.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/types/device/device_control.h"
 #include "src/types/device/device_tile.h"
@@ -1113,8 +1114,10 @@ void refresh(bool show) {
 // The theme's default card, read with the theme: the caller may still hold
 // the surface of the popup opened before (after a filled Alarm tile the
 // white Lock tile got the dark theme's default card, V2 b365).
-uint32_t theme_default_card() {
-  const ui_theme::SurfaceScope theme = popup_surface::theme_scope();
+uint32_t theme_default_card(lv_obj_t* source) {
+  // The theme of the opener's screen (a screensaver tile's own design,
+  // tile_screen.h), read before its popup_background sets it.
+  const ui_theme::SurfaceScope theme(ui_theme::kThemeSurface, nullptr, tile_screen::of(source));
   return popup_surface::card_or_default(tileDefaultBgColor());
 }
 
@@ -1128,7 +1131,7 @@ void open_for(const DevicePopupTarget& target) {
   }
   pop.target = target;
   if (!device_tile_alive(target.source)) pop.target.source = nullptr;
-  const uint32_t fallback = theme_default_card();
+  const uint32_t fallback = theme_default_card(pop.target.source);
   if (!pop.target.source) tile_icon_source::open_popup_without_tile();
   pop.card_rgb = pop.target.source ? tile_icon_source::popup_background(pop.target.source, fallback) : fallback;
   // Drawn with the surface its opener just set.
@@ -1230,7 +1233,7 @@ void ask_code(const DevicePopupTarget& target, const char* action, bool from_til
   PinPopupInit init;
   init.title = target.title;
   init.icon_name = target.icon_name.length() ? target.icon_name : String(v.icon);
-  const uint32_t fallback = theme_default_card();
+  const uint32_t fallback = theme_default_card(g_code.target.source);
   if (!g_code.target.source) tile_icon_source::open_popup_without_tile();
   init.bg_color = g_code.target.source ? tile_icon_source::popup_background(g_code.target.source, fallback) : fallback;
   init.icon_color = v.color;

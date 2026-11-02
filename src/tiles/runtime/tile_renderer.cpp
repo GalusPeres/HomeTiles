@@ -5268,16 +5268,13 @@ static bool tile_has_own_color(const Tile& tile) { return tileHasOwnColor(tile);
 // The surface a tile draws on (tile_surface in tile_icon_disc.h, user 2026-10-10):
 // a tile in its own color follows that color's lightness (a black tile is the
 // light theme's screen: the theme); every other tile, and the screensaver (a
-// photo frame), keeps the theme.
+// photo frame), keeps the theme. The screensaver's theme is its own design
+// (user 2026-10-11): it renders its tiles on that screen (tile_screen.h), so
+// they fill and color like the pages in that design (user 2026-11-02: as a
+// Light or Dark surface of their own they never filled).
 static uint8_t tile_surface_rule_of(const Tile& tile, GridType grid_type);
 
 static uint8_t tile_surface_of(const Tile& tile, GridType grid_type) {
-  // The screensaver's own design (user 2026-10-11): Dark or Light for all its
-  // tiles, Automatic follows the panel.
-  if (grid_type == GridType::SCREENSAVER) {
-    const uint8_t theme = screensaverConfig.get().theme;
-    return theme == 0 ? tile_surface::kDark : theme == 1 ? tile_surface::kLight : tile_surface::kNone;
-  }
   // A Camera tile's head over its picture: dark or light in either theme,
   // or the design's (types/camera/picture.h).
   if (grid_type != GridType::SCREENSAVER && camera_picture::head_over_picture(tile)) {
@@ -5305,10 +5302,12 @@ static uint8_t tile_surface_of(const Tile& tile, GridType grid_type) {
 // A rule row with its own "Fuellen" (user 2026-10-11)
 // changes a tile between the white and the filled look while it runs: filled
 // while a row with "Fuellen" matches, white while a row without it matches.
-// Every other tile keeps the theme's card.
+// Every other tile keeps the theme's card. The screensaver's tiles too, in
+// its own design (the open screen's theme).
 static uint8_t tile_surface_rule_of(const Tile& tile, GridType grid_type) {
-  if (grid_type == GridType::SCREENSAVER || tile.type == TILE_EMPTY || !ui_theme::theme_light() ||
-      tile_has_own_color(tile) || camera_picture::head_over_picture(tile)) {
+  (void)grid_type;
+  if (tile.type == TILE_EMPTY || !ui_theme::theme_light() || tile_has_own_color(tile) ||
+      camera_picture::head_over_picture(tile)) {
     return 0;
   }
   if (tileFills(tile)) {
@@ -5322,6 +5321,10 @@ lv_obj_t* render_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint
 
   const TileTypeDescriptor* desc = get_tile_type_descriptor(tile.type);
   if (desc && desc->render) {
+    // On its screen's design: a screensaver tile on the screensaver's own
+    // (its grid's mark, tile_screen.h), every other tile on the panel's.
+    const ui_theme::SurfaceScope on_screen(-1, nullptr,
+                                           grid_type == GridType::SCREENSAVER ? tile_screen::of(parent) : -1);
     // The whole tile draws with its surface's rules; its card keeps the
     // surface for every later color change (tile_surface::scope).
     const uint8_t surface = tile_surface_of(tile, grid_type);

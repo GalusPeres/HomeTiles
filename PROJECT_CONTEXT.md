@@ -84,15 +84,15 @@ Last reviewed: 2026-10-29
 - One color rule (b378): color always from the icon; per tile only "Ausfuellen" (`tileFills`); own color only Clock/Text/Pixelanim; Light/Climate/Cover popups never filled; light theme: filled tile kJewel, frame line per `frame_line`.
 - Radius fixed (b378): `tile_radius::kDefault`, circle 25 %, card per theme (dark `#1A1A1A`). Colors from `tone_color.h` (OKLCH); presses without theme recolor.
 - Half-grid: Sensor/Binary/Energy/Switch height 0.5, width >= 1 by 0.5; V7 size unchanged. Open: cross-grid import clamps whole tiles (HTTP 400), value fonts 32/40 clip in half tiles.
-- Titles: two centred/ellipsized lines, 255 UTF-8 bytes in `/_tile_titles`.
+- Titles: two centred/ellipsized lines, 255 bytes in `/_tile_titles`.
 - HW pending (evidence in `build/`): radius reboot, screensaver child-click, Energy compact slots, Clock/Text border.
-- Layouts (`grid_layout.h`): classic, head bar landscape, head bar upright (prepared); NVS `layout`; places `/_tile_grids/layouts.json`; folder storage entries (`grid_slots.h`, max 64), full storage blocks Save (`layoutStorageFull`); backups hold all three, import checks classic places on the stored grid, a start keeps the choice (b509/b510); b479/b480 HW pending.
-- One look (b300): popup card margin 0, tiles one grid gap from the edge; popup header follows the head bar rule (`popup_layout.h`); card shadow width follows the radius to stay in the LVGL shadow cache (`shadow_width_for`, max 28 px).
-- Upright (b294): P4 panels upright under a landscape profile draw the upright UI directly (`drawUpright`); JC1060/7B upright and JC4880 landscape (b368) compile only, HW pending.
-- Light theme: `ui_theme` roles + `SurfaceScope`; popups take the opener's surface. Remembered LVGL objects clear themselves on delete (LVGL 9.6 `lv_obj_is_valid` reads freed objects).
+- Layouts (`grid_layout.h`): classic, head bar landscape, upright (prepared); NVS `layout`; places `/_tile_grids/layouts.json`; folder storage entries (`grid_slots.h`, max 64), full storage blocks Save (`layoutStorageFull`); backups hold all three, import checks classic places on the stored grid, a start keeps the choice (b509/b510); b479/b480 HW pending.
+- One look (b300): popup card margin 0, tiles one grid gap from the edge; popup header follows the head bar rule (`popup_layout.h`); card shadow width follows the radius (LVGL shadow cache, `shadow_width_for`, max 28 px).
+- Upright (b294): P4 panels upright under a landscape profile draw it directly (`drawUpright`); JC1060/7B upright, JC4880 landscape (b368) compile only.
+- Light theme: `ui_theme` roles + `SurfaceScope`; popups take the opener's surface. Screensaver Dark/Light: own screen (`tile_screen.h`), fills/popups like pages; b655 HW pending. Remembered LVGL objects clear on delete (9.6 `lv_obj_is_valid` reads freed ones).
 - Settings: 4 pages (`build/design-mockups/settings`), Display with a Sound group on speaker boards (#123); setup in the popup card.
 - Lights (#130, b554): HA colors in both themes; Fill fills while on (white grey); Switch tiles off unfilled; Light popup = tile without Fill. HW pending.
-- Units (b551): a step smaller after the number, digit tops level, like the weather forecast (`value_unit.h`, `.tile-unit`, `unitTextHtml`): tiles, state lines, popups; two units in one line keep one size.
+- Units (b551): a step smaller after the number, digit tops level (`value_unit.h`, `.tile-unit`, `unitTextHtml`): tiles, state lines, popups; two units in one line keep one size.
 
 ## Tiles and Bridge contracts
 

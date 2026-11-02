@@ -45,19 +45,35 @@ inline constexpr int8_t kDarkTintedSurface = 2;
 // that update with the new one (follow_surface).
 inline const void* g_surface_owner = nullptr;
 
-inline bool theme_light() { return g_theme == Theme::Light; }
+// The design of the screen the colors are for (user 2026-11-02): -1 the
+// panel's theme; 0 dark or 1 light for the screensaver's own design
+// (ScreensaverConfigData::theme), so its tiles and the popups they open
+// follow the pages' rules in that design (tile_screen.h, popup_surface.h).
+// The screensaver had only its tiles' text roles, while filling, icon
+// colors, frame lines and popups followed the panel's theme.
+inline int8_t g_screen = -1;
+
+// The panel's own theme, whatever screen is open.
+inline bool panel_light() { return g_theme == Theme::Light; }
+// The design of the open screen: the theme's rules (filled tiles, real icon
+// colors, frame lines) follow it.
+inline bool theme_light() { return g_screen >= 0 ? g_screen == 1 : panel_light(); }
 inline bool light() { return g_surface >= 0 ? g_surface == 1 : theme_light(); }
 inline void set(uint8_t stored) { g_theme = stored == 1 ? Theme::Light : Theme::Dark; }
 
 // SurfaceScope(kThemeSurface) draws with the theme again inside a surface.
 inline constexpr int8_t kThemeSurface = -2;
+// A SurfaceScope that keeps the open screen's design.
+inline constexpr int8_t kKeepScreen = -2;
 
 class SurfaceScope {
  public:
   // -1 keeps the surface that is open (or the theme). `owner`: the tile card
-  // whose surface this is (tile_surface::scope).
-  explicit SurfaceScope(int8_t surface, const void* owner = nullptr)
-      : saved_(g_surface), saved_owner_(g_surface_owner), owner_(owner) {
+  // whose surface this is (tile_surface::scope). `screen`: the design of the
+  // screen while it lives (g_screen), kKeepScreen keeps the open one.
+  explicit SurfaceScope(int8_t surface, const void* owner = nullptr, int8_t screen = kKeepScreen)
+      : saved_(g_surface), saved_owner_(g_surface_owner), owner_(owner), saved_screen_(g_screen) {
+    if (screen != kKeepScreen) g_screen = screen;
     if (surface >= 0) g_surface = surface;
     else if (surface == kThemeSurface) g_surface = -1;
     if (owner) g_surface_owner = owner;
@@ -67,6 +83,7 @@ class SurfaceScope {
     // changed since (follow_surface).
     if (!(owner_ && saved_owner_ == owner_)) g_surface = saved_;
     g_surface_owner = saved_owner_;
+    g_screen = saved_screen_;
   }
   SurfaceScope(const SurfaceScope&) = delete;
   SurfaceScope& operator=(const SurfaceScope&) = delete;
@@ -75,6 +92,7 @@ class SurfaceScope {
   int8_t saved_;
   const void* saved_owner_;
   const void* owner_;
+  int8_t saved_screen_;
 };
 
 // A card changed its surface (tile_surface::change): its open scopes draw

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "src/tiles/runtime/tile_glass.h"
+#include "src/tiles/runtime/tile_screen.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/core/config/icon_glow.h"
@@ -71,11 +72,13 @@ inline int8_t theme_of(uint8_t surface) {
 
 // Opens the surface of `obj`'s card for the colors computed while it lives;
 // a card on the theme opens the theme explicitly, also inside a popup's
-// scope (a popup command updating its tile).
+// scope (a popup command updating its tile). The theme is the design of the
+// card's screen (tile_screen.h: the screensaver's own, else the panel's).
 inline ui_theme::SurfaceScope scope(lv_obj_t* obj) {
   lv_obj_t* card = card_of(obj);
   const int8_t theme = theme_of(card ? get(card) : find(obj));
-  return ui_theme::SurfaceScope(theme >= 0 ? theme : ui_theme::kThemeSurface, card);
+  return ui_theme::SurfaceScope(theme >= 0 ? theme : ui_theme::kThemeSurface, card,
+                                tile_screen::of(card ? card : obj));
 }
 
 // The rule of a card whose surface changes while it runs (render_tile): the

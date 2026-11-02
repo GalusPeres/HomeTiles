@@ -166,6 +166,9 @@ static void mqttPublishMediaSeek(const char* entity, float value) { seeks.push_b
 static void mqttPublishMediaMute(const char* entity, bool muted) { mutes.push_back({entity, muted ? 1.0f : 0.0f}); }
 ${fs.readFileSync(path.join(repoRoot, 'src/ui/shared/ui_theme.h'), 'utf8')}
 int8_t popup_drawn_surface(lv_obj_t*) { return ui_theme::kThemeSurface; }
+namespace popup_surface {
+${fs.readFileSync(path.join(repoRoot, 'src/ui/popups/popup_surface.h'), 'utf8').replace(/\r\n/g, '\n').match(/^inline int8_t drawn_screen\(int8_t surface\) \{\n[^}]*\}$/m)[0]}
+}
 ${productionStruct(header, 'MediaPopupInit')}
 ${[...popup.matchAll(/^constexpr uint32_t kFeature\w+ = \d+;$/gm)].map(match => match[0]).join('\n')}
 ${productionStruct(popup, 'MediaGroupCandidate')}

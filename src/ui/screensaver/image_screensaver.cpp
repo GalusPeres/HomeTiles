@@ -49,6 +49,7 @@
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_source.h"
+#include "src/tiles/runtime/tile_screen.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/core/config/tile_radius.h"
 #include "src/ui/screensaver/frosted_backdrop.h"
@@ -1905,6 +1906,11 @@ void rebuild_slot_grid(ScreensaverState* st) {
     // (the screen edge) as before, not by the grid.
     lv_obj_add_flag(st->slot_grid, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
   }
+  // Its tiles and the popups they open draw on the screensaver's own design
+  // (user 2026-10-11: Dark or Light; Automatic the panel's theme) with the
+  // pages' rules of that design (tile_screen.h, user 2026-11-02).
+  const uint8_t design = screensaverConfig.get().theme;
+  tile_screen::set(st->slot_grid, design <= 1 ? static_cast<int8_t>(design) : -1);
 
   // The active layout's places (screensaver_places.h): a bar layout's own,
   // two rows at the bottom of its grid (three upright); a tile without one

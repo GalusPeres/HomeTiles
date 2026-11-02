@@ -610,7 +610,11 @@ void surface_root_deleted(lv_event_t* event) {
 
 void popup_follow_surface(lv_obj_t* root) {
   if (!root) return;
-  const int8_t want = popup_surface::g_open_surface == ui_theme::kThemeSurface ? -1 : popup_surface::g_open_surface;
+  int8_t want = popup_surface::g_open_surface == ui_theme::kThemeSurface ? -1 : popup_surface::g_open_surface;
+  // On the theme of a screen in the other design than the panel's (a
+  // screensaver tile in its own Dark or Light): that design's roles.
+  const int8_t screen = popup_surface::g_open_screen;
+  if (want < 0 && screen >= 0 && (screen == 1) != ui_theme::panel_light()) want = screen;
   SurfaceMark* mark = nullptr;
   for (SurfaceMark& entry : g_surface_marks) {
     if (entry.root == root) mark = &entry;
@@ -627,7 +631,9 @@ void popup_follow_surface(lv_obj_t* root) {
     }
   }
   if (!mark || mark->surface == want) return;
-  tile_icon_source::recolor_surface(root, mark->surface, want);
+  // -1: built with the panel's theme (whatever screen is open now).
+  const int8_t panel = ui_theme::panel_light() ? 1 : 0;
+  tile_icon_source::recolor_surface(root, mark->surface < 0 ? panel : mark->surface, want < 0 ? panel : want);
   mark->surface = want;
 }
 

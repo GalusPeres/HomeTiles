@@ -32,7 +32,7 @@ for (const marker of [
 // (The panel theme helpers: no document here, so the dark theme.)
 const js = new Function(['toneToLinear', 'toneToSrgb', 'toneOklch', 'toneLinear', 'toneRgb', 'toneBlend', 'toneHex',
   'panelLight', 'panelThemeLight', 'panelVar', 'panelRole', 'surfaceRoleTable', 'panelRoleHex', 'toneStep', 'toneFill',
-  'toneReadableIcon'].map(extractDeliveredFunction).join('\n') + '; return {toneFill, toneReadableIcon, toneOklch};')();
+  'designLight', 'toneReadableIcon'].map(extractDeliveredFunction).join('\n') + '; return {toneFill, toneReadableIcon, toneOklch};')();
 
 // The tile card of Tile color "From icon" at 20 % (tile_tint::background).
 const lin = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };

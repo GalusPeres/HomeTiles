@@ -38,11 +38,12 @@ assert.ok(picture.includes('ui_surface_style::draw_frame_over_children(card);') 
   picture.includes('x - lv_obj_get_style_space_left(card, LV_PART_MAIN)') &&
   picture.includes('y - lv_obj_get_style_space_top(card, LV_PART_MAIN)'), 'camera picture: the frame line over the picture');
 // The renderer gives a tile with "Fill" the rule in the light theme
-// (tile_surface_rule_of), not the screensaver, empty places or own colors.
+// (tile_surface_rule_of), not empty places or own colors; the screensaver's
+// tiles too, in its own design (its screen, user 2026-11-02).
 const renderer = read('src/tiles/runtime/tile_renderer.cpp');
 // A Camera tile's head over its picture keeps its fixed surface (no tint
 // rule; types/camera/picture.h head_over_picture).
-assert.match(renderer, /static uint8_t tile_surface_rule_of\(const Tile& tile, GridType grid_type\) \{\s*if \(grid_type == GridType::SCREENSAVER \|\| tile\.type == TILE_EMPTY \|\| !ui_theme::theme_light\(\) \|\|\s*tile_has_own_color\(tile\) \|\| camera_picture::head_over_picture\(tile\)\) \{\s*return 0;\s*\}/);
+assert.match(renderer, /static uint8_t tile_surface_rule_of\(const Tile& tile, GridType grid_type\) \{\s*\(void\)grid_type;\s*if \(tile\.type == TILE_EMPTY \|\| !ui_theme::theme_light\(\) \|\| tile_has_own_color\(tile\) \|\|\s*camera_picture::head_over_picture\(tile\)\) \{\s*return 0;\s*\}/);
 // A tile "From icon" and a Media tile are filled from the start and stay
 // filled: no later surface change (user 2026-10-10: colors built up late).
 assert.ok(renderer.includes('if (tile_surface_rule_of(tile, grid_type) & tile_surface::kNeutralIdle) return tile_surface::kJewel;') &&
@@ -85,7 +86,7 @@ assert.ok(renderer.includes('return tile.type == TILE_SWITCH ? tile_surface::kFo
 const gridPreview = read('src/web/admin/tiles/grid-preview.js');
 // White light fills grey in the dark theme too; a Switch tile has no idle
 // grey (#130, user 2026-10-26).
-assert.ok(gridPreview.includes("if (!choice && given && (tileElem.dataset.followTint === '1' || !panelThemeLight()) && toneNoColor(given) &&") &&
+assert.ok(gridPreview.includes("if (!choice && given && (tileElem.dataset.followTint === '1' || !designLight()) && toneNoColor(given) &&") &&
   gridPreview.includes("if (el.dataset.followTint === '1' && tileFillOf(tile?.icon_colors) > 0 && surfaceType !== '5') {") &&
   colors.includes("const card = idle ? toneJewelIdleCard() : toneJewelCard(given, Number(percent) || 20);"),
   'preview: white light grey, the idle grey without a color');
@@ -125,7 +126,8 @@ for (const name of ['update_light_popup', 'light_popup_follow_tile_color']) {
 }
 const shell = read('src/ui/popups/popup_shell.cpp');
 assert.ok(shell.includes('void popup_follow_surface(lv_obj_t* root) {') &&
-  shell.includes('tile_icon_source::recolor_surface(root, mark->surface, want);'), 'popup texts follow the open surface');
+  shell.includes('tile_icon_source::recolor_surface(root, mark->surface < 0 ? panel : mark->surface, want < 0 ? panel : want);'),
+  'popup texts follow the open surface');
 // Remembered objects clear themselves when deleted (crash b364): a popup
 // body's surface mark, the opening tile's circle.
 assert.ok(shell.includes('lv_obj_add_event_cb(root, surface_root_deleted, LV_EVENT_DELETE, nullptr);') &&
@@ -166,6 +168,7 @@ constexpr int GRID_CELL_H=CELL_H,GRID_GAP=GAP;
 #include "src/types/climate/layout.h"
 #include "src/tiles/runtime/tile_press.h"
 #include "src/tiles/runtime/tile_glass.h"
+#include "src/tiles/runtime/tile_screen.h"
 ${read('src/tiles/runtime/tile_icon_disc.h').replace(/^#.*$/gm, '')}
 #include "src/tiles/config/tile_tint.h"
 // The default card of the surface (tile_config.cpp tileDefaultBgColor).

@@ -245,6 +245,7 @@ uint32_t disc_icon_rgb(lv_obj_t* disc) {
 // color without a hue.
 tile_tint::Choice with_white(lv_obj_t* card, tile_tint::Choice choice, uint8_t fill, lv_obj_t* disc) {
   if (choice.percent || !fill || !disc || !tile_icon_disc::icon_of(disc)) return choice;
+  const ui_theme::SurfaceScope screen = tile_screen::scope(card);
   uint8_t base = 0, flags = 0;
   if (ui_theme::theme_light() && (!tile_surface::rule_of(card, base, flags) || !(flags & tile_surface::kFollowTint))) {
     return choice;
@@ -320,6 +321,7 @@ void on_icon_color(lv_obj_t* disc) {
 // An open popup of this card takes the card's current background.
 void follow_open_popup(lv_obj_t* card) {
   if (!card || !popup_shell_active()) return;
+  const ui_theme::SurfaceScope screen = tile_screen::scope(card);
   // Its popup keeps the neutral card (popup_background).
   const uint8_t tile_side = tile_surface::find(card);
   const int8_t surface = tile_surface::theme_of(tile_side);
@@ -371,6 +373,7 @@ void apply_card_background(lv_obj_t* card, uint32_t rgb) {
 void set_open_popup_surface(lv_obj_t* obj) {
   popup_surface::g_open_surface = tile_surface::find(obj) == tile_surface::kJewel ? ui_theme::kDarkTintedSurface
                                                                                    : ui_theme::kThemeSurface;
+  popup_surface::g_open_screen = tile_screen::of(obj);
 }
 
 void follow_tint(lv_obj_t* card, bool tinted) {
@@ -522,6 +525,8 @@ void change_surface(lv_obj_t* card, uint8_t surface, const Tile* tile) {
   if (!card || !tile_surface::marked(card)) return;
   const uint8_t before = tile_surface::get(card);
   if (before == surface) return;
+  // Both surfaces on the card's screen (the theme is its design).
+  const ui_theme::SurfaceScope screen = tile_screen::scope(card);
   const ui_theme::Roles& from = ui_theme::roles_of(tile_surface::theme_of(before));
   tile_surface::set(card, surface);
   const int8_t theme = tile_surface::theme_of(surface);
@@ -661,8 +666,10 @@ void recolor_surface(lv_obj_t* root, int8_t from, int8_t to) {
 }
 
 void forget_popup_source(lv_obj_t* obj) {
-  // Light, Climate and Cover popups keep the neutral card: the theme.
+  // Light, Climate and Cover popups keep the neutral card: the theme, of the
+  // tile's screen.
   popup_surface::g_open_surface = ui_theme::kThemeSurface;
+  popup_surface::g_open_screen = tile_screen::of(obj);
   remember_popup_source(nullptr);
   pass_popup_disc(obj, false);
 }
@@ -697,6 +704,7 @@ bool popup_tile_circle(uint32_t rgb, uint32_t& circle, uint8_t& opa, uint32_t& i
 
 void open_popup_without_tile() {
   popup_surface::g_open_surface = ui_theme::kThemeSurface;
+  popup_surface::g_open_screen = -1;
   set_popup_disc(nullptr);
   remember_popup_source(nullptr);
   popup_shell_use_no_tile_disc();
@@ -706,6 +714,7 @@ uint32_t popup_background(lv_obj_t* obj, uint32_t fallback) {
   set_open_popup_surface(obj);
   remember_popup_source(obj);
   pass_popup_disc(obj, true);
+  const ui_theme::SurfaceScope screen = tile_screen::scope(obj);
   // A tile in its own color on the other theme's side (an own dark color in
   // the light theme) opens its popup on the theme's neutral card. A filled
   // tile (kJewel) passes its color like in the dark theme; its popup draws on

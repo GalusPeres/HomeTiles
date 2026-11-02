@@ -39,7 +39,7 @@ assert.match(shell, /if \(shell\.active != binding \|\| g_next_disc\.from_tile\)
 // Every opener passes its tile's disc: popup_background() and, for Climate,
 // Light and Cover (global background), forget_popup_source(card).
 const source = read('src/tiles/runtime/tile_icon_source.cpp');
-assert.match(source, /void forget_popup_source\(lv_obj_t\* obj\) \{[^}]*?popup_surface::g_open_surface = ui_theme::kThemeSurface;\s*remember_popup_source\(nullptr\);\s*pass_popup_disc\(obj, false\);/);
+assert.match(source, /void forget_popup_source\(lv_obj_t\* obj\) \{[^}]*?popup_surface::g_open_surface = ui_theme::kThemeSurface;\s*popup_surface::g_open_screen = tile_screen::of\(obj\);\s*remember_popup_source\(nullptr\);\s*pass_popup_disc\(obj, false\);/);
 assert.match(source, /uint32_t popup_background\(lv_obj_t\* obj, uint32_t fallback\) \{\s*set_open_popup_surface\(obj\);\s*remember_popup_source\(obj\);\s*pass_popup_disc\(obj, true\);/);
 // A popup that shows the tile color "From icon" computes the circle for its
 // own card; every other one gets the tile's From icon strength, so its circle

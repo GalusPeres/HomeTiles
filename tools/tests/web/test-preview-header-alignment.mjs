@@ -10,7 +10,7 @@ const helpers = [
   'tileColorInputIsDefault', 'tileBgToHex', 'tileBgValueIsSet', 'tileBackgroundCss',
   'applyIconDiscTint', 'iconDiscTinted', 'cssColorMatch', 'cssColorChannels', 'cssColorAlpha', 'toneToLinear', 'toneToSrgb', 'toneOklch',
   'toneLinear', 'toneRgb', 'toneBlend', 'toneFill', 'toneReadableIcon', 'toneHex',
-  'panelLight', 'panelThemeLight', 'toneNoColor', 'tileFillOf', 'panelVar', 'panelRole', 'surfaceRoleTable', 'panelRoleHex', 'toneStep',
+  'panelLight', 'panelThemeLight', 'designLight', 'screensaverDesign', 'previewScreenOf', 'toneNoColor', 'tileFillOf', 'panelVar', 'panelRole', 'surfaceRoleTable', 'panelRoleHex', 'toneStep',
   'tileBgFollowsDefault', 'tileColorHexIsDefaultGrey', 'applyFrameLine', 'tileTypeKeepsOwnColor',
   'isDefaultTileGrey', 'tileColorMode', 'syncTileColorMode', 'previewIconColor', 'iconColorRuleState',
   'rgbToHex', 'applyTileAriaLabel',

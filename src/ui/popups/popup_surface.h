@@ -27,8 +27,21 @@ namespace popup_surface {
 // (tile_icon_source::open_popup_without_tile), and nothing reads the theme's
 // colors under the previous popup's surface before its opener set it.
 inline int8_t g_open_surface = ui_theme::kThemeSurface;
-inline ui_theme::SurfaceScope scope() { return ui_theme::SurfaceScope(g_open_surface); }
-inline ui_theme::SurfaceScope theme_scope() { return ui_theme::SurfaceScope(ui_theme::kThemeSurface); }
+// The design of the opener's screen (ui_theme::g_screen, tile_screen.h): a
+// popup opened from a screensaver tile in its own Dark or Light draws with
+// that design, the neutral popups too; -1 the panel's theme. Set with
+// g_open_surface.
+inline int8_t g_open_screen = -1;
+inline ui_theme::SurfaceScope scope() { return ui_theme::SurfaceScope(g_open_surface, nullptr, g_open_screen); }
+inline ui_theme::SurfaceScope theme_scope() {
+  return ui_theme::SurfaceScope(ui_theme::kThemeSurface, nullptr, g_open_screen);
+}
+// The screen of a body drawn with `surface` (popup_drawn_surface): a plain
+// Dark or Light there is a screen's design (popup_follow_surface), so the
+// theme's rules follow it too; else the open screen stays.
+inline int8_t drawn_screen(int8_t surface) {
+  return surface == 0 || surface == 1 ? surface : ui_theme::kKeepScreen;
+}
 
 // The popup card when a caller passes no color (0); the light theme's card.
 inline uint32_t default_card() { return ui_theme::popup_card(); }

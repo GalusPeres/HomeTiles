@@ -75,6 +75,7 @@ ${surfaceStyleHost(root)}
 #include "src/types/climate/layout.h"
 #include "src/tiles/runtime/tile_press.h"
 #include "src/tiles/runtime/tile_glass.h"
+#include "src/tiles/runtime/tile_screen.h"
 ${strip(read('src/tiles/runtime/tile_icon_disc.h'))}
 namespace i18n{struct Strings{const char*media_state_playing="Playing";const char*media_state_paused="Paused";const char*media_state_idle="Idle";const char*media_state_standby="Standby";const char*media_state_off="Off";const char*media_no_playback="No playback";};
  inline const Strings&strings(const char*){static Strings s;return s;}inline String entity_state_label(const char*,const char*s){return std::string(s)=="unavailable"?"Unavailable":"Unknown";}}

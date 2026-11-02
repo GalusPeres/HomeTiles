@@ -63,7 +63,9 @@ const productionFunctions = [
   extractDeliveredFunction('isEditableValueType'),
   extractDeliveredFunction('editableCompactValueFont'),
   extractDeliveredFunction('syncEditableValueFontOptions'),
-  extractDeliveredFunction('renderTileFromData')
+  extractDeliveredFunction('renderTileFromData'),
+  extractDeliveredFunction('screensaverDesign'),
+  extractDeliveredFunction('previewScreenOf')
 ].join('\n\n');
 
 const harness = `<!doctype html><html><body>

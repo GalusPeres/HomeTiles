@@ -8230,6 +8230,9 @@ async function saveGestureEdge(select) {
     // The edited tile draws with its surface's rules (tile_surface), set
     // below once its color is known; restored at the end.
     const surfaceSaved = globalThis.hometilesPreviewSurface;
+    const screenSaved = globalThis.hometilesPreviewScreen;
+    // A screensaver tile on the screensaver's own design (grid-preview.js).
+    globalThis.hometilesPreviewScreen = typeof previewScreenOf === 'function' ? previewScreenOf(tab) : undefined;
     let surfaceDrawn = null;
     try {
     if (currentTileIndex === -1) return;
@@ -8704,6 +8707,7 @@ async function saveGestureEdge(select) {
     }
     } finally {
       globalThis.hometilesPreviewSurface = surfaceSaved;
+      globalThis.hometilesPreviewScreen = screenSaved;
     }
     // Its tint changed the surface: drawn again on it from the start.
     const tileElem = currentTileIndex >= 0 ? document.getElementById(tab + '-tile-' + currentTileIndex) : null;
@@ -10542,7 +10546,7 @@ async function saveGestureEdge(select) {
     const tinted = icon[0] !== icon[1] || icon[1] !== icon[2];
     // The light theme shows every colored icon in its own color, on every
     // surface (tone_color::readable_icon).
-    if (panelThemeLight() && tinted) return icon;
+    if (designLight() && tinted) return icon;
     if (panelLight()) {
       // The icon's own color, like Home Assistant; only an icon without a
       // color (white, almost white, the text color) takes the icon grey.
@@ -10577,6 +10581,24 @@ async function saveGestureEdge(select) {
   // page's theme; each function reads it by itself).
   function panelThemeLight() {
     return typeof document !== 'undefined' && document.documentElement?.dataset?.panelTheme === 'light';
+  }
+  // ui_theme::g_screen (tile_screen.h): a screensaver tile follows the
+  // pages' rules of the screensaver's own design (data-ss-theme 0 dark,
+  // 1 light; Automatic the panel's theme). While a screensaver tile draws,
+  // globalThis.hometilesPreviewScreen holds that design; designLight()
+  // answers the theme's rules (filled tiles, real icon colors, frame lines)
+  // for it, panelThemeLight() stays the page's (its CSS tables).
+  function screensaverDesign() {
+    const theme = typeof document !== 'undefined' ? document.getElementById('screensaverGrid')?.dataset?.ssTheme : '';
+    return theme === '0' ? 0 : theme === '1' ? 1 : undefined;
+  }
+  function previewScreenOf(tab) {
+    return typeof isScreensaverTileTab === 'function' && isScreensaverTileTab(tab) ? screensaverDesign() : undefined;
+  }
+  function designLight() {
+    const screen = globalThis.hometilesPreviewScreen;
+    if (screen === 0 || screen === 1) return screen === 1;
+    return panelThemeLight();
   }
   function panelLight() {
     const surface = globalThis.hometilesPreviewSurface;
@@ -10682,10 +10704,11 @@ async function saveGestureEdge(select) {
   // its lightness; every other tile, and the screensaver, keeps the theme.
   function tileSurfaceOf(tab, previewKind, bgValue, iconColors, typeValue) {
     if (typeof isScreensaverTileTab === 'function' && isScreensaverTileTab(tab)) {
-      // The screensaver's own design (screensaver_config.h theme): Dark or
-      // Light for all its tiles, Automatic follows the panel.
-      const theme = document.getElementById('screensaverGrid')?.dataset.ssTheme;
-      return theme === '0' ? 'dark' : theme === '1' ? 'light' : '';
+      // The screensaver's own design (screensaver_config.h theme, its
+      // screen): Dark or Light for all its tiles, Automatic follows the
+      // panel. Drawn with that theme's CSS roles on the page.
+      const theme = screensaverDesign();
+      return theme === 0 ? 'dark' : theme === 1 ? 'light' : '';
     }
     if (!tileHasOwnColor(bgValue, iconColors, typeValue)) return '';
     const own = Number(bgValue) & 0xFFFFFF;
@@ -10695,10 +10718,12 @@ async function saveGestureEdge(select) {
   // tile_surface_rule_of() (tile_renderer.cpp): in the light theme a tile with
   // "Ausfuellen" is filled from the start; a rule row with its own "Fuellen"
   // changes a tile between the white and the filled look.
+  // The screensaver's tiles too, in its own design (user 2026-11-02).
   function tileFollowsTint(tab, previewKind, bgValue, iconColors, typeValue) {
-    if (typeof isScreensaverTileTab === 'function' && isScreensaverTileTab(tab)) return false;
+    const screen = previewScreenOf(tab);
+    const light = screen === 0 || screen === 1 ? screen === 1 : panelThemeLight();
     const rows = typeof iconColorRowsFill === 'function' && iconColorRowsFill(iconColors);
-    return panelThemeLight() && (tileFills(typeValue, iconColors) > 0 || rows) &&
+    return light && (tileFills(typeValue, iconColors) > 0 || rows) &&
       !tileHasOwnColor(bgValue, iconColors, typeValue);
   }
   // ui_surface_style frame_line(): a solid line, on the theme's plain card a
@@ -10713,7 +10738,7 @@ async function saveGestureEdge(select) {
     let line;
     if (card.every(v => v === 255)) line = [221, 221, 221];
     else if (card.every(v => v === 26)) line = [41, 41, 41];
-    else if (!panelThemeLight()) line = card.map(v => Math.floor((255 * 23 + v * 232) * 0x8081 / 0x800000));
+    else if (!designLight()) line = card.map(v => Math.floor((255 * 23 + v * 232) * 0x8081 / 0x800000));
     // frame_line_shown(): a filled card of the light theme (white words)
     // draws no line (user 2026-10-11, b391).
     else if (!toneLightSurface(card)) {
@@ -10747,7 +10772,7 @@ async function saveGestureEdge(select) {
   // ui_theme::unavailable_icon(): the light theme's one unavailable grey for
   // every domain, the dark theme each type's own `darkGrey`.
   function unavailableIconHex(darkGrey) {
-    return panelThemeLight() ? panelRoleHex('icon-unavailable', '#BDBDBD') : darkGrey;
+    return designLight() ? panelRoleHex('icon-unavailable', '#BDBDBD') : darkGrey;
   }
   // tone_color::no_color(): white, almost white or grey-white.
   function toneNoColor(rgb) {
@@ -10831,9 +10856,12 @@ async function saveGestureEdge(select) {
     if (!tileElem) return;
     // The tile's surface rules (tile_surface) while its colors are computed.
     const surfaceSaved = globalThis.hometilesPreviewSurface;
+    const screenSaved = globalThis.hometilesPreviewScreen;
     const surfaceMode = typeof surfaceTheme === 'function' ? surfaceTheme(tileElem.dataset?.surface || '') : -1;
     // 0 dark, 1 light, 2 a filled tile (ui_theme::kDarkTinted): its rules everywhere.
     if (surfaceMode >= 0) globalThis.hometilesPreviewSurface = surfaceMode;
+    // A screensaver tile on the screensaver's own design.
+    globalThis.hometilesPreviewScreen = tileElem.closest?.('.screensaver-tile-grid') ? screensaverDesign() : undefined;
     try {
     // Cut-outs in the card's color (the Media play glyph,
     // tile_icon_disc::refresh_cutouts) follow the card after every tint.
@@ -10862,7 +10890,7 @@ async function saveGestureEdge(select) {
       if (choice && toneNoColor(given)) choice = null;
       // White light fills in the neutral grey (tile_icon_source with_white):
       // the light theme's filled tiles, every tile of the dark theme (#130).
-      if (!choice && given && (tileElem.dataset.followTint === '1' || !panelThemeLight()) && toneNoColor(given) &&
+      if (!choice && given && (tileElem.dataset.followTint === '1' || !designLight()) && toneNoColor(given) &&
           toneOklch(given).L <= 0.95) {
         choice = { color: givenHex.toUpperCase(), percent: fill };
       }
@@ -10986,6 +11014,7 @@ async function saveGestureEdge(select) {
     }
     } finally {
       globalThis.hometilesPreviewSurface = surfaceSaved;
+      globalThis.hometilesPreviewScreen = screenSaved;
     }
   }
   // Mirrors tileBgColorFollowsDefault(): an unset color and the built-in
@@ -11245,9 +11274,12 @@ async function saveGestureEdge(select) {
       delete el.dataset.neutralIdle;
     }
     const surfaceSaved = globalThis.hometilesPreviewSurface;
+    const screenSaved = globalThis.hometilesPreviewScreen;
     const surfaceMode = typeof surfaceTheme === 'function' ? surfaceTheme(surface) : -1;
     // 0 dark, 1 light, 2 a filled tile (ui_theme::kDarkTinted): its rules everywhere.
     if (surfaceMode >= 0) globalThis.hometilesPreviewSurface = surfaceMode;
+    // A screensaver tile on the screensaver's own design.
+    globalThis.hometilesPreviewScreen = previewScreenOf(tab);
     try {
     const metaValues = sensorMeta?.values || {};
     const metaUnits = sensorMeta?.units || {};
@@ -11535,6 +11567,7 @@ async function saveGestureEdge(select) {
     }
     } finally {
       globalThis.hometilesPreviewSurface = surfaceSaved;
+      globalThis.hometilesPreviewScreen = screenSaved;
     }
     // Its tint changed the surface: drawn again on it from the start.
     if (!forcedSurface && el.dataset.surface === 'jewel' && surface !== 'jewel') {

@@ -278,7 +278,7 @@ assert.match(handler, /tile\.key_modifier = static_cast<uint8_t>\(\(server\.arg\
 const tiles = readRepoFile('src/tiles/runtime/tile_renderer.cpp');
 assert.match(tiles, /if \(grid_type != GridType::SCREENSAVER && camera_picture::head_over_picture\(tile\)\) \{\s*return camera_picture::light_head\(tile\)  \? tile_surface::kLight\s*: camera_picture::dark_head\(tile\) \? tile_surface::kDark\s*: tile_surface::kNone;/,
   'the head follows the design or draws on its fixed surface');
-assert.match(tiles, /tile_has_own_color\(tile\) \|\| camera_picture::head_over_picture\(tile\)\) \{\s*return 0;/);
+assert.match(tiles, /tile_has_own_color\(tile\) \|\|\s+camera_picture::head_over_picture\(tile\)\) \{\s*return 0;/);
 assert.match(readRepoFile('src/types/camera/renderer.cpp'),
   /const uint32_t card_color = camera_picture::head_over_picture\(tile\)\s*\? tileDefaultBgColor\(\)/);
 const scripts = readRepoFile('src/types/camera/web_scripts.cpp');

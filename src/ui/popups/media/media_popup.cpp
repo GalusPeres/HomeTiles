@@ -442,7 +442,8 @@ bool popup_visible(const MediaPopupContext* ctx) {
 // The next opening's show_popup_shell maps them to that opener's surface
 // (popup_follow_surface); while shown both are the same.
 ui_theme::SurfaceScope body_scope(const MediaPopupContext* ctx) {
-  return ui_theme::SurfaceScope(ctx && ctx->card ? popup_drawn_surface(ctx->card) : ui_theme::kThemeSurface);
+  const int8_t drawn = ctx && ctx->card ? popup_drawn_surface(ctx->card) : ui_theme::kThemeSurface;
+  return ui_theme::SurfaceScope(drawn, nullptr, popup_surface::drawn_screen(drawn));
 }
 
 static void* alloc_popup_memory(size_t bytes, bool prefer_psram = false) {

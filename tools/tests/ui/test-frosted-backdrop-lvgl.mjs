@@ -19,7 +19,9 @@
 // (frayed corners, b648); and the screenshot's ARGB8888 snapshot shows the
 // glass like the panel. The shadow stays LVGL's see-through one (drawn as
 // covered it went under the whole card, slower, b650). The glass sums its
-// own time for the screensaver's once-a-second log.
+// own time for the screensaver's once-a-second log. The fade back from a
+// press mixes the kept values of both states (each frame computed its own,
+// b652).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -85,6 +87,7 @@ fs.writeFileSync(source, String.raw`
 #include <lvgl.h>
 #include <lvgl_private.h>
 #include "src/ui/screensaver/frosted_backdrop.h"
+#include "src/tiles/runtime/tile_press.h"
 #include "src/core/display/display_flush_gate.cpp"
 constexpr int W = 320, H = 200;
 // A band copy to the panel that is still running until copy_until.
@@ -310,6 +313,44 @@ int main() {
   lv_refr_now(d);
   std::printf("kept %u %u %u %u %.1f\n", fills_after_shadow, fills_after_band, fills_after_move,
               frosted_backdrop::g_kept_fills, moved);
+  // A released press fades back (tile_press.h, 80 ms after 70): its frames
+  // mix the kept values of both states instead of computing their own, and
+  // the resting values stay kept for the end and the next press.
+  lv_obj_set_style_bg_color(card, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_opa(card, LV_OPA_50, 0);
+  lv_obj_set_style_bg_color(card, lv_color_hex(0xc0c0c0), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(card, LV_OPA_50, LV_STATE_PRESSED);
+  tile_press::apply(card);
+  lv_refr_now(d);
+  const int rest_green = green(120, 88);
+  lv_obj_add_state(card, LV_STATE_PRESSED);
+  lv_refr_now(d);
+  const int pressed_green = green(120, 88);
+  const uint32_t fills_pressed = frosted_backdrop::g_kept_fills;
+  lv_obj_remove_state(card, LV_STATE_PRESSED);
+  lv_tick_inc(70 + 40);
+  lv_timer_handler();
+  lv_refr_now(d);
+  const uint32_t mid_fill = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xffffff;
+  const int mid_green = green(120, 88);
+  const uint32_t fills_mid = frosted_backdrop::g_kept_fills;
+  lv_tick_inc(200);
+  lv_timer_handler();
+  lv_refr_now(d);
+  const int end_green = green(120, 88);
+  const uint32_t fills_end = frosted_backdrop::g_kept_fills;
+  lv_obj_add_state(card, LV_STATE_PRESSED);
+  lv_refr_now(d);
+  lv_obj_remove_state(card, LV_STATE_PRESSED);
+  lv_tick_inc(70 + 40);
+  lv_timer_handler();
+  lv_refr_now(d);
+  lv_tick_inc(200);
+  lv_timer_handler();
+  lv_refr_now(d);
+  std::printf("fade %d %d %d %d %d %u %u %u\n", rest_green, pressed_green, mid_green, end_green,
+              mid_fill != 0x000000 && mid_fill != 0xc0c0c0, fills_mid - fills_pressed, fills_end - fills_pressed,
+              frosted_backdrop::g_kept_fills - fills_pressed);
   // The screenshot's way: an ARGB8888 snapshot shows the glass too.
   lv_draw_buf_t* shot = lv_snapshot_take(lv_screen_active(), LV_COLOR_FORMAT_ARGB8888);
   auto shot_spread = [&](int x0, int y0, int n) {
@@ -372,6 +413,15 @@ assert.ok(Number(rows.band[1]) < outside / 20, `a card drawn while the band befo
 // computed again since two looks are kept.
 assert.deepEqual(rows.kept.slice(0, 4), ['2', '4', '5', '6'], `kept per look and place, computed again when moved or over a new copy${why}`);
 assert.ok(Number(rows.kept[4]) < outside / 20, `the moved card is glass${why}`);
+// The fade back from a press: between the two states on the panel, nothing
+// computed (it computed every frame and then the resting values again,
+// V2 b652: a 404x320 card three times, 143 ms, while a popup opened).
+const [restGreen, pressedGreen, midGreen, endGreen, midFill, fillsMid, fillsEnd, fillsAgain] = rows.fade.map(Number);
+assert.equal(midFill, 1, `the frame is drawn in the middle of the fade${why}`);
+assert.ok(restGreen < midGreen && midGreen < pressedGreen, `the fade shows between the two states${why}`);
+assert.equal(endGreen, restGreen, `the fade ends at rest${why}`);
+assert.deepEqual([fillsMid, fillsEnd, fillsAgain], [0, 0, 0],
+  `the fade mixes the kept values; rest and pressed stay kept for the next press${why}`);
 assert.equal(rows.shot[0], '1', `the snapshot was taken${why}`);
 assert.ok(Number(rows.shot[2]) > 500 && Number(rows.shot[1]) < Number(rows.shot[2]) / 20,
   `the screenshot's ARGB8888 snapshot shows the glass like the panel${why}`);

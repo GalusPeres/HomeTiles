@@ -415,7 +415,7 @@ inline void compose_row(const uint16_t* values, int32_t values_x, const lv_area_
 // one place over one copy: a press, a new value or a closing popup copies
 // them instead of computing every pixel again (a 404x320 card took 69 ms
 // when a popup closed, V2 b648). Two looks per card: pressed or not, on or
-// off.
+// off; the fade back from a press mixes the two (fade_of).
 struct Kept {
   uint16_t* px = nullptr;
   size_t bytes = 0;
@@ -544,6 +544,70 @@ inline CardLook look_of(lv_obj_t* card) {
   return look;
 }
 
+// A released press fades the card from its pressed fill back to its resting
+// one (tile_press.h: 80 ms after 70). Each frame of the fade had a tint of
+// its own: the glass computed the card's values for every frame, and the
+// third look pushed the resting one out of the two kept (a 404x320 card
+// three times, 143 ms, while a popup opened, V2 b652). The fade's tints lie
+// between the two states' fills at one opacity, and so do the values (the
+// tint mixes in linearly): the fade mixes the kept values of both states.
+struct Fade {
+  CardLook pressed;
+  CardLook rest;
+  uint32_t t = 0;  // share of the resting values, 0..256
+};
+
+// The fade the card's look is in: its fill is neither state's own fill
+// (local styles) but lies between them, at the opacity both states share.
+inline bool fade_of(lv_obj_t* card, const CardLook& look, Fade& fade) {
+  if (!look.tint_opa) return false;
+  lv_style_value_t rest, down;
+  if (lv_obj_get_local_style_prop(card, LV_STYLE_BG_COLOR, &rest, LV_PART_MAIN | LV_STATE_DEFAULT) !=
+          LV_STYLE_RES_FOUND ||
+      lv_obj_get_local_style_prop(card, LV_STYLE_BG_COLOR, &down, LV_PART_MAIN | LV_STATE_PRESSED) !=
+          LV_STYLE_RES_FOUND) {
+    return false;
+  }
+  lv_style_value_t opa_rest, opa_down;
+  if (lv_obj_get_local_style_prop(card, LV_STYLE_BG_OPA, &opa_rest, LV_PART_MAIN | LV_STATE_DEFAULT) ==
+          LV_STYLE_RES_FOUND &&
+      lv_obj_get_local_style_prop(card, LV_STYLE_BG_OPA, &opa_down, LV_PART_MAIN | LV_STATE_PRESSED) ==
+          LV_STYLE_RES_FOUND &&
+      opa_rest.num != opa_down.num) {
+    return false;
+  }
+  const int32_t from[3] = {down.color.red, down.color.green, down.color.blue};
+  const int32_t to[3] = {rest.color.red, rest.color.green, rest.color.blue};
+  const int32_t now[3] = {look.tint[0], look.tint[1], look.tint[2]};
+  auto same = [&](const int32_t* state) { return state[0] == now[0] && state[1] == now[1] && state[2] == now[2]; };
+  if (same(from) || same(to)) return false;
+  // The channel that changes most gives the fade's position.
+  int c = 0;
+  for (int i = 1; i < 3; ++i) {
+    if (LV_ABS(to[i] - from[i]) > LV_ABS(to[c] - from[c])) c = i;
+  }
+  int32_t span = to[c] - from[c];
+  int32_t moved = now[c] - from[c];
+  if (span == 0) return false;
+  if (span < 0) {
+    span = -span;
+    moved = -moved;
+  }
+  const int32_t t = moved <= 0 ? 0 : LV_MIN((moved * 256 + span / 2) / span, 256);
+  // Every channel on that line (LVGL mixes them alike), else a new fill.
+  for (int i = 0; i < 3; ++i) {
+    if (LV_ABS(from[i] + (to[i] - from[i]) * t / 256 - now[i]) > 2) return false;
+  }
+  fade.pressed = look;
+  fade.rest = look;
+  for (int i = 0; i < 3; ++i) {
+    fade.pressed.tint[i] = static_cast<uint8_t>(from[i]);
+    fade.rest.tint[i] = static_cast<uint8_t>(to[i]);
+  }
+  fade.t = static_cast<uint32_t>(t);
+  return true;
+}
+
 // The glass paints this card on `layer` (on_card_draw_end): see-through,
 // over a shown picture, on a layer it can write.
 inline bool paints(const CardGlass* glass, lv_obj_t* card, const lv_layer_t* layer) {
@@ -577,18 +641,33 @@ inline void on_card_task(lv_event_t* e) {
   task->state = LV_DRAW_TASK_STATE_FINISHED;
 }
 
-// Draws the card's rows over `area` of the layer (RGB565 or ARGB8888).
+// Draws the card's rows over `area` of the layer (RGB565 or ARGB8888); in a
+// fade (fade_of) the kept values of both states mixed.
 template <typename Pixel>
 inline void compose_area(CardGlass& glass, lv_layer_t* layer, const lv_area_t& card_area, const lv_area_t& area,
-                         int32_t r, const CardLook& look, int32_t px, int32_t py) {
+                         int32_t r, const CardLook& look, const Fade* fade, int32_t px, int32_t py) {
   Pixel* buf = reinterpret_cast<Pixel*>(layer->draw_buf->data);
   const int32_t stride = static_cast<int32_t>(layer->draw_buf->header.stride / sizeof(Pixel));
   auto layer_row = [&](int32_t y) {
     return buf + static_cast<size_t>(y - layer->buf_area.y1) * stride + (area.x1 - layer->buf_area.x1);
   };
   const int32_t w = lv_area_get_width(&card_area);
+  const int32_t n = lv_area_get_width(&area);
   const uint16_t* corner = corner_table(glass, r);
-  if (const uint16_t* values = kept_values(glass, px, py, card_area, r, look)) {
+  if (fade) {
+    const uint16_t* pressed = kept_values(glass, px, py, card_area, r, fade->pressed);
+    const uint16_t* rest = pressed ? kept_values(glass, px, py, card_area, r, fade->rest) : nullptr;
+    uint16_t* mixed = rest ? static_cast<uint16_t*>(lv_malloc(static_cast<size_t>(n) * sizeof(uint16_t))) : nullptr;
+    if (mixed) {
+      for (int32_t y = area.y1; y <= area.y2; ++y) {
+        const size_t at = static_cast<size_t>(y - card_area.y1) * w + (area.x1 - card_area.x1);
+        for (int32_t i = 0; i < n; ++i) mixed[i] = mix565(rest[at + i], pressed[at + i], fade->t);
+        compose_row(mixed, area.x1, card_area, r, corner, y, area.x1, area.x2, layer_row(y));
+      }
+      lv_free(mixed);
+      return;
+    }
+  } else if (const uint16_t* values = kept_values(glass, px, py, card_area, r, look)) {
     for (int32_t y = area.y1; y <= area.y2; ++y) {
       compose_row(values + static_cast<size_t>(y - card_area.y1) * w, card_area.x1, card_area, r, corner, y,
                   area.x1, area.x2, layer_row(y));
@@ -596,7 +675,7 @@ inline void compose_area(CardGlass& glass, lv_layer_t* layer, const lv_area_t& c
     return;
   }
   // Without memory to keep them, this draw's rows are computed as it goes.
-  uint16_t* row = static_cast<uint16_t*>(lv_malloc(static_cast<size_t>(lv_area_get_width(&area)) * sizeof(uint16_t)));
+  uint16_t* row = static_cast<uint16_t*>(lv_malloc(static_cast<size_t>(n) * sizeof(uint16_t)));
   if (!row) return;
   for (int32_t y = area.y1; y <= area.y2; ++y) {
     fill(glass.backdrop->copy, px, py, look, area.x1, area.x2, y, y, row, 0);
@@ -635,10 +714,12 @@ inline void on_card_draw_end(lv_event_t* e) {
   const int32_t half = LV_MIN(w, lv_area_get_height(&card_area)) / 2;
   if (r > half) r = half;
   const CardLook look = look_of(card);
+  Fade fade;
+  const Fade* fading = fade_of(card, look, fade) ? &fade : nullptr;
   if (layer->draw_buf->header.cf == LV_COLOR_FORMAT_ARGB8888) {
-    compose_area<lv_color32_t>(*glass, layer, card_area, area, r, look, picture.x1, picture.y1);
+    compose_area<lv_color32_t>(*glass, layer, card_area, area, r, look, fading, picture.x1, picture.y1);
   } else {
-    compose_area<uint16_t>(*glass, layer, card_area, area, r, look, picture.x1, picture.y1);
+    compose_area<uint16_t>(*glass, layer, card_area, area, r, look, fading, picture.x1, picture.y1);
   }
   g_stats.draw_us += display_flush_gate::clock_us() - draw_started;  // with any fill
 }

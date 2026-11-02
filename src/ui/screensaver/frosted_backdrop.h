@@ -8,6 +8,7 @@
 #include <lvgl.h>
 #include <lvgl_private.h>
 
+#include "src/core/display/display_flush_gate.h"
 #include "src/tiles/runtime/tile_glass.h"
 
 // Frosted glass behind see-through screensaver tiles (user 2026-11-02, test
@@ -45,29 +46,80 @@ struct Copy {
 
 inline size_t copy_bytes(int w, int h) { return static_cast<size_t>(w) * h * 3; }
 
-// One box pass over the 8-bit RGB plane, horizontal or vertical, edges clamped.
-inline void box_pass(const uint8_t* in, uint8_t* out, int w, int h, bool vertical) {
-  const int len = vertical ? h : w;
-  const int lines = vertical ? w : h;
-  const int window = 2 * kBoxRadius + 1;
-  for (int line = 0; line < lines; ++line) {
-    auto at = [&](int i) -> const uint8_t* {
-      if (i < 0) i = 0;
-      if (i >= len) i = len - 1;
-      return in + 3 * (vertical ? i * w + line : line * w + i);
-    };
-    uint32_t sum[3] = {0, 0, 0};
+// The P4 divides slowly: one division per channel and pixel made the blur
+// take 290 ms per slide and the frosted cards 230 ms more per frame (V2
+// b647). Every division below is a multiplication by a reciprocal, exact
+// for the values that occur (test-frosted-backdrop-lvgl).
+constexpr uint32_t kWindow = 2 * kBoxRadius + 1;
+constexpr uint32_t kWindowRecip = (65536 + kWindow - 1) / kWindow;
+
+// A window's rounded mean of 8-bit values.
+inline uint8_t window_mean(uint32_t sum) {
+  return static_cast<uint8_t>(((sum + kWindow / 2) * kWindowRecip) >> 16);
+}
+
+// ceil(2^32 / d): num / d = (num * reciprocal(d)) >> 32 while num * d stays
+// far below 2^32.
+inline uint64_t reciprocal(uint32_t d) { return ((static_cast<uint64_t>(1) << 32) + d - 1) / d; }
+inline uint32_t divide(uint32_t num, uint64_t recip) { return static_cast<uint32_t>((num * recip) >> 32); }
+
+// One horizontal box pass over every row of the 8-bit RGB plane, edges clamped.
+inline void box_rows(const uint8_t* in, uint8_t* out, int w, int h) {
+  auto clamp = [w](int i) { return 3 * (i < 0 ? 0 : (i >= w ? w - 1 : i)); };
+  for (int y = 0; y < h; ++y) {
+    const uint8_t* src = in + static_cast<size_t>(y) * w * 3;
+    uint8_t* dst = out + static_cast<size_t>(y) * w * 3;
+    uint32_t s0 = 0, s1 = 0, s2 = 0;
     for (int i = -kBoxRadius; i <= kBoxRadius; ++i) {
-      const uint8_t* p = at(i);
-      for (int c = 0; c < 3; ++c) sum[c] += p[c];
+      const int k = clamp(i);
+      s0 += src[k];
+      s1 += src[k + 1];
+      s2 += src[k + 2];
     }
-    for (int i = 0; i < len; ++i) {
-      uint8_t* o = out + 3 * (vertical ? i * w + line : line * w + i);
-      for (int c = 0; c < 3; ++c) o[c] = static_cast<uint8_t>((sum[c] + window / 2) / window);
-      const uint8_t* leaving = at(i - kBoxRadius);
-      const uint8_t* entering = at(i + kBoxRadius + 1);
-      for (int c = 0; c < 3; ++c) sum[c] += entering[c] - leaving[c];
+    for (int x = 0; x < w; ++x) {
+      dst[3 * x] = window_mean(s0);
+      dst[3 * x + 1] = window_mean(s1);
+      dst[3 * x + 2] = window_mean(s2);
+      const int leave = clamp(x - kBoxRadius);
+      const int enter = clamp(x + kBoxRadius + 1);
+      s0 += src[enter] - src[leave];
+      s1 += src[enter + 1] - src[leave + 1];
+      s2 += src[enter + 2] - src[leave + 2];
     }
+  }
+}
+
+// One vertical box pass, edges clamped, walked row by row (PSRAM reads long
+// runs) with every column's running sum in `sums` (3 * w words).
+inline void box_columns(const uint8_t* in, uint8_t* out, int w, int h, uint32_t* sums) {
+  const size_t row_bytes = static_cast<size_t>(w) * 3;
+  auto row = [&](int y) { return in + static_cast<size_t>(y < 0 ? 0 : (y >= h ? h - 1 : y)) * row_bytes; };
+  memset(sums, 0, row_bytes * sizeof(uint32_t));
+  for (int i = -kBoxRadius; i <= kBoxRadius; ++i) {
+    const uint8_t* r = row(i);
+    for (size_t k = 0; k < row_bytes; ++k) sums[k] += r[k];
+  }
+  for (int y = 0; y < h; ++y) {
+    uint8_t* dst = out + static_cast<size_t>(y) * row_bytes;
+    const uint8_t* leave = row(y - kBoxRadius);
+    const uint8_t* enter = row(y + kBoxRadius + 1);
+    for (size_t k = 0; k < row_bytes; ++k) {
+      dst[k] = window_mean(sums[k]);
+      sums[k] += enter[k] - leave[k];
+    }
+  }
+}
+
+// One picture row's RGB565 channels added to the blocks' sums.
+template <bool kSwapped>
+inline void add_row(const uint16_t* row, int w, uint32_t* sums) {
+  for (int x = 0; x < w; ++x) {
+    const uint16_t raw = row[x];
+    const uint16_t p = kSwapped ? static_cast<uint16_t>((raw << 8) | (raw >> 8)) : raw;
+    uint32_t* s = sums + 3 * (x / kShrink);
+    s[0] += p >> 11;
+    s[1] += (p >> 5) & 0x3f;
+    s[2] += p & 0x1f;
   }
 }
 
@@ -75,40 +127,45 @@ inline void box_pass(const uint8_t* in, uint8_t* out, int w, int h, bool vertica
 // averaged down by kShrink, reading it row by row (PSRAM likes long runs),
 // then blurred with kPasses box passes each way. copy.rgb and scratch hold
 // copy_bytes(shrunk(w), shrunk(h)); sums holds 3 * shrunk(w) words.
+// A block of n samples becomes sum * 255 / (31 * n) rounded (63 for green).
 inline void shrink_and_blur(const uint16_t* src, int w, int h, int stride_px, bool swapped, Copy& copy,
                             uint8_t* scratch, uint32_t* sums) {
   const int sw = shrunk(w);
   const int sh = shrunk(h);
   copy.w = sw;
   copy.h = sh;
+  uint32_t n_of = 0;  // the block size the reciprocals are for
+  uint64_t recip31 = 0, recip63 = 0;
   for (int sy = 0; sy < sh; ++sy) {
     memset(sums, 0, static_cast<size_t>(sw) * 3 * sizeof(uint32_t));
     const int y0 = sy * kShrink;
     const int y1 = y0 + kShrink < h ? y0 + kShrink : h;
     for (int y = y0; y < y1; ++y) {
       const uint16_t* row = src + static_cast<size_t>(y) * stride_px;
-      for (int x = 0; x < w; ++x) {
-        const uint16_t raw = row[x];
-        const uint16_t p = swapped ? static_cast<uint16_t>((raw << 8) | (raw >> 8)) : raw;
-        uint32_t* s = sums + 3 * (x / kShrink);
-        s[0] += p >> 11;
-        s[1] += (p >> 5) & 0x3f;
-        s[2] += p & 0x1f;
+      if (swapped) {
+        add_row<true>(row, w, sums);
+      } else {
+        add_row<false>(row, w, sums);
       }
     }
     uint8_t* out = copy.rgb + static_cast<size_t>(sy) * sw * 3;
     for (int sx = 0; sx < sw; ++sx) {
       const int cols = (sx + 1) * kShrink <= w ? kShrink : w - sx * kShrink;
       const uint32_t n = static_cast<uint32_t>(cols * (y1 - y0));
+      if (n != n_of) {
+        n_of = n;
+        recip31 = reciprocal(31 * n);
+        recip63 = reciprocal(63 * n);
+      }
       const uint32_t* s = sums + 3 * sx;
-      out[3 * sx + 0] = static_cast<uint8_t>((s[0] * 255 + 31 * n / 2) / (31 * n));
-      out[3 * sx + 1] = static_cast<uint8_t>((s[1] * 255 + 63 * n / 2) / (63 * n));
-      out[3 * sx + 2] = static_cast<uint8_t>((s[2] * 255 + 31 * n / 2) / (31 * n));
+      out[3 * sx + 0] = static_cast<uint8_t>(divide(s[0] * 255 + 31 * n / 2, recip31));
+      out[3 * sx + 1] = static_cast<uint8_t>(divide(s[1] * 255 + 63 * n / 2, recip63));
+      out[3 * sx + 2] = static_cast<uint8_t>(divide(s[2] * 255 + 31 * n / 2, recip31));
     }
   }
   for (int pass = 0; pass < kPasses; ++pass) {
-    box_pass(copy.rgb, scratch, sw, sh, false);
-    box_pass(scratch, copy.rgb, sw, sh, true);
+    box_rows(copy.rgb, scratch, sw, sh);
+    box_columns(scratch, copy.rgb, sw, sh, sums);
   }
 }
 
@@ -171,9 +228,16 @@ inline bool usable(const lv_layer_t* layer) {
 }
 
 // The layer's queued draws finished, so its buffer holds what lies under the
-// card (clock_shadow_paint.h layer_settled).
+// card (clock_shadow_paint.h layer_settled). A band's draws wait while the
+// band before it is still copied to the panel (display_flush_gate.h, about
+// 1 ms on the V2): the card waits for that copy, a bounded time. Giving up
+// after eight tries left cards without their glass in the bands drawn
+// after a popup closed (user 2026-11-02, b647).
+constexpr uint32_t kSettleUs = 20000;
+
 inline bool settled(lv_layer_t* layer) {
-  for (int attempt = 0; attempt < 8; ++attempt) {
+  const uint32_t started = display_flush_gate::clock_us();
+  while (true) {
     bool pending = false;
     for (lv_draw_task_t* t = layer->draw_task_head; t; t = t->next) {
       if (t->state != LV_DRAW_TASK_STATE_FINISHED && t->state != LV_DRAW_TASK_STATE_FAILED) {
@@ -182,9 +246,9 @@ inline bool settled(lv_layer_t* layer) {
       }
     }
     if (!pending) return true;
+    if (display_flush_gate::clock_us() - started > kSettleUs) return false;
     lv_draw_dispatch();
   }
-  return false;
 }
 
 // The card's tint and frame line, read from its current style.
@@ -222,8 +286,9 @@ inline void paint(const Copy& copy, int32_t px, int32_t py, const lv_area_t& car
   uint16_t* row = span <= 96 ? stack_row : static_cast<uint16_t*>(lv_malloc(static_cast<size_t>(span) * 3 * sizeof(uint16_t)));
   if (!row) return;
   auto clampi = [](int32_t v, int32_t hi) { return v < 0 ? 0 : (v > hi ? hi : v); };
-  // The tint over the copy: value * (255 - opa) / 255 + tint * opa / 255, in 8.8.
-  const uint32_t keep = 255 - look.tint_opa;
+  // The tint over the copy: value * (255 - opa) / 255 + tint * opa / 255, in
+  // 8.8; keep_mul is (255 - opa) / 255 in 0.16.
+  const uint32_t keep_mul = ((255 - look.tint_opa) * 65536 + 127) / 255;
   uint32_t tint88[3];
   for (int c = 0; c < 3; ++c) tint88[c] = look.tint[c] * look.tint_opa * 256 / 255;
   const bool line = look.line_opa > 0;
@@ -252,7 +317,7 @@ inline void paint(const Copy& copy, int32_t px, int32_t py, const lv_area_t& car
       uint32_t value[3];
       for (int c = 0; c < 3; ++c) {
         const uint32_t frosted = (p0[c] * (256 - fx) + p1[c] * fx) >> 8;
-        value[c] = (frosted * keep) / 255 + tint88[c];
+        value[c] = ((frosted * keep_mul) >> 16) + tint88[c];
       }
       uint16_t pixel = static_cast<uint16_t>((dither(value[0], 31, threshold) << 11) |
                                              (dither(value[1], 63, threshold) << 5) | dither(value[2], 31, threshold));

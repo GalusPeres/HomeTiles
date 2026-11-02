@@ -112,19 +112,19 @@ struct ScreensaverState {
   // When the clock and tiles last moved (screensaver_pixel_shift.h).
   uint32_t last_shift_ms = 0;
 #if defined(HOMETILES_FROSTED_TILES)
-  // The slide blurred at a quarter of its size (frosted_backdrop.h).
+  // The slide blurred at a quarter of its size (frosted_backdrop.h), made
+  // from the cache's picture number frosted_generation.
   frosted_backdrop::Copy frosted;
+  uint32_t frosted_generation = 0;
 #endif
   ~ScreensaverState() { delete shown_grid; }
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
   // Prepare a complete LVGL frame for smooth slide transitions: wallpaper,
   // clock, tiles and any open popup are rendered off-screen in PSRAM, then
   // presented together through the device's full-frame path (PPA rotation on
-  // Tab5/8-inch, direct copy on B4).
-  uint8_t* composite_storage = nullptr;
-  size_t composite_storage_size = 0;
+  // Tab5/8-inch, direct copy on B4). Its pixels lie in the spare picture slot
+  // (ensure_composite_draw_buf).
   lv_draw_buf_t composite_draw_buf{};
-  bool composite_draw_buf_ready = false;
 #endif
 };
 
@@ -189,6 +189,22 @@ uint16_t g_cache_focus_y = 500;
 uint16_t g_cache_zoom = 1000;
 uint16_t g_cache_radius = 0;
 lv_image_dsc_t* g_cache_dsc = nullptr;
+// Counts the pictures decoded into the cache: the frosted copy is made once
+// per picture (update_frosted_backdrop).
+uint32_t g_cache_generation = 0;
+
+// The picture's two buffers in the screen's size (user 2026-11-02, V2 b647):
+// the shown picture and the next one take turns in the same two blocks. A
+// fresh 2 MB block per slide with the old one freed left 2 MB gaps in the
+// PSRAM that smaller blocks (new media covers) settled in, until no 2 MB
+// block was left: the slides stopped and screenshots failed (largest free
+// block 1983 KB). Between two pictures the spare slot also takes the
+// composite frame (P4); closed, only the shown picture's slot stays.
+struct PictureSlot {
+  uint8_t* data = nullptr;
+  size_t capacity = 0;
+};
+PictureSlot g_slots[2];
 
 // Preload the image a few seconds after tile construction so the first
 // tap can open it without waiting for SD access or decoding.
@@ -228,13 +244,82 @@ bool psram_budget_ok(size_t needed) {
   return largest >= needed && free_total >= needed + reserve;
 }
 
+bool in_picture_slot(const void* data) {
+  return data && (data == g_slots[0].data || data == g_slots[1].data);
+}
+
+// A picture in the screen's size as the hardware decoder writes it: whole
+// 16x16 blocks (hw_decode_jpeg).
+size_t picture_slot_bytes(uint32_t w, uint32_t h) {
+  return static_cast<size_t>(jpeg_padded_output::align_up(w, 16)) *
+         jpeg_padded_output::align_up(h, 16) * sizeof(uint16_t);
+}
+
+uint8_t* alloc_picture_slot(size_t bytes, size_t& capacity) {
+  capacity = 0;
+#if defined(CONFIG_IDF_TARGET_ESP32P4) && SOC_JPEG_DECODE_SUPPORTED
+  // The hardware decoder writes into it directly: its alignment and size.
+  jpeg_decode_memory_alloc_cfg_t mem_cfg{};
+  mem_cfg.buffer_direction = JPEG_DEC_ALLOC_OUTPUT_BUFFER;
+  size_t allocated = 0;
+  void* p = jpeg_alloc_decoder_mem(bytes, &mem_cfg, &allocated);
+  if (p && allocated < bytes) {
+    free(p);
+    p = nullptr;
+  }
+  if (p) capacity = allocated;
+#else
+  void* p = alloc_aligned_prefer_psram(bytes);
+  if (p) capacity = bytes;
+#endif
+  return static_cast<uint8_t*>(p);
+}
+
+// The slot the next picture (or the composite frame) goes into: the one the
+// shown picture does not use, fetched once and then kept.
+PictureSlot* spare_slot(size_t bytes) {
+  const void* shown = g_cache_dsc ? g_cache_dsc->data : nullptr;
+  PictureSlot* slot = g_slots[0].data && g_slots[0].data == shown ? &g_slots[1] : &g_slots[0];
+  if (slot->data && slot->capacity >= bytes) return slot;
+  if (slot->data) {
+    // Another screen size (a new layout): the old block goes first.
+    free(slot->data);
+    *slot = PictureSlot{};
+  }
+  if (!psram_budget_ok(bytes)) {
+    Serial.printf("[Screensaver] PSRAM budget too small for %u bytes\n",
+                  static_cast<unsigned>(bytes));
+    return nullptr;
+  }
+  slot->data = alloc_picture_slot(bytes, slot->capacity);
+  if (!slot->data) {
+    Serial.printf("[Screensaver] Picture slot missing: %u bytes\n",
+                  static_cast<unsigned>(bytes));
+    return nullptr;
+  }
+  return slot;
+}
+
+// Closed, only the shown picture's slot stays: the next opening shows it at
+// once, the spare is fetched again then.
+void release_spare_slot() {
+  const void* shown = g_cache_dsc ? g_cache_dsc->data : nullptr;
+  for (PictureSlot& slot : g_slots) {
+    if (slot.data && slot.data != shown) {
+      free(slot.data);
+      slot = PictureSlot{};
+    }
+  }
+}
+
 void free_screensaver_dsc(lv_image_dsc_t*& dsc) {
   if (!dsc) return;
   // LVGL caches decode results by pointer address. Without dropping the
   // entry, a later malloc at the same address can reuse the old image;
-  // see the same media-cover issue in free_media_cover_dsc.
+  // see the same media-cover issue in free_media_cover_dsc. A slot's pixels
+  // stay for the next picture.
   lv_image_cache_drop(dsc);
-  if (dsc->data) {
+  if (dsc->data && !in_picture_slot(dsc->data)) {
     free(const_cast<uint8_t*>(dsc->data));
   }
   free(dsc);
@@ -250,6 +335,10 @@ void set_image_src_without_invalidation(lv_obj_t* image, const void* src) {
 }
 
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
+// The frame goes into the spare picture slot: between two pictures it holds
+// nothing (the next picture is decoded into it later), so the frame takes no
+// 2 MB block of its own (PictureSlot). The device has copied the frame when
+// present_composited_screensaver_frame returns.
 bool ensure_composite_draw_buf(ScreensaverState* st) {
   if (!st) return false;
   const uint32_t width = grid_layout::screen_w();
@@ -257,39 +346,15 @@ bool ensure_composite_draw_buf(ScreensaverState* st) {
   const uint32_t stride = width * sizeof(uint16_t);
   const size_t needed = static_cast<size_t>(stride) * height;
   if (needed > UINT32_MAX) return false;
-
-  if (st->composite_draw_buf_ready && st->composite_storage &&
-      st->composite_storage_size >= needed) {
-    return true;
-  }
-
-  if (st->composite_storage) {
-    free(st->composite_storage);
-    st->composite_storage = nullptr;
-  }
-  st->composite_storage_size = 0;
-  st->composite_draw_buf_ready = false;
-
-  st->composite_storage = static_cast<uint8_t*>(heap_caps_aligned_alloc(
-      kPpaBufferAlignment, needed,
-      MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA | MALLOC_CAP_8BIT));
-  if (!st->composite_storage) {
+  PictureSlot* slot = spare_slot(picture_slot_bytes(width, height));
+  if (!slot) {
     Serial.printf("[Screensaver] Composite buffer missing: %u bytes\n",
                   static_cast<unsigned>(needed));
     return false;
   }
-
-  if (lv_draw_buf_init(&st->composite_draw_buf, width, height,
-                       LV_COLOR_FORMAT_RGB565, stride,
-                       st->composite_storage,
-                       static_cast<uint32_t>(needed)) != LV_RESULT_OK) {
-    free(st->composite_storage);
-    st->composite_storage = nullptr;
-    return false;
-  }
-  st->composite_storage_size = needed;
-  st->composite_draw_buf_ready = true;
-  return true;
+  return lv_draw_buf_init(&st->composite_draw_buf, width, height,
+                          LV_COLOR_FORMAT_RGB565, stride, slot->data,
+                          static_cast<uint32_t>(needed)) == LV_RESULT_OK;
 }
 
 // The wallpaper copied into the frame, LVGL drawing only what lies above it
@@ -427,9 +492,13 @@ uint8_t* read_wallpaper_file(const String& file_name, size_t& out_len) {
 // screensaver need not turn every pixel (finish_native_in_place); `native`
 // says which order the buffer has.
 // Returns a malloc buffer of out_w*out_h pixels; the caller must free it.
+// With `into` (into_bytes, from jpeg_alloc_decoder_mem) holding the
+// decoder's whole blocks, the picture is decoded there and `into` returned
+// (the screensaver's picture slot); the caller keeps that buffer.
 uint16_t* hw_decode_jpeg(const uint8_t* data, size_t len,
                          uint16_t& out_w, uint16_t& out_h, bool& native,
-                         uint16_t native_w = 0, uint16_t native_h = 0) {
+                         uint16_t native_w = 0, uint16_t native_h = 0,
+                         uint16_t* into = nullptr, size_t into_bytes = 0) {
   native = false;
   if (len > UINT32_MAX) return nullptr;
 
@@ -453,22 +522,30 @@ uint16_t* hw_decode_jpeg(const uint8_t* data, size_t len,
   if (pixels > kMaxDecodePixels) return nullptr;
 
   const size_t requested_bytes = static_cast<size_t>(pixels) * sizeof(uint16_t);
-  if (!psram_budget_ok(requested_bytes)) {
-    Serial.printf("[Screensaver] PSRAM budget too small for %u bytes\n",
-                  static_cast<unsigned>(requested_bytes));
-    return nullptr;
-  }
-
-  jpeg_decode_memory_alloc_cfg_t mem_cfg{};
-  mem_cfg.buffer_direction = JPEG_DEC_ALLOC_OUTPUT_BUFFER;
-  size_t allocated_bytes = 0;
-  uint16_t* decoded = static_cast<uint16_t*>(
-      jpeg_alloc_decoder_mem(requested_bytes, &mem_cfg, &allocated_bytes));
-  if (!decoded || allocated_bytes < requested_bytes) {
-    free(decoded);
-    Serial.printf("[Screensaver] HW JPEG PSRAM buffer missing: %u bytes\n",
-                  static_cast<unsigned>(requested_bytes));
-    return nullptr;
+  const bool own = !into || requested_bytes > into_bytes;
+  uint16_t* decoded = into;
+  size_t allocated_bytes = into_bytes;
+  // A buffer of its own goes on every way out; the caller's stays.
+  auto drop = [&]() {
+    if (own) free(decoded);
+  };
+  if (own) {
+    if (!psram_budget_ok(requested_bytes)) {
+      Serial.printf("[Screensaver] PSRAM budget too small for %u bytes\n",
+                    static_cast<unsigned>(requested_bytes));
+      return nullptr;
+    }
+    jpeg_decode_memory_alloc_cfg_t mem_cfg{};
+    mem_cfg.buffer_direction = JPEG_DEC_ALLOC_OUTPUT_BUFFER;
+    allocated_bytes = 0;
+    decoded = static_cast<uint16_t*>(
+        jpeg_alloc_decoder_mem(requested_bytes, &mem_cfg, &allocated_bytes));
+    if (!decoded || allocated_bytes < requested_bytes) {
+      drop();
+      Serial.printf("[Screensaver] HW JPEG PSRAM buffer missing: %u bytes\n",
+                    static_cast<unsigned>(requested_bytes));
+      return nullptr;
+    }
   }
 
   // Keep the engine alive as for media covers. Creating/destroying it per
@@ -487,7 +564,7 @@ uint16_t* hw_decode_jpeg(const uint8_t* data, size_t len,
     // pool (see dma2d_arbiter.h).
     Dma2dArbiterGuard dma2d_guard(2000);
     if (!dma2d_guard.locked()) {
-      free(decoded);
+      drop();
       Serial.println("[Screensaver] 2D DMA arbiter timeout, using software fallback");
       return nullptr;
     }
@@ -499,7 +576,7 @@ uint16_t* hw_decode_jpeg(const uint8_t* data, size_t len,
       err = jpeg_new_decoder_engine(&engine_cfg, &s_engine);
       if (err != ESP_OK || !s_engine) {
         s_engine = nullptr;
-        free(decoded);
+        drop();
         Serial.printf("[Screensaver] HW JPEG engine unavailable: %s\n",
                       esp_err_to_name(err));
         return nullptr;
@@ -511,7 +588,7 @@ uint16_t* hw_decode_jpeg(const uint8_t* data, size_t len,
                                static_cast<uint32_t>(allocated_bytes),
                                &decoded_bytes);
     if (err != ESP_OK || decoded_bytes < requested_bytes) {
-      free(decoded);
+      drop();
       Serial.printf("[Screensaver] HW JPEG decode failed: %s bytes=%u/%u\n",
                     esp_err_to_name(err),
                     static_cast<unsigned>(decoded_bytes),
@@ -526,7 +603,7 @@ uint16_t* hw_decode_jpeg(const uint8_t* data, size_t len,
   // The decoder reports the size it wrote; another MCU layout than the one
   // assumed above would shift every row.
   if (decoded_bytes != requested_bytes) {
-    free(decoded);
+    drop();
     Serial.printf("[Screensaver] HW JPEG layout %ux%u unexpected: bytes=%u/%u, using software fallback\n",
                   static_cast<unsigned>(stride), static_cast<unsigned>(rows),
                   static_cast<unsigned>(decoded_bytes),
@@ -759,10 +836,12 @@ int s3_direct_jpeg_output(JDEC* jd, void* bitmap, JRECT* rect) {
   return 1;
 }
 
+// Writes the cover into `output` (the picture slot, target_w x target_h).
 lv_image_dsc_t* s3_decode_jpeg_direct_cover(
     const uint8_t* data, size_t len, uint16_t target_w, uint16_t target_h,
     uint16_t focus_x, uint16_t focus_y, uint16_t zoom,
-    uint16_t& source_w, uint16_t& source_h, uint16_t corner_radius) {
+    uint16_t& source_w, uint16_t& source_h, uint16_t corner_radius,
+    uint16_t* output) {
   source_w = 0;
   source_h = 0;
   uint8_t* work =
@@ -835,19 +914,11 @@ lv_image_dsc_t* s3_decode_jpeg_direct_cover(
 
   const size_t output_bytes =
       static_cast<size_t>(target_w) * target_h * sizeof(uint16_t);
-  if (!psram_budget_ok(output_bytes)) {
-    Serial.printf(
-        "[Screensaver] S3 direct JPEG PSRAM budget too small: %u bytes\n",
-        static_cast<unsigned>(output_bytes));
+  if (!output) {
     free(work);
     return nullptr;
   }
-  ctx.output = static_cast<uint16_t*>(
-      alloc_aligned_prefer_psram(output_bytes));
-  if (!ctx.output) {
-    free(work);
-    return nullptr;
-  }
+  ctx.output = output;
   memset(ctx.output, 0, output_bytes);
 
   const JRESULT decode_result =
@@ -862,16 +933,12 @@ lv_image_dsc_t* s3_decode_jpeg_direct_cover(
         static_cast<int>(decode_result),
         static_cast<unsigned long>(ctx.written_pixels),
         static_cast<unsigned long>(expected_pixels));
-    free(ctx.output);
     return nullptr;
   }
 
   lv_image_dsc_t* descriptor =
       static_cast<lv_image_dsc_t*>(malloc(sizeof(lv_image_dsc_t)));
-  if (!descriptor) {
-    free(ctx.output);
-    return nullptr;
-  }
+  if (!descriptor) return nullptr;
   memset(descriptor, 0, sizeof(*descriptor));
   descriptor->header.magic = LV_IMAGE_HEADER_MAGIC;
   descriptor->header.cf = LV_COLOR_FORMAT_RGB565_SWAPPED;
@@ -888,11 +955,14 @@ lv_image_dsc_t* s3_decode_jpeg_direct_cover(
 // configured tile radius plus the tiles' distance to the edge (concentric,
 // image_radius()). PPA and LVGL share this full-frame buffer,
 // so opening needs neither additional clipping nor rendering in bands.
+// Written into `out` (the picture slot: 64-byte aligned, so the 8-inch
+// device's PPA can read it directly).
 lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
                                uint16_t src_h, uint16_t target_w,
                                uint16_t target_h, uint16_t focus_x,
-                               uint16_t focus_y, uint16_t zoom, uint16_t corner_radius) {
-  if (!src || src_w == 0 || src_h == 0 || target_w == 0 || target_h == 0) {
+                               uint16_t focus_y, uint16_t zoom, uint16_t corner_radius,
+                               uint16_t* out) {
+  if (!src || !out || src_w == 0 || src_h == 0 || target_w == 0 || target_h == 0) {
     return nullptr;
   }
   const uint16_t image_inset = 0;
@@ -909,11 +979,6 @@ lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
   }
 
   const size_t bytes = static_cast<size_t>(target_w) * target_h * sizeof(uint16_t);
-  // The completed cache can feed PPA directly on the 8-inch device.
-  // 64-byte alignment also meets the cache/DMA requirement; the format
-  // stays unchanged for LVGL and the other targets.
-  uint16_t* out = static_cast<uint16_t*>(alloc_aligned_prefer_psram(bytes));
-  if (!out) return nullptr;
   // Every image pixel is written below; only an inset leaves a black frame.
   if (image_inset) memset(out, 0, bytes);
 
@@ -930,10 +995,7 @@ lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
   heap_caps_free(column_map);
 
   lv_image_dsc_t* dsc = static_cast<lv_image_dsc_t*>(malloc(sizeof(lv_image_dsc_t)));
-  if (!dsc) {
-    free(out);
-    return nullptr;
-  }
+  if (!dsc) return nullptr;
   memset(dsc, 0, sizeof(*dsc));
   dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
   dsc->header.cf = LV_COLOR_FORMAT_RGB565;
@@ -979,16 +1041,55 @@ lv_image_dsc_t* finish_cover_in_place(uint16_t* pixels, uint16_t w, uint16_t h,
   return dsc;
 }
 
-// Decodes a JPEG in memory into the screen-sized cover. `owned` data (an SD
-// file) is freed right after decoding, before the cover is cut, keeping the
-// PSRAM peak as before; otherwise the caller keeps it.
+// A decoded picture in its slot that fills the screen stretched from its top
+// (a 16:9 picture on the 16:10 V2) becomes the cover where it lies, rows
+// from the bottom up (wallpaper_cover::cover_in_place), instead of a second
+// buffer. Only the decoders' byte-swapped order; nullptr when the crop does
+// not allow it.
+lv_image_dsc_t* stretch_cover_in_place(uint16_t* pixels, uint16_t w, uint16_t h,
+                                       uint16_t target_w, uint16_t target_h,
+                                       uint16_t focus_x, uint16_t focus_y,
+                                       uint16_t zoom, uint16_t corner_radius,
+                                       bool native) {
+  wallpaper_cover::Crop crop;
+  if (native || !wallpaper_cover::crop_for(w, h, target_w, target_h, focus_x, focus_y, zoom, crop) ||
+      !wallpaper_cover::cover_in_place_ok(crop, w, target_w, target_h)) {
+    return nullptr;
+  }
+  uint16_t* row = static_cast<uint16_t*>(
+      heap_caps_malloc(static_cast<size_t>(w) * sizeof(uint16_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+  lv_image_dsc_t* dsc = static_cast<lv_image_dsc_t*>(malloc(sizeof(lv_image_dsc_t)));
+  if (!row || !dsc) {
+    heap_caps_free(row);
+    free(dsc);
+    return nullptr;
+  }
+  uint16_t* column_map = static_cast<uint16_t*>(
+      heap_caps_malloc(static_cast<size_t>(target_w) * sizeof(uint16_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+  wallpaper_cover::cover_in_place(pixels, w, crop, target_w, target_h, corner_radius, column_map, row, true);
+  heap_caps_free(column_map);
+  heap_caps_free(row);
+  memset(dsc, 0, sizeof(*dsc));
+  dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
+  dsc->header.cf = LV_COLOR_FORMAT_RGB565;
+  dsc->header.w = target_w;
+  dsc->header.h = target_h;
+  dsc->header.stride = target_w * 2;
+  dsc->data_size = static_cast<uint32_t>(target_w) * target_h * sizeof(uint16_t);
+  dsc->data = reinterpret_cast<const uint8_t*>(pixels);
+  return dsc;
+}
+
+// Decodes a JPEG in memory into the screen-sized cover in `slot`. `owned`
+// data (an SD file) is freed right after decoding, before the cover is cut,
+// keeping the PSRAM peak as before; otherwise the caller keeps it.
 lv_image_dsc_t* decode_jpeg_to_size(const char* name, const uint8_t* data,
                                     size_t len, bool owned,
                                     uint16_t target_w, uint16_t target_h,
                                     uint16_t focus_x, uint16_t focus_y,
                                     uint16_t zoom, uint16_t corner_radius,
                                     uint32_t pipeline_started_ms,
-                                    uint32_t read_ms) {
+                                    uint32_t read_ms, PictureSlot& slot) {
   auto release = [&]() {
     if (owned) free(const_cast<uint8_t*>(data));
     owned = false;
@@ -1008,7 +1109,8 @@ lv_image_dsc_t* decode_jpeg_to_size(const char* name, const uint8_t* data,
   uint16_t h = 0;
 #if defined(DEVICE_ESP32_S3_RGB_480)
   lv_image_dsc_t* dsc = s3_decode_jpeg_direct_cover(
-      data, len, target_w, target_h, focus_x, focus_y, zoom, w, h, corner_radius);
+      data, len, target_w, target_h, focus_x, focus_y, zoom, w, h, corner_radius,
+      reinterpret_cast<uint16_t*>(slot.data));
   const uint32_t decode_ms = millis() - decode_started_ms;
   release();
   GuitionS3Diagnostics::logSlideshowDecode(
@@ -1028,10 +1130,12 @@ lv_image_dsc_t* decode_jpeg_to_size(const char* name, const uint8_t* data,
   bool hw = false;
   bool native = false;
   const char* decoder = "SW";
+  uint16_t* const slot_pixels = reinterpret_cast<uint16_t*>(slot.data);
 #if defined(CONFIG_IDF_TARGET_ESP32P4) && SOC_JPEG_DECODE_SUPPORTED
-  // A picture of the screen's size without zoom comes out in native order.
+  // A picture of the screen's size without zoom comes out in native order;
+  // one that fits the slot is decoded straight into it.
   pixels = hw_decode_jpeg(data, len, w, h, native, zoom <= 1000 ? target_w : 0,
-                          zoom <= 1000 ? target_h : 0);
+                          zoom <= 1000 ? target_h : 0, slot_pixels, slot.capacity);
   hw = pixels != nullptr;
   if (hw) decoder = "HW";
 #endif
@@ -1050,19 +1154,34 @@ lv_image_dsc_t* decode_jpeg_to_size(const char* name, const uint8_t* data,
   }
 
   const uint32_t cover_started_ms = millis();
-  lv_image_dsc_t* dsc = finish_cover_in_place(pixels, w, h, target_w, target_h,
-                                              focus_x, focus_y, zoom, corner_radius, native);
-  const char* cover_way = native ? "native" : "in place";
-  if (dsc) {
-    pixels = nullptr;  // Now the picture's own buffer.
-  } else {
-    cover_way = "copy";
+  lv_image_dsc_t* dsc = nullptr;
+  const char* cover_way = "copy";
+  if (pixels == slot_pixels) {
+    dsc = finish_cover_in_place(pixels, w, h, target_w, target_h,
+                                focus_x, focus_y, zoom, corner_radius, native);
+    cover_way = native ? "native" : "in place";
+    if (!dsc) {
+      dsc = stretch_cover_in_place(pixels, w, h, target_w, target_h,
+                                   focus_x, focus_y, zoom, corner_radius, native);
+      cover_way = "stretched in place";
+    }
+    if (!dsc) {
+      // Any other crop (a zoom) reads the picture from a copy of its own.
+      const size_t bytes = static_cast<size_t>(w) * h * sizeof(uint16_t);
+      pixels = static_cast<uint16_t*>(alloc_prefer_psram(bytes));
+      if (pixels) memcpy(pixels, slot_pixels, bytes);
+      cover_way = "copy";
+    }
+  }
+  if (!dsc && pixels) {
     // The copy expects the decoders' usual byte-swapped order.
     if (native) wallpaper_cover::swap_row(pixels, static_cast<uint32_t>(w) * h);
-    dsc = make_cover_dsc(pixels, w, h, target_w, target_h, focus_x, focus_y, zoom, corner_radius);
+    dsc = make_cover_dsc(pixels, w, h, target_w, target_h, focus_x, focus_y, zoom, corner_radius,
+                         slot_pixels);
   }
   const uint32_t cover_ms = millis() - cover_started_ms;
-  free(pixels);
+  // A buffer of its own goes; the slot stays.
+  if (pixels != slot_pixels) free(pixels);
   GuitionS3Diagnostics::logSlideshowDecode(
       name, len, w, h, target_w, target_h,
       static_cast<uint32_t>(target_w) * sizeof(uint16_t),
@@ -1083,7 +1202,8 @@ lv_image_dsc_t* decode_jpeg_to_size(const char* name, const uint8_t* data,
 lv_image_dsc_t* decode_wallpaper_to_size(const String& file_name,
                                          uint16_t target_w, uint16_t target_h,
                                          uint16_t focus_x, uint16_t focus_y,
-                                         uint16_t zoom, uint16_t corner_radius) {
+                                         uint16_t zoom, uint16_t corner_radius,
+                                         PictureSlot& slot) {
   const uint32_t pipeline_started_ms = millis();
   size_t len = 0;
   uint8_t* file = read_wallpaper_file(file_name, len);
@@ -1096,7 +1216,7 @@ lv_image_dsc_t* decode_wallpaper_to_size(const String& file_name,
   }
   return decode_jpeg_to_size(file_name.c_str(), file, len, true, target_w,
                              target_h, focus_x, focus_y, zoom, corner_radius,
-                             pipeline_started_ms, millis() - pipeline_started_ms);
+                             pipeline_started_ms, millis() - pipeline_started_ms, slot);
 }
 
 // The cache holds this picture in the screen's size and corners.
@@ -1110,7 +1230,8 @@ bool cache_holds(const ScreensaverWallpaperConfig& wallpaper) {
 }
 
 // The slide's file, or the Bridge's `picture` named by wallpaper.file_name
-// (ha_picture_source), decoded into the single cache slot.
+// (ha_picture_source), decoded into the spare picture slot; it becomes the
+// single cached picture.
 lv_image_dsc_t* get_or_decode_cached(const ScreensaverWallpaperConfig& wallpaper,
                                      uint16_t w, uint16_t h,
                                      lv_obj_t* visible_image = nullptr,
@@ -1122,12 +1243,15 @@ lv_image_dsc_t* get_or_decode_cached(const ScreensaverWallpaperConfig& wallpaper
     return g_cache_dsc;
   }
   const uint16_t corner_radius = image_radius();
+  // The shown picture stays in its slot while the next one is decoded.
+  PictureSlot* slot = spare_slot(picture_slot_bytes(w, h));
+  if (!slot) return nullptr;
   lv_image_dsc_t* dsc =
       picture ? decode_jpeg_to_size(name.c_str(), picture->jpeg, picture->length, false, w, h,
                                     wallpaper.focus_x, wallpaper.focus_y, wallpaper.zoom,
-                                    corner_radius, millis(), 0)
+                                    corner_radius, millis(), 0, *slot)
               : decode_wallpaper_to_size(name, w, h, wallpaper.focus_x, wallpaper.focus_y,
-                                         wallpaper.zoom, corner_radius);
+                                         wallpaper.zoom, corner_radius, *slot);
   if (!dsc) return nullptr;
   // Detach the old source from the visible LVGL object only now, immediately
   // before swapping caches. The previous slide stays visible during decoding
@@ -1139,6 +1263,7 @@ lv_image_dsc_t* get_or_decode_cached(const ScreensaverWallpaperConfig& wallpaper
   // that no overlay still displays the old buffer.
   free_screensaver_dsc(g_cache_dsc);
   g_cache_dsc = dsc;
+  ++g_cache_generation;
   g_cache_name = name;
   g_cache_w = w;
   g_cache_h = h;
@@ -1146,6 +1271,8 @@ lv_image_dsc_t* get_or_decode_cached(const ScreensaverWallpaperConfig& wallpaper
   g_cache_focus_y = wallpaper.focus_y;
   g_cache_zoom = wallpaper.zoom;
   g_cache_radius = corner_radius;
+  // Decoded ahead while closed: the old picture's slot is not kept.
+  if (!g_state) release_spare_slot();
   return dsc;
 }
 
@@ -1350,9 +1477,15 @@ void rebuild_global_clock(ScreensaverState* st) {
 // Shows a decoded picture in the overlay at once.
 #if defined(HOMETILES_FROSTED_TILES)
 // The slide blurred once at a quarter of its size for the see-through tiles;
-// the copy is reused while the size stays.
+// the copy is reused while the size stays, and kept for the same picture
+// shown again (a slideshow of one picture, a slide whose successor failed).
 void update_frosted_backdrop(ScreensaverState* st, const lv_image_dsc_t* picture) {
   g_backdrop.picture = st->image;
+  if (st->frosted.rgb && picture && picture == g_cache_dsc &&
+      st->frosted_generation == g_cache_generation) {
+    g_backdrop.copy = st->frosted;
+    return;
+  }
   const bool swapped = picture && picture->header.cf == LV_COLOR_FORMAT_RGB565_SWAPPED;
   if (!picture || !picture->data || (picture->header.cf != LV_COLOR_FORMAT_RGB565 && !swapped)) {
     g_backdrop.copy = frosted_backdrop::Copy{};
@@ -1385,6 +1518,7 @@ void update_frosted_backdrop(ScreensaverState* st, const lv_image_dsc_t* picture
                                     st->frosted, scratch, sums);
   lv_free(scratch);
   lv_free(sums);
+  st->frosted_generation = g_cache_generation;
   g_backdrop.copy = st->frosted;
   Serial.printf("[Screensaver] Frosted backdrop %dx%d in %u ms\n", sw, sh,
                 static_cast<unsigned>(millis() - started));
@@ -1670,13 +1804,16 @@ lv_obj_t* build_slot_tile(ScreensaverState* st, size_t i, const Tile& tile) {
   lv_obj_set_style_bg_opa(tile_obj, opacity,
                           LV_PART_MAIN | LV_STATE_PRESSED);
   // Circles and controls of a see-through tile stay a veil over the
-  // wallpaper (tone_color.h); the tile was built opaque.
+  // wallpaper (tone_color.h); the tile was built opaque. A frosted card is
+  // marked glass first: its circles and controls keep the opaque colors, also
+  // the ones styled here (an off Switch's slider stayed a veil until the
+  // first press restyled it, user 2026-11-02 b647).
   if (opacity < LV_OPA_COVER) {
-    tile_icon_disc::refresh_fills(tile_obj);
-    tile_icon_source::refresh_controls(tile_obj);
 #if defined(HOMETILES_FROSTED_TILES)
     frosted_backdrop::attach(tile_obj, &g_backdrop);
 #endif
+    tile_icon_disc::refresh_fills(tile_obj);
+    tile_icon_source::refresh_controls(tile_obj);
   }
   lv_obj_remove_flag(tile_obj, LV_OBJ_FLAG_EVENT_BUBBLE);
   return tile_obj;
@@ -2108,12 +2245,9 @@ void on_global_overlay_delete(lv_event_t* e) {
     restore_configured_display_brightness();
   }
   if (st->timer) lv_timer_delete(st->timer);
-#if defined(CONFIG_IDF_TARGET_ESP32P4)
-  if (st->composite_storage) {
-    free(st->composite_storage);
-    st->composite_storage = nullptr;
-  }
-#endif
+  // The spare picture slot (and with it the composite frame) goes; a
+  // screensaver opened meanwhile keeps its own.
+  if (!g_state) release_spare_slot();
 #if defined(HOMETILES_FROSTED_TILES)
   if (g_backdrop.copy.rgb == st->frosted.rgb) g_backdrop = frosted_backdrop::Backdrop{};
   if (st->frosted.rgb) lv_free(st->frosted.rgb);
@@ -2325,6 +2459,8 @@ void hide_image_screensaver() {
     st->timer = nullptr;
   }
   if (st->image) lv_image_set_src(st->image, nullptr);
+  // Closed, only the shown picture's slot stays (PictureSlot).
+  release_spare_slot();
   hide_page_under_screensaver(false);
   if (st->overlay) {
     lv_obj_add_flag(st->overlay, LV_OBJ_FLAG_HIDDEN);

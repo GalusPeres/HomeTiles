@@ -8,6 +8,10 @@
 // outside the radius and everything beside the card keep the picture, a
 // shadow stays outside the card, the line is translucent, an opaque card
 // draws no backdrop, and a swapped (big-endian) picture blurs to the same copy.
+// The blur and the tint divide by multiplying (the P4 divides slowly, V2
+// b647: 290 ms blur per slide), exactly; a card drawn while the band before
+// is still copied to the panel waits for that copy instead of losing its
+// glass (after a popup closed, b647).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -25,6 +29,15 @@ assert.match(screensaver, /set_image_src_without_invalidation\(st->image, dsc\);
   'every new slide is blurred before its frame is composed');
 assert.match(screensaver, /if \(opacity < LV_OPA_COVER\) \{[\s\S]*?frosted_backdrop::attach\(tile_obj, &g_backdrop\);/,
   'only see-through cards draw the backdrop');
+// Marked glass before its circles and controls are styled: an off Switch's
+// slider stayed a veil until the first press restyled it (b647).
+assert.match(screensaver, /frosted_backdrop::attach\(tile_obj, &g_backdrop\);\n#endif\n    tile_icon_disc::refresh_fills\(tile_obj\);\n    tile_icon_source::refresh_controls\(tile_obj\);/,
+  'the card is glass before its controls take their colors');
+// Blurred once per picture: the same picture shown again keeps its copy.
+assert.match(screensaver, /if \(st->frosted\.rgb && picture && picture == g_cache_dsc &&\n      st->frosted_generation == g_cache_generation\) \{\n    g_backdrop\.copy = st->frosted;\n    return;\n  \}/);
+assert.match(screensaver, /g_cache_dsc = dsc;\n  \+\+g_cache_generation;/);
+assert.doesNotMatch(header.replace(/\/\/.*$/gm, ''), /\/ window\)|\/ 255 \+|\/ \(31 \* n\)|\/ \(63 \* n\)/,
+  'no division per pixel');
 assert.match(screensaver, /if \(st->frosted\.rgb\) lv_free\(st->frosted\.rgb\);\n  st->frosted = frosted_backdrop::Copy\{\};\n#endif\n  delete st;/, 'the copy goes with the screensaver');
 // From LVGL's pool: kept in the system PSRAM between the slides' pictures it
 // split the free space until a 2 MB screenshot no longer fitted (V2 b646).
@@ -63,7 +76,13 @@ fs.writeFileSync(source, String.raw`
 #include <lvgl.h>
 #include <lvgl_private.h>
 #include "src/ui/screensaver/frosted_backdrop.h"
+#include "src/core/display/display_flush_gate.cpp"
 constexpr int W = 320, H = 200;
+// A band copy to the panel that is still running until copy_until.
+static uint32_t copy_until = 0;
+static bool copy_begin(int32_t, int32_t, int32_t, int32_t, const uint16_t*) { return false; }
+static bool copy_done() { return display_flush_gate::clock_us() >= copy_until; }
+static void copy_finish() {}
 static uint16_t frame[W * H];
 static void flush(lv_display_t* d, const lv_area_t* a, uint8_t* map) {
   const int32_t w = lv_area_get_width(a);
@@ -82,6 +101,19 @@ static double spread(int x0, int y0, int n) {
 }
 static int green(int x, int y) { return (frame[y * W + x] >> 5) & 0x3f; }
 int main() {
+  // The multiplications divide exactly: every window sum, every block sum.
+  bool exact = true;
+  for (uint32_t sum = 0; sum <= 255 * frosted_backdrop::kWindow; ++sum)
+    exact &= frosted_backdrop::window_mean(sum) == (sum + frosted_backdrop::kWindow / 2) / frosted_backdrop::kWindow;
+  for (uint32_t n = 1; n <= 16; ++n)
+    for (uint32_t max : {31u, 63u}) {
+      const uint64_t recip = frosted_backdrop::reciprocal(max * n);
+      for (uint32_t s = 0; s <= max * n; ++s) {
+        const uint32_t num = s * 255 + max * n / 2;
+        exact &= frosted_backdrop::divide(num, recip) == num / (max * n);
+      }
+    }
+  std::printf("exact %d\n", exact);
   lv_init();
   static uint16_t buffer[W * 24];
   lv_display_t* d = lv_display_create(W, H);
@@ -172,6 +204,17 @@ int main() {
   lv_refr_now(d);
   const uint16_t fill = lv_color_to_u16(lv_color_hex(0x203040));
   std::printf("opaque %d\n", frame[88 * W + 120] == fill);
+  // The band before is still being copied to the panel (3 ms): LVGL holds
+  // the band's draws until then, the card waits for them and keeps its glass.
+  lv_obj_set_style_bg_opa(card, LV_OPA_TRANSP, 0);
+  lv_refr_now(d);
+  display_flush_gate::set_backend({copy_begin, copy_done, copy_finish});
+  display_flush_gate::install_dispatch();
+  copy_until = display_flush_gate::clock_us() + 3000;
+  display_flush_gate::g_pending = true;
+  lv_obj_invalidate(card);
+  lv_refr_now(d);
+  std::printf("band %d %.1f\n", display_flush_gate::g_dispatch_gated, spread(100, 70, 16));
   return 0;
 }
 `);
@@ -186,6 +229,7 @@ const rows = Object.fromEntries(run.stdout.trim().split('\n').map((line) => {
   return [key, rest];
 }));
 const why = `\n${run.stdout}`;
+assert.deepEqual(rows.exact, ['1'], `the reciprocal multiplications divide exactly${why}`);
 assert.deepEqual(rows.swap, ['1'], `a swapped picture blurs to the same copy${why}`);
 assert.deepEqual(rows.glass, ['1'], `a frosted card is marked glass${why}`);
 const inside = Number(rows.inside[0]);
@@ -200,4 +244,6 @@ assert.equal(Number(rows.shadow[0]), 0, `the shadow stays out of the card${why}`
 assert.ok(Number(rows.shadow[1]) > 0, `and shows around it${why}`);
 assert.deepEqual(rows.line, ['1', '1', '1'], `the frame line is translucent at the card's opacity${why}`);
 assert.deepEqual(rows.opaque, ['1'], `an opaque card draws no backdrop${why}`);
-console.log('Frosted backdrop: blurred, tinted and dithered under see-through cards, shadow outside, translucent line, corners and surroundings untouched, opaque cards plain');
+assert.equal(rows.band[0], '1', `the band copy gate is in place${why}`);
+assert.ok(Number(rows.band[1]) < outside / 20, `a card drawn while the band before is still copied keeps its glass${why}`);
+console.log('Frosted backdrop: blurred, tinted and dithered under see-through cards without divisions, shadow outside, translucent line, corners and surroundings untouched, opaque cards plain, glass kept while a band copy runs');

@@ -66,11 +66,11 @@ Last reviewed: 2026-10-29
 
 - LVGL PSRAM S3 2 / P4 12 MiB; SRAM band <= 72 KiB = DMA free - 150 KB (big tables in LVGL heap, S3 b606); page caches S3 4 / P4 6; bindings, popup history, Select options, slots, queues, grids in PSRAM.
 - S3 mallocs > 32 B prefer PSRAM (b324): internal free 42 -> ~89 KB, text-heavy steps slower. Open: S3 Web Admin pages block the loop 1-6 s.
-- Icon file: all 7447 MDI icons in LittleFS `/_mdi_icons_<px>.bin` (`tools/generate-icon-files.mjs`), 399 built in, one PSRAM raw cache; icon + text fonts unpack each glyph once (`glyph_cache.c`, P4 512 KB, S3 256, b599); a missing file downloads once from its release; System page Icons card.
+- Icon file: all 7447 MDI icons in LittleFS `/_mdi_icons_<px>.bin`, 399 built in, one PSRAM raw cache; icon + text fonts unpack each glyph once (`glyph_cache.c`, P4 512 KB, S3 256, b599); a missing file downloads once from its release; System page Icons card.
 - `-fno-exceptions` (-300 KiB per image), unused LVGL widgets off, Admin CSS minified. LVGL 9.6.0 (lvgl#10306, caches `hometiles-lvgl96-*`).
 - Perf (released): nav preload (S3 max 3 grids), shadow/circle caches, P4 CPU rotation for small areas, S3 PCLK 12 MHz.
 - Cards/discs draw rounded fills and frame lines from kept corner masks (`rounded_corners.h`, b594); clock face one object.
-- Pending: artwork, sleep/wake, camera soak, memory minima.
+- Pending: artwork, sleep/wake, camera soak, memory minima, fixed screensaver picture slots (b648).
 
 ## Camera
 

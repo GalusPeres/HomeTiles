@@ -6721,7 +6721,7 @@ async function saveGestureEdge(select) {
   // size stays offered (types/sensor/renderer.cpp).
   function syncCompactValueFontOptions(select, compact, inside = 0) {
     if (!select?.options) return;
-    const allowed = inside ? ['0', '1', '2', '5', '3', '4'] : compact ? ['0', '2', '5'] : ['0', '1', '2', '3', '4'];
+    const allowed = inside ? ['0', '1', '2', '5', '3', '4', '6'] : compact ? ['0', '2', '5'] : ['0', '1', '2', '3', '4', '6'];
     const sizes = String(select.dataset?.[compact && !inside ? 'compactSizes' : 'sizes'] || '').split(',').map(Number);
     if (inside && sizes.length > 5) sizes[0] = sizes[inside === 2 ? 2 : 1];
     const known = sizes.length > 5 && sizes.every(size => size > 0);
@@ -16935,7 +16935,7 @@ function maybeFillTitleFromSensor(tab) {
 
   function normalizeSensorValueFont(value) {
     const v = String(value || '0');
-    return (['1','2','3','4','5'].includes(v)) ? v : '0';
+    return (['1','2','3','4','5','6'].includes(v)) ? v : '0';
   }
 
   function getSensorValueFontClass(value) {
@@ -16943,7 +16943,7 @@ function maybeFillTitleFromSensor(tab) {
     if (v === '1') return 'sensor-value-size-20';
     if (v === '2') return 'sensor-value-size-24';
     if (v === '3') return 'sensor-value-size-32';
-    if (v === '4') return 'sensor-value-size-40';
+    if (v === '4' || v === '6') return 'sensor-value-size-40';
     return 'sensor-value-size-default';
   }
 

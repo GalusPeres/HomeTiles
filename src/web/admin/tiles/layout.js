@@ -69,7 +69,7 @@
   // size stays offered (types/sensor/renderer.cpp).
   function syncCompactValueFontOptions(select, compact, inside = 0) {
     if (!select?.options) return;
-    const allowed = inside ? ['0', '1', '2', '5', '3', '4'] : compact ? ['0', '2', '5'] : ['0', '1', '2', '3', '4'];
+    const allowed = inside ? ['0', '1', '2', '5', '3', '4', '6'] : compact ? ['0', '2', '5'] : ['0', '1', '2', '3', '4', '6'];
     const sizes = String(select.dataset?.[compact && !inside ? 'compactSizes' : 'sizes'] || '').split(',').map(Number);
     if (inside && sizes.length > 5) sizes[0] = sizes[inside === 2 ? 2 : 1];
     const known = sizes.length > 5 && sizes.every(size => size > 0);

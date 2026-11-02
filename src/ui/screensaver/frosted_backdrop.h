@@ -219,9 +219,24 @@ inline uint16_t mix565(uint16_t pixel, uint16_t dst, uint32_t coverage) {
   return static_cast<uint16_t>((r << 11) | (g << 5) | b);
 }
 
+// pixel (RGB565) over an ARGB8888 dst with coverage 0..256.
+inline lv_color32_t mix8888(uint16_t pixel, lv_color32_t dst, uint32_t coverage) {
+  const uint32_t r = ((pixel >> 11) << 3) | (pixel >> 13);
+  const uint32_t g = (((pixel >> 5) & 0x3f) << 2) | ((pixel >> 9) & 0x03);
+  const uint32_t b = ((pixel & 0x1f) << 3) | ((pixel >> 2) & 0x07);
+  if (coverage >= 256) return lv_color32_make(r, g, b, LV_OPA_COVER);
+  const uint32_t keep = 256 - coverage;
+  return lv_color32_make((r * coverage + dst.red * keep) >> 8, (g * coverage + dst.green * keep) >> 8,
+                         (b * coverage + dst.blue * keep) >> 8, (255 * coverage + dst.alpha * keep) >> 8);
+}
+
+// The panel's RGB565 bands and the screenshot's ARGB8888 snapshot of the top
+// layer (web_admin_diagnostics.cpp createUiScreenshot), at full opacity: a
+// screenshot showed no glass while only RGB565 was drawn (user 2026-11-02).
 inline bool usable(const lv_layer_t* layer) {
-  return layer && layer->opa >= LV_OPA_MAX && layer->color_format == LV_COLOR_FORMAT_RGB565 &&
-         layer->draw_buf && layer->draw_buf->data && layer->draw_buf->header.cf == LV_COLOR_FORMAT_RGB565;
+  if (!layer || layer->opa < LV_OPA_MAX || !layer->draw_buf || !layer->draw_buf->data) return false;
+  const lv_color_format_t cf = static_cast<lv_color_format_t>(layer->draw_buf->header.cf);
+  return layer->color_format == cf && (cf == LV_COLOR_FORMAT_RGB565 || cf == LV_COLOR_FORMAT_ARGB8888);
 }
 
 // The layer's queued draws finished, so its buffer holds what lies under the
@@ -322,18 +337,30 @@ inline void fill(const Copy& copy, int32_t px, int32_t py, const CardLook& look,
   if (row != stack_row) lv_free(row);
 }
 
+// A value over a layer pixel with coverage 0..256, and a run of values
+// copied, in the layer's format.
+inline void put(uint16_t& out, uint16_t pixel, uint32_t coverage) { out = mix565(pixel, out, coverage); }
+inline void put(lv_color32_t& out, uint16_t pixel, uint32_t coverage) { out = mix8888(pixel, out, coverage); }
+inline void copy_run(uint16_t* out, const uint16_t* values, int32_t n) {
+  memcpy(out, values, static_cast<size_t>(n) * sizeof(uint16_t));
+}
+inline void copy_run(lv_color32_t* out, const uint16_t* values, int32_t n) {
+  for (int32_t i = 0; i < n; ++i) out[i] = mix8888(values[i], out[i], 256);
+}
+
 // One row y of the card's values (`values`, values[0] at screen column
 // values_x) over columns x1..x2 of `out` (the layer at x1): the inside copied,
 // the rounded edge and the frame line mixed with what lies under them.
+template <typename Pixel>
 inline void compose_row(const uint16_t* values, int32_t values_x, const lv_area_t& card, int32_t r,
-                        const CardLook& look, int32_t y, int32_t x1, int32_t x2, uint16_t* out) {
+                        const CardLook& look, int32_t y, int32_t x1, int32_t x2, Pixel* out) {
   auto edge = [&](int32_t x) {
     uint16_t pixel = values[x - values_x];
     if (look.line_opa) {
       const uint32_t ring = ring_coverage(card, r, x, y);
       if (ring) pixel = mix565(look.line, pixel, (ring * look.line_opa) / 255);
     }
-    out[x - x1] = mix565(pixel, out[x - x1], corner_coverage(card, r, x, y));
+    put(out[x - x1], pixel, corner_coverage(card, r, x, y));
   };
   // The inside of a row between the corner columns; none in a corner row.
   const bool edge_row = y <= card.y1 + r || y >= card.y2 - r;
@@ -344,7 +371,7 @@ inline void compose_row(const uint16_t* values, int32_t values_x, const lv_area_
     return;
   }
   for (int32_t x = x1; x < in1; ++x) edge(x);
-  memcpy(out + (in1 - x1), values + (in1 - values_x), static_cast<size_t>(in2 - in1 + 1) * sizeof(uint16_t));
+  copy_run(out + (in1 - x1), values + (in1 - values_x), in2 - in1 + 1);
   for (int32_t x = in2 + 1; x <= x2; ++x) edge(x);
 }
 
@@ -437,38 +464,47 @@ inline CardLook look_of(lv_obj_t* card) {
   return look;
 }
 
-// Draw main end of a see-through tile card: LVGL drew its shadow, fill and
-// line; the card's area becomes the copy under its tint and line, so the
-// shadow stays outside the card (LVGL draws it inside a see-through card
-// too, which darkened the frosted edges, user 2026-11-02). The children
-// (icon, texts, circles) draw after it.
-inline void on_card_draw_end(lv_event_t* e) {
-  CardGlass* glass = static_cast<CardGlass*>(lv_event_get_user_data(e));
+// The glass paints this card on `layer` (on_card_draw_end): see-through,
+// over a shown picture, on a layer it can write.
+inline bool paints(const CardGlass* glass, lv_obj_t* card, const lv_layer_t* layer) {
   const Backdrop* b = glass ? glass->backdrop : nullptr;
+  return b && b->copy.rgb && b->picture && card && !lv_obj_has_flag(b->picture, LV_OBJ_FLAG_HIDDEN) &&
+         lv_obj_get_style_bg_opa(card, LV_PART_MAIN) < LV_OPA_COVER && usable(layer);
+}
+
+// LVGL's own fill and frame line of a card the glass paints are left out:
+// the glass draws both itself, and its rounded edge mixed with them instead
+// of the picture under the card (the opaque line showed through the corners,
+// frayed, user 2026-11-02 b648). The shadow stays, and a line drawn over the
+// children (border_post, Camera tiles).
+inline void on_card_task(lv_event_t* e) {
+  lv_draw_task_t* task = lv_event_get_draw_task(e);
   lv_obj_t* card = lv_event_get_current_target_obj(e);
-  lv_layer_t* layer = lv_event_get_layer(e);
-  if (!b || !b->copy.rgb || !b->picture || !card || !layer) return;
-  if (lv_obj_get_style_bg_opa(card, LV_PART_MAIN) >= LV_OPA_COVER) return;
-  if (lv_obj_has_flag(b->picture, LV_OBJ_FLAG_HIDDEN)) return;
-  lv_area_t card_area;
-  lv_obj_get_coords(card, &card_area);
-  lv_area_t area;
-  if (!lv_area_intersect(&area, &layer->_clip_area, &card_area)) return;
-  if (!usable(layer) || !lv_area_intersect(&area, &area, &layer->buf_area)) return;
-  if (!settled(layer)) return;
-  lv_area_t picture;
-  lv_obj_get_coords(b->picture, &picture);
-  int32_t r = lv_obj_get_style_radius(card, LV_PART_MAIN);
-  const int32_t w = lv_area_get_width(&card_area);
-  const int32_t half = LV_MIN(w, lv_area_get_height(&card_area)) / 2;
-  if (r > half) r = half;
-  const CardLook look = look_of(card);
-  uint16_t* buf = reinterpret_cast<uint16_t*>(layer->draw_buf->data);
-  const int32_t stride = static_cast<int32_t>(layer->draw_buf->header.stride / sizeof(uint16_t));
+  if (!task || !card) return;
+  const auto* base = static_cast<const lv_draw_dsc_base_t*>(lv_draw_task_get_draw_dsc(task));
+  if (!base || base->obj != card || base->part != LV_PART_MAIN) return;
+  const lv_draw_task_type_t type = lv_draw_task_get_type(task);
+  const bool fill_task = type == LV_DRAW_TASK_TYPE_FILL;
+  const bool line_task = type == LV_DRAW_TASK_TYPE_BORDER && !lv_obj_get_style_border_post(card, LV_PART_MAIN);
+  if ((!fill_task && !line_task) || !paints(static_cast<CardGlass*>(lv_event_get_user_data(e)), card, base->layer)) {
+    return;
+  }
+  // Done before it is drawn: LVGL's dispatch takes waiting tasks only and
+  // drops finished ones (as for a task no draw unit takes, lv_draw.c).
+  task->state = LV_DRAW_TASK_STATE_FINISHED;
+}
+
+// Draws the card's rows over `area` of the layer (RGB565 or ARGB8888).
+template <typename Pixel>
+inline void compose_area(CardGlass& glass, lv_layer_t* layer, const lv_area_t& card_area, const lv_area_t& area,
+                         int32_t r, const CardLook& look, int32_t px, int32_t py) {
+  Pixel* buf = reinterpret_cast<Pixel*>(layer->draw_buf->data);
+  const int32_t stride = static_cast<int32_t>(layer->draw_buf->header.stride / sizeof(Pixel));
   auto layer_row = [&](int32_t y) {
     return buf + static_cast<size_t>(y - layer->buf_area.y1) * stride + (area.x1 - layer->buf_area.x1);
   };
-  if (const uint16_t* values = kept_values(*glass, picture.x1, picture.y1, card_area, look)) {
+  const int32_t w = lv_area_get_width(&card_area);
+  if (const uint16_t* values = kept_values(glass, px, py, card_area, look)) {
     for (int32_t y = area.y1; y <= area.y2; ++y) {
       compose_row(values + static_cast<size_t>(y - card_area.y1) * w, card_area.x1, card_area, r, look, y,
                   area.x1, area.x2, layer_row(y));
@@ -479,10 +515,41 @@ inline void on_card_draw_end(lv_event_t* e) {
   uint16_t* row = static_cast<uint16_t*>(lv_malloc(static_cast<size_t>(lv_area_get_width(&area)) * sizeof(uint16_t)));
   if (!row) return;
   for (int32_t y = area.y1; y <= area.y2; ++y) {
-    fill(b->copy, picture.x1, picture.y1, look, area.x1, area.x2, y, y, row, 0);
+    fill(glass.backdrop->copy, px, py, look, area.x1, area.x2, y, y, row, 0);
     compose_row(row, area.x1, card_area, r, look, y, area.x1, area.x2, layer_row(y));
   }
   lv_free(row);
+}
+
+// Draw main end of a see-through tile card: LVGL drew its shadow (its fill
+// and line were left out, on_card_task); the card's area becomes the copy
+// under its tint and line, so the shadow stays outside the card (LVGL draws
+// it inside a see-through card too, which darkened the frosted edges, user
+// 2026-11-02). The children (icon, texts, circles) draw after it.
+inline void on_card_draw_end(lv_event_t* e) {
+  CardGlass* glass = static_cast<CardGlass*>(lv_event_get_user_data(e));
+  lv_obj_t* card = lv_event_get_current_target_obj(e);
+  lv_layer_t* layer = lv_event_get_layer(e);
+  if (!paints(glass, card, layer)) return;
+  const Backdrop* b = glass->backdrop;
+  lv_area_t card_area;
+  lv_obj_get_coords(card, &card_area);
+  lv_area_t area;
+  if (!lv_area_intersect(&area, &layer->_clip_area, &card_area)) return;
+  if (!lv_area_intersect(&area, &area, &layer->buf_area)) return;
+  if (!settled(layer)) return;
+  lv_area_t picture;
+  lv_obj_get_coords(b->picture, &picture);
+  int32_t r = lv_obj_get_style_radius(card, LV_PART_MAIN);
+  const int32_t w = lv_area_get_width(&card_area);
+  const int32_t half = LV_MIN(w, lv_area_get_height(&card_area)) / 2;
+  if (r > half) r = half;
+  const CardLook look = look_of(card);
+  if (layer->draw_buf->header.cf == LV_COLOR_FORMAT_ARGB8888) {
+    compose_area<lv_color32_t>(*glass, layer, card_area, area, r, look, picture.x1, picture.y1);
+  } else {
+    compose_area<uint16_t>(*glass, layer, card_area, area, r, look, picture.x1, picture.y1);
+  }
 }
 
 inline void on_card_delete(lv_event_t* e) {
@@ -506,6 +573,8 @@ inline void attach(lv_obj_t* card, const Backdrop* backdrop) {
   CardGlass* glass = new (memory) CardGlass();
   glass->backdrop = backdrop;
   tile_glass::mark(card);
+  lv_obj_add_flag(card, LV_OBJ_FLAG_SEND_DRAW_TASK_EVENTS);
+  lv_obj_add_event_cb(card, on_card_task, LV_EVENT_DRAW_TASK_ADDED, glass);
   lv_obj_add_event_cb(card, on_card_draw_end, LV_EVENT_DRAW_MAIN_END, glass);
   lv_obj_add_event_cb(card, on_card_delete, LV_EVENT_DELETE, glass);
 }

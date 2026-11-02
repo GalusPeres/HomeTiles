@@ -14,6 +14,10 @@
 // glass (after a popup closed, b647). A card keeps its values per look and
 // place: a shadow, a frame line or a redraw copy them, a new look, place or
 // copy computes them again (V2 b648: 69 ms for a 404x320 card per close).
+// LVGL's own fill and opaque frame line are left out under the glass, so
+// the rounded corners mix with the picture, not with an opaque line
+// (frayed corners, b648); and the screenshot's ARGB8888 snapshot shows the
+// glass like the panel.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -70,6 +74,7 @@ const out = path.join(root, 'build/tests/frosted-backdrop');
 fs.mkdirSync(out, {recursive: true});
 const source = path.join(out, 'test.cpp');
 fs.writeFileSync(source, String.raw`
+#include <algorithm>
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
@@ -85,6 +90,17 @@ static uint32_t copy_until = 0;
 static bool copy_begin(int32_t, int32_t, int32_t, int32_t, const uint16_t*) { return false; }
 static bool copy_done() { return display_flush_gate::clock_us() >= copy_until; }
 static void copy_finish() {}
+// The card's own fill and line tasks as LVGL adds them, after the glass
+// had its say (registered after attach): seen, and left out (finished).
+static int tasks[4];
+static void observe(lv_event_t* e) {
+  lv_draw_task_t* t = lv_event_get_draw_task(e);
+  const auto* base = static_cast<const lv_draw_dsc_base_t*>(lv_draw_task_get_draw_dsc(t));
+  if (!base || base->part != LV_PART_MAIN) return;
+  const bool done = t->state == LV_DRAW_TASK_STATE_FINISHED;
+  if (t->type == LV_DRAW_TASK_TYPE_FILL) { ++tasks[0]; tasks[1] += done; }
+  if (t->type == LV_DRAW_TASK_TYPE_BORDER) { ++tasks[2]; tasks[3] += done; }
+}
 static uint16_t frame[W * H];
 static void flush(lv_display_t* d, const lv_area_t* a, uint8_t* map) {
   const int32_t w = lv_area_get_width(a);
@@ -160,6 +176,7 @@ int main() {
   lv_obj_set_style_bg_opa(card, LV_OPA_TRANSP, 0);
   lv_obj_t* inner_label = lv_label_create(card);
   frosted_backdrop::attach(card, &backdrop);
+  lv_obj_add_event_cb(card, observe, LV_EVENT_DRAW_TASK_ADDED, nullptr);
   // Only the fill is glass: the contents see an opaque card.
   std::printf("glass %d\n", tile_glass::is_glass(card));
   (void)inner_label;
@@ -196,15 +213,26 @@ int main() {
   lv_obj_set_style_outline_pad(card, -1, 0);
   lv_obj_set_style_outline_color(card, lv_color_hex(0xffffff), 0);
   lv_obj_set_style_outline_opa(card, LV_OPA_COVER, 0);
+  std::memset(tasks, 0, sizeof(tasks));
   lv_refr_now(d);
+  std::printf("glass_tasks %d %d %d %d\n", tasks[0], tasks[1], tasks[2], tasks[3]);
   const uint16_t edge = frame[90 * W + 40];
   const uint16_t inner = frame[90 * W + 42];
   std::printf("line %d %d %d\n", edge != 0xffff, (edge >> 5 & 0x3f) > (inner >> 5 & 0x3f), edge != inner);
+  // The corners: no pixel redder than the translucent line on the straight
+  // edge (the picture is dark red there; an opaque white line would show).
+  int ring_red = 0, corner_red = 0;
+  for (int x = 70; x < 170; ++x) ring_red = std::max(ring_red, frame[40 * W + x] >> 11);
+  for (int y = 40; y < 60; ++y)
+    for (int x = 40; x < 60; ++x) corner_red = std::max(corner_red, frame[y * W + x] >> 11);
+  std::printf("corners %d %d\n", ring_red, corner_red);
   // An opaque card draws its own fill only.
   lv_obj_set_style_outline_width(card, 0, 0);
   lv_obj_set_style_bg_color(card, lv_color_hex(0x203040), 0);
   lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+  std::memset(tasks, 0, sizeof(tasks));
   lv_refr_now(d);
+  std::printf("opaque_tasks %d %d\n", tasks[0], tasks[1]);
   const uint16_t fill = lv_color_to_u16(lv_color_hex(0x203040));
   std::printf("opaque %d\n", frame[88 * W + 120] == fill);
   // The band before is still being copied to the panel (3 ms): LVGL holds
@@ -229,6 +257,20 @@ int main() {
   lv_refr_now(d);
   std::printf("kept %u %u %u %u %.1f\n", fills_after_shadow, fills_after_band, fills_after_move,
               frosted_backdrop::g_kept_fills, moved);
+  // The screenshot's way: an ARGB8888 snapshot shows the glass too.
+  lv_draw_buf_t* shot = lv_snapshot_take(lv_screen_active(), LV_COLOR_FORMAT_ARGB8888);
+  auto shot_spread = [&](int x0, int y0, int n) {
+    double sum = 0, sum2 = 0;
+    for (int y = y0; y < y0 + n; ++y)
+      for (int x = x0; x < x0 + n; ++x) {
+        const lv_color32_t* p = reinterpret_cast<const lv_color32_t*>(shot->data + y * shot->header.stride) + x;
+        const double g = p->green >> 2;
+        sum += g; sum2 += g * g;
+      }
+    return sum2 / (n * n) - (sum / (n * n)) * (sum / (n * n));
+  };
+  std::printf("shot %d %.1f %.1f\n", shot != nullptr, shot ? shot_spread(100, 70, 16) : 0.0,
+              shot ? shot_spread(240, 140, 16) : 0.0);
   return 0;
 }
 `);
@@ -258,10 +300,21 @@ assert.equal(Number(rows.shadow[0]), 0, `the shadow stays out of the card${why}`
 assert.ok(Number(rows.shadow[1]) > 0, `and shows around it${why}`);
 assert.deepEqual(rows.line, ['1', '1', '1'], `the frame line is translucent at the card's opacity${why}`);
 assert.deepEqual(rows.opaque, ['1'], `an opaque card draws no backdrop${why}`);
+// Under the glass LVGL's own fill and opaque frame line are left out: the
+// corners mixed with that line instead of the picture (frayed, b648).
+const [fills, fillsOut, lines, linesOut] = rows.glass_tasks.map(Number);
+assert.ok(fills > 0 && fillsOut === fills && lines > 0 && linesOut === lines,
+  `LVGL's fill and frame line of a frosted card are left out${why}`);
+assert.ok(Number(rows.opaque_tasks[0]) > 0 && rows.opaque_tasks[1] === '0', `an opaque card keeps its fill${why}`);
+const [ringRed, cornerRed] = rows.corners.map(Number);
+assert.ok(cornerRed <= ringRed + 1, `the rounded corners mix with the picture, not with LVGL's opaque line${why}`);
 assert.equal(rows.band[0], '1', `the band copy gate is in place${why}`);
 assert.ok(Number(rows.band[1]) < outside / 20, `a card drawn while the band before is still copied keeps its glass${why}`);
 // Two looks so far (clear, then 50 % black): the shadow, the frame line, the
 // opaque detour and the band redraw copied the kept values.
 assert.deepEqual(rows.kept.slice(0, 4), ['2', '2', '3', '4'], `kept per look and place, computed again when moved or over a new copy${why}`);
 assert.ok(Number(rows.kept[4]) < outside / 20, `the moved card is glass${why}`);
+assert.equal(rows.shot[0], '1', `the snapshot was taken${why}`);
+assert.ok(Number(rows.shot[2]) > 500 && Number(rows.shot[1]) < Number(rows.shot[2]) / 20,
+  `the screenshot's ARGB8888 snapshot shows the glass like the panel${why}`);
 console.log('Frosted backdrop: blurred, tinted and dithered under see-through cards without divisions, shadow outside, translucent line, corners and surroundings untouched, opaque cards plain, glass kept while a band copy runs');

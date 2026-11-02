@@ -105,6 +105,17 @@ assert.match(driver, /writeTouchRegister\(kTouchStatusRegister, 0\)/,
 assert.match(driver, /raw_x >= kScreenWidth \|\| raw_y >= kScreenHeight/,
   'The controller already reports screen coordinates');
 
+// --- Sleep: no ghost wake --------------------------------------------------
+assert.match(driver, /void displaySleep\(\) \{\s*\n\s*applyBrightness\(0\);\s*\n\s*\/\/ Drop any held touch point/,
+  'Sleep drops a held point before the panel polls for a wake tap');
+assert.match(driver, /g_touch_active = false;\s*\n\s*g_touch_x = 0;/,
+  'Sleep clears the held touch state');
+const mainSketch = read('HomeTiles.ino');
+assert.match(mainSketch, /#if defined\(DEVICE_BTT_PANDA_TOUCH\)/,
+  'The sketch guards the Panda Touch wake debounce');
+assert.match(mainSketch, /s_wake_touch_streak >= 3/,
+  'Sleep wakes only on a sustained touch, not a single ghost frame');
+
 // --- Storage and hardware I/O -----------------------------------------------
 assert.match(driver, /LittleFS\.begin\(true, "\/littlefs", 10, "spiffs"\)/);
 assert.match(read('src/devices/btt_panda_touch/hardware_io_profile.h'), /kNoHardwareIoProfile/);

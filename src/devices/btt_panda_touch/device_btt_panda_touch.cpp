@@ -552,6 +552,13 @@ bool getTouch(int16_t& x, int16_t& y) {
 
 void displaySleep() {
   applyBrightness(0);
+  // Drop any held touch point and acknowledge the controller: a frame that
+  // arrived right before sleep must not wake the panel on the first poll.
+  g_touch_active = false;
+  g_touch_x = 0;
+  g_touch_y = 0;
+  g_touch_error_streak = 0;
+  writeTouchRegister(kTouchStatusRegister, 0);
 }
 
 void displayWake() {

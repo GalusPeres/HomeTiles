@@ -16,6 +16,7 @@
 
 #include "src/core/hardware/board_hal.h"
 #include "src/core/display/display_manager.h"
+#include "src/devices/device_select.h"
 #include "src/core/power/power_manager.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/diagnostics/crash_log.h"
@@ -1466,12 +1467,30 @@ void loop() {
     // loop delay keeps newly received state close to presentation without adding
     // a separate wake-time data path.
     BoardHAL::TouchPoint tp;
+#if defined(DEVICE_BTT_PANDA_TOUCH)
+    // The GT900 sometimes reports a single ghost frame; waking on it would
+    // light the panel at night with nobody near. Require a sustained touch
+    // (three polls in a row) before waking.
+    static uint8_t s_wake_touch_streak = 0;
+    if (BoardHAL::getTouch(&tp)) {
+      if (++s_wake_touch_streak >= 3) {
+        s_wake_touch_streak = 0;
+        Serial.printf("[Power] Sleep-poll touch detected: x=%d y=%d\n", tp.x, tp.y);
+        powerManager.wakeFromDisplaySleep("sleep-poll");
+        was_asleep = false;
+        return;
+      }
+    } else {
+      s_wake_touch_streak = 0;
+    }
+#else
     if (BoardHAL::getTouch(&tp)) {
       Serial.printf("[Power] Sleep-poll touch detected: x=%d y=%d\n", tp.x, tp.y);
       powerManager.wakeFromDisplaySleep("sleep-poll");
       was_asleep = false;
       return;
     }
+#endif
     delay(20);
     return;
   }

@@ -348,31 +348,67 @@ inline void copy_run(lv_color32_t* out, const uint16_t* values, int32_t n) {
   for (int32_t i = 0; i < n; ++i) out[i] = mix8888(values[i], out[i], 256);
 }
 
+// The card's frame line mixed into row y of its values (`values`, values[0]
+// at screen column values_x) over columns x1..x2: the line lies on the top
+// and bottom rows, the outer columns and the arcs of the corner squares.
+inline void line_row(uint16_t* values, int32_t values_x, const lv_area_t& card, int32_t r, const CardLook& look,
+                     int32_t y, int32_t x1, int32_t x2) {
+  if (!look.line_opa) return;
+  auto mix_in = [&](int32_t from, int32_t to) {
+    for (int32_t x = LV_MAX(from, x1); x <= LV_MIN(to, x2); ++x) {
+      const uint32_t ring = ring_coverage(card, r, x, y);
+      if (ring) values[x - values_x] = mix565(look.line, values[x - values_x], (ring * look.line_opa) / 255);
+    }
+  };
+  if (y == card.y1 || y == card.y2) {
+    mix_in(card.x1, card.x2);
+  } else if (y < card.y1 + r || y > card.y2 - r) {
+    mix_in(card.x1, card.x1 + r);
+    mix_in(card.x2 - r, card.x2);
+  } else {
+    mix_in(card.x1, card.x1);
+    mix_in(card.x2, card.x2);
+  }
+}
+
+// Coverage (0..256) of the top left corner square, r x r: the other corners
+// are its mirror images (corner_coverage).
+inline void fill_corner(uint16_t* table, int32_t r) {
+  const lv_area_t box = {0, 0, 2 * r + 1, 2 * r + 1};
+  for (int32_t j = 0; j < r; ++j) {
+    for (int32_t i = 0; i < r; ++i) {
+      table[j * r + i] = static_cast<uint16_t>(corner_coverage(box, r, i, j));
+    }
+  }
+}
+
 // One row y of the card's values (`values`, values[0] at screen column
-// values_x) over columns x1..x2 of `out` (the layer at x1): the inside copied,
-// the rounded edge and the frame line mixed with what lies under them.
+// values_x, the frame line mixed in) over columns x1..x2 of `out` (the layer
+// at x1): copied, only the corner squares mixed with what lies under them
+// (`corner`, fill_corner; computed per pixel without it). Mixing every pixel
+// of the radius rows made the glass take 56 of 165 ms when a popup closed
+// (V2 b651).
 template <typename Pixel>
 inline void compose_row(const uint16_t* values, int32_t values_x, const lv_area_t& card, int32_t r,
-                        const CardLook& look, int32_t y, int32_t x1, int32_t x2, Pixel* out) {
-  auto edge = [&](int32_t x) {
-    uint16_t pixel = values[x - values_x];
-    if (look.line_opa) {
-      const uint32_t ring = ring_coverage(card, r, x, y);
-      if (ring) pixel = mix565(look.line, pixel, (ring * look.line_opa) / 255);
-    }
-    put(out[x - x1], pixel, corner_coverage(card, r, x, y));
-  };
-  // The inside of a row between the corner columns; none in a corner row.
-  const bool edge_row = y <= card.y1 + r || y >= card.y2 - r;
-  const int32_t in1 = edge_row ? x2 + 1 : LV_MAX(x1, card.x1 + r + 1);
-  const int32_t in2 = edge_row ? x2 : LV_MIN(x2, card.x2 - r - 1);
-  if (in1 > in2) {
-    for (int32_t x = x1; x <= x2; ++x) edge(x);
+                        const uint16_t* corner, int32_t y, int32_t x1, int32_t x2, Pixel* out) {
+  int32_t j = -1;  // the row in the corner squares
+  if (r > 0 && y < card.y1 + r) j = y - card.y1;
+  if (r > 0 && y > card.y2 - r) j = card.y2 - y;
+  if (j < 0) {
+    copy_run(out, values + (x1 - values_x), x2 - x1 + 1);
     return;
   }
-  for (int32_t x = x1; x < in1; ++x) edge(x);
-  copy_run(out + (in1 - x1), values + (in1 - values_x), in2 - in1 + 1);
-  for (int32_t x = in2 + 1; x <= x2; ++x) edge(x);
+  auto cover = [&](int32_t i) -> uint32_t {
+    return corner ? corner[j * r + i] : corner_coverage(card, r, card.x1 + i, card.y1 + j);
+  };
+  int32_t x = x1;
+  for (; x <= LV_MIN(x2, card.x1 + r - 1); ++x) put(out[x - x1], values[x - values_x], cover(x - card.x1));
+  const int32_t inside_end = LV_MIN(x2, card.x2 - r);
+  if (x <= inside_end) {
+    copy_run(out + (x - x1), values + (x - values_x), inside_end - x + 1);
+    x = inside_end + 1;
+  }
+  for (; x <= x2; ++x) put(out[x - x1], values[x - values_x], cover(card.x2 - x));
 }
 
 // A card's values over its whole area for one look (tint and opacity), at
@@ -389,6 +425,8 @@ struct Kept {
   int32_t picture_x = 0;
   int32_t picture_y = 0;
   uint32_t look = 0;  // tint RGB888 << 8 | opacity
+  uint32_t line = 0;  // frame line RGB565 << 8 | opacity, mixed into the values
+  int32_t radius = 0;
   uint32_t used = 0;
 };
 
@@ -396,6 +434,8 @@ struct CardGlass {
   const Backdrop* backdrop = nullptr;
   Kept kept[2];
   uint32_t uses = 0;
+  uint16_t* corner = nullptr;  // fill_corner for corner_radius
+  int32_t corner_radius = -1;
 };
 
 // How often a card's values were computed (host tests).
@@ -420,15 +460,34 @@ inline uint32_t look_key(const CardLook& look) {
          (static_cast<uint32_t>(look.tint[2]) << 8) | look.tint_opa;
 }
 
-// The card's values for its look, kept or computed now; nullptr without
-// memory for them.
-inline const uint16_t* kept_values(CardGlass& glass, int32_t px, int32_t py, const lv_area_t& card,
+inline uint32_t line_key(const CardLook& look) {
+  return look.line_opa ? (static_cast<uint32_t>(look.line) << 8) | look.line_opa : 0;
+}
+
+// The card's corner table for radius r, kept with the card; nullptr without
+// memory (compose_row then computes the corners).
+inline const uint16_t* corner_table(CardGlass& glass, int32_t r) {
+  if (r <= 0) return nullptr;
+  if (glass.corner_radius != r) {
+    if (glass.corner) lv_free(glass.corner);
+    glass.corner = static_cast<uint16_t*>(lv_malloc(static_cast<size_t>(r) * r * sizeof(uint16_t)));
+    glass.corner_radius = glass.corner ? r : -1;
+    if (glass.corner) fill_corner(glass.corner, r);
+  }
+  return glass.corner;
+}
+
+// The card's values for its look, the frame line mixed in, kept or computed
+// now; nullptr without memory for them.
+inline const uint16_t* kept_values(CardGlass& glass, int32_t px, int32_t py, const lv_area_t& card, int32_t r,
                                    const CardLook& look) {
   const Backdrop& b = *glass.backdrop;
   const uint32_t key = look_key(look);
+  const uint32_t line = line_key(look);
   ++glass.uses;
   for (Kept& k : glass.kept) {
-    if (k.valid && k.generation == b.generation && k.look == key && k.picture_x == px && k.picture_y == py &&
+    if (k.valid && k.generation == b.generation && k.look == key && k.line == line && k.radius == r &&
+        k.picture_x == px && k.picture_y == py &&
         k.card.x1 == card.x1 && k.card.y1 == card.y1 && k.card.x2 == card.x2 && k.card.y2 == card.y2) {
       k.used = glass.uses;
       return k.px;
@@ -449,6 +508,9 @@ inline const uint16_t* kept_values(CardGlass& glass, int32_t px, int32_t py, con
   if (!k->px) return nullptr;
   const uint32_t fill_started = display_flush_gate::clock_us();
   fill(b.copy, px, py, look, card.x1, card.x2, card.y1, card.y2, k->px, w);
+  for (int32_t y = card.y1; y <= card.y2; ++y) {
+    line_row(k->px + static_cast<size_t>(y - card.y1) * w, card.x1, card, r, look, y, card.x1, card.x2);
+  }
   g_stats.fill_us += display_flush_gate::clock_us() - fill_started;
   ++g_stats.fills;
   ++g_kept_fills;
@@ -458,6 +520,8 @@ inline const uint16_t* kept_values(CardGlass& glass, int32_t px, int32_t py, con
   k->picture_x = px;
   k->picture_y = py;
   k->look = key;
+  k->line = line;
+  k->radius = r;
   k->used = glass.uses;
   return k->px;
 }
@@ -523,9 +587,10 @@ inline void compose_area(CardGlass& glass, lv_layer_t* layer, const lv_area_t& c
     return buf + static_cast<size_t>(y - layer->buf_area.y1) * stride + (area.x1 - layer->buf_area.x1);
   };
   const int32_t w = lv_area_get_width(&card_area);
-  if (const uint16_t* values = kept_values(glass, px, py, card_area, look)) {
+  const uint16_t* corner = corner_table(glass, r);
+  if (const uint16_t* values = kept_values(glass, px, py, card_area, r, look)) {
     for (int32_t y = area.y1; y <= area.y2; ++y) {
-      compose_row(values + static_cast<size_t>(y - card_area.y1) * w, card_area.x1, card_area, r, look, y,
+      compose_row(values + static_cast<size_t>(y - card_area.y1) * w, card_area.x1, card_area, r, corner, y,
                   area.x1, area.x2, layer_row(y));
     }
     return;
@@ -535,7 +600,8 @@ inline void compose_area(CardGlass& glass, lv_layer_t* layer, const lv_area_t& c
   if (!row) return;
   for (int32_t y = area.y1; y <= area.y2; ++y) {
     fill(glass.backdrop->copy, px, py, look, area.x1, area.x2, y, y, row, 0);
-    compose_row(row, area.x1, card_area, r, look, y, area.x1, area.x2, layer_row(y));
+    line_row(row, area.x1, card_area, r, look, y, area.x1, area.x2);
+    compose_row(row, area.x1, card_area, r, corner, y, area.x1, area.x2, layer_row(y));
   }
   lv_free(row);
 }
@@ -583,6 +649,7 @@ inline void on_card_delete(lv_event_t* e) {
   for (Kept& k : glass->kept) {
     if (k.px) lv_free(k.px);
   }
+  if (glass->corner) lv_free(glass->corner);
   glass->~CardGlass();
   lv_free(glass);
 }

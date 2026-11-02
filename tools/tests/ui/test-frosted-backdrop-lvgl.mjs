@@ -138,6 +138,50 @@ int main() {
       }
     }
   std::printf("exact %d\n", exact);
+  // The line mixed into the values and the corners from the table give the
+  // per-pixel result of b651 (ring and corner coverage at every edge pixel),
+  // also for a band through part of the card and without the table.
+  {
+    const lv_area_t c = {10, 20, 129, 69};
+    const int32_t r = 22, w = 120, h = 50;
+    frosted_backdrop::CardLook look;
+    look.tint[0] = 10; look.tint[1] = 200; look.tint[2] = 30; look.tint_opa = 128;
+    look.line = 0xffff; look.line_opa = 100;
+    std::vector<uint8_t> rgb(40 * 40 * 3);
+    for (size_t i = 0; i < rgb.size(); ++i) rgb[i] = static_cast<uint8_t>(i * 37);
+    const frosted_backdrop::Copy cp{rgb.data(), 40, 40};
+    std::vector<uint16_t> values(w * h), under(w * h);
+    frosted_backdrop::fill(cp, 0, 0, look, c.x1, c.x2, c.y1, c.y2, values.data(), w);
+    for (size_t i = 0; i < under.size(); ++i) under[i] = static_cast<uint16_t>(i * 2654435761u >> 16);
+    std::vector<uint16_t> before = under, table_out = under, plain_out = under, band_out = under;
+    for (int32_t y = c.y1; y <= c.y2; ++y)
+      for (int32_t x = c.x1; x <= c.x2; ++x) {
+        uint16_t pixel = values[(y - c.y1) * w + (x - c.x1)];
+        const uint32_t ring = frosted_backdrop::ring_coverage(c, r, x, y);
+        if (ring) pixel = frosted_backdrop::mix565(look.line, pixel, (ring * look.line_opa) / 255);
+        uint16_t& o = before[(y - c.y1) * w + (x - c.x1)];
+        o = frosted_backdrop::mix565(pixel, o, frosted_backdrop::corner_coverage(c, r, x, y));
+      }
+    std::vector<uint16_t> lined = values;
+    std::vector<uint16_t> table(r * r);
+    frosted_backdrop::fill_corner(table.data(), r);
+    for (int32_t y = c.y1; y <= c.y2; ++y) {
+      uint16_t* row = &lined[(y - c.y1) * w];
+      frosted_backdrop::line_row(row, c.x1, c, r, look, y, c.x1, c.x2);
+      frosted_backdrop::compose_row(row, c.x1, c, r, table.data(), y, c.x1, c.x2, &table_out[(y - c.y1) * w]);
+      frosted_backdrop::compose_row(row, c.x1, c, r, static_cast<const uint16_t*>(nullptr), y, c.x1, c.x2,
+                                    &plain_out[(y - c.y1) * w]);
+      frosted_backdrop::compose_row(row, c.x1, c, r, table.data(), y, c.x1 + 7, c.x2 - 31,
+                                    &band_out[(y - c.y1) * w + 7]);
+    }
+    bool band_same = true;
+    for (int32_t y = 0; y < h; ++y)
+      for (int32_t x = 0; x < w; ++x) {
+        const bool inside = x >= 7 && x <= w - 1 - 31;
+        band_same &= band_out[y * w + x] == (inside ? before[y * w + x] : under[y * w + x]);
+      }
+    std::printf("compose %d %d %d\n", table_out == before, plain_out == before, band_same);
+  }
   lv_init();
   static uint16_t buffer[W * 24];
   lv_display_t* d = lv_display_create(W, H);
@@ -295,6 +339,7 @@ const rows = Object.fromEntries(run.stdout.trim().split('\n').map((line) => {
 }));
 const why = `\n${run.stdout}`;
 assert.deepEqual(rows.exact, ['1'], `the reciprocal multiplications divide exactly${why}`);
+assert.deepEqual(rows.compose, ['1', '1', '1'], `the copied rows and the corner table give b651's per-pixel result${why}`);
 assert.deepEqual(rows.swap, ['1'], `a swapped picture blurs to the same copy${why}`);
 assert.deepEqual(rows.glass, ['1'], `a frosted card is marked glass${why}`);
 const inside = Number(rows.inside[0]);
@@ -317,14 +362,15 @@ const [fills, fillsOut, lines, linesOut] = rows.glass_tasks.map(Number);
 assert.ok(fills > 0 && fillsOut === fills && lines > 0 && linesOut === lines,
   `LVGL's fill and frame line of a frosted card are left out${why}`);
 assert.ok(Number(rows.opaque_tasks[0]) > 0 && rows.opaque_tasks[1] === '0', `an opaque card keeps its fill${why}`);
-assert.ok(Number(rows.stats[0]) > 0 && Number(rows.stats[1]) === 2, `the glass counts its draws and computed values${why}`);
+assert.ok(Number(rows.stats[0]) > 0 && Number(rows.stats[1]) === 3, `the glass counts its draws and computed values${why}`);
 const [ringRed, cornerRed] = rows.corners.map(Number);
 assert.ok(cornerRed <= ringRed + 1, `the rounded corners mix with the picture, not with LVGL's opaque line${why}`);
 assert.equal(rows.band[0], '1', `the band copy gate is in place${why}`);
 assert.ok(Number(rows.band[1]) < outside / 20, `a card drawn while the band before is still copied keeps its glass${why}`);
-// Two looks so far (clear, then 50 % black): the shadow, the frame line, the
-// opaque detour and the band redraw copied the kept values.
-assert.deepEqual(rows.kept.slice(0, 4), ['2', '2', '3', '4'], `kept per look and place, computed again when moved or over a new copy${why}`);
+// Clear, then 50 % black: the shadow copied the kept values; the frame line
+// is mixed into them (a third look), and the band redraw's clear look is
+// computed again since two looks are kept.
+assert.deepEqual(rows.kept.slice(0, 4), ['2', '4', '5', '6'], `kept per look and place, computed again when moved or over a new copy${why}`);
 assert.ok(Number(rows.kept[4]) < outside / 20, `the moved card is glass${why}`);
 assert.equal(rows.shot[0], '1', `the snapshot was taken${why}`);
 assert.ok(Number(rows.shot[2]) > 500 && Number(rows.shot[1]) < Number(rows.shot[2]) / 20,

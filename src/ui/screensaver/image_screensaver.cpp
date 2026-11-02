@@ -113,7 +113,7 @@ struct ScreensaverState {
   uint32_t last_shift_ms = 0;
 #if defined(HOMETILES_FROSTED_TILES)
   // The slide blurred at a quarter of its size (frosted_backdrop.h).
-  lv_image_dsc_t* frosted = nullptr;
+  frosted_backdrop::Copy frosted;
 #endif
   ~ScreensaverState() { delete shown_grid; }
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
@@ -1349,55 +1349,40 @@ void rebuild_global_clock(ScreensaverState* st) {
 
 // Shows a decoded picture in the overlay at once.
 #if defined(HOMETILES_FROSTED_TILES)
-// The slide blurred once at a quarter of its size for the see-through tiles.
-// The copy is reused while the size stays; LVGL caches images by address,
-// so its entry is dropped before the pixels change.
+// The slide blurred once at a quarter of its size for the see-through tiles;
+// the copy is reused while the size stays.
 void update_frosted_backdrop(ScreensaverState* st, const lv_image_dsc_t* picture) {
   g_backdrop.picture = st->image;
   const bool swapped = picture && picture->header.cf == LV_COLOR_FORMAT_RGB565_SWAPPED;
   if (!picture || !picture->data || (picture->header.cf != LV_COLOR_FORMAT_RGB565 && !swapped)) {
-    g_backdrop.image = nullptr;
+    g_backdrop.copy = frosted_backdrop::Copy{};
     return;
   }
   const int w = picture->header.w;
   const int h = picture->header.h;
   const int sw = frosted_backdrop::shrunk(w);
   const int sh = frosted_backdrop::shrunk(h);
-  if (st->frosted && (st->frosted->header.w != static_cast<uint32_t>(sw) ||
-                      st->frosted->header.h != static_cast<uint32_t>(sh))) {
-    free_screensaver_dsc(st->frosted);
+  const size_t bytes = frosted_backdrop::copy_bytes(sw, sh);
+  if (st->frosted.rgb && (st->frosted.w != sw || st->frosted.h != sh)) {
+    free(st->frosted.rgb);
+    st->frosted = frosted_backdrop::Copy{};
   }
-  const size_t bytes = static_cast<size_t>(sw) * sh * sizeof(uint16_t);
-  if (!st->frosted) {
-    uint8_t* data = static_cast<uint8_t*>(alloc_prefer_psram(bytes));
-    lv_image_dsc_t* dsc = data ? static_cast<lv_image_dsc_t*>(calloc(1, sizeof(lv_image_dsc_t))) : nullptr;
-    if (!dsc) {
-      free(data);
-      g_backdrop.image = nullptr;
-      return;
-    }
-    dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
-    dsc->header.cf = LV_COLOR_FORMAT_RGB565;
-    dsc->header.w = sw;
-    dsc->header.h = sh;
-    dsc->header.stride = sw * sizeof(uint16_t);
-    dsc->data_size = bytes;
-    dsc->data = data;
-    st->frosted = dsc;
-  }
-  uint16_t* scratch = static_cast<uint16_t*>(alloc_prefer_psram(bytes));
-  if (!scratch) {
-    g_backdrop.image = nullptr;
+  if (!st->frosted.rgb) st->frosted.rgb = static_cast<uint8_t*>(alloc_prefer_psram(bytes));
+  uint8_t* scratch = static_cast<uint8_t*>(alloc_prefer_psram(bytes));
+  uint32_t* sums = static_cast<uint32_t*>(malloc(static_cast<size_t>(sw) * 3 * sizeof(uint32_t)));
+  if (!st->frosted.rgb || !scratch || !sums) {
+    free(scratch);
+    free(sums);
+    g_backdrop.copy = frosted_backdrop::Copy{};
     return;
   }
-  lv_image_cache_drop(st->frosted);
   const uint32_t started = millis();
   frosted_backdrop::shrink_and_blur(reinterpret_cast<const uint16_t*>(picture->data), w, h,
                                     static_cast<int>(picture->header.stride / sizeof(uint16_t)), swapped,
-                                    reinterpret_cast<uint16_t*>(const_cast<uint8_t*>(st->frosted->data)), scratch);
+                                    st->frosted, scratch, sums);
   free(scratch);
-  g_backdrop.image = st->frosted;
-  ++g_backdrop.generation;
+  free(sums);
+  g_backdrop.copy = st->frosted;
   Serial.printf("[Screensaver] Frosted backdrop %dx%d in %u ms\n", sw, sh,
                 static_cast<unsigned>(millis() - started));
 }
@@ -2127,8 +2112,9 @@ void on_global_overlay_delete(lv_event_t* e) {
   }
 #endif
 #if defined(HOMETILES_FROSTED_TILES)
-  if (g_backdrop.image == st->frosted) g_backdrop = frosted_backdrop::Backdrop{};
-  free_screensaver_dsc(st->frosted);
+  if (g_backdrop.copy.rgb == st->frosted.rgb) g_backdrop = frosted_backdrop::Backdrop{};
+  free(st->frosted.rgb);
+  st->frosted = frosted_backdrop::Copy{};
 #endif
   delete st;
 }

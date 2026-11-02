@@ -37,6 +37,12 @@ void image_screensaver_config_changed(
 // a hidden one decodes it ahead.
 void image_screensaver_picture_arrived(const char* entity_id);
 
+// A new state of an entity (tiles_update_sensor_by_entity): a screensaver
+// tile showing it, or following it with a rule, takes it at once instead of
+// with the once-a-second refresh (a Media tile's next track came up to a
+// second after the popup's, user 2026-11-02).
+void image_screensaver_entity_changed(const char* entity_id);
+
 // A Bridge picture for a Camera tile (types/camera/picture.cpp), decoded with
 // the screensaver's decoders so tiles share its hardware JPEG engine (P4) and
 // its PSRAM budget: native RGB565 (LV_COLOR_FORMAT_RGB565) of the JPEG's own

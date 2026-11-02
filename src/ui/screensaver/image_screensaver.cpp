@@ -162,6 +162,13 @@ String g_live_preview_wallpaper;
 // A new Home Assistant picture arrived for the open screensaver; its timer
 // shows it in the LVGL context.
 bool g_ha_picture_arrived = false;
+// A tile's entity changed state (image_screensaver_entity_changed); its timer
+// refreshes the tiles' values in the LVGL context.
+bool g_slot_values_changed = false;
+#if defined(HOMETILES_FROSTED_TILES)
+// When the frosted cards' time was last logged (once a second at most).
+uint32_t g_frosted_logged_ms = 0;
+#endif
 // The camera whose still is subscribed while the screensaver shows it, with
 // its placement and interval (sync_live_picture).
 String g_live_picture_entity;
@@ -2095,9 +2102,11 @@ void global_screensaver_timer_cb(lv_timer_t* timer) {
   ScreensaverState* st = static_cast<ScreensaverState*>(lv_timer_get_user_data(timer));
   if (!st || st != g_state) return;
 #if defined(HOMETILES_FROSTED_TILES)
-  // The frosted cards' own time since the last tick, only when they drew.
+  // The frosted cards' own time since the last log, only when they drew; the
+  // timer also runs early for a tile's new state.
   frosted_backdrop::Stats& frosted = frosted_backdrop::g_stats;
-  if (frosted.draws) {
+  if (frosted.draws && static_cast<uint32_t>(millis() - g_frosted_logged_ms) >= 1000U) {
+    g_frosted_logged_ms = millis();
     Serial.printf("[Frosted] %u card draws: band wait %u.%u ms, drawn %u.%u ms (%u computed in %u.%u ms)\n",
                   static_cast<unsigned>(frosted.draws), static_cast<unsigned>(frosted.wait_us / 1000),
                   static_cast<unsigned>(frosted.wait_us / 100 % 10), static_cast<unsigned>(frosted.draw_us / 1000),
@@ -2127,7 +2136,8 @@ void global_screensaver_timer_cb(lv_timer_t* timer) {
     }
   }
   const uint32_t now = millis();
-  if (static_cast<int32_t>(now - st->next_slot_refresh_ms) >= 0) {
+  if (g_slot_values_changed || static_cast<int32_t>(now - st->next_slot_refresh_ms) >= 0) {
+    g_slot_values_changed = false;
     refresh_slot_values(st);
     st->next_slot_refresh_ms = now + 1000U;
   }
@@ -2559,6 +2569,22 @@ void image_screensaver_picture_arrived(const char* entity_id) {
   // Decoded ahead, so the screensaver opens with it at once.
   g_preload_ha_picture = true;
   schedule_preload(1000);
+}
+
+void image_screensaver_entity_changed(const char* entity_id) {
+  ScreensaverState* st = g_state;
+  if (!st || !st->timer || !entity_id || !entity_id[0]) return;
+  const TileGridConfig& grid = screensaverConfig.tileGrid();
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    const Tile& tile = grid.tiles[i];
+    if (!st->slot_objs[i]) continue;
+    if (tile.sensor_entity.equalsIgnoreCase(entity_id) ||
+        (tile.icon_colors.length() && tile_icon_source::rule_entity(tile).equalsIgnoreCase(entity_id))) {
+      g_slot_values_changed = true;
+      lv_timer_ready(st->timer);
+      return;
+    }
+  }
 }
 
 void image_screensaver_tiles_changed() {

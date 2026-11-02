@@ -25,8 +25,21 @@ assert.match(screensaver, /set_image_src_without_invalidation\(st->image, dsc\);
   'every new slide is blurred before its frame is composed');
 assert.match(screensaver, /if \(opacity < LV_OPA_COVER\) \{[\s\S]*?frosted_backdrop::attach\(tile_obj, &g_backdrop\);/,
   'only see-through cards draw the backdrop');
-assert.match(screensaver, /free\(st->frosted\.rgb\);\n  st->frosted = frosted_backdrop::Copy\{\};\n#endif\n  delete st;/, 'the copy goes with the screensaver');
+assert.match(screensaver, /if \(st->frosted\.rgb\) lv_free\(st->frosted\.rgb\);\n  st->frosted = frosted_backdrop::Copy\{\};\n#endif\n  delete st;/, 'the copy goes with the screensaver');
+// From LVGL's pool: kept in the system PSRAM between the slides' pictures it
+// split the free space until a 2 MB screenshot no longer fitted (V2 b646).
+const update = screensaver.slice(screensaver.indexOf('void update_frosted_backdrop('), screensaver.indexOf('void present_picture('));
+assert.match(update, /st->frosted\.rgb = static_cast<uint8_t\*>\(lv_malloc\(bytes\)\);/);
+assert.match(update, /uint8_t\* scratch = static_cast<uint8_t\*>\(lv_malloc\(bytes\)\);/);
+assert.doesNotMatch(update, /alloc_prefer_psram|heap_caps_malloc|\bmalloc\(/, 'nothing from the system PSRAM');
 assert.match(screensaver, /picture->header\.cf == LV_COLOR_FORMAT_RGB565_SWAPPED/, 'the S3 and hardware-decoded pictures (swapped) blur too');
+// Only the fill is glass: tile_icon_disc treats a glass card as opaque for
+// its circles, controls and graphs (see_through) and as their background
+// (card_of), so they keep the pages' colors (user 2026-11-02).
+const disc = readRepoFile('src/tiles/runtime/tile_icon_disc.h').replace(/\r\n/g, '\n');
+assert.match(disc, /inline bool see_through\(lv_obj_t\* card\) \{\n  return !card \|\| \(lv_obj_get_style_bg_opa\(card, LV_PART_MAIN\) < LV_OPA_COVER && !tile_glass::is_glass\(card\)\);/);
+assert.match(disc, /< LV_OPA_50 && !tile_glass::is_glass\(host\); \+\+depth\)/);
+assert.match(header, /tile_glass::mark\(card\);/);
 assert.match(header, /lv_obj_add_event_cb\(card, on_card_draw_end, LV_EVENT_DRAW_MAIN_END/,
   'drawn after LVGL\'s shadow, fill and line');
 assert.match(header, /#if \(defined\(HOMETILES_ISSUE38_BETA\) \|\| defined\(HOMETILES_TEST_BETA\)\) && !defined\(HOMETILES_FROSTED_TILES\)/,
@@ -111,7 +124,11 @@ int main() {
   lv_obj_set_style_radius(card, 20, 0);
   lv_obj_set_style_bg_color(card, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(card, LV_OPA_TRANSP, 0);
+  lv_obj_t* inner_label = lv_label_create(card);
   frosted_backdrop::attach(card, &backdrop);
+  // Only the fill is glass: the contents see an opaque card.
+  std::printf("glass %d\n", tile_glass::is_glass(card));
+  (void)inner_label;
   lv_refr_now(d);
   // Inside the card: smooth. Beside it and in the rounded corner: the checker.
   std::printf("inside %.1f outside %.1f\n", spread(100, 70, 16), spread(240, 140, 16));
@@ -170,6 +187,7 @@ const rows = Object.fromEntries(run.stdout.trim().split('\n').map((line) => {
 }));
 const why = `\n${run.stdout}`;
 assert.deepEqual(rows.swap, ['1'], `a swapped picture blurs to the same copy${why}`);
+assert.deepEqual(rows.glass, ['1'], `a frosted card is marked glass${why}`);
 const inside = Number(rows.inside[0]);
 const outside = Number(rows.inside[2]);
 assert.ok(outside > 500 && inside < outside / 20, `the card shows the blurred picture, the rest the sharp one${why}`);

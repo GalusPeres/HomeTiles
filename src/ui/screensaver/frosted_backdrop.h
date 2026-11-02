@@ -8,6 +8,8 @@
 #include <lvgl.h>
 #include <lvgl_private.h>
 
+#include "src/tiles/runtime/tile_glass.h"
+
 // Frosted glass behind see-through screensaver tiles (user 2026-11-02, test
 // builds only for now). The slide's picture is averaged down to a quarter of
 // its size per axis with 8 bits per channel (V2 320x200 = 188 KB, S3 120x120
@@ -217,7 +219,7 @@ inline void paint(const Copy& copy, int32_t px, int32_t py, const lv_area_t& car
   const int32_t span = i_last - i_first + 1;
   // One row of the copy interpolated vertically, 8.8 per channel.
   uint16_t stack_row[3 * 96];
-  uint16_t* row = span <= 96 ? stack_row : static_cast<uint16_t*>(malloc(static_cast<size_t>(span) * 3 * sizeof(uint16_t)));
+  uint16_t* row = span <= 96 ? stack_row : static_cast<uint16_t*>(lv_malloc(static_cast<size_t>(span) * 3 * sizeof(uint16_t)));
   if (!row) return;
   auto clampi = [](int32_t v, int32_t hi) { return v < 0 ? 0 : (v > hi ? hi : v); };
   // The tint over the copy: value * (255 - opa) / 255 + tint * opa / 255, in 8.8.
@@ -266,7 +268,7 @@ inline void paint(const Copy& copy, int32_t px, int32_t py, const lv_area_t& car
       *out = mix565(pixel, *out, corner_coverage(card, r, x, y));
     }
   }
-  if (row != stack_row) free(row);
+  if (row != stack_row) lv_free(row);
 }
 
 // The card's tint (its own fill at its own opacity) and frame line (LVGL's
@@ -315,9 +317,13 @@ inline void on_card_draw_end(lv_event_t* e) {
         static_cast<int32_t>(layer->draw_buf->header.stride / sizeof(uint16_t)), layer->buf_area, area);
 }
 
-// A see-through card draws the backdrop under its tint from now on.
+// A see-through card draws the backdrop under its tint from now on; only
+// its fill is glass: its circles, controls and graphs keep the colors of
+// an opaque card (user 2026-11-02, tile_glass.h).
 inline void attach(lv_obj_t* card, const Backdrop* backdrop) {
-  if (card && backdrop) lv_obj_add_event_cb(card, on_card_draw_end, LV_EVENT_DRAW_MAIN_END, const_cast<Backdrop*>(backdrop));
+  if (!card || !backdrop) return;
+  tile_glass::mark(card);
+  lv_obj_add_event_cb(card, on_card_draw_end, LV_EVENT_DRAW_MAIN_END, const_cast<Backdrop*>(backdrop));
 }
 
 }  // namespace frosted_backdrop

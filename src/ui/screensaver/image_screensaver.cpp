@@ -1363,16 +1363,19 @@ void update_frosted_backdrop(ScreensaverState* st, const lv_image_dsc_t* picture
   const int sw = frosted_backdrop::shrunk(w);
   const int sh = frosted_backdrop::shrunk(h);
   const size_t bytes = frosted_backdrop::copy_bytes(sw, sh);
+  // From LVGL's own pool, not the system PSRAM: the copy kept between the
+  // slides' large pictures split the free PSRAM until a screenshot's 2 MB
+  // no longer fitted (V2 b646: largest block 6015 -> 1983 KB).
   if (st->frosted.rgb && (st->frosted.w != sw || st->frosted.h != sh)) {
-    free(st->frosted.rgb);
+    lv_free(st->frosted.rgb);
     st->frosted = frosted_backdrop::Copy{};
   }
-  if (!st->frosted.rgb) st->frosted.rgb = static_cast<uint8_t*>(alloc_prefer_psram(bytes));
-  uint8_t* scratch = static_cast<uint8_t*>(alloc_prefer_psram(bytes));
-  uint32_t* sums = static_cast<uint32_t*>(malloc(static_cast<size_t>(sw) * 3 * sizeof(uint32_t)));
+  if (!st->frosted.rgb) st->frosted.rgb = static_cast<uint8_t*>(lv_malloc(bytes));
+  uint8_t* scratch = static_cast<uint8_t*>(lv_malloc(bytes));
+  uint32_t* sums = static_cast<uint32_t*>(lv_malloc(static_cast<size_t>(sw) * 3 * sizeof(uint32_t)));
   if (!st->frosted.rgb || !scratch || !sums) {
-    free(scratch);
-    free(sums);
+    if (scratch) lv_free(scratch);
+    if (sums) lv_free(sums);
     g_backdrop.copy = frosted_backdrop::Copy{};
     return;
   }
@@ -1380,8 +1383,8 @@ void update_frosted_backdrop(ScreensaverState* st, const lv_image_dsc_t* picture
   frosted_backdrop::shrink_and_blur(reinterpret_cast<const uint16_t*>(picture->data), w, h,
                                     static_cast<int>(picture->header.stride / sizeof(uint16_t)), swapped,
                                     st->frosted, scratch, sums);
-  free(scratch);
-  free(sums);
+  lv_free(scratch);
+  lv_free(sums);
   g_backdrop.copy = st->frosted;
   Serial.printf("[Screensaver] Frosted backdrop %dx%d in %u ms\n", sw, sh,
                 static_cast<unsigned>(millis() - started));
@@ -2113,7 +2116,7 @@ void on_global_overlay_delete(lv_event_t* e) {
 #endif
 #if defined(HOMETILES_FROSTED_TILES)
   if (g_backdrop.copy.rgb == st->frosted.rgb) g_backdrop = frosted_backdrop::Backdrop{};
-  free(st->frosted.rgb);
+  if (st->frosted.rgb) lv_free(st->frosted.rgb);
   st->frosted = frosted_backdrop::Copy{};
 #endif
   delete st;

@@ -475,18 +475,28 @@ inline bool paints(const CardGlass* glass, lv_obj_t* card, const lv_layer_t* lay
 // LVGL's own fill and frame line of a card the glass paints are left out:
 // the glass draws both itself, and its rounded edge mixed with them instead
 // of the picture under the card (the opaque line showed through the corners,
-// frayed, user 2026-11-02 b648). The shadow stays, and a line drawn over the
-// children (border_post, Camera tiles).
+// frayed, user 2026-11-02 b648). A line drawn over the children stays
+// (border_post, Camera tiles). The shadow stays and is told that the card
+// covers it, as the glass does: under a see-through card LVGL masked every
+// shadow pixel against the card's rounded shape, and the kept shadow
+// (kept_shadow.h) left it to LVGL, about 10-30 ms per card when a popup
+// closed (V2 b649).
 inline void on_card_task(lv_event_t* e) {
   lv_draw_task_t* task = lv_event_get_draw_task(e);
   lv_obj_t* card = lv_event_get_current_target_obj(e);
   if (!task || !card) return;
-  const auto* base = static_cast<const lv_draw_dsc_base_t*>(lv_draw_task_get_draw_dsc(task));
+  auto* base = static_cast<lv_draw_dsc_base_t*>(lv_draw_task_get_draw_dsc(task));
   if (!base || base->obj != card || base->part != LV_PART_MAIN) return;
   const lv_draw_task_type_t type = lv_draw_task_get_type(task);
   const bool fill_task = type == LV_DRAW_TASK_TYPE_FILL;
   const bool line_task = type == LV_DRAW_TASK_TYPE_BORDER && !lv_obj_get_style_border_post(card, LV_PART_MAIN);
-  if ((!fill_task && !line_task) || !paints(static_cast<CardGlass*>(lv_event_get_user_data(e)), card, base->layer)) {
+  const bool shadow_task = type == LV_DRAW_TASK_TYPE_BOX_SHADOW;
+  if ((!fill_task && !line_task && !shadow_task) ||
+      !paints(static_cast<CardGlass*>(lv_event_get_user_data(e)), card, base->layer)) {
+    return;
+  }
+  if (shadow_task) {
+    static_cast<lv_draw_box_shadow_dsc_t*>(static_cast<void*>(base))->bg_cover = 1;
     return;
   }
   // Done before it is drawn: LVGL's dispatch takes waiting tasks only and

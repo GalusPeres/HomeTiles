@@ -2493,6 +2493,10 @@ void mqttPublishSwitchCommand(const char* entity_id, const char* state) {
   Serial.printf("Switch command -> '%s' (%s)\n", topic, queued ? "queued" : "queue-full");
 }
 
+static uint32_t g_last_media_command_ms = 0;
+
+uint32_t mqttLastMediaCommandMs() { return g_last_media_command_ms; }
+
 void mqttPublishMediaCommand(const char* entity_id, const char* command) {
   if (!entity_id || !*entity_id) return;
 
@@ -2511,6 +2515,7 @@ void mqttPublishMediaCommand(const char* entity_id, const char* command) {
   char payload[256];
   snprintf(payload, sizeof(payload), "{\"entity_id\":\"%s\",\"command\":\"%s\"}", entity_id, action);
   bool queued = networkManager.mqttEnqueuePublishPriority(topic, payload, false);
+  if (queued) g_last_media_command_ms = millis() | 1U;
   Serial.printf("Media command -> '%s' (%s, priority)\n",
                 topic, queued ? "queued" : "queue-full");
 }

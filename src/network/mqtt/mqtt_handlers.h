@@ -30,6 +30,8 @@ void mqttPublishDiscovery();
 void mqttPublishScene(const char* scene_name);
 void mqttPublishSwitchCommand(const char* entity_id, const char* state);
 void mqttPublishMediaCommand(const char* entity_id, const char* command);
+// millis() of the last media command sent (0 = none), for the cover timing log.
+uint32_t mqttLastMediaCommandMs();
 void mqttPublishMediaSeek(const char* entity_id, float position_seconds);
 void mqttPublishMediaVolume(const char* entity_id, float volume_level);
 void mqttPublishMediaMute(const char* entity_id, bool muted);

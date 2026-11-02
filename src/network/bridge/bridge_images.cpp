@@ -3,6 +3,7 @@
 #include <esp_heap_caps.h>
 
 #include "src/core/memory/psram_static.h"
+#include "src/network/mqtt/mqtt_handlers.h"
 #include "src/network/mqtt/mqtt_topics.h"
 #include "src/tiles/config/grid_layout.h"
 #include "src/tiles/runtime/tile_renderer.h"
@@ -126,10 +127,20 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
   slot->height = header.height;
   slot->fit = fit;
   slot->used = ++g_tick;
-  Serial.printf("[Images] %s %s %ux%u, %u bytes | int=%u KB min=%u KB\n", entity, header.key,
+  // A new cover's way from the panel's media command (a track change) to
+  // here; the panel draws it within milliseconds after (user 2026-11-02, b649).
+  char after_command[48] = "";
+  const uint32_t command_ms = mqttLastMediaCommandMs();
+  const uint32_t since_command = millis() - command_ms;
+  if (command_ms && since_command < 30000U && strncmp(entity, "media_player.", 13) == 0) {
+    snprintf(after_command, sizeof(after_command), " | %u ms after the media command",
+             static_cast<unsigned>(since_command));
+  }
+  Serial.printf("[Images] %s %s %ux%u, %u bytes | int=%u KB min=%u KB%s\n", entity, header.key,
                 header.width, header.height, static_cast<unsigned>(jpeg_length),
                 static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
-                static_cast<unsigned>(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024));
+                static_cast<unsigned>(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024),
+                after_command);
   announce(entity);
   return true;
 }

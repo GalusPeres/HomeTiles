@@ -17,7 +17,9 @@
 // LVGL's own fill and opaque frame line are left out under the glass, so
 // the rounded corners mix with the picture, not with an opaque line
 // (frayed corners, b648); and the screenshot's ARGB8888 snapshot shows the
-// glass like the panel.
+// glass like the panel. Its shadow is told the card covers it: LVGL masked
+// every shadow pixel of a see-through card and the kept shadow left it to
+// LVGL (10-30 ms per card per popup close, b649).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -92,7 +94,7 @@ static bool copy_done() { return display_flush_gate::clock_us() >= copy_until; }
 static void copy_finish() {}
 // The card's own fill and line tasks as LVGL adds them, after the glass
 // had its say (registered after attach): seen, and left out (finished).
-static int tasks[4];
+static int tasks[6];
 static void observe(lv_event_t* e) {
   lv_draw_task_t* t = lv_event_get_draw_task(e);
   const auto* base = static_cast<const lv_draw_dsc_base_t*>(lv_draw_task_get_draw_dsc(t));
@@ -100,6 +102,10 @@ static void observe(lv_event_t* e) {
   const bool done = t->state == LV_DRAW_TASK_STATE_FINISHED;
   if (t->type == LV_DRAW_TASK_TYPE_FILL) { ++tasks[0]; tasks[1] += done; }
   if (t->type == LV_DRAW_TASK_TYPE_BORDER) { ++tasks[2]; tasks[3] += done; }
+  if (t->type == LV_DRAW_TASK_TYPE_BOX_SHADOW) {
+    ++tasks[4];
+    tasks[5] += static_cast<const lv_draw_box_shadow_dsc_t*>(t->draw_dsc)->bg_cover;
+  }
 }
 static uint16_t frame[W * H];
 static void flush(lv_display_t* d, const lv_area_t* a, uint8_t* map) {
@@ -201,7 +207,9 @@ int main() {
   lv_obj_set_style_shadow_spread(card, 3, 0);
   lv_obj_set_style_shadow_opa(card, LV_OPA_80, 0);
   lv_obj_set_style_shadow_color(card, lv_color_hex(0x000000), 0);
+  std::memset(tasks, 0, sizeof(tasks));
   lv_refr_now(d);
+  std::printf("shadow_tasks %d %d\n", tasks[4], tasks[5]);
   int inner_changed = 0, outer_changed = 0;
   for (int y = 46; y < 130; ++y) for (int x = 66; x < 174; ++x) inner_changed += frame[y * W + x] != no_shadow[y * W + x];
   for (int x = 40; x < 200; ++x) outer_changed += frame[36 * W + x] != no_shadow[36 * W + x];
@@ -298,6 +306,8 @@ const [plain, tinted] = rows.tint.map(Number);
 assert.ok(Math.abs(tinted - plain / 2) <= 2, `a 50 % black tint halves the frosted pixels${why}`);
 assert.equal(Number(rows.shadow[0]), 0, `the shadow stays out of the card${why}`);
 assert.ok(Number(rows.shadow[1]) > 0, `and shows around it${why}`);
+const [shadows, covered] = rows.shadow_tasks.map(Number);
+assert.ok(shadows > 0 && covered === shadows, `the shadow of a frosted card is drawn as covered by the card${why}`);
 assert.deepEqual(rows.line, ['1', '1', '1'], `the frame line is translucent at the card's opacity${why}`);
 assert.deepEqual(rows.opaque, ['1'], `an opaque card draws no backdrop${why}`);
 // Under the glass LVGL's own fill and opaque frame line are left out: the

@@ -39,7 +39,7 @@ const FontSize kValueFonts[] = {
 const char kUnitTag = 0;
 // The degree sign of a unit ("°C") gets its own label: the font's degree
 // glyph is small, and at a large value it would nearly vanish beside the
-// digits (user 2026-11-03). It is drawn one step and a half larger.
+// digits (user 2026-11-03). It is drawn 1.75 times the unit font.
 const char kDegreeTag = 1;
 
 // The full text fonts a degree sign may use, ascending.
@@ -81,7 +81,7 @@ bool has_degree(const char* unit) {
 const lv_font_t* degree_font(const lv_font_t* unit_font) {
   const uint8_t px = px_of(unit_font);
   if (!px) return unit_font;
-  const uint8_t want = static_cast<uint8_t>((px * 3 + 1) / 2);
+  const uint8_t want = static_cast<uint8_t>((px * 7 + 3) / 4);
   for (const FontSize& size : kDegreeFonts) {
     if (size.px >= want) return size.font;
   }

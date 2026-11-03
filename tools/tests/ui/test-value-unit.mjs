@@ -114,8 +114,8 @@ has('src/types/power_flow/admin.js', `(parts[1] ? '<span class="tile-unit">' + e
 const escapeHtml = text => String(text).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
 const unitHtml = new Function('escapeHtml', extractDeliveredFunction('unitHtml') + '\nreturn unitHtml;')(escapeHtml);
 const unitTextHtml = new Function('escapeHtml', 'unitHtml', extractDeliveredFunction('unitTextHtml') + '\nreturn unitTextHtml;')(escapeHtml, unitHtml);
-assert.match(read('src/web/assets/admin.css'), /\.tile-unit-degree\s*\{[^}]*font-size:1\.5em/,
-  'the degree sign is drawn 1.5x the unit font in the preview');
+assert.match(read('src/web/assets/admin.css'), /\.tile-unit-degree\s*\{[^}]*font-size:1\.75em/,
+  'the degree sign is drawn 1.75x the unit font in the preview');
 assert.ok(read('src/types/sensor/admin-format.js').includes('function unitHtml(unit)'),
   'the preview unit HTML keeps a leading degree sign apart');
 const cases = [['21,5 °C', '21,5', '°C'], ['Open · 58 %', 'Open · 58', '%'], ['75%', '75', '%'], ['-- °C'], ['Off'],

@@ -1923,7 +1923,7 @@
     /* A leading degree sign is enlarged on its own: at a large value the
        font's degree glyph would nearly vanish beside the digits
        (value_unit.cpp draws it in a larger font on the panel). */
-    .tile-unit-degree { font-size:1.5em; line-height:0; vertical-align:.1em; }
+    .tile-unit-degree { font-size:1.75em; line-height:0; vertical-align:.1em; }
     .tile.binary_sensor,
     .tile.number,
     .tile.select,

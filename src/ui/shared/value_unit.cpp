@@ -31,7 +31,7 @@ const FontSize kValueFonts[] = {
 #endif
     {&ui_font_16, 16}, {&ui_font_20, 20}, {&ui_font_24, 24}, {&ui_font_28, 28}, {&ui_font_32, 32},
     {&ui_font_40, 40}, {&ui_font_48, 48}, {&ui_font_56, 56}, {&ui_font_64, 64}, {&ui_font_72, 72},
-    {&ui_font_80, 80}, {&ui_font_96, 96},
+    {&ui_font_80, 80}, {&ui_font_96, 96}, {&ui_font_120, 120},
 };
 
 // A unit label carries this tag as its user data, so its value label finds

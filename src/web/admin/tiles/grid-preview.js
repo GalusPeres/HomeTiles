@@ -1026,7 +1026,7 @@
         const unit = resolveUnitValue(tile.sensor_unit || '', tile.sensor_entity || '', metaUnits);
         html += '<div class="tile-value ' + sensorValueClass + '" id="' + tab + '-tile-' + index + '-value">' +
           escapeHtml(value) +
-          (unit ? '<span class="tile-unit">' + escapeHtml(unit) + '</span>' : '') +
+          (unit ? unitHtml(unit) : '') +
           '</div>';
       }
       if (previewKind === 'climate') {

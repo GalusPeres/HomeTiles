@@ -8542,7 +8542,7 @@ async function saveGestureEdge(select) {
       const entity = entitySelect ? entitySelect.value : '';
       const unit = resolveUnitValue(unitInput ? unitInput.value : '', entity, sensorMetaCache.units);
       html += '<div class="tile-value ' + sensorValueClass + '" id="' + tileId + '-value">--';
-      if (unit) html += '<span class="tile-unit">' + escapeHtml(unit) + '</span>';
+      if (unit) html += unitHtml(unit);
       html += '</div>';
       if (entity) {
         tileElem.innerHTML = html;
@@ -11401,7 +11401,7 @@ async function saveGestureEdge(select) {
         const unit = resolveUnitValue(tile.sensor_unit || '', tile.sensor_entity || '', metaUnits);
         html += '<div class="tile-value ' + sensorValueClass + '" id="' + tab + '-tile-' + index + '-value">' +
           escapeHtml(value) +
-          (unit ? '<span class="tile-unit">' + escapeHtml(unit) + '</span>' : '') +
+          (unit ? unitHtml(unit) : '') +
           '</div>';
       }
       if (previewKind === 'climate') {
@@ -16423,6 +16423,20 @@ function maybeFillTitleFromSensor(tab) {
     maybeFillTitleFromEntity(tab, '_sensor_entity');
   }
 
+  // A unit's HTML, the unit a step smaller (.tile-unit). A leading degree
+  // sign gets its own span: the font's degree glyph is small, and at a large
+  // value it nearly vanishes beside the digits (user 2026-11-03). The span
+  // scales it up without growing the rest of the unit.
+  function unitHtml(unit) {
+    const text = String(unit ?? '');
+    if (!text) return '';
+    if (text.codePointAt(0) === 0xB0) {
+      return '<span class="tile-unit"><span class="tile-unit-degree">\u00B0</span>' +
+        escapeHtml(text.slice(1)) + '</span>';
+    }
+    return '<span class="tile-unit">' + escapeHtml(text) + '</span>';
+  }
+
   // A finished text with its unit after a number ("21,5 °C", "Open · 58 %")
   // as HTML, the unit a step smaller (.tile-unit), like the panel's
   // value_unit::show_text (value_unit_rules.h split_unit): the last word, or
@@ -16433,7 +16447,7 @@ function maybeFillTitleFromSensor(tab) {
     const match = /^([^\n]*\d) ?([^ \d\n]+)$/.exec(value);
     const bytes = match ? [...match[2]].reduce((n, c) => n + (c.codePointAt(0) < 0x80 ? 1 : c.codePointAt(0) < 0x800 ? 2 : c.codePointAt(0) < 0x10000 ? 3 : 4), 0) : 0;
     if (!match || bytes > 12) return escapeHtml(value);
-    return escapeHtml(match[1]) + '<span class="tile-unit">' + escapeHtml(match[2]) + '</span>';
+    return escapeHtml(match[1]) + unitHtml(match[2]);
   }
 
   // A unit's inline size for a number of `valuePx` panel pixels, the step

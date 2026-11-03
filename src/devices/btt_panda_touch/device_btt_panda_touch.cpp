@@ -446,6 +446,30 @@ void displayWaitDisplay() {
   g_displayedBuffer = drawn;
   g_framebuffer = g_framebuffers[g_displayedBuffer == 0 ? 1 : 0];
   g_frameOpen = false;
+  // A starved bounce-fill interrupt lets the scanout phase drift until the
+  // shift sticks, even after the load is gone. Re-anchor the RGB stream
+  // after damage-heavy frames, and as a safety net at most once every five
+  // minutes while frames keep coming.
+  {
+    const int32_t w = g_previousX1 - g_previousX0 + 1;
+    const int32_t h = g_previousY1 - g_previousY0 + 1;
+    const int64_t area =
+        (w > 0 && h > 0) ? static_cast<int64_t>(w) * h : 0;
+    constexpr int64_t kResyncArea = (800L * 480L) / 2;
+    const uint32_t now = millis();
+    static uint32_t last_resync_ms = 0;
+    static bool saw_frame = false;
+    if (area > 0) saw_frame = true;
+    const bool big = area >= kResyncArea;
+    const bool due = (now - last_resync_ms >= 5UL * 60UL * 1000UL);
+    const bool cooled =
+        (last_resync_ms == 0 || now - last_resync_ms >= 1000);
+    if ((big || (due && saw_frame)) && cooled) {
+      last_resync_ms = now;
+      saw_frame = false;
+      esp_lcd_rgb_panel_restart(g_panel);
+    }
+  }
 }
 
 // The panel scans the framebuffer the UI is drawn into. LVGL only redraws

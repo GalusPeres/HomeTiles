@@ -82,6 +82,8 @@ assert.match(driver, /err = esp_lcd_rgb_panel_get_frame_buffer\(g_panel, 2, &fb0
   'Both framebuffers come from the driver, never out of bounds');
 assert.match(driver, /Only switch the panel on a frame that drew something|g_damageX1 < g_damageX0/,
   'A frame that drew nothing must not switch the panel');
+assert.match(driver, /esp_lcd_rgb_panel_restart\(g_panel\);/,
+  'A desynchronised scanout is re-anchored after damage-heavy frames');
 assert.match(driver, /for \(int32_t row = y; row < y \+ h; \+\+row\)/,
   'The cache write back walks the rows, the framebuffer rows are not contiguous');
 assert.match(driver, /ESP_CACHE_MSYNC_FLAG_UNALIGNED/,

@@ -103,12 +103,15 @@
 
   function getScreensaverClockPreviewDate(d) {
     if (!d) return '';
-    const weekdayNames = getClockPreviewLanguage().toLowerCase().startsWith('de')
-      ? ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
-      : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    // The weekday comes from the same central table as the Clock tile's
+    // preview (CLOCK_I18N, the panel's language): every language, not only
+    // German and English.
+    const weekdayNames = typeof CLOCK_I18N === 'object' && CLOCK_I18N ? CLOCK_I18N.weekdays : null;
+    const weekday = weekdayNames && weekdayNames[new Date().getDay()]
+      ? weekdayNames[new Date().getDay()] : '';
     let text = d.show_date ? getClockPreviewDate(d.date_format) : '';
     if (d.show_weekday) {
-      text = weekdayNames[new Date().getDay()] + (text ? ', ' + text : '');
+      text = weekday + (text ? ', ' + text : '');
     }
     return text;
   }

@@ -1908,7 +1908,8 @@
       line-height:1;
     }
     .tile-value.sensor-value-size-default { font-size:var(--fs28, 14px); }
-    .tile-value.sensor-value-size-96 { font-size:var(--fs96, 48px); }
+    .tile-value.sensor-value-size-96 { font-size:var(--sensor-value-fs-96, 48px); }
+    .tile-value.sensor-value-size-120 { font-size:var(--sensor-value-fs-120, 60px); }
     .tile-value.sensor-value-size-80 { font-size:var(--fs80, 40px); }
     .tile-value.sensor-value-size-40 { font-size:var(--fs40, 20px); }
     .tile-value.sensor-value-size-32 { font-size:var(--fs32, 16px); }

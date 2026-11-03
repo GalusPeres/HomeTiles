@@ -15293,12 +15293,15 @@ async function saveGestureEdge(select) {
 
   function getScreensaverClockPreviewDate(d) {
     if (!d) return '';
-    const weekdayNames = getClockPreviewLanguage().toLowerCase().startsWith('de')
-      ? ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
-      : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    // The weekday comes from the same central table as the Clock tile's
+    // preview (CLOCK_I18N, the panel's language): every language, not only
+    // German and English.
+    const weekdayNames = typeof CLOCK_I18N === 'object' && CLOCK_I18N ? CLOCK_I18N.weekdays : null;
+    const weekday = weekdayNames && weekdayNames[new Date().getDay()]
+      ? weekdayNames[new Date().getDay()] : '';
     let text = d.show_date ? getClockPreviewDate(d.date_format) : '';
     if (d.show_weekday) {
-      text = weekdayNames[new Date().getDay()] + (text ? ', ' + text : '');
+      text = weekday + (text ? ', ' + text : '');
     }
     return text;
   }
@@ -16945,13 +16948,14 @@ function maybeFillTitleFromSensor(tab) {
     if (v === '3') return 'sensor-value-size-32';
     if (v === '4' || v === '6') return 'sensor-value-size-40';
     if (v === '7') return 'sensor-value-size-80';
-    if (v === '8' || v === '9') return 'sensor-value-size-96';
+    if (v === '8') return 'sensor-value-size-96';
+    if (v === '9') return 'sensor-value-size-120';
     return 'sensor-value-size-default';
   }
 
   function applySensorValueFontClass(el, value) {
     if (!el) return;
-    el.classList.remove('sensor-value-size-20', 'sensor-value-size-24', 'sensor-value-size-32', 'sensor-value-size-40', 'sensor-value-size-80', 'sensor-value-size-96', 'sensor-value-size-default');
+    el.classList.remove('sensor-value-size-20', 'sensor-value-size-24', 'sensor-value-size-32', 'sensor-value-size-40', 'sensor-value-size-80', 'sensor-value-size-96', 'sensor-value-size-120', 'sensor-value-size-default');
     el.classList.add(getSensorValueFontClass(value));
   }
 

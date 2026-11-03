@@ -30,6 +30,10 @@ fs.mkdirSync(out, {recursive: true});
 fs.writeFileSync(path.join(out, 'Arduino.h'), '#pragma once\n#include <cstdint>\n#include <cstddef>\n');
 fs.writeFileSync(path.join(out, 'FS.h'), '#pragma once\nnamespace fs { class FS {}; }\n');
 
+// The point size of a UI font, from the font tables the firmware links.
+const sizes = [12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 72, 80, 96, 120];
+const sizeOf = `static int ui_font_size_of(const lv_font_t*f){${sizes.map(s => `if(f==&ui_font_${s})return ${s};`).join('')}return 0;}`;
+
 const cpp = String.raw`
 #include <lvgl.h>
 #include <lvgl_private.h>
@@ -42,7 +46,7 @@ const cpp = String.raw`
 #include <string>
 #include "src/devices/device_select.h"
 #include "src/ui/shared/title_label.h"
-extern "C" {LV_FONT_DECLARE(ui_font_12);LV_FONT_DECLARE(ui_font_14);LV_FONT_DECLARE(ui_font_16);LV_FONT_DECLARE(ui_font_20);LV_FONT_DECLARE(ui_font_24);LV_FONT_DECLARE(ui_font_28);LV_FONT_DECLARE(ui_font_32);LV_FONT_DECLARE(ui_font_40);LV_FONT_DECLARE(ui_font_48);LV_FONT_DECLARE(ui_font_56);LV_FONT_DECLARE(ui_font_64);LV_FONT_DECLARE(ui_font_72);LV_FONT_DECLARE(ui_font_80);LV_FONT_DECLARE(ui_font_96);LV_FONT_DECLARE(mdi_icons_32);LV_FONT_DECLARE(mdi_icons_40);LV_FONT_DECLARE(mdi_icons_48);}
+extern "C" {LV_FONT_DECLARE(ui_font_12);LV_FONT_DECLARE(ui_font_14);LV_FONT_DECLARE(ui_font_16);LV_FONT_DECLARE(ui_font_20);LV_FONT_DECLARE(ui_font_24);LV_FONT_DECLARE(ui_font_28);LV_FONT_DECLARE(ui_font_32);LV_FONT_DECLARE(ui_font_40);LV_FONT_DECLARE(ui_font_48);LV_FONT_DECLARE(ui_font_56);LV_FONT_DECLARE(ui_font_64);LV_FONT_DECLARE(ui_font_72);LV_FONT_DECLARE(ui_font_80);LV_FONT_DECLARE(ui_font_96);LV_FONT_DECLARE(ui_font_120);LV_FONT_DECLARE(mdi_icons_32);LV_FONT_DECLARE(mdi_icons_40);LV_FONT_DECLARE(mdi_icons_48);}
 #if defined(DEVICE_LAYOUT_480X480)
 #define FONT_MDI_ICONS (&mdi_icons_32)
 #elif defined(DEVICE_LAYOUT_1024X600)
@@ -80,6 +84,7 @@ ${strip(read('src/ui/shared/tabular_digits.h'))}
 ${strip(read('src/ui/shared/tabular_digits.cpp'))}
 ${strip(read('src/types/clock/clock_face.h'))}
 ${strip(read('src/types/text/text_options.h'))}
+${sizeOf}
 ${strip(read('src/web/server/render/web_admin_styles.cpp').split('void appendAdminStyles(')[0])}
 static void line(std::ostream&o,const char*name,lv_obj_t*label,lv_obj_t*card,bool&first){
  if(!label)return;
@@ -125,11 +130,8 @@ int main(){
  lv_deinit();
 }
 `;
-// The point size of a UI font, from the font tables the firmware links.
-const sizes = [12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 72, 80, 96];
-const sizeOf = `static int ui_font_size_of(const lv_font_t*f){${sizes.map(s => `if(f==&ui_font_${s})return ${s};`).join('')}return 0;}`;
 const source = path.join(out, 'test.cpp');
-fs.writeFileSync(source, cpp.replace('static void line(', sizeOf + '\nstatic void line('));
+fs.writeFileSync(source, cpp);
 
 const fontUrl = pathToFileURL(path.join(root, 'docs/assets/fonts/inter-4.1-regular.woff2')).href;
 const css = readRepoFile('src/web/assets/admin.css').replace(/\r\n/g, '\n')

@@ -167,6 +167,16 @@ inline const lv_font_t* content_font_80() {
 #endif
 }
 
+inline const lv_font_t* content_font_96() {
+#if defined(DEVICE_LAYOUT_1024X600)
+  return &ui_font_80;
+#elif defined(DEVICE_LAYOUT_480X480)
+  return &ui_font_96;
+#else
+  return &ui_font_96;
+#endif
+}
+
 inline const lv_font_t* value_font_for_choice(uint8_t choice, const lv_font_t* fallback) {
   switch (choice) {
     case 1: return content_font_20();
@@ -176,6 +186,7 @@ inline const lv_font_t* value_font_for_choice(uint8_t choice, const lv_font_t* f
     case 5: return content_font_28();
     case 6: return content_font_48();
     case 7: return content_font_80();
+    case 8: return content_font_96();
     default: return fallback;
   }
 }

@@ -294,10 +294,10 @@ export const DEVICE_PROFILES = Object.freeze([
   Object.freeze({
     "key": "btt_panda_touch",
     "buildProfile": "btt_panda_touch",
-    "label": "BIGTREETECH Panda Touch (4.3 inch)",
+    "label": "BIGTREETECH Panda Touch (5 inch)",
     "chipFamily": "ESP32-S3",
     "flashSize": 16777216,
     "status": "validation-pending",
-    "hardwareCheck": "The board is a BIGTREETECH Panda Touch with a 4.3 inch 800x480 RGB display and a GT900 touch controller."
+    "hardwareCheck": "The board is a BIGTREETECH Panda Touch with a 5 inch 800x480 RGB display and a GT900 touch controller."
   }),
 ]);

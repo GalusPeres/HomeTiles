@@ -7,20 +7,22 @@
 
 namespace DeviceBTTPandaTouch {
 
-// BIGTREETECH Panda Touch (4.3 inch, 800 x 480):
+// BIGTREETECH Panda Touch (5 inch, 800 x 480):
 // ESP32-S3 with 16 MB flash and 8 MB octal PSRAM, an 800 x 480 RGB565 panel
-// in DE mode and a GT900 capacitive touch controller on I2C0.
+// in DE mode and a GT900 capacitive touch controller on I2C0. The grid is the
+// one of the other 800 x 480 panel (Waveshare Touch LCD 4.3): 5 x 4 cells of
+// 150 x 111; the head bar layouts take their own 4 x 3 (grid_layout.h).
 inline constexpr Device::Profile kProfile{
     "btt_panda_touch",
     "BTT Panda Touch",
     800,
     480,
+    5,
     4,
-    3,
     10,
     3,
-    187,
-    146,
+    150,
+    111,
     4,
     // The backlight is a plain LEDC PWM line; every duty from 1 % up is
     // visible, so the raw scale starts at 1.
@@ -48,8 +50,9 @@ bool displayTryFullFramePreview(int32_t x, int32_t y, int32_t w, int32_t h,
 void displayWaitDMA();
 void displayFillScreen(uint16_t color);
 void displaySetRotation(uint8_t rotation);
-// The panel scans a single PSRAM framebuffer directly, so there is no second
-// buffer to render the UI into. The caller blanks the screen instead.
+// Every frame is drawn into the framebuffer the panel does not scan and is
+// shown whole by the buffer switch (displayWaitDisplay), so nothing needs to
+// be armed for a full-screen change: false keeps LVGL's normal path.
 bool displayBeginAtomicFrame(const char* reason);
 
 void setBrightness(uint8_t value);

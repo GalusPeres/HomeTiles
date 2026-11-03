@@ -291,4 +291,13 @@ export const DEVICE_PROFILES = Object.freeze([
     "status": "validation-pending",
     "hardwareCheck": "The board is a GS-T3E (Tuya T3E) 4-inch 480x480 wall panel with an ESP32-S3-WROOM-1 module and PCB revision v2.3. The discontinued v1.23 board and the Zigbee-only T3E Pro use different hardware."
   }),
+  Object.freeze({
+    "key": "btt_panda_touch",
+    "buildProfile": "btt_panda_touch",
+    "label": "BIGTREETECH Panda Touch (4.3 inch)",
+    "chipFamily": "ESP32-S3",
+    "flashSize": 16777216,
+    "status": "validation-pending",
+    "hardwareCheck": "The board is a BIGTREETECH Panda Touch with a 4.3 inch 800x480 RGB display and a GT900 touch controller."
+  }),
 ]);

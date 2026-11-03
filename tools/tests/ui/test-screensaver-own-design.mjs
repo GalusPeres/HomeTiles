@@ -102,11 +102,23 @@ assert.match(fn(source, 'set_open_popup_surface'), /popup_surface::g_open_screen
 assert.match(fn(source, 'forget_popup_source'), /popup_surface::g_open_screen = tile_screen::of\(obj\);/);
 assert.match(fn(source, 'open_popup_without_tile'), /popup_surface::g_open_screen = -1;/);
 const shell = read('src/ui/popups/popup_shell.cpp');
-const follow = fn(shell, 'popup_follow_surface');
-assert.match(follow, /if \(want < 0 && screen >= 0 && \(screen == 1\) != ui_theme::panel_light\(\)\) want = screen;/,
+assert.match(fn(shell, 'wanted_surface'), /return want < 0 && screen >= 0 && \(screen == 1\) != ui_theme::panel_light\(\) \? screen : want;/,
   'a popup takes the roles of its opener\'s screen');
-assert.match(follow, /recolor_surface\(root, mark->surface < 0 \? panel : mark->surface, want < 0 \? panel : want\);/,
+assert.match(fn(shell, 'follow_mark'), /recolor_surface\(mark\.root, mark\.surface < 0 \? panel : mark\.surface, want < 0 \? panel : want\);/,
   'from the panel\'s roles it was built with, whatever screen is open');
+// Between screens every popup takes the design before the opened one applies
+// its content: recolored after it, the Climate popup's white mode on its
+// orange pill turned dark (simulator, b656). A body records the surface it
+// is built with (built for a light screen, it is not mapped again).
+const followScreen = fn(shell, 'popup_follow_screen');
+assert.match(followScreen, /bool screen = want == 0 \|\| want == 1;/);
+assert.match(followScreen, /if \(entry\.root\) follow_mark\(entry, want\);/);
+assert.match(fn(shell, 'create_popup_body'), /add_mark\(parts\.card, current_surface\(\)\);/);
+for (const name of ['set_open_popup_surface', 'forget_popup_source', 'open_popup_without_tile']) {
+  assert.match(fn(source, name), /popup_follow_screen\(\);/, `${name}: the popups take the opener's screen first`);
+}
+// The head's X takes the head's text like the title.
+assert.match(fn(shell, 'sync_popup_shell'), /lv_color_eq\(x_now, lv_color_hex\(ui_theme::kLight\.icon\)\)\) &&\s*!lv_color_eq\(x_now, header_text\)\) \{\s*lv_obj_set_style_text_color\(x, header_text, 0\);/);
 for (const file of ['src/ui/popups/calendar/calendar_popup.cpp', 'src/ui/popups/device/device_popup.cpp',
   'src/ui/popups/vacuum/vacuum_popup.cpp']) {
   const text = read(file);

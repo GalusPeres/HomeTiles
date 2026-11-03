@@ -374,6 +374,7 @@ void set_open_popup_surface(lv_obj_t* obj) {
   popup_surface::g_open_surface = tile_surface::find(obj) == tile_surface::kJewel ? ui_theme::kDarkTintedSurface
                                                                                    : ui_theme::kThemeSurface;
   popup_surface::g_open_screen = tile_screen::of(obj);
+  popup_follow_screen();
 }
 
 void follow_tint(lv_obj_t* card, bool tinted) {
@@ -672,6 +673,7 @@ void forget_popup_source(lv_obj_t* obj) {
   // tile's screen.
   popup_surface::g_open_surface = ui_theme::kThemeSurface;
   popup_surface::g_open_screen = tile_screen::of(obj);
+  popup_follow_screen();
   remember_popup_source(nullptr);
   pass_popup_disc(obj, false);
 }
@@ -707,6 +709,7 @@ bool popup_tile_circle(uint32_t rgb, uint32_t& circle, uint8_t& opa, uint32_t& i
 void open_popup_without_tile() {
   popup_surface::g_open_surface = ui_theme::kThemeSurface;
   popup_surface::g_open_screen = -1;
+  popup_follow_screen();
   set_popup_disc(nullptr);
   remember_popup_source(nullptr);
   popup_shell_use_no_tile_disc();

@@ -204,6 +204,13 @@ int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SC
   const bool light_title=lv_color_eq(lv_obj_get_style_text_color(shell.title,LV_PART_MAIN),lv_color_hex(ui_theme::kLight.text));
   if(!light_title)std::cerr<<"screensaver popup title keeps the dark theme's white\n";
   assert(light_title&&"a light screen's popup head has the light design's text");
+  // The X too: dark-built white became the light design's icon grey, not its
+  // text (two roles are white in the dark theme, b656).
+  const bool light_x=lv_color_eq(lv_obj_get_style_text_color(lv_obj_get_child(shell.close,0),LV_PART_MAIN),lv_color_hex(ui_theme::kLight.text));
+  if(!light_x)std::cerr<<"screensaver popup X keeps another color\n";
+  assert(light_x&&"a light screen's popup X has the light design's text");
+  lv_obj_set_style_text_color(lv_obj_get_child(c.close,0),lv_color_hex(ui_theme::kLight.icon),0);sync_popup_shell();
+  assert(lv_color_eq(lv_obj_get_style_text_color(lv_obj_get_child(shell.close,0),LV_PART_MAIN),lv_color_hex(ui_theme::kLight.text))&&"an X mapped to the icon grey takes the text");
   popup_surface::g_open_screen=-1;show(c,"Dark panel");sync_popup_shell();
   assert(lv_color_eq(lv_obj_get_style_text_color(shell.title,LV_PART_MAIN),lv_color_hex(ui_theme::kDark.text))&&"back on the panel: its text");
   hide_popup_shell(c.body);lv_obj_delete(c.owner);lv_refr_now(d);}

@@ -99,6 +99,13 @@ void popup_shell_delete_popups();
 // (popup_surface::g_open_surface): its fixed texts and icons, colored when it
 // was built, take that surface's roles (and back on the next opening).
 void popup_follow_surface(lv_obj_t* root);
+// An opener on a screen in another design than the last opener's (a
+// screensaver tile in its own Dark or Light, tile_screen.h, or back on the
+// panel's theme): every popup takes that design's roles now, before the
+// opened one applies its content (recolored after it, a white value on a
+// colored pill turned dark, b656). The opener calls it after setting the
+// open surface (tile_icon_source).
+void popup_follow_screen();
 // The surface `root`'s content was last shown with (kThemeSurface before its
 // first show): a hidden popup that refreshes draws with it, so the next show
 // recolors it like the rest of its content.

@@ -126,7 +126,7 @@ for (const name of ['update_light_popup', 'light_popup_follow_tile_color']) {
 }
 const shell = read('src/ui/popups/popup_shell.cpp');
 assert.ok(shell.includes('void popup_follow_surface(lv_obj_t* root) {') &&
-  shell.includes('tile_icon_source::recolor_surface(root, mark->surface < 0 ? panel : mark->surface, want < 0 ? panel : want);'),
+  shell.includes('tile_icon_source::recolor_surface(mark.root, mark.surface < 0 ? panel : mark.surface, want < 0 ? panel : want);'),
   'popup texts follow the open surface');
 // Remembered objects clear themselves when deleted (crash b364): a popup
 // body's surface mark, the opening tile's circle.
@@ -175,6 +175,9 @@ ${read('src/tiles/runtime/tile_icon_disc.h').replace(/^#.*$/gm, '')}
 static uint32_t tileDefaultBgColor() { return ui_theme::light() ? ui_theme::card() : 0x1A1A1A; }
 struct Tile {};
 static uint32_t tileBgColorOrDefault(const Tile&, uint32_t fallback) { return fallback; }
+// The popups take the opener's screen (popup_shell.cpp, not compiled here).
+static int g_popup_screen_follows = 0;
+void popup_follow_screen() { ++g_popup_screen_follows; }
 namespace tile_icon_source {
 ${tintStore}
 void change_surface(lv_obj_t* card, uint8_t surface, const Tile* tile = nullptr);

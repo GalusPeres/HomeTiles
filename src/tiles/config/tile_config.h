@@ -119,9 +119,9 @@ enum SwitchPopupOpenModeStorage : uint8_t {
 
 // Value size choices (Tile::sensor_value_font): 0 = default (28 px, the title
 // size in half-height tiles), 1 = 20, 2 = 24, 3 = 32, 4 = 40, 5 = 28, 6 = 48,
-// 7 = 80, 8 = 96 (sizes on the 1280x800 layouts). Half-height tiles show at
-// most 28.
-static constexpr uint8_t SENSOR_VALUE_FONT_MAX = 8;
+// 7 = 80, 8 = 96, 9 = 120 (sizes on the 1280x800 layouts). Half-height tiles
+// show at most 28.
+static constexpr uint8_t SENSOR_VALUE_FONT_MAX = 9;
 
 // A new field also belongs in tileContentEquals() below.
 struct Tile {

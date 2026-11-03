@@ -28,12 +28,12 @@ void append_sensor_fields_html(String& html, const String& tab_id) {
   // Switch's: one row high the half-height sizes, taller the full-size ones
   // (syncCompactValueFontOptions).
   const SwitchChoice sizes[] = {{"0", tr.sensor_value_size_default}, {"1", "20"}, {"2", "24"},
-                                {"5", "28"}, {"3", "32"}, {"4", "40"}, {"6", "48"}, {"7", "80"}, {"8", "96"}};
+                                {"5", "28"}, {"3", "32"}, {"4", "40"}, {"6", "48"}, {"7", "80"}, {"8", "96"}, {"9", "120"}};
   String size_attrs;
   append_value_size_attrs(size_attrs, FONT_VALUE, tr.sensor_value_size_default);
   html += tr.sensor_value_size;
   html += "</label>";
-  append_switch_choice(html, tab_id, "sensor_value_font", tr.sensor_value_size, sizes, 9, size_attrs);
+  append_switch_choice(html, tab_id, "sensor_value_font", tr.sensor_value_size, sizes, 10, size_attrs);
   html += R"html(              <label>)html";
   html += tr.sensor_unit;
   html += R"html(</label>

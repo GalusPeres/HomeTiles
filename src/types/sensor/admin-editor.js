@@ -38,7 +38,7 @@
 
   function normalizeSensorValueFont(value) {
     const v = String(value || '0');
-    return (['1','2','3','4','5','6','7','8'].includes(v)) ? v : '0';
+    return (['1','2','3','4','5','6','7','8','9'].includes(v)) ? v : '0';
   }
 
   function getSensorValueFontClass(value) {
@@ -48,7 +48,7 @@
     if (v === '3') return 'sensor-value-size-32';
     if (v === '4' || v === '6') return 'sensor-value-size-40';
     if (v === '7') return 'sensor-value-size-80';
-    if (v === '8') return 'sensor-value-size-96';
+    if (v === '8' || v === '9') return 'sensor-value-size-96';
     return 'sensor-value-size-default';
   }
 

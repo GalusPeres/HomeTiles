@@ -34,20 +34,21 @@ constexpr int8_t kPanelReset = 46;
 constexpr int8_t kPanelData[16] = {17, 18, 48, 47, 39, 11, 12, 13,
                                    14, 15, 16, 6,  7,  8,  9,  10};
 
-// 23 MHz is the clock of the board's own display service.
-// The panel's vendor rate is 23 MHz. The panel's interrupt has to refill the
-// bounce buffer while the display reads it, and a busy CPU (the web admin,
-// the network) starves that interrupt: the picture then jitters vertically.
-// A lower pixel clock gives the interrupt more time per line. 12 MHz is below
-// what this panel accepts (the picture falls apart); 16 MHz holds a square
-// popup card, and the wider 640 px card needs 14 MHz to stay stable.
+// The panel's interrupt has to refill the bounce buffer while the display
+// reads it, and a busy CPU (the web admin, the network) starves that
+// interrupt: the picture then jitters vertically. A lower pixel clock gives
+// the interrupt more time per line. Measured on the board: 23 MHz jitters
+// under load, 20 MHz loses the sync, 12 MHz is below what this panel accepts
+// (the picture falls apart), 14 MHz holds (BIGTREETECH's own firmware runs
+// 14.8 MHz, PandaTouch_PlatformIO pt_board.h).
 constexpr uint32_t kPanelPclkHz = 14 * 1000 * 1000;
 
 constexpr int8_t kBacklightPin = 21;
-// The backlight is a plain LEDC PWM line. A fast rate sits in the range the
-// ear hears best and makes the panel whine whenever the backlight is dimmed,
-// so this board uses its own low, silent rate.
-constexpr uint32_t kBacklightFrequency = 200;
+// The backlight is a plain LEDC PWM line at BIGTREETECH's own rate
+// (PandaTouch_PlatformIO pt_board.h PT_LCD_BL_FREQUENCY_HZ): above hearing,
+// where 5 kHz made the panel whine when dimmed, and without the flicker of a
+// slow rate such as 200 Hz. 10 bits fit 30 kHz on the 80 MHz LEDC clock.
+constexpr uint32_t kBacklightFrequency = 30000;
 constexpr uint8_t kBacklightResolution = 10;
 constexpr uint32_t kBacklightMaxDuty = (1u << kBacklightResolution) - 1u;
 
@@ -448,11 +449,9 @@ void displayWaitDisplay() {
   g_frameOpen = false;
 }
 
-// The panel scans the framebuffer the UI is drawn into. LVGL only redraws
-// the changed bands, so a second buffer would show the state of two frames
+// Every frame is already shown whole (displayWaitDisplay switches the
+// buffers), so a full-screen change needs nothing armed: LVGL's normal path.
 bool displayBeginAtomicFrame(const char* reason) {
-  // One framebuffer, scanned by the LCD: there is no inactive buffer the UI
-  // could be rendered into. The caller blanks the screen for the handover.
   (void)reason;
   return false;
 }

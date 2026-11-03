@@ -1,23 +1,28 @@
 # BIGTREETECH Panda Touch
 
-HomeTiles target for the BIGTREETECH Panda Touch, the 4.3 inch touch panel of
-3D printers:
+HomeTiles target for the BIGTREETECH Panda Touch, the 5 inch touch panel of
+3D printers (community profile, PR #144):
 
 - ESP32-S3 with 16 MB flash and 8 MB octal PSRAM
 - 800x480 RGB565 panel in DE mode, 14 MHz pixel clock, active low
-- 640 px popup card (a full-width card desynchronises this panel)
+- the grid and popup card of the other 800 x 480 panel (Waveshare Touch LCD
+  4.3): 5 x 4 cells of 150 x 111, the square popup card; the head bar layouts
+  take their own 4 x 3 (`grid_layout.h`)
 - GT900 capacitive touch controller on I2C0
-- LEDC backlight on GPIO 21
-- No microSD slot, no camera, no battery
+- LEDC backlight on GPIO 21 at 30 kHz
+- GPIO 4 and GPIO 3 on the I2C expansion header P2 under hardware I/O
+- No microSD slot, no camera, no voice (like every S3 board), no battery
+  gauge
 
 ## Sources
 
-- The board's own display service: `bigtreetech/PandaTouch_IDF`
-  (`docs/pinout.md`) for the pin assignment and the panel in DE mode
-- The ESP-IDF board support package `fmauNeko/pandatouch-bsp` for the RGB
-  panel configuration, the touch controller and the backlight
+- BIGTREETECH's own board code: `bigtreetech/PandaTouch_PlatformIO`
+  (`docs/PINOUT.md` for the pins and headers, `src/pt/pt_board.h` for the
+  panel timing and the 30 kHz backlight rate) and `bigtreetech/PandaTouch_IDF`
+- BIGTREETECH wiki: 5 inch 800 x 480 IPS display, I2C expansion interface
+- The ESP-IDF board support package `fmauNeko/pandatouch-bsp`
 - The measured behaviour of the panel and the touch controller on the
-  hardware (see below)
+  contributor's hardware (see below)
 
 ## Panel
 
@@ -42,36 +47,38 @@ stays at the top edge and the last one at the bottom edge.
 
 ### Pixel clock
 
-The vendor rate is 23 MHz, but the panel's interrupt has to refill the bounce
-buffer while the display reads it, and a busy CPU (the web admin, the network)
-starves that interrupt: the picture then jitters vertically. A lower pixel
-clock gives the interrupt more time per line.
+The panel's interrupt has to refill the bounce buffer while the display reads
+it, and a busy CPU (the web admin, the network) starves that interrupt: the
+picture then jitters vertically. A lower pixel clock gives the interrupt more
+time per line. BIGTREETECH's own firmware runs 14.8 MHz.
 
 | Pixel clock | Frame time | Frame rate | Result |
 | --- | --- | --- | --- |
 | 23 MHz | 22.5 ms | 44.4 Hz | stable picture, but it jitters under load |
-| 16 MHz | 26.4 ms | 37.8 Hz | stable with the square popup card |
-| 14 MHz | 30.1 ms | 33.2 Hz | stable picture, no jitter under load, with the 640 px card |
+| 20 MHz | 25.8 ms | 38.8 Hz | loses the sync |
+| 14 MHz | 30.1 ms | 33.2 Hz | stable picture, no jitter under load |
 | 12 MHz | 34.4 ms | 29.1 Hz | the picture falls apart, the screen shows one colour |
 
 The frame time is `(800 + 16) x (480 + 36) / pclk`, so the panel's own
 synchronisation needs a frame rate above roughly 30 Hz: 12 MHz falls below
-that. 14 MHz is the lowest rate that keeps the picture intact and stable
-with the wide card.
+that. 14 MHz is the lowest rate that keeps the picture intact and stable.
 
 ## Framebuffer and cache
 
 The stock Arduino SDK for this core has no PSRAM XIP and a 32-byte data cache
 line. A DMA that reads the PSRAM framebuffer directly loses its sync under
-load, so the driver keeps one framebuffer in PSRAM and lets the panel driver
-serve the DMA from a bounce buffer in DRAM (30 lines) with the cache
-invalidation enabled.
+load, so the panel driver serves the DMA from a bounce buffer in DRAM (30
+lines) with the cache invalidation enabled.
+
+The driver keeps two framebuffers in PSRAM: the panel scans one while the UI
+is drawn into the other, and `displayWaitDisplay` switches them once a frame
+is complete, so a redraw never tears and no full-screen change needs to be
+armed (`displayBeginAtomicFrame` returns false).
 
 The CPU writes into the framebuffer through the cache, while the DMA reads the
 memory. The driver therefore writes the framebuffer back row by row after
-every update, with a 32-byte aligned start and size; the rows of the
-framebuffer are not contiguous, so a single range over the whole area would
-sync the wrong bytes.
+every update; the rows of the framebuffer are not contiguous, so a single
+range over the whole area would sync the wrong bytes.
 
 ## Touch
 
@@ -89,8 +96,21 @@ already in screen coordinates (0..799 / 0..479), so no mapping or scaling
 applies. The controller reports up to five points; HomeTiles uses the first
 one.
 
+## Backlight
+
+The backlight is a plain LEDC PWM line on GPIO 21 at BIGTREETECH's own rate
+of 30 kHz: above hearing (5 kHz made the panel whine when dimmed) and without
+the flicker of a slow rate.
+
+## Hardware I/O
+
+The I2C expansion header P2 (SDA1 GPIO 4, SCL1 GPIO 3, 3.3 V, GND) carries
+nothing else on the board, so both pins are offered for switches and 1-Wire
+temperature sensors. Every other GPIO belongs to the panel, the touch
+controller, the backlight, the USB host port or the debug UART.
+
 ## USB
 
 The USB-C port of the board is wired to a CH340K bridge, so the firmware logs
 on UART0 (TX 43 / RX 44) and the native USB of the ESP32-S3 stays on the
-USB-A host port, which the firmware does not use.
+USB-A host port (GPIO 19/20), which the firmware does not use.

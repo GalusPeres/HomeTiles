@@ -488,30 +488,33 @@ Used for:
 - `src/devices/btt_panda_touch`
 
 Important:
-- The board is a 4.3 inch 800 x 480 printer panel: ESP32-S3 with 16 MB flash
+- The board is a 5 inch 800 x 480 printer panel: ESP32-S3 with 16 MB flash
   and 8 MB octal PSRAM, an RGB565 panel in DE mode and a GT900 touch
-  controller on I2C0.
+  controller on I2C0. Grid and popup card follow the other 800 x 480 panel
+  (Waveshare Touch LCD 4.3).
 - The USB-C port goes to a CH340K bridge, so the serial log is on UART0
   (TX 43 / RX 44). The native USB of the ESP32-S3 is wired to the USB-A host
   port and stays unused by the firmware.
 - The panel needs no initialization sequence: only the reset on GPIO 46, the
   data enable on GPIO 38 and the pixel clock on GPIO 5. The pixel clock is
-  14 MHz with an active-low polarity (the vendor rate 23 MHz jitters under
-  load, 12 MHz falls below the panel's frame rate; 16 MHz needs the square
-  popup card, the wider 640 px card needs 14 MHz).
+  14 MHz with an active-low polarity (23 MHz jitters under load, 20 MHz loses
+  the sync, 12 MHz falls below the panel's frame rate; BIGTREETECH's own
+  firmware runs 14.8 MHz).
 - The RGB bus carries B3..B7, G2..G7 and R3..R7 on sixteen lines
   (17, 18, 48, 47, 39, 11, 12, 13, 14, 15, 16, 6, 7, 8, 9, 10).
-- The backlight is a plain LEDC PWM line on GPIO 21.
+- The backlight is a plain LEDC PWM line on GPIO 21 at BIGTREETECH's 30 kHz.
+- GPIO 4 and GPIO 3 on the I2C expansion header P2 are offered as hardware
+  I/O (switches, 1-Wire temperature).
 - The touch controller is a GT900 (it reports "GOODIX_GT900_105") at I2C
   address 0x5D: SDA 2, SCL 1, interrupt 40, reset 41. Its status register is
   0x814E (bit 7 marks a new frame, the low nibble the point count, the frame
   is acknowledged with a zero write) and the point block starts at 0x8150 with
   X and Y, already in screen coordinates.
 - The stock Arduino SDK has no PSRAM XIP and a 32-byte cache line, so the
-  panel's DMA must not read the PSRAM framebuffer directly. The driver keeps
-  one framebuffer in PSRAM and lets the driver serve the DMA from a bounce
-  buffer in DRAM, and it writes the framebuffer back row by row with a
-  32-byte aligned cache sync.
+  panel's DMA must not read the PSRAM framebuffer directly. The panel driver
+  serves the DMA from a bounce buffer in DRAM; the board driver keeps two
+  framebuffers in PSRAM (the UI is drawn into the one the panel does not
+  scan) and writes them back row by row with a cache sync.
 - There is no microSD slot; the runtime files live in LittleFS.
 - Use the repository's `partitions.csv`; HomeTiles needs two 6.5MB OTA slots.
 

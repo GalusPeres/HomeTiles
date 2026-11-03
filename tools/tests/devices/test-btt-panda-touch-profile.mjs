@@ -1,7 +1,9 @@
-// BIGTREETECH Panda Touch (4.3 inch 800 x 480 ESP32-S3 printer panel). This
-// contract checks the device profile (catalog, build profile, firmware
-// identity, installer entry), the panel wiring and timing measured on the
-// hardware, the GT900 register map (status 0x814E, point block 0x8150 with X
+// BIGTREETECH Panda Touch (5 inch 800 x 480 ESP32-S3 printer panel, PR #144).
+// This contract checks the device profile (catalog, build profile, firmware
+// identity, installer entry, setup access point), the grid and popup card of
+// the other 800 x 480 panel (no device extras), the panel wiring and timing
+// measured on the hardware and listed in BIGTREETECH's PINOUT.md, the
+// backlight at BIGTREETECH's 30 kHz, the I/O pins of the expansion header, the GT900 register map (status 0x814E, point block 0x8150 with X
 // first), the framebuffer handling (two PSRAM buffers with the panel reading
 // one while the UI draws into the other, a bounce buffer in DRAM instead of
 // a DMA that reads PSRAM, and a row by row cache write back instead of one
@@ -34,7 +36,12 @@ assert.equal(panda.rxVariant, 'native-s3');
 assert.equal(panda.elfFlags, '');
 assert.equal(panda.publish, true);
 assert.equal(panda.installer.status, 'validation-pending');
+assert.match(panda.installer.label, /\(5 inch\)/, 'BIGTREETECH lists a 5 inch display');
 assert.ok(releaseProfiles.some(profile => profile.key === pandaKey));
+// After the open device branches (T3E v2.4 23, CrowPanel 24).
+assert.equal(panda.ciOrder, 25);
+assert.ok(read('src/web/setup/web_config.cpp').includes(
+  `#elif defined(${PANDA})\n  return "BTT_Panda_Touch_Config";`), 'Its own setup access point');
 
 const select = read('src/devices/device_select.h');
 assert.match(select, new RegExp(`// #define ${PANDA}`), 'The profile is selectable');
@@ -55,8 +62,13 @@ assert.match(sketchProfile(pandaKey), /CDCOnBoot=default/,
 // --- Panel: pins, timing, no init sequence ----------------------------------
 assert.match(header, /"btt_panda_touch",/);
 assert.match(header, /"BTT Panda Touch",/);
-assert.match(header, /800,\s*480,\s*4,\s*3,/,
-  'The profile is a 800 x 480 panel with a 4 x 3 grid');
+// No device extras (the closest panel's contract): the grid of the
+// Waveshare Touch LCD 4.3 and the shared square popup card.
+const waveshare43 = read('src/devices/waveshare_touch_lcd_4_3/profile.h');
+const grid = text => text.match(/800,\s*480,\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),/)?.slice(1);
+assert.deepEqual(grid(header), grid(waveshare43), 'The grid of the other 800 x 480 panel');
+assert.deepEqual(grid(header), ['5', '4', '10', '3', '150', '111']);
+assert.doesNotMatch(read('src/ui/popups/popup_layout.h'), /PANDA/, 'The shared popup card, no card of its own');
 assert.match(driver, /constexpr int16_t kScreenWidth = 800;/);
 assert.match(driver, /constexpr int16_t kScreenHeight = 480;/);
 assert.match(driver, /constexpr int8_t kPanelPclk = 5;/);
@@ -64,7 +76,9 @@ assert.match(driver, /constexpr int8_t kPanelDe = 38;/);
 assert.match(driver, /constexpr int8_t kPanelReset = 46;/);
 assert.match(driver, /constexpr int8_t kBacklightPin = 21;/);
 assert.match(driver, /constexpr uint32_t kPanelPclkHz = 14 \* 1000 \* 1000;/,
-  'The pixel clock stays at the rate the panel holds with the wide card');
+  'The pixel clock stays at the rate the panel holds under load');
+assert.match(driver, /constexpr uint32_t kBacklightFrequency = 30000;/,
+  'The backlight at the rate of BIGTREETECH: above hearing, no flicker');
 assert.match(driver, /config\.timings\.flags\.pclk_active_neg = true;/);
 assert.match(driver, /config\.hsync_gpio_num = GPIO_NUM_NC;/);
 assert.match(driver, /config\.vsync_gpio_num = GPIO_NUM_NC;/);
@@ -107,7 +121,13 @@ assert.match(driver, /raw_x >= kScreenWidth \|\| raw_y >= kScreenHeight/,
 
 // --- Storage and hardware I/O -----------------------------------------------
 assert.match(driver, /LittleFS\.begin\(true, "\/littlefs", 10, "spiffs"\)/);
-assert.match(read('src/devices/btt_panda_touch/hardware_io_profile.h'), /kNoHardwareIoProfile/);
+// The I2C expansion header P2 (PINOUT.md 2.6: SDA1 GPIO 4, SCL1 GPIO 3).
+const io = read('src/devices/btt_panda_touch/hardware_io_profile.h');
+assert.match(io, /\{4, Device::kHardwareIoPinSwitch \| Device::kHardwareIoPinTemperature,\s*"Expansion header P2 GPIO 4 \(SDA1\)"\}/);
+assert.match(io, /\{3, Device::kHardwareIoPinSwitch \| Device::kHardwareIoPinTemperature,\s*"Expansion header P2 GPIO 3 \(SCL1\)"\}/);
+for (const reserved of [1, 2, 5, 19, 20, 21, 38, 40, 41, 43, 44, 46]) {
+  assert.ok(!io.includes(`{${reserved}, Device::`), `GPIO ${reserved} stays reserved`);
+}
 
 // --- The other S3 drivers keep their own values -----------------------------
 const guition = read('src/devices/guition_esp32_4848s040/device_guition_esp32_4848s040.cpp');

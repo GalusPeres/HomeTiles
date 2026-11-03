@@ -28,9 +28,6 @@ has('src/ui/shared/value_unit.cpp',
   'unit_label = lv_label_create(value_label);', 'set_room(value_label, room_for(value_label, unit));',
   'if (align == LV_TEXT_ALIGN_CENTER) x = (inner - value_w) / 2 + value_w + gap;', 'else if (align == LV_TEXT_ALIGN_RIGHT) x = inner + gap;',
   'const std::string text = std::string(value) + " " + unit;',
-  // A leading degree sign gets its own, larger label (user 2026-11-03).
-  'const char kDegreeTag = 1;', 'const lv_font_t* degree_font(const lv_font_t* unit_font) {',
-  'lv_obj_set_pos(degree_label, x, unit_y(digit_top(font), digit_top(degree)));',
   // Floating: a content-sized label counts its text and the room only.
   'lv_obj_add_flag(unit_label, LV_OBJ_FLAG_FLOATING);',
   'lv_obj_set_pos(unit_label, x, unit_y(digit_top(font), digit_top(small)));',
@@ -44,6 +41,10 @@ assert.match(read('src/ui/shared/value_unit.cpp'), /const FontSize kTextFonts\[\
 // unit such as "°C" becomes two missing-glyph boxes (user 2026-11-03).
 assert.match(read('src/ui/shared/value_unit.cpp'),
   /const FontSize kValueFonts\[\] = \{[\s\S]*?\{&ui_font_120, 120\},\s*\};/);
+// The 120 px value's unit uses the largest full text font (72 px): larger
+// digit fonts (80/96) have no unit glyphs, and a 32 px unit nearly vanished
+// beside the digits (user 2026-11-03).
+assert.match(read('src/ui/shared/value_unit.cpp'), /if \(px >= 120\) return &ui_font_72;/);
 
 // Tiles: one place sets the sensor and energy tiles' values (also compact,
 // graph and gauge); the power flow values; every tile header state line
@@ -112,19 +113,11 @@ assert.equal(valueUnitStyle(20), 'font-size:0.8000em;margin-left:0.1875em;vertic
 has('src/types/power_flow/admin.js', `(parts[1] ? '<span class="tile-unit">' + escapeHtml(parts[1]) + '</span>' : '')`);
 // The preview splits finished texts like the panel (the same cases below).
 const escapeHtml = text => String(text).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
-const unitHtml = new Function('escapeHtml', extractDeliveredFunction('unitHtml') + '\nreturn unitHtml;')(escapeHtml);
-const unitTextHtml = new Function('escapeHtml', 'unitHtml', extractDeliveredFunction('unitTextHtml') + '\nreturn unitTextHtml;')(escapeHtml, unitHtml);
-assert.match(read('src/web/assets/admin.css'), /\.tile-unit-degree\s*\{[^}]*font-size:1\.75em/,
-  'the degree sign is drawn 1.75x the unit font in the preview');
-assert.ok(read('src/types/sensor/admin-format.js').includes('function unitHtml(unit)'),
-  'the preview unit HTML keeps a leading degree sign apart');
+const unitTextHtml = new Function('escapeHtml', extractDeliveredFunction('unitTextHtml') + '\nreturn unitTextHtml;')(escapeHtml);
 const cases = [['21,5 °C', '21,5', '°C'], ['Open · 58 %', 'Open · 58', '%'], ['75%', '75', '%'], ['-- °C'], ['Off'],
   ['Speed 2'], ['a\n5 W'], ['20.5  °C']];
-const unitHtmlExpected = unit => unit.codePointAt(0) === 0xB0
-  ? '<span class="tile-unit"><span class="tile-unit-degree">°</span>' + escapeHtml(unit.slice(1)) + '</span>'
-  : '<span class="tile-unit">' + escapeHtml(unit) + '</span>';
 for (const [text, number, unit] of cases) {
-  assert.equal(unitTextHtml(text), number ? escapeHtml(number) + unitHtmlExpected(unit)
+  assert.equal(unitTextHtml(text), number ? escapeHtml(number) + '<span class="tile-unit">' + escapeHtml(unit) + '</span>'
     : escapeHtml(text), JSON.stringify(text));
 }
 

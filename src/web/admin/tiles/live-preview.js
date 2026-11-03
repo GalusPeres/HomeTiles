@@ -340,7 +340,7 @@
       const entity = entitySelect ? entitySelect.value : '';
       const unit = resolveUnitValue(unitInput ? unitInput.value : '', entity, sensorMetaCache.units);
       html += '<div class="tile-value ' + sensorValueClass + '" id="' + tileId + '-value">--';
-      if (unit) html += unitHtml(unit);
+      if (unit) html += '<span class="tile-unit">' + escapeHtml(unit) + '</span>';
       html += '</div>';
       if (entity) {
         tileElem.innerHTML = html;

@@ -37,19 +37,6 @@ const FontSize kValueFonts[] = {
 // A unit label carries this tag as its user data, so its value label finds
 // it again (the LVGL user flags are all taken).
 const char kUnitTag = 0;
-// The degree sign of a unit ("°C") gets its own label: the font's degree
-// glyph is small, and at a large value it would nearly vanish beside the
-// digits (user 2026-11-03). It is drawn 1.75 times the unit font.
-const char kDegreeTag = 1;
-
-// The full text fonts a degree sign may use, ascending.
-const FontSize kDegreeFonts[] = {
-#if defined(DEVICE_LAYOUT_480X480)
-    {&ui_font_16, 16}, {&ui_font_20, 20},
-#endif
-    {&ui_font_24, 24}, {&ui_font_28, 28}, {&ui_font_32, 32}, {&ui_font_40, 40},
-    {&ui_font_48, 48}, {&ui_font_56, 56}, {&ui_font_64, 64}, {&ui_font_72, 72},
-};
 
 uint8_t px_of(const lv_font_t* font) {
   for (const FontSize& size : kValueFonts) {
@@ -73,51 +60,26 @@ int32_t text_width(const char* text, const lv_font_t* font, int32_t letter_space
 
 const lv_font_t* font_of(lv_obj_t* label) { return lv_obj_get_style_text_font(label, LV_PART_MAIN); }
 
-// A unit starting with the degree sign (UTF-8 C2 B0) keeps that sign apart.
-bool has_degree(const char* unit) {
-  return unit && unit[0] == '\xC2' && unit[1] == '\xB0';
-}
-
-const lv_font_t* degree_font(const lv_font_t* unit_font) {
-  const uint8_t px = px_of(unit_font);
-  if (!px) return unit_font;
-  const uint8_t want = static_cast<uint8_t>((px * 7 + 3) / 4);
-  for (const FontSize& size : kDegreeFonts) {
-    if (size.px >= want) return size.font;
-  }
-  return kDegreeFonts[sizeof(kDegreeFonts) / sizeof(kDegreeFonts[0]) - 1].font;
-}
-
 int32_t gap_for(const lv_font_t* value_font, const lv_font_t* unit_font) {
   const uint8_t px = px_of(unit_font);
   return gap_px(px ? px : static_cast<uint8_t>(value_font->line_height * 3 / 4));
 }
 
-// The unit's room: its gap and width. A leading degree sign is measured in
-// its larger font and gets a thin gap before the rest of the unit.
+// The unit's room: its gap and width.
 int32_t room_for(lv_obj_t* value_label, const char* unit) {
   const lv_font_t* font = font_of(value_label);
   const lv_font_t* small = unit_font(font);
-  const int32_t gap = gap_for(font, small);
-  if (!has_degree(unit)) return gap + text_width(unit, small, 0);
-  const lv_font_t* degree = degree_font(small);
-  const uint8_t small_px = px_of(small);
-  return gap + text_width("\xC2\xB0", degree, 0) +
-         gap_px(small_px ? small_px : 20) + text_width(unit + 2, small, 0);
+  return gap_for(font, small) + text_width(unit, small, 0);
 }
 
-lv_obj_t* tagged_child(lv_obj_t* value_label, const char* tag) {
+lv_obj_t* unit_child(lv_obj_t* value_label) {
   const uint32_t count = value_label ? lv_obj_get_child_count(value_label) : 0;
   for (uint32_t i = 0; i < count; ++i) {
     lv_obj_t* child = lv_obj_get_child(value_label, static_cast<int32_t>(i));
-    if (lv_obj_get_user_data(child) == tag) return child;
+    if (lv_obj_get_user_data(child) == &kUnitTag) return child;
   }
   return nullptr;
 }
-
-lv_obj_t* unit_child(lv_obj_t* value_label) { return tagged_child(value_label, &kUnitTag); }
-
-lv_obj_t* degree_child(lv_obj_t* value_label) { return tagged_child(value_label, &kDegreeTag); }
 
 void set_text(lv_obj_t* label, const char* text) {
   const char* shown = lv_label_get_text(label);
@@ -149,6 +111,9 @@ const uint8_t* unit_font_sizes(uint8_t& count) {
 const lv_font_t* unit_font(const lv_font_t* value_font) {
   const uint8_t px = px_of(value_font);
   if (!px) return value_font;
+  // The 120 px sensor value keeps the web preview's 80 % ratio as far as a
+  // full text font allows: 72 px. The 80 and 96 px fonts hold digits only.
+  if (px >= 120) return &ui_font_72;
   uint8_t sizes[kTextFontCount];
   for (uint8_t i = 0; i < kTextFontCount; ++i) sizes[i] = kTextFonts[i].px;
   const uint8_t want = unit_px(px, sizes, kTextFontCount);
@@ -176,27 +141,7 @@ bool reserve(lv_obj_t* value_label, lv_obj_t*& unit_label, const char* unit) {
   }
   const lv_font_t* small = unit_font(font_of(value_label));
   if (font_of(unit_label) != small) lv_obj_set_style_text_font(unit_label, small, 0);
-  if (has_degree(unit)) {
-    lv_obj_t* degree_label = degree_child(value_label);
-    if (!degree_label) {
-      degree_label = lv_label_create(value_label);
-      lv_obj_set_user_data(degree_label, const_cast<char*>(&kDegreeTag));
-      lv_obj_add_flag(degree_label, LV_OBJ_FLAG_FLOATING);
-      lv_obj_remove_flag(degree_label, LV_OBJ_FLAG_CLICKABLE);
-      lv_obj_remove_flag(degree_label, LV_OBJ_FLAG_SCROLLABLE);
-    }
-    const lv_font_t* degree = degree_font(small);
-    if (font_of(degree_label) != degree) lv_obj_set_style_text_font(degree_label, degree, 0);
-    set_text(degree_label, "\xC2\xB0");
-    if (lv_obj_has_flag(degree_label, LV_OBJ_FLAG_HIDDEN)) lv_obj_remove_flag(degree_label, LV_OBJ_FLAG_HIDDEN);
-    set_text(unit_label, unit + 2);
-  } else {
-    lv_obj_t* degree_label = degree_child(value_label);
-    if (degree_label && !lv_obj_has_flag(degree_label, LV_OBJ_FLAG_HIDDEN)) {
-      lv_obj_add_flag(degree_label, LV_OBJ_FLAG_HIDDEN);
-    }
-    set_text(unit_label, unit);
-  }
+  set_text(unit_label, unit);
   set_room(value_label, room_for(value_label, unit));
   if (lv_obj_has_flag(unit_label, LV_OBJ_FLAG_HIDDEN)) lv_obj_remove_flag(unit_label, LV_OBJ_FLAG_HIDDEN);
   return true;
@@ -218,14 +163,6 @@ void place(lv_obj_t* value_label, lv_obj_t* unit_label) {
     const lv_text_align_t align = lv_obj_get_style_text_align(value_label, LV_PART_MAIN);
     if (align == LV_TEXT_ALIGN_CENTER) x = (inner - value_w) / 2 + value_w + gap;
     else if (align == LV_TEXT_ALIGN_RIGHT) x = inner + gap;
-  }
-  lv_obj_t* degree_label = degree_child(value_label);
-  if (degree_label && !lv_obj_has_flag(degree_label, LV_OBJ_FLAG_HIDDEN)) {
-    const lv_font_t* degree = font_of(degree_label);
-    const uint8_t small_px = px_of(small);
-    const int32_t degree_gap = gap_px(small_px ? small_px : 20);
-    lv_obj_set_pos(degree_label, x, unit_y(digit_top(font), digit_top(degree)));
-    x += text_width("\xC2\xB0", degree, 0) + degree_gap;
   }
   lv_obj_set_pos(unit_label, x, unit_y(digit_top(font), digit_top(small)));
 }

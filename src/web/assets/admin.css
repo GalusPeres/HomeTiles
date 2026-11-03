@@ -1920,10 +1920,6 @@
        like the weather forecast (user 2026-10-26; value_unit_rules.h: 80 %,
        a thin gap, the digits' tops meeting). */
     .tile-unit { color:inherit; font-size:.8em; line-height:1; margin-left:.17em; vertical-align:.18em; }
-    /* A leading degree sign is enlarged on its own: at a large value the
-       font's degree glyph would nearly vanish beside the digits
-       (value_unit.cpp draws it in a larger font on the panel). */
-    .tile-unit-degree { font-size:1.75em; line-height:0; vertical-align:.1em; }
     .tile.binary_sensor,
     .tile.number,
     .tile.select,

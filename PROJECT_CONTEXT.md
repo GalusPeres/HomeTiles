@@ -100,7 +100,7 @@ Last reviewed: 2026-10-29
 - Lock/Alarm/Fan (24-26, `src/types/device/`): sealed commands need pairing + Web Admin password; HW ok 2026-10-02.
 - Calendar 27 (PR #127, `docs-dev/calendar.md`): Bridge v0.9.6b1 `events` (`entity_search` 5); V2 HW pending.
 - Sensor graph (#131, mockup sensor-graph-3): pictures (`area_graph.h`), circle-color area fading low, 1 px 8 % lines, labels right; tile 24 h; numeric popup 30D/7D/24H/6H/1H; corners in masks. HW ok b613.
-- Energy: popup Year/Month/Week/Today (Bridge v0.9.6b3); tile mode 2 = today's bars, hourly at :06 (V2 ok b661); week start: Localization.
+- Energy: popup Year/Month/Week/Today (Bridge v0.9.6b3); tile mode 2 = today's bars, every 5 min (:01, :06); week start: Localization.
 - Sensor looks (`build/analysis/2026-10-28-analyse.md`): modes 3-14 (`sensor_look.h`, `look_view.cpp`, `admin-look.js`), A8 masks rebuilt on value change; Switch-like menu; b570 HW pending.
 - Rule icons (b574): stop/state colors may carry an MDI icon (`RRGGBB,<icon>`); `tile_rule_icon.h` swaps/restores the glyph (renderers: `set_glyph`), popup head too; Switch & co. own rules b575. HW pending.
 - Switch layouts `sensor_decimals` 0-3, 4-6 upright bar (`bar_orientation.h`; Fan upright = 1; sim ok, HW pending); `command_pacer.h` pacing: reporter test pending (#11).

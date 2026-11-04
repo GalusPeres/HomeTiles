@@ -1721,6 +1721,14 @@ void queue_energy_popup_refresh(const char* period) {
   g_pending_refresh.period[static_cast<uint8_t>(period_from_name(period ? period : ""))] = true;
 }
 
+const char* energy_popup_open_period() {
+  if (!g_energy_popup_ctx || !popup_visible(g_energy_popup_ctx) ||
+      g_energy_popup_ctx->shown_period == EnergyPeriod::Day) {
+    return nullptr;
+  }
+  return period_name(g_energy_popup_ctx->shown_period);
+}
+
 void process_energy_popup_queue() {
   const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
   if (!g_energy_popup_ctx || !g_energy_popup_ctx->card) {

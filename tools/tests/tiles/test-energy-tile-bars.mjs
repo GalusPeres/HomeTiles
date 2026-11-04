@@ -25,6 +25,12 @@ const fn = (source, name) => {
 // ---- The tile ---------------------------------------------------------------
 const renderer = read('src/types/energy/renderer.cpp');
 const render = fn(renderer, 'render_energy_tile');
+// Every tile with a source counts while it lives, so the day answers keep
+// coming without an energy section in the Bridge's configuration (the sources
+// come from the Energy dashboard; bars stayed empty until a press, 2026-11-04).
+assert.match(render, /new EnergyEventData\(\);\n\s*\+\+g_energy_tiles;/, 'a tile with a source counts');
+assert.match(render, /delete data;\n\s*if \(g_energy_tiles\) --g_energy_tiles;/, 'until it is deleted');
+assert.match(fn(renderer, 'energy_tiles_alive'), /return g_energy_tiles > 0;/);
 assert.ok(render.includes('const bool bars_shown = tile.sensor_display_mode == kEnergyBarsMode && tile.span_h >= 1 && !compact;') &&
   !render.includes('grid_type != GridType::SCREENSAVER'), 'whole-height tiles, also on the screensaver (user 2026-10-31)');
 assert.ok(render.includes('head.title = title_text;') &&

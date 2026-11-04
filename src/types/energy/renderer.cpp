@@ -207,6 +207,10 @@ lv_obj_t* create_energy_bars(lv_obj_t* card, const Tile& tile, lv_obj_t* icon) {
   return frame;
 }
 
+// The Energy tiles with a source on every built grid (cached pages, the
+// screensaver): they follow the day answers (energy_service_periodic).
+uint16_t g_energy_tiles = 0;
+
 struct EnergyEventData {
   String entity_id;
   String title;
@@ -246,6 +250,8 @@ bool is_disabled_token(const String& value) {
 }
 
 }  // namespace
+
+bool energy_tiles_alive() { return g_energy_tiles > 0; }
 
 void energy_tile_bars_update(const EnergyEntryData& entry) {
   if (entry.period != "day" || !entry.id.length()) return;
@@ -397,6 +403,7 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
       icon_override = true;
     }
     EnergyEventData* data = new EnergyEventData();
+    ++g_energy_tiles;
     data->entity_id = tile.sensor_entity;
     data->title = title_text;
     data->icon_name = icon_name;
@@ -454,6 +461,7 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
           if (lv_event_get_code(e) != LV_EVENT_DELETE) return;
           EnergyEventData* data = static_cast<EnergyEventData*>(lv_event_get_user_data(e));
           delete data;
+          if (g_energy_tiles) --g_energy_tiles;
         },
         LV_EVENT_DELETE,
         data);

@@ -411,9 +411,13 @@ void energy_service_periodic() {
   service_energy_retry("week", g_week_request, now);
   service_energy_retry("month", g_month_request, now);
   service_energy_retry("year", g_year_request, now);
-  // Without an energy section the Bridge has nothing to answer; Energy tiles
-  // and the popup still ask on their own when they are shown.
-  if (!haBridgeConfig.hasEnergyEntries()) return;
+  // Energy tiles follow the day (the Bridge's running hour, every five
+  // minutes) also without an energy section: their sources come from the
+  // Energy dashboard (picker list "energy"). Gated on the section alone, such
+  // a tile only got new values when it was built or a popup asked: an answer
+  // just after midnight has no hours yet and its bars stayed empty until a
+  // press (user 2026-11-04). With neither there is nothing to ask for.
+  if (!haBridgeConfig.hasEnergyEntries() && !energy_tiles_alive()) return;
   if (g_last_periodic_ms != 0 && (uint32_t)(now - g_last_periodic_ms) < kEnergyPeriodicMs) {
     return;
   }

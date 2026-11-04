@@ -86,11 +86,10 @@ assert.match(fn(bridge, 'HaBridgeConfig::applyJson'),
 assert.match(fn(bridge, 'HaBridgeConfig::applyJson'), /"\\"push\\""/);
 
 // Energy: with an energy section or an Energy tile (its source comes from the
-// Energy dashboard, without a section: bars stayed empty until a press, user
-// 2026-11-04), every five minutes, and no endless 15-second retry when the
-// Bridge never answers.
+// Energy dashboard, without a section: values only moved after a tap, user
+// 2026-11-04), once an hour (test-energy-hourly-refresh.mjs), and no endless
+// 15-second retry when the Bridge never answers.
 const energy = read('src/types/energy/energy_data.cpp');
-assert.match(energy, /kEnergyPeriodicMs = 5UL \* 60UL \* 1000UL;/);
 assert.match(fn(energy, 'energy_service_periodic'), /if \(!haBridgeConfig\.hasEnergyEntries\(\) && !energy_tiles_alive\(\)\) return;/);
 assert.match(fn(energy, 'service_energy_retry'), /state\.retry_requested = state\.timeouts < kEnergyMaxTimeoutsInRow;/);
 assert.match(fn(energy, 'queue_energy_response'), /request\.timeouts = 0;/);

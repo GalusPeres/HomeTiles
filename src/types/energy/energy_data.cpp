@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <cstring>
 #include <math.h>
+#include <time.h>
 #include <utility>
 #include <vector>
 
@@ -51,14 +52,31 @@ EnergyRequestState g_day_request;
 EnergyRequestState g_week_request;
 EnergyRequestState g_month_request;
 EnergyRequestState g_year_request;
-uint32_t g_last_periodic_ms = 0;
+// The tiles' hourly refresh (loop-task only): the hour whose answer reached
+// them (tm_hour, -1 before the first), the hour last asked for, when an answer
+// last reached them, and the last look at the clock.
+int g_refreshed_hour = -1;
+int g_asked_hour = -1;
+uint32_t g_day_applied_ms = 0;
+uint32_t g_refresh_checked_ms = 0;
 
 constexpr uint32_t kEnergyRequestThrottleMs = 10000UL;
 constexpr uint32_t kEnergyRetryBackoffMs = 2000UL;
 constexpr uint32_t kEnergyResponseTimeoutMs = 15000UL;
-// Home Assistant's statistics have five-minute resolution at best, so a
-// shorter periodic refresh of the tiles only repeats the same totals.
-constexpr uint32_t kEnergyPeriodicMs = 5UL * 60UL * 1000UL;
+// Energy tiles show hours and the day's total, so once an hour is enough: 20
+// minutes past the hour, when Home Assistant's own Energy dashboard refreshes
+// (frontend src/data/energy.ts, scheduleHourlyRefresh). Every request costs a
+// statistics query in Home Assistant and a parse in the loop, and it must stay
+// sparing (user 2026-11-04). The Energy popup asks for itself when it opens.
+constexpr int kEnergyRefreshMinute = 20;
+// Without a clock (no time server reached): an hour after the last answer.
+constexpr uint32_t kEnergyRefreshMs = 60UL * 60UL * 1000UL;
+// The hour counts only once its answer reached the tiles. A request or an
+// answer can get lost (QoS 0, a busy Recorder, no memory for the parse), so
+// until then it asks again this often: Home Assistant's own statistics step.
+constexpr uint32_t kEnergyUnansweredMs = 5UL * 60UL * 1000UL;
+// The clock is set from 2024-01-01 on (the same check as the head bar's time).
+constexpr time_t kClockSetEpoch = 1704067200;
 // A Bridge without Energy dashboard never answers. After this many timeouts
 // in a row the request waits for the next periodic slot or a popup instead of
 // retrying every 15 seconds (each try logged a Home Assistant warning).
@@ -217,6 +235,29 @@ void queue_energy_tile_update_for_entry(const EnergyEntryData& entry) {
   }
 }
 
+// The local time, when the clock is set.
+bool read_local_clock(struct tm& local) {
+  const time_t wall = time(nullptr);
+  return wall >= kClockSetEpoch && localtime_r(&wall, &local);
+}
+
+// A day answer reached the tiles: only now does this hour's refresh count.
+void note_day_answer_applied() {
+  g_day_applied_ms = millis();
+  struct tm local {};
+  if (read_local_clock(local) && local.tm_min >= kEnergyRefreshMinute) g_refreshed_hour = local.tm_hour;
+}
+
+// Whether any source of an answer has a value for any hour.
+bool answer_has_hours(JsonArray entries) {
+  for (JsonObject obj : entries) {
+    for (JsonVariant value : obj["values"].as<JsonArray>()) {
+      if (!value.isNull()) return true;
+    }
+  }
+  return false;
+}
+
 void parse_energy_response(const char* payload) {
   const uint32_t parse_started_ms = millis();
   DynamicJsonDocument doc(32768);
@@ -232,6 +273,13 @@ void parse_energy_response(const char* payload) {
   JsonArray entries = doc["entries"].as<JsonArray>();
   if (entries.isNull()) {
     Serial.println("[Energy] Response without entries");
+    return;
+  }
+  // Sources without a single hour: the Recorder failed, or the first minutes
+  // of a day hold no statistics yet. Such an answer must not blank the tiles'
+  // bars and totals; it does not count, so the refresh asks again.
+  if (strcmp(period, "day") == 0 && entries.size() > 0 && !answer_has_hours(entries)) {
+    Serial.println("[Energy] Day response without hours; the tiles keep their values");
     return;
   }
 
@@ -308,6 +356,7 @@ void parse_energy_response(const char* payload) {
   }
   cache_for_period(period) = parsed;
   if (new_icon) tiles_request_icon_refresh();
+  if (strcmp(period, "day") == 0) note_day_answer_applied();
   queue_energy_popup_refresh(period);
   // Timing of one response: since its request was sent, and the parse itself.
   const uint32_t now = millis();
@@ -411,19 +460,25 @@ void energy_service_periodic() {
   service_energy_retry("week", g_week_request, now);
   service_energy_retry("month", g_month_request, now);
   service_energy_retry("year", g_year_request, now);
-  // Energy tiles follow the day (the Bridge's running hour, every five
-  // minutes) also without an energy section: their sources come from the
-  // Energy dashboard (picker list "energy"). Gated on the section alone, such
-  // a tile only got new values when it was built or a popup asked: an answer
-  // just after midnight has no hours yet and its bars stayed empty until a
-  // press (user 2026-11-04). With neither there is nothing to ask for.
+  // Energy tiles follow the day also without an energy section: their sources
+  // come from the Energy dashboard (picker list "energy"). Gated on the section
+  // alone, such a tile only got new values when it was built or a popup asked
+  // (user 2026-11-04: they only moved after a tap). With neither there is
+  // nothing to ask for.
   if (!haBridgeConfig.hasEnergyEntries() && !energy_tiles_alive()) return;
-  if (g_last_periodic_ms != 0 && (uint32_t)(now - g_last_periodic_ms) < kEnergyPeriodicMs) {
-    return;
-  }
-  if (energy_request_day_for_tiles(false)) {
-    g_last_periodic_ms = now;
-  }
+  // This runs in every loop; the clock once a second is plenty.
+  if (g_refresh_checked_ms != 0 && (uint32_t)(now - g_refresh_checked_ms) < 1000UL) return;
+  g_refresh_checked_ms = now;
+  struct tm local {};
+  const bool clock_set = read_local_clock(local);
+  const bool due = clock_set
+                       ? local.tm_min >= kEnergyRefreshMinute && local.tm_hour != g_refreshed_hour
+                       : g_day_applied_ms == 0 || (uint32_t)(now - g_day_applied_ms) >= kEnergyRefreshMs;
+  if (!due) return;
+  // Nothing reached the tiles yet: ask, and again until an answer does.
+  const int asked = clock_set ? local.tm_hour : -2;
+  if (asked == g_asked_hour && (uint32_t)(now - g_day_request.last_attempt_ms) < kEnergyUnansweredMs) return;
+  if (energy_request_day_for_tiles(false)) g_asked_hour = asked;
 }
 
 bool energy_find_entry(const String& id, const char* period, EnergyEntryData& out) {

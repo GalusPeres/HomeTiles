@@ -53,8 +53,16 @@ assert.ok(read('src/types/sensor/renderer.cpp').includes('static lv_area_t senso
 // Live data: a day answer reaches every tile with bars of its source.
 const data = read('src/types/energy/energy_data.cpp');
 assert.match(data, /if \(strcmp\(period, "day"\) == 0\) \{\s*queue_energy_tile_update_for_entry\(entry\);\s*energy_tile_bars_update\(entry\);/);
-assert.ok(fn(renderer, 'energy_tile_bars_update').includes('if (copy_day_values(*live.bars, entry)) lv_obj_invalidate(live.frame);'),
+const barsUpdate = fn(renderer, 'energy_tile_bars_update');
+assert.ok(barsUpdate.includes('if (!copy_day_values(*live.bars, entry)) continue;') && barsUpdate.includes('lv_obj_invalidate(live.frame);'),
   'only changed hours redraw');
+// The log shows an answer's way to the display: changed, then drawn once.
+assert.ok(barsUpdate.includes('live.bars->report_next_draw = true;') && barsUpdate.includes('[EnergyTile] %s bars changed'),
+  'changed hours are logged and wait for their drawing');
+const barsDraw = fn(renderer, 'energy_bars_draw_cb');
+assert.ok(barsDraw.indexOf('bars->report_next_draw = false;') > 0 && barsDraw.includes('[EnergyTile] %s bars drawn')
+  && barsDraw.indexOf('bars->report_next_draw = false;') < barsDraw.indexOf('if (newest < 0) return;'),
+  'the drawing reports once, also when no hour is left to draw');
 assert.ok(fn(renderer, 'energy_bars_delete_cb').includes('if (live.frame == frame) live = LiveBars{};'), 'a deleted tile leaves the table');
 
 // ---- The editor -------------------------------------------------------------

@@ -41,6 +41,8 @@ struct EnergyTileBars {
   int32_t room = 0;
   float values[kEnergyBarHours] = {};
   bool valid[kEnergyBarHours] = {};
+  // New hours wait for their next drawing, which says so in the log once.
+  bool report_next_draw = false;
 };
 
 // How far the bars' lower corners stay from the card's side and bottom
@@ -82,6 +84,14 @@ bool copy_day_values(EnergyTileBars& bars, const EnergyEntryData& entry) {
   return changed;
 }
 
+// The newest hour with a value, -1 without any.
+int newest_bar_hour(const EnergyTileBars& bars) {
+  for (int i = kEnergyBarHours - 1; i >= 0; --i) {
+    if (bars.valid[i]) return i;
+  }
+  return -1;
+}
+
 void energy_bars_draw_cb(lv_event_t* e) {
   lv_obj_t* frame = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
   lv_layer_t* layer = lv_event_get_layer(e);
@@ -105,6 +115,10 @@ void energy_bars_draw_cb(lv_event_t* e) {
     newest = i;
     if (bars->values[i] > max_v) max_v = bars->values[i];
     if (bars->values[i] < min_v) min_v = bars->values[i];
+  }
+  if (bars->report_next_draw) {
+    bars->report_next_draw = false;
+    Serial.printf("[EnergyTile] %s bars drawn: newest hour %d\n", bars->entity_id.c_str(), newest);
   }
   if (newest < 0) return;
   const float span = max_v - min_v;
@@ -257,7 +271,14 @@ void energy_tile_bars_update(const EnergyEntryData& entry) {
   if (entry.period != "day" || !entry.id.length()) return;
   for (const LiveBars& live : g_live_bars) {
     if (!live.frame || !live.bars || !live.bars->entity_id.equalsIgnoreCase(entry.id)) continue;
-    if (copy_day_values(*live.bars, entry)) lv_obj_invalidate(live.frame);
+    if (!copy_day_values(*live.bars, entry)) continue;
+    lv_obj_invalidate(live.frame);
+    // Only changed hours reach the log, so it shows an answer's whole way to the
+    // display without a line per frame or per unchanged answer. A tile on a page
+    // not shown draws when its page comes up.
+    live.bars->report_next_draw = true;
+    Serial.printf("[EnergyTile] %s bars changed: newest hour %d\n", live.bars->entity_id.c_str(),
+                  newest_bar_hour(*live.bars));
   }
 }
 

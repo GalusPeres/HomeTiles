@@ -53,9 +53,11 @@ EnergyRequestState g_week_request;
 EnergyRequestState g_month_request;
 EnergyRequestState g_year_request;
 // The tiles' hourly refresh (loop-task only): the hour whose answer reached
-// them (tm_hour, -1 before the first), the hour last asked for, when an answer
-// last reached them, and the last look at the clock.
+// them (tm_hour, -1 before the first), the newest bar of that answer, the hour
+// last asked for, when an answer last reached them, and the last look at the
+// clock.
 int g_refreshed_hour = -1;
+int g_refreshed_newest = -1;
 int g_asked_hour = -1;
 uint32_t g_day_applied_ms = 0;
 uint32_t g_refresh_checked_ms = 0;
@@ -63,12 +65,20 @@ uint32_t g_refresh_checked_ms = 0;
 constexpr uint32_t kEnergyRequestThrottleMs = 10000UL;
 constexpr uint32_t kEnergyRetryBackoffMs = 2000UL;
 constexpr uint32_t kEnergyResponseTimeoutMs = 15000UL;
-// Energy tiles show hours and the day's total, so once an hour is enough: 20
-// minutes past the hour, when Home Assistant's own Energy dashboard refreshes
-// (frontend src/data/energy.ts, scheduleHourlyRefresh). Every request costs a
-// statistics query in Home Assistant and a parse in the loop, and it must stay
-// sparing (user 2026-11-04). The Energy popup asks for itself when it opens.
-constexpr int kEnergyRefreshMinute = 20;
+// Energy tiles show hours and the day's total, so once an hour is enough, right
+// after the new hour's bar exists: the Bridge builds the running hour from the
+// 5-minute statistics, and the Recorder writes an hour's first row at 5 minutes
+// 10 seconds past it. Home Assistant's own dashboard refreshes at 20 past
+// (frontend src/data/energy.ts, scheduleHourlyRefresh) but shows finished hours
+// only; at 20 past, a tap found a new bar for 15 minutes of every hour (user
+// 2026-11-04). Every request costs a statistics query in Home Assistant and a
+// parse in the loop, and it must stay sparing. The Energy popup asks for itself
+// when it opens.
+constexpr int kEnergyRefreshMinute = 6;
+// A busy Recorder writes the new bar later: an answer without it does not count
+// and the refresh asks again. From the minute the dashboard refreshes an answer
+// counts as it is, so sources without new statistics cost four requests an hour.
+constexpr int kEnergyLastRetryMinute = 20;
 // Without a clock (no time server reached): an hour after the last answer.
 constexpr uint32_t kEnergyRefreshMs = 60UL * 60UL * 1000UL;
 // The hour counts only once its answer reached the tiles. A request or an
@@ -241,21 +251,30 @@ bool read_local_clock(struct tm& local) {
   return wall >= kClockSetEpoch && localtime_r(&wall, &local);
 }
 
-// A day answer reached the tiles: only now does this hour's refresh count.
-void note_day_answer_applied() {
+// A day answer reached the tiles: this hour's refresh is done once the answer
+// brought a new bar (compared with the last one, so it needs no agreement on
+// the hour with Home Assistant's clock), or when none will come any more. An
+// answer without any hour gets here only when the dashboard has no sources.
+void note_day_answer_applied(int newest_hour) {
   g_day_applied_ms = millis();
   struct tm local {};
-  if (read_local_clock(local) && local.tm_min >= kEnergyRefreshMinute) g_refreshed_hour = local.tm_hour;
+  if (!read_local_clock(local) || local.tm_min < kEnergyRefreshMinute) return;
+  if (newest_hour >= 0 && newest_hour == g_refreshed_newest && local.tm_min < kEnergyLastRetryMinute) return;
+  g_refreshed_hour = local.tm_hour;
+  g_refreshed_newest = newest_hour;
 }
 
-// Whether any source of an answer has a value for any hour.
-bool answer_has_hours(JsonArray entries) {
+// The newest hour any source of an answer has a value for, -1 without any.
+int answer_newest_hour(JsonArray entries) {
+  int newest = -1;
   for (JsonObject obj : entries) {
+    int hour = 0;
     for (JsonVariant value : obj["values"].as<JsonArray>()) {
-      if (!value.isNull()) return true;
+      if (!value.isNull() && hour > newest) newest = hour;
+      ++hour;
     }
   }
-  return false;
+  return newest;
 }
 
 void parse_energy_response(const char* payload) {
@@ -278,7 +297,8 @@ void parse_energy_response(const char* payload) {
   // Sources without a single hour: the Recorder failed, or the first minutes
   // of a day hold no statistics yet. Such an answer must not blank the tiles'
   // bars and totals; it does not count, so the refresh asks again.
-  if (strcmp(period, "day") == 0 && entries.size() > 0 && !answer_has_hours(entries)) {
+  const int newest_hour = answer_newest_hour(entries);
+  if (strcmp(period, "day") == 0 && entries.size() > 0 && newest_hour < 0) {
     Serial.println("[Energy] Day response without hours; the tiles keep their values");
     return;
   }
@@ -356,14 +376,15 @@ void parse_energy_response(const char* payload) {
   }
   cache_for_period(period) = parsed;
   if (new_icon) tiles_request_icon_refresh();
-  if (strcmp(period, "day") == 0) note_day_answer_applied();
+  if (strcmp(period, "day") == 0) note_day_answer_applied(newest_hour);
   queue_energy_popup_refresh(period);
   // Timing of one response: since its request was sent, and the parse itself.
   const uint32_t now = millis();
   const uint32_t requested_ms = request_state_for_period(period).last_attempt_ms;
-  Serial.printf("[Energy] Response parsed: period=%s entries=%u after=%lu ms parse=%lu ms\n",
+  Serial.printf("[Energy] Response parsed: period=%s entries=%u newest=%d after=%lu ms parse=%lu ms\n",
                 period,
                 static_cast<unsigned>(parsed.size()),
+                newest_hour,
                 static_cast<unsigned long>(requested_ms ? now - requested_ms : 0),
                 static_cast<unsigned long>(now - parse_started_ms));
 }

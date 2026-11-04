@@ -193,6 +193,7 @@ static const char* normalize_timezone_code(const char* timezone_code) {
       {"phoenix"},
       {"los_angeles"},
       {"honolulu"},
+      {"anchorage"},
       {"buenos_aires"},
       {"sao_paulo"},
       {"tokyo"},

@@ -100,6 +100,7 @@ static const char* timezone_spec_for_code(const char* code) {
   if (strcasecmp(code, "phoenix") == 0) return "MST7";
   if (strcasecmp(code, "los_angeles") == 0) return "PST8PDT,M3.2.0/02,M11.1.0/02";
   if (strcasecmp(code, "honolulu") == 0) return "HST10";
+  if (strcasecmp(code, "anchorage") == 0) return "AKST9AKDT,M3.2.0/02,M11.1.0/02";
   if (strcasecmp(code, "buenos_aires") == 0) return "ART3";
   if (strcasecmp(code, "sao_paulo") == 0) return "BRT3";
   if (strcasecmp(code, "tokyo") == 0) return "JST-9";

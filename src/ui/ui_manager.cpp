@@ -82,6 +82,11 @@ static const char* timezone_spec_for_code(const char* code) {
   if (strcasecmp(code, "berlin") == 0) return kBerlinSpec;
   if (strcasecmp(code, "london") == 0) return "GMT0BST,M3.5.0/01,M10.5.0/02";
   if (strcasecmp(code, "utc") == 0) return "UTC0";
+  // Home Assistant's zone, from the Bridge; UTC until a Bridge sent one.
+  if (strcasecmp(code, "auto") == 0) {
+    const char* rule = configManager.getConfig().timezone_rule;
+    return rule[0] ? rule : "UTC0";
+  }
   if (strcasecmp(code, "athens") == 0) return "EET-2EEST,M3.5.0/03,M10.5.0/04";
   if (strcasecmp(code, "istanbul") == 0) return "TRT-3";
   if (strcasecmp(code, "moscow") == 0) return "MSK-3";

@@ -23,6 +23,7 @@
 #define CONFIG_HA_PREFIX_MAX     48
 #define CONFIG_LANG_MAX          8
 #define CONFIG_TIMEZONE_MAX      24
+#define CONFIG_TIMEZONE_RULE_MAX 48
 
 static constexpr uint16_t kSleepOptionsSec[] = {5, 15, 30, 60, 300, 900, 1800, 3600};
 static constexpr size_t kSleepOptionsSecCount = sizeof(kSleepOptionsSec) / sizeof(kSleepOptionsSec[0]);
@@ -80,6 +81,9 @@ struct DeviceConfig {
   char ha_prefix[CONFIG_HA_PREFIX_MAX];
   char language[CONFIG_LANG_MAX];
   char timezone[CONFIG_TIMEZONE_MAX];
+  // Home Assistant's time zone as the Bridge last sent it (a POSIX rule), for
+  // the time zone "auto". Only saveTimeZoneRule() changes it.
+  char timezone_rule[CONFIG_TIMEZONE_RULE_MAX];
   uint8_t global_time_format;
   uint8_t global_date_format;
   // The first day of the week (tm_wday: 0 Sunday, 1 Monday, 6 Saturday), or
@@ -194,6 +198,8 @@ public:
   bool saveHomeHead(const String& title, const String& icon);
   bool saveTheme(uint8_t theme);
   bool saveThemeAutoLast(uint8_t theme);
+  // True when the rule changed and is stored.
+  bool saveTimeZoneRule(const char* rule);
   bool saveEthernetEnabled(bool enabled);
   bool saveStaticAddressingEnabled(bool enabled);
 

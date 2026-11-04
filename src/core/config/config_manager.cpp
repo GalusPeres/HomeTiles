@@ -175,6 +175,7 @@ static const char* normalize_timezone_code(const char* timezone_code) {
       {"berlin"},
       {"london"},
       {"utc"},
+      {"auto"},
       {"athens"},
       {"istanbul"},
       {"moscow"},
@@ -369,6 +370,7 @@ bool ConfigManager::load() {
   char stored_timezone[CONFIG_TIMEZONE_MAX] = {0};
   prefs.getString("tz", stored_timezone, CONFIG_TIMEZONE_MAX);
   set_timezone_code(config.timezone, sizeof(config.timezone), stored_timezone);
+  prefs.getString("tz_rule", config.timezone_rule, CONFIG_TIMEZONE_RULE_MAX);
   config.global_time_format =
       normalize_global_time_format(prefs.getUChar("time_fmt", clock_tile::TIME_FORMAT_AUTO));
   config.global_date_format =
@@ -605,6 +607,8 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
                     normalized.language);
   set_timezone_code(normalized.timezone, sizeof(normalized.timezone),
                     normalized.timezone);
+  // Not a setting: it comes from the Bridge (saveTimeZoneRule).
+  memcpy(normalized.timezone_rule, config.timezone_rule, sizeof(normalized.timezone_rule));
   normalized.global_time_format =
       normalize_global_time_format(normalized.global_time_format);
   normalized.global_date_format =
@@ -1050,6 +1054,23 @@ bool ConfigManager::saveThemeAutoLast(uint8_t theme) {
   const bool committed = BatchedNvsWrite::finish(prefs);
   if (!written || !committed) return false;
   config.theme_auto_last = theme;
+  return true;
+}
+
+bool ConfigManager::saveTimeZoneRule(const char* rule) {
+  if (!rule || strlen(rule) >= sizeof(config.timezone_rule)) return false;
+  if (strcmp(config.timezone_rule, rule) == 0) return false;
+  Device::ScopedStorageWrite storage_write(BatchedNvsWrite::kNeedsDisplayGuard);
+  BatchedNvsWrite::Preferences prefs;
+  if (!prefs.begin(PREF_NAMESPACE, false)) {
+    Serial.println("ConfigManager: Failed to open time zone rule preferences");
+    return false;
+  }
+  const bool written = prefs.putString("tz_rule", rule) == strlen(rule);
+  const bool committed = BatchedNvsWrite::finish(prefs);
+  if (!written || !committed) return false;
+  strncpy(config.timezone_rule, rule, sizeof(config.timezone_rule) - 1);
+  config.timezone_rule[sizeof(config.timezone_rule) - 1] = '\0';
   return true;
 }
 

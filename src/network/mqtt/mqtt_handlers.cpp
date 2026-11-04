@@ -22,6 +22,8 @@
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/core/config/config_manager.h"
+#include "src/network/bridge/time_zone_rule.h"
+#include "src/ui/ui_manager.h"
 #include "src/core/config/week_start.h"
 #include "src/core/display/display_manager.h"
 #include "src/core/i18n/i18n.h"
@@ -2146,6 +2148,15 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
         Serial.println("[Bridge] Initial sync: idle timer started once");
       }
       tiles_request_bridge_cache_refresh();
+      // Home Assistant's time zone: kept also while the panel has its own, so
+      // the choice "auto" applies at once and the clock is right after a start.
+      char zone_rule[CONFIG_TIMEZONE_RULE_MAX];
+      if (time_zone_rule::extract(cfg_buf, zone_rule, sizeof(zone_rule)) &&
+          configManager.saveTimeZoneRule(zone_rule) &&
+          strcasecmp(configManager.getConfig().timezone, "auto") == 0) {
+        Serial.printf("[NTP] Time zone from Home Assistant: %s\n", zone_rule);
+        uiManager.scheduleNtpSync(0);
+      }
       if (reload) {
         yield();  // After JSON parsing.
         // Do not announce the device again: HA answers each announcement with

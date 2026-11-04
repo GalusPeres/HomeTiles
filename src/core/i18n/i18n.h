@@ -949,7 +949,7 @@ struct LocaleProfile {
   // Timezone selection in Web Admin and device Settings. Entries follow
   // i18n::timezone_option(); TimezoneOptionInfo::group selects the group.
   const char* timezone_group_labels[6];
-  const char* timezone_labels[28];
+  const char* timezone_labels[29];
 
   // Binary sensor UI labels. Order: type, entity, history, activity,
   // history unavailable, no activity, 24-hour range, 7-day range.
@@ -1155,7 +1155,7 @@ static_assert(static_cast<int>(DeviceLabel::Count) == 42, "LocaleProfile::device
 
 // Locale-independent timezone catalog with codes and group assignments.
 // LocaleProfile::timezone_labels supplies display names in the same order.
-constexpr size_t kTimezoneOptionCount = 28;
+constexpr size_t kTimezoneOptionCount = 29;
 constexpr size_t kTimezoneGroupCount = 6;
 struct TimezoneOptionInfo {
   uint8_t group;  // Index in LocaleProfile::timezone_group_labels

@@ -356,14 +356,16 @@ void microphone_selected(bool on) { speaker::setMicEnabled(on, "panel settings")
 
 static uint32_t settings_timezone_index(const char* code) {
   const char* selected = (code && code[0]) ? code : "berlin";
+  uint32_t berlin = 0;
   for (uint32_t i = 0; i < i18n::kTimezoneOptionCount; ++i) {
     if (strcmp(i18n::timezone_option(i).code, selected) == 0) return i;
+    if (strcmp(i18n::timezone_option(i).code, "berlin") == 0) berlin = i;
   }
-  return 2;  // berlin
+  return berlin;
 }
 
 static const char* selected_timezone_code(uint32_t index) {
-  if (index >= i18n::kTimezoneOptionCount) index = 2;  // berlin
+  if (index >= i18n::kTimezoneOptionCount) return "berlin";
   return i18n::timezone_option(index).code;
 }
 

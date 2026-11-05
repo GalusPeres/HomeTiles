@@ -57,6 +57,9 @@ void mqttPublishCameraCommand(const char* entity_id, const char* command,
                               uint8_t fps = 0);
 // Camera full screen (#65): frames in the panel's own size and orientation
 // (turned clockwise by turn_cw), the picture whole with black bars.
+// The time bar of a camera with a history: its frame of this time (the times
+// came with the Bridge's "ready"), 0 for the newest.
+void mqttPublishCameraFrame(const char* entity_id, uint32_t time);
 void mqttPublishCameraFullScreenOpen(const char* entity_id, uint8_t fps,
                                      uint16_t width, uint16_t height,
                                      uint16_t turn_cw);

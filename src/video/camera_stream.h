@@ -12,6 +12,8 @@ void camera_stream_process_ui(lv_obj_t* image,
                               lv_obj_t* placeholder,
                               lv_obj_t* status_label);
 void camera_stream_set_external_status(const char* text, bool error = false);
+// The last status was an error (the popup shows it over the picture).
+bool camera_stream_status_is_error();
 bool camera_stream_is_active();
 // millis() of this stream's first shown frame, 0 before it (switch timing).
 uint32_t camera_stream_first_frame_ms();

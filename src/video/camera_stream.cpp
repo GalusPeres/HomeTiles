@@ -397,10 +397,9 @@ static void note_presented_frame() {
   const float fps =
       static_cast<float>(g_presented_frame_count) * 1000.0f /
       static_cast<float>(now - g_presented_fps_ms);
-  char message[64];
-  snprintf(message, sizeof(message), camera_text().camera_fps_fmt, fps);
-  set_status(message);
-  if (g_present_timed_frames > 0) {
+  if (g_present_timed_frames == 0) {
+    Serial.printf("[CameraStream] Present: %.1f FPS\n", fps);
+  } else {
     Serial.printf(
         "[CameraStream] Present: %.1f FPS wait=%.1fms ppa+cache+swap=%.1fms "
         "gap=%u-%ums\n",
@@ -2172,6 +2171,13 @@ void camera_stream_set_external_status(const char* text, bool error) {
   set_status(text, error);
 }
 
+bool camera_stream_status_is_error() {
+  portENTER_CRITICAL(&g_state_mux);
+  const bool error = g_status_error;
+  portEXIT_CRITICAL(&g_state_mux);
+  return error;
+}
+
 bool camera_stream_is_active() {
   return task_is_active();
 }
@@ -2202,6 +2208,7 @@ bool camera_stream_start(const char*, uint32_t, bool) {
 void camera_stream_stop() {}
 void camera_stream_process_ui(lv_obj_t*, lv_obj_t*, lv_obj_t*) {}
 void camera_stream_set_external_status(const char*, bool) {}
+bool camera_stream_status_is_error() { return false; }
 bool camera_stream_is_active() { return false; }
 uint32_t camera_stream_first_frame_ms() { return 0; }
 bool camera_stream_take_transport_failure() { return false; }

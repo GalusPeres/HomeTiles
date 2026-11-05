@@ -6,6 +6,7 @@
 #include "src/ui/popups/camera/camera_popup.h"
 
 #include <ArduinoJson.h>
+#include <time.h>
 
 #include "src/core/config/config_manager.h"
 #include "src/core/display/display_manager.h"
@@ -23,6 +24,8 @@
 #include "src/ui/popups/energy/energy_popup.h"
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/media/media_popup.h"
+#include "src/ui/popups/media/media_popup_layout.h"
+#include "src/ui/popups/popup_nav_style.h"
 #include "src/ui/popups/popup_layout.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/popups/weather/weather_popup.h"
@@ -30,15 +33,28 @@
 #include "src/devices/device.h"
 #include "src/video/camera_stream.h"
 #include "src/video/camera_transport.h"
+#include "src/tiles/runtime/tile_renderer_shared.h"
+#include "src/types/clock/clock_format.h"
 #include "src/ui/shared/ui_theme.h"
 
 namespace {
 
+namespace ml = media_popup_layout;
+
 constexpr int kVideoFrameWidth = camera_geometry::kWidth;
 constexpr int kVideoHeight = camera_geometry::kHeight;
-constexpr int kVideoTop = popup_layout::scale480(104);
-constexpr int kStatusTop =
-    kVideoTop + kVideoHeight + popup_layout::scale480(22);
+// In card coordinates, as in the Media popup (mockup webcam-radar/radar.html):
+// with a time bar the picture one edge below the head like the Media cover,
+// without one in the middle between the head and the buttons.
+constexpr int kHeadBottom = ml::kHeadTop + ml::kDisc;
+constexpr int kButtonTop = ml::kVolumeTop;
+constexpr int kVideoTopWithBar = kHeadBottom + ml::kEdge;
+constexpr int kVideoTopPlain = kHeadBottom + (kButtonTop - kHeadBottom - kVideoHeight) / 2;
+// The time bar: the frames of a camera with a history stay in the Bridge, the
+// panel knows only their times and shows the one it asks for over the stream.
+constexpr uint8_t kMaxFrames = 32;
+constexpr uint32_t kFrameSendMs = 120;
+constexpr uint32_t kPlayStepMs = 700;
 constexpr uint8_t kRequiredBridgeCameraProtocol = 1;
 constexpr uint32_t kBridgeResponseTimeoutMs = 30000;
 // A full-screen request the Bridge does not answer goes back to the popup.
@@ -60,6 +76,34 @@ struct CameraPopupContext {
   lv_obj_t* image = nullptr;
   lv_obj_t* placeholder = nullptr;
   lv_obj_t* status = nullptr;
+  lv_obj_t* video = nullptr;
+  // The head's second line ("Live", the picture's time): the shell's hidden
+  // source (show_popup_shell).
+  lv_obj_t* value_label = nullptr;
+  // A neutral message that stays over the picture ("stopped").
+  bool status_sticky = false;
+  // The controls in card coordinates.
+  lv_obj_t* root = nullptr;
+  lv_obj_t* bar_track = nullptr;
+  lv_obj_t* bar_cap = nullptr;
+  lv_obj_t* bar = nullptr;
+  lv_obj_t* time_shown = nullptr;
+  lv_obj_t* time_newest = nullptr;
+  lv_obj_t* play_button = nullptr;
+  lv_obj_t* play_label = nullptr;
+  lv_obj_t* full_button = nullptr;
+  // The history the Bridge told: the times, oldest first, and the shown one.
+  uint32_t frame_times[kMaxFrames] = {};
+  uint8_t frame_count = 0;
+  uint8_t shown_frame = 0;
+  bool frame_dirty = false;
+  uint32_t frame_sent_ms = 0;
+  bool playing = false;
+  uint32_t play_next_ms = 0;
+  bool live_kind = false;
+  bool with_bar = false;
+  // The camera last known to have a history: it opens in its layout at once.
+  String bar_entity;
   size_t previous_draw_buffer_requested_lines = 0;
   bool previous_draw_buffer_fast = false;
   bool large_draw_buffer_active = false;
@@ -190,6 +234,125 @@ static void note_switch(CameraPopupContext* ctx, const char* step) {
 
 static void reveal_skipped_popup(CameraPopupContext* ctx);
 
+// ---- The time bar and the head's second line --------------------------------
+
+static void set_shown(lv_obj_t* obj, bool shown) {
+  if (!obj || lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN) != shown) return;
+  if (shown) lv_obj_remove_flag(obj, LV_OBJ_FLAG_HIDDEN);
+  else lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void format_frame_time(uint32_t when, char* out, size_t size) {
+  const time_t stamp = static_cast<time_t>(when);
+  struct tm local {};
+  localtime_r(&stamp, &local);
+  const DeviceConfig& cfg = configManager.getConfig();
+  const uint8_t format =
+      clock_tile::resolve_time_format(clock_tile::TIME_FORMAT_AUTO, cfg.global_time_format, cfg.language);
+  strftime(out, size, format == clock_tile::TIME_FORMAT_24H ? "%H:%M" : "%I:%M %p", &local);
+}
+
+static void show_head_value(CameraPopupContext* ctx) {
+  if (!ctx->value_label) return;
+  char text[48] = "";
+  if (ctx->frame_count) {
+    char when[16] = "";
+    format_frame_time(ctx->frame_times[ctx->shown_frame], when, sizeof(when));
+    snprintf(text, sizeof(text), camera_text().camera_picture_time_fmt, when);
+  } else if (ctx->live_kind) {
+    snprintf(text, sizeof(text), "%s", camera_text().camera_live);
+  }
+  if (strcmp(lv_label_get_text(ctx->value_label), text) == 0) return;
+  lv_label_set_text(ctx->value_label, text);
+  if (ctx->visible && !ctx->shell_skipped && !ctx->full) sync_popup_shell();
+}
+
+static void set_playing(CameraPopupContext* ctx, bool playing) {
+  if (ctx->playing == playing) return;
+  ctx->playing = playing;
+  ctx->play_next_ms = millis() + kPlayStepMs;
+  if (ctx->play_label) lv_label_set_text(ctx->play_label, getMdiChar(playing ? "pause" : "play").c_str());
+}
+
+// Bar, times and Play follow the history; a value from outside never moves the
+// knob under the finger (it follows on release, bar_event_cb).
+static void show_bar(CameraPopupContext* ctx) {
+  if (!ctx->bar) return;
+  const bool shown = ctx->frame_count >= 2;
+  for (lv_obj_t* obj : {ctx->bar_track, ctx->bar_cap, ctx->bar, ctx->time_shown, ctx->time_newest, ctx->play_button}) {
+    set_shown(obj, shown);
+  }
+  if (!shown) {
+    set_playing(ctx, false);
+    return;
+  }
+  if (!lv_slider_is_dragged(ctx->bar)) {
+    const int32_t last = ctx->frame_count - 1;
+    if (lv_slider_get_max_value(ctx->bar) != last) lv_slider_set_range(ctx->bar, 0, last);
+    if (lv_slider_get_value(ctx->bar) != ctx->shown_frame) lv_slider_set_value(ctx->bar, ctx->shown_frame, LV_ANIM_OFF);
+  }
+  char when[16] = "";
+  format_frame_time(ctx->frame_times[ctx->shown_frame], when, sizeof(when));
+  lv_label_set_text(ctx->time_shown, when);
+  format_frame_time(ctx->frame_times[ctx->frame_count - 1], when, sizeof(when));
+  lv_label_set_text(ctx->time_newest, when);
+}
+
+static void apply_layout(CameraPopupContext* ctx, bool with_bar) {
+  ctx->with_bar = with_bar;
+  lv_obj_align(ctx->video, LV_ALIGN_TOP_MID, 0, (with_bar ? kVideoTopWithBar : kVideoTopPlain) - popup_layout::kCardPad);
+  if (ctx->full_button) {
+    const int center = popup_layout::kCardWidth / 2 + (with_bar ? popup_layout::scale(190) : 0);
+    lv_obj_set_pos(ctx->full_button, center - ml::kButton / 2, kButtonTop);
+  }
+}
+
+// The Bridge's times, the shown frame kept by its time: the newest stays the
+// newest, a frame that is gone becomes the next older one.
+static void take_frames(CameraPopupContext* ctx, JsonArrayConst frames) {
+  const bool at_newest = ctx->frame_count == 0 || ctx->shown_frame + 1 >= ctx->frame_count;
+  const uint32_t shown_time = ctx->frame_count ? ctx->frame_times[ctx->shown_frame] : 0;
+  uint8_t count = 0;
+  for (JsonVariantConst item : frames) {
+    const uint32_t when = item.as<uint32_t>();
+    if (!when) continue;
+    if (count == kMaxFrames) {  // The newest are kept.
+      memmove(ctx->frame_times, ctx->frame_times + 1, sizeof(ctx->frame_times[0]) * (kMaxFrames - 1));
+      --count;
+    }
+    ctx->frame_times[count++] = when;
+  }
+  ctx->frame_count = count;
+  ctx->shown_frame = count ? count - 1 : 0;
+  if (at_newest || !count) return;
+  ctx->shown_frame = 0;
+  for (uint8_t i = 0; i < count; ++i) {
+    if (ctx->frame_times[i] <= shown_time) ctx->shown_frame = i;
+  }
+  if (ctx->frame_times[ctx->shown_frame] != shown_time) ctx->frame_dirty = true;
+}
+
+// One step while playing and the picked frame to the Bridge, at most every
+// kFrameSendMs: while dragging only the newest position goes out.
+static void process_time_bar(CameraPopupContext* ctx) {
+  const uint32_t now = millis();
+  if (ctx->playing && static_cast<int32_t>(now - ctx->play_next_ms) >= 0) {
+    ctx->play_next_ms = now + kPlayStepMs;
+    if (ctx->shown_frame + 1 < ctx->frame_count) {
+      ++ctx->shown_frame;
+      ctx->frame_dirty = true;
+      show_bar(ctx);
+      show_head_value(ctx);
+    }
+    if (ctx->shown_frame + 1 >= ctx->frame_count) set_playing(ctx, false);
+  }
+  if (!ctx->frame_dirty || now - ctx->frame_sent_ms < kFrameSendMs) return;
+  ctx->frame_dirty = false;
+  ctx->frame_sent_ms = now;
+  const bool newest = ctx->shown_frame + 1 >= ctx->frame_count;
+  mqttPublishCameraFrame(ctx->entity_id.c_str(), newest ? 0 : ctx->frame_times[ctx->shown_frame]);
+}
+
 static void open_popup_stream(CameraPopupContext* ctx) {
   ctx->waiting_for_bridge = true;
   ctx->bridge_response_deadline_ms = millis() + kBridgeResponseTimeoutMs;
@@ -204,6 +367,7 @@ static void open_popup_stream(CameraPopupContext* ctx) {
 static void enter_soft_full_screen() {
   CameraPopupContext* ctx = g_camera_popup;
   if (!ctx || !ctx->visible || ctx->full || !ctx->soft_full) return;
+  set_playing(ctx, false);
   // The popup's frames go with its stream; its video area drawn black.
   lv_image_set_src(ctx->image, nullptr);
   lv_obj_add_flag(ctx->image, LV_OBJ_FLAG_HIDDEN);
@@ -264,7 +428,8 @@ static void reveal_skipped_popup(CameraPopupContext* ctx) {
   ctx->close_on_leave = false;
   lv_obj_clear_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_flag(ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
-  show_popup_shell(ctx->overlay, ctx->card, ctx->title_label, ctx->icon_label, ctx->close_button);
+  show_popup_shell(ctx->overlay, ctx->card, ctx->title_label, ctx->icon_label, ctx->close_button, nullptr,
+                   ctx->value_label);
 }
 
 // The popup back at once: the kept UI swapped in and LVGL drawing again
@@ -327,6 +492,7 @@ static void enter_full_screen() {
 #endif
   CameraPopupContext* ctx = g_camera_popup;
   if (!ctx || !ctx->visible || ctx->full) return;
+  set_playing(ctx, false);
   uint16_t width = 0;
   uint16_t height = 0;
   uint16_t turn = 0;
@@ -439,6 +605,43 @@ static void video_event_cb(lv_event_t* event) {
   }
 }
 
+static void bar_event_cb(lv_event_t* event) {
+  const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
+  CameraPopupContext* ctx = g_camera_popup;
+  if (!ctx || !ctx->bar || !ctx->frame_count) return;
+  const lv_event_code_t code = lv_event_get_code(event);
+  if (code == LV_EVENT_VALUE_CHANGED) {
+    int32_t index = lv_slider_get_value(ctx->bar);
+    if (index >= ctx->frame_count) index = ctx->frame_count - 1;
+    set_playing(ctx, false);
+    if (index == ctx->shown_frame) return;
+    ctx->shown_frame = static_cast<uint8_t>(index);
+    ctx->frame_dirty = true;
+  } else if (code != LV_EVENT_RELEASED && code != LV_EVENT_PRESS_LOST) {
+    return;
+  }
+  show_bar(ctx);
+  show_head_value(ctx);
+}
+
+static void play_event_cb(lv_event_t* event) {
+  const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
+  CameraPopupContext* ctx = g_camera_popup;
+  if (!ctx || lv_event_get_code(event) != LV_EVENT_CLICKED || ctx->frame_count < 2) return;
+  if (ctx->playing) {
+    set_playing(ctx, false);
+    return;
+  }
+  // From the newest it starts over at the oldest.
+  if (ctx->shown_frame + 1 >= ctx->frame_count) {
+    ctx->shown_frame = 0;
+    ctx->frame_dirty = true;
+    show_bar(ctx);
+    show_head_value(ctx);
+  }
+  set_playing(ctx, true);
+}
+
 static void full_touch_event_cb(lv_event_t* event) {
   const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
   if (lv_event_get_code(event) != LV_EVENT_CLICKED) return;
@@ -463,6 +666,114 @@ static void overlay_deleted_cb(lv_event_t* e) {
   delete ctx;
 }
 
+static lv_obj_t* plain_part(lv_obj_t* parent) {
+  lv_obj_t* obj = lv_obj_create(parent);
+  lv_obj_remove_style_all(obj);
+  lv_obj_remove_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_remove_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+  return obj;
+}
+
+static lv_obj_t* control_button(lv_obj_t* parent, const char* icon, lv_obj_t** label_out) {
+  lv_obj_t* button = plain_part(parent);
+  lv_obj_add_flag(button, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_size(button, ml::kButton, ml::kButton);
+  lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
+  disable_pressed_button_animation(button);
+  lv_obj_t* label = lv_label_create(button);
+  lv_obj_set_style_text_font(label, FONT_MDI_ICONS, 0);
+  lv_label_set_text(label, getMdiChar(icon).c_str());
+  lv_obj_remove_flag(label, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_center(label);
+  if (label_out) *label_out = label;
+  return button;
+}
+
+// The time bar as in the Media popup (make_slider, media_popup.cpp): from edge
+// to edge, the knob travelling inside it, the times under it on the edges,
+// with the same space from the picture to the knob as from the times' digits
+// to the buttons.
+static void build_controls(CameraPopupContext* ctx) {
+  ctx->root = plain_part(ctx->card);
+  lv_obj_add_flag(ctx->root, LV_OBJ_FLAG_IGNORE_LAYOUT);
+  lv_obj_set_size(ctx->root, popup_layout::kCardWidth, popup_layout::kCardHeight);
+  lv_obj_set_pos(ctx->root, -popup_layout::kCardPad, -popup_layout::kCardPad);
+
+  const int line = lv_font_get_line_height(popup_layout::font20());
+  const int mid = (kButtonTop + kVideoTopWithBar + kVideoHeight + ml::kSeekKnob / 2 - ml::kSeekHeight / 2 -
+                   ml::kTimeGap - line * 4 / 5) / 2;
+  const int width = popup_layout::kCardWidth - 2 * ml::kEdge;
+  const int bar_y = mid - ml::kSeekHeight / 2;
+  ctx->bar_track = plain_part(ctx->root);
+  lv_obj_set_pos(ctx->bar_track, ml::kEdge, bar_y);
+  lv_obj_set_size(ctx->bar_track, width, ml::kSeekHeight);
+  lv_obj_set_style_radius(ctx->bar_track, LV_RADIUS_CIRCLE, 0);
+  ctx->bar_cap = plain_part(ctx->root);
+  lv_obj_set_pos(ctx->bar_cap, ml::kEdge, bar_y);
+  lv_obj_set_size(ctx->bar_cap, ml::kSeekKnob, ml::kSeekHeight);
+  lv_obj_set_style_radius(ctx->bar_cap, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_opa(ctx->bar_cap, LV_OPA_COVER, 0);
+  ctx->bar = lv_slider_create(ctx->root);
+  lv_obj_remove_style_all(ctx->bar);
+  lv_obj_set_pos(ctx->bar, ml::kEdge, bar_y);
+  lv_obj_set_size(ctx->bar, width, ml::kSeekHeight);
+  lv_obj_set_style_pad_left(ctx->bar, ml::kSeekKnob / 2, LV_PART_MAIN);
+  lv_obj_set_style_pad_right(ctx->bar, ml::kSeekKnob / 2, LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(ctx->bar, LV_OPA_COVER, LV_PART_INDICATOR);
+  lv_obj_set_style_radius(ctx->bar, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
+  lv_obj_set_style_pad_all(ctx->bar, (ml::kSeekKnob - ml::kSeekHeight) / 2, LV_PART_KNOB);
+  lv_obj_set_style_bg_opa(ctx->bar, LV_OPA_COVER, LV_PART_KNOB);
+  lv_obj_set_style_radius(ctx->bar, LV_RADIUS_CIRCLE, LV_PART_KNOB);
+  lv_obj_set_ext_click_area(ctx->bar, popup_layout::scale(18));
+  lv_obj_remove_flag(ctx->bar, LV_OBJ_FLAG_SCROLLABLE);
+  for (lv_event_code_t code : {LV_EVENT_VALUE_CHANGED, LV_EVENT_RELEASED, LV_EVENT_PRESS_LOST}) {
+    lv_obj_add_event_cb(ctx->bar, bar_event_cb, code, ctx);
+  }
+
+  const int time_top = mid + ml::kSeekHeight / 2 + ml::kTimeGap;
+  for (lv_obj_t** label : {&ctx->time_shown, &ctx->time_newest}) {
+    *label = lv_label_create(ctx->root);
+    lv_obj_set_style_text_font(*label, popup_layout::font20(), 0);
+    lv_label_set_text(*label, "");
+    lv_obj_remove_flag(*label, LV_OBJ_FLAG_CLICKABLE);
+  }
+  lv_obj_set_pos(ctx->time_shown, ml::kEdge, time_top);
+  lv_obj_align(ctx->time_newest, LV_ALIGN_TOP_RIGHT, -ml::kEdge, time_top);
+
+  ctx->play_button = control_button(ctx->root, "play", &ctx->play_label);
+  lv_obj_set_pos(ctx->play_button, popup_layout::kCardWidth / 2 - ml::kButton / 2, kButtonTop);
+  lv_obj_add_event_cb(ctx->play_button, play_event_cb, LV_EVENT_CLICKED, ctx);
+  ctx->full_button = control_button(ctx->root, "fullscreen", nullptr);
+  lv_obj_add_event_cb(ctx->full_button, video_event_cb, LV_EVENT_CLICKED, ctx);
+}
+
+// The colors follow the opener's card and icon, as in the Media popup.
+static void style_controls(CameraPopupContext* ctx, uint32_t icon_color) {
+  if (!ctx->bar) return;
+  lv_color_t control = {};
+  lv_opa_t control_opa = 0;
+  bool tinted = false;
+  popup_shell_control_fill(ctx->surface_color, icon_color, control, control_opa, &tinted);
+  const lv_color_t fill = lv_color_hex(tinted ? icon_color : ui_theme::icon());
+  lv_obj_set_style_bg_color(ctx->bar_track, control, 0);
+  lv_obj_set_style_bg_opa(ctx->bar_track, control_opa, 0);
+  lv_obj_set_style_bg_color(ctx->bar_cap, fill, 0);
+  lv_obj_set_style_bg_color(ctx->bar, fill, LV_PART_INDICATOR);
+  lv_obj_set_style_bg_color(ctx->bar, lv_color_hex(ui_theme::icon()), LV_PART_KNOB);
+  for (lv_obj_t* label : {ctx->time_shown, ctx->time_newest}) {
+    lv_obj_set_style_text_color(label, lv_color_hex(ui_theme::text_secondary()), 0);
+  }
+  // Play stays the round button in the icon role with the card's color.
+  lv_obj_set_style_bg_color(ctx->play_button, lv_color_hex(ui_theme::icon()), 0);
+  lv_obj_set_style_bg_opa(ctx->play_button, LV_OPA_COVER, 0);
+  lv_obj_set_style_bg_color(ctx->play_button, lv_color_hex(ui_theme::text_soft()), LV_PART_MAIN | LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(ctx->play_button, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
+  lv_obj_set_style_text_color(ctx->play_label, lv_color_hex(ctx->surface_color), 0);
+  // A press shows the control fill, like the pressed close button.
+  popup_nav_style::style_press_fill(ctx->full_button, control, control_opa);
+  lv_obj_set_style_text_color(lv_obj_get_child(ctx->full_button, 0), lv_color_hex(ui_theme::icon()), 0);
+}
+
 static CameraPopupContext* create_popup() {
   CameraPopupContext* ctx = new CameraPopupContext();
 
@@ -473,13 +784,16 @@ static CameraPopupContext* create_popup() {
   ctx->icon_label = parts.icon;
   ctx->close_button = parts.close;
   lv_obj_t* close_button = parts.close;
+  ctx->value_label = lv_label_create(ctx->card);
+  lv_obj_add_flag(ctx->value_label, LV_OBJ_FLAG_HIDDEN);
+  lv_label_set_text(ctx->value_label, "");
   lv_obj_set_style_pad_all(ctx->overlay, 0, 0);
   lv_obj_add_event_cb(ctx->overlay, overlay_event_cb, LV_EVENT_CLICKED, ctx);
   lv_obj_add_event_cb(ctx->overlay, overlay_deleted_cb, LV_EVENT_DELETE, ctx);
 
   lv_obj_t* video = lv_obj_create(ctx->card);
+  ctx->video = video;
   lv_obj_set_size(video, kVideoFrameWidth, kVideoHeight);
-  lv_obj_align(video, LV_ALIGN_TOP_MID, 0, kVideoTop);
   lv_obj_set_style_bg_color(video, lv_color_black(), 0);
   lv_obj_set_style_bg_opa(video, LV_OPA_COVER, 0);
   ui_surface_style::apply_radius(video, camera_geometry::kCornerRadius, 0);
@@ -533,14 +847,20 @@ static CameraPopupContext* create_popup() {
   lv_label_set_text(ctx->placeholder, camera_text().camera_preparing);
   lv_obj_center(ctx->placeholder);
 
-  ctx->status = lv_label_create(ctx->card);
-  lv_obj_set_width(ctx->status, kVideoFrameWidth);
+  // In the video area until the first frame shows, afterwards only an error
+  // (process_camera_popup): no status line under a running picture.
+  ctx->status = lv_label_create(video);
+  lv_obj_set_width(ctx->status, LV_PCT(90));
   lv_obj_set_style_text_align(ctx->status, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_font(ctx->status, popup_layout::font20(), 0);
   lv_obj_set_style_text_color(ctx->status, lv_color_hex(ui_theme::text_secondary()), 0);
-  lv_label_set_long_mode(ctx->status, LV_LABEL_LONG_DOT);
+  lv_label_set_long_mode(ctx->status, LV_LABEL_LONG_WRAP);
   lv_label_set_text(ctx->status, camera_text().camera_ready);
-  lv_obj_align(ctx->status, LV_ALIGN_TOP_MID, 0, kStatusTop);
+  lv_obj_align(ctx->status, LV_ALIGN_CENTER, 0, popup_layout::scale480(48));
+
+  build_controls(ctx);
+  apply_layout(ctx, false);
+  show_bar(ctx);
 
   lv_obj_move_foreground(ctx->icon_label);
   lv_obj_move_foreground(ctx->title_label);
@@ -674,6 +994,19 @@ void show_camera_popup(const CameraPopupInit& init) {
   lv_obj_set_style_text_color(g_camera_popup->icon_label, lv_color_hex(init.icon_color), 0);
   popup_layout::alignHeader(g_camera_popup->card, g_camera_popup->title_label, g_camera_popup->icon_label);
 
+  // A new opening: the newest frame, no history until the Bridge tells it; a
+  // camera known to have one opens in its layout at once.
+  set_playing(g_camera_popup, false);
+  g_camera_popup->frame_count = 0;
+  g_camera_popup->shown_frame = 0;
+  g_camera_popup->frame_dirty = false;
+  g_camera_popup->live_kind = false;
+  g_camera_popup->status_sticky = false;
+  lv_label_set_text(g_camera_popup->value_label, "");
+  style_controls(g_camera_popup, init.icon_color);
+  apply_layout(g_camera_popup, g_camera_popup->bar_entity.equalsIgnoreCase(init.entity_id));
+  show_bar(g_camera_popup);
+
   lv_image_set_src(g_camera_popup->image, nullptr);
   lv_obj_add_flag(g_camera_popup->image, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(g_camera_popup->placeholder, LV_OBJ_FLAG_HIDDEN);
@@ -699,7 +1032,7 @@ void show_camera_popup(const CameraPopupInit& init) {
                         g_camera_popup->icon_label, g_camera_popup->close_button,
                         init, finish_camera_popup_open, true)) finish_camera_popup_open(init);
   if (g_camera_popup && g_camera_popup->card) viewNavigationPopupShown(g_camera_popup->card, init.entity_id.c_str());
-  show_popup_shell(g_camera_popup->overlay, g_camera_popup->card, g_camera_popup->title_label, g_camera_popup->icon_label, g_camera_popup->close_button);
+  show_popup_shell(g_camera_popup->overlay, g_camera_popup->card, g_camera_popup->title_label, g_camera_popup->icon_label, g_camera_popup->close_button, nullptr, g_camera_popup->value_label);
 }
 
 void hide_camera_popup() {
@@ -826,6 +1159,11 @@ void process_camera_popup() {
   if (g_camera_popup->resuming && !lv_obj_has_flag(g_camera_popup->image, LV_OBJ_FLAG_HIDDEN)) {
     g_camera_popup->resuming = false;
   }
+  process_time_bar(g_camera_popup);
+  // The status shows until the first frame; over a running picture only an
+  // error or a message that must stay.
+  set_shown(g_camera_popup->status, lv_obj_has_flag(g_camera_popup->image, LV_OBJ_FLAG_HIDDEN) ||
+                                        g_camera_popup->status_sticky || camera_stream_status_is_error());
 }
 
 void camera_popup_handle_mqtt_status(const char* payload) {
@@ -834,7 +1172,8 @@ void camera_popup_handle_mqtt_status(const char* payload) {
     return;
   }
 
-  DynamicJsonDocument doc(1024);
+  // Room for a history's times (kMaxFrames) next to the stream's fields.
+  DynamicJsonDocument doc(1536);
   if (deserializeJson(doc, payload)) {
     camera_popup_set_status(camera_text().camera_invalid_response, true);
     return;
@@ -842,6 +1181,16 @@ void camera_popup_handle_mqtt_status(const char* payload) {
   const char* entity = doc["entity_id"] | "";
   if (*entity &&
       !g_camera_popup->entity_id.equalsIgnoreCase(String(entity))) {
+    return;
+  }
+  // New frames while the popup shows them: no answer to a pending request.
+  if (strcmp(doc["status"] | "", "frames") == 0) {
+    JsonArrayConst frames = doc["frames"];
+    if (!frames.isNull()) {
+      take_frames(g_camera_popup, frames);
+      show_bar(g_camera_popup);
+      show_head_value(g_camera_popup);
+    }
     return;
   }
   g_camera_popup->waiting_for_bridge = false;
@@ -901,6 +1250,23 @@ void camera_popup_handle_mqtt_status(const char* payload) {
     Serial.printf("[Camera] Stream URL received (%u characters)\n",
                   static_cast<unsigned>(strlen(url)));
     note_switch(g_camera_popup, "Bridge ready");
+    // What this camera is: a history brings its times, the bar and Play. A
+    // frame picked before a new stream (back from the full screen) goes out again.
+    g_camera_popup->live_kind = strcmp(doc["kind"] | "", "live") == 0;
+    JsonArrayConst frames = doc["frames"];
+    const bool has_history = !frames.isNull();
+    if (has_history) {
+      take_frames(g_camera_popup, frames);
+      g_camera_popup->bar_entity = g_camera_popup->entity_id;
+      if (g_camera_popup->shown_frame + 1 < g_camera_popup->frame_count) g_camera_popup->frame_dirty = true;
+    } else {
+      g_camera_popup->frame_count = 0;
+      g_camera_popup->shown_frame = 0;
+      if (g_camera_popup->bar_entity.equalsIgnoreCase(g_camera_popup->entity_id)) g_camera_popup->bar_entity = String();
+    }
+    if (has_history != g_camera_popup->with_bar) apply_layout(g_camera_popup, has_history);
+    show_bar(g_camera_popup);
+    show_head_value(g_camera_popup);
     camera_popup_set_status(camera_text().camera_connecting, false);
     start_camera_stream(String(url), full);
     return;
@@ -933,6 +1299,7 @@ void camera_popup_handle_mqtt_status(const char* payload) {
   }
   if (strcmp(status, "stopped") == 0) {
     leave_full_screen(false);
+    g_camera_popup->status_sticky = true;
     camera_popup_set_status(camera_text().camera_stream_stopped, false);
   }
 }

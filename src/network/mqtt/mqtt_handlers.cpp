@@ -3410,6 +3410,19 @@ void mqttPublishCameraFullScreenOpen(const char* entity_id, uint8_t fps,
   if (!queued) camera_popup_set_status(text.camera_mqtt_queue_full, true);
 }
 
+void mqttPublishCameraFrame(const char* entity_id, uint32_t time) {
+  if (!entity_id || !*entity_id) return;
+  const char* topic = mqttTopics.topic(TopicKey::CAMERA_CMND);
+  if (!networkManager.isMqttConnected() || !topic || !*topic) return;
+  char payload[192];
+  snprintf(payload, sizeof(payload), "{\"entity_id\":\"%s\",\"command\":\"frame\",\"time\":%lu}", entity_id,
+           static_cast<unsigned long>(time));
+  // Lost under a full queue: the next step of the time bar sends the newest.
+  if (!networkManager.mqttEnqueuePublishPriority(topic, payload, false)) {
+    Serial.println("[Camera] Frame command dropped: queue full");
+  }
+}
+
 void mqttPublishCameraCommand(const char* entity_id, const char* command,
                               uint8_t fps) {
   if (!entity_id || !*entity_id) return;

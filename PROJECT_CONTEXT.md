@@ -22,7 +22,7 @@ Last reviewed: 2026-10-29
 ## Active work
 
 - Vacuum tile 29 (#50, `src/types/vacuum/`), Bridge level 6; V2 HW ok, others pending.
-- Rain radar: Bridge v0.9.8b2 camera (`rain_radar.py`); HA/HW pending.
+- Rain radar: Bridge camera (`rain_radar.py`), time bar b663; HW pending.
 - Power flow tile 28 ("Leistungsfluss", `src/types/power_flow/`, picture 65): nodes in `/_tile_flow_entities`, options in key_code, node tap = Sensor popup; V2 HW ok b542; smooth lines/dots b568.
 - Media popup: layouts `sensor_display_mode` 0 cover left, 1 centre; controls only with their HA feature bit; menu box: speakers, source, library; tile/head icon state form (`state_icon.h`).
 - #116 (JC4880 camera popup ends after 18-60 min): Bridge waits 45 s per chunk ACK; reporter pending.

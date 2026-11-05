@@ -60,8 +60,28 @@ function maybeFillTitleFromWeather(tab) {
     'lightning-rainy': 'weather-lightning-rainy', partlycloudy: 'weather-partly-cloudy',
     pouring: 'weather-pouring', rainy: 'weather-rainy', snowy: 'weather-snowy',
     'snowy-rainy': 'weather-snowy-rainy', sunny: 'weather-sunny', windy: 'weather-windy',
-    'windy-variant': 'weather-windy-variant'
+    'windy-variant': 'weather-windy-variant',
+    // Yandex Pogoda's own codes (i18n::weather_condition_label).
+    clear: 'weather-sunny', 'partly-cloudy': 'weather-partly-cloudy',
+    overcast: 'weather-cloudy', drizzle: 'weather-rainy',
+    'light-rain': 'weather-rainy', rain: 'weather-rainy',
+    'moderate-rain': 'weather-rainy', 'heavy-rain': 'weather-pouring',
+    'continuous-heavy-rain': 'weather-pouring', showers: 'weather-pouring',
+    'wet-snow': 'weather-snowy-rainy', 'light-snow': 'weather-snowy',
+    snow: 'weather-snowy', 'snow-showers': 'weather-snowy',
+    thunderstorm: 'weather-lightning', 'thunderstorm-with-rain': 'weather-lightning-rainy',
+    'thunderstorm-with-hail': 'weather-lightning'
   });
+
+  // The key the icon table and i18n::weather_condition_label use: the Yandex
+  // Pogoda integration sends underscored states (light_rain) and has two names
+  // for conditions the table already carries (sleet, snowfall).
+  function weatherConditionKey(value) {
+    const key = String(value ?? '').trim().toLowerCase().replace(/_/g, '-');
+    if (key === 'sleet') return 'snowy-rainy';
+    if (key === 'snowfall') return 'snowy';
+    return key;
+  }
 
   // A number or a numeric string (extract_json_number_or_string_field).
   function weatherPreviewNumber(value) {
@@ -101,7 +121,7 @@ function maybeFillTitleFromWeather(tab) {
 
   // i18n::weather_condition_label.
   function weatherConditionLabel(condition) {
-    const key = String(condition || '').trim().toLowerCase();
+    const key = weatherConditionKey(condition);
     if (!key) return '--';
     if (WEATHER_I18N.conditions[key]) return WEATHER_I18N.conditions[key];
     const text = String(condition).replaceAll('-', ' ').replaceAll('_', ' ').trim();
@@ -136,7 +156,7 @@ function maybeFillTitleFromWeather(tab) {
     // An empty state falls back to the condition (extract_json_string_field).
     const condition = weatherPreviewString(data.state).trim() || weatherPreviewString(data.condition).trim();
     let icon = normalizeMdiIconName(weatherPreviewString(data.icon));
-    if (!icon) icon = WEATHER_CONDITION_ICONS[condition.trim().toLowerCase()] || '';
+    if (!icon) icon = WEATHER_CONDITION_ICONS[weatherConditionKey(condition)] || '';
     const units = data.units && typeof data.units === 'object' ? data.units : null;
     return {
       condition,
@@ -359,7 +379,7 @@ function maybeFillTitleFromWeather(tab) {
         if (!dateLocal && datetime.length >= 10) dateLocal = datetime.slice(0, 10);
         const low = ['templow', 'temperature_low', 'temp_low', 'low']
           .map(key => weatherPreviewNumber(entry[key])).find(value => value !== null) ?? null;
-        const conditionIcon = WEATHER_CONDITION_ICONS[weatherPreviewString(entry.condition).trim().toLowerCase()] || '';
+        const conditionIcon = WEATHER_CONDITION_ICONS[weatherConditionKey(weatherPreviewString(entry.condition))] || '';
         const slot = {
           dateLocal,
           day: datetime ? weatherWeekdayShort(datetime) : '',

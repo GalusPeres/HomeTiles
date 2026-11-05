@@ -22,6 +22,7 @@
 #include "src/web/server/handlers/web_admin_tile_helpers.h"
 #include "src/web/server/handlers/preview_payload.h"
 #include "src/types/types_registry.h"
+#include "src/types/weather/graph_renderer.h"
 #include "src/types/navigate/web_handler.h"
 #include "src/types/scene/web_handler.h"
 #include "src/types/energy/energy_data.h"
@@ -62,6 +63,55 @@ static bool tileChangeAffectsDynamicMqttRoutes(const Tile& before, const Tile& a
   if (!before_has_route && !after_has_route) return false;
   if (before.type != after.type) return true;
   return !before_entity.equalsIgnoreCase(after_entity);
+}
+
+// The two halves of a Weather graph pair share everything but the day and
+// their place. The server mirrors a saved half onto its partner so the link
+// survives a request that only updates one tile (autosave sends one tile).
+static void syncWeatherGraphPair(TileGridConfig& grid, size_t edited_index) {
+  if (edited_index >= TILES_PER_GRID) return;
+  Tile& source = grid.tiles[edited_index];
+  if (source.type != TILE_WEATHER_GRAPH) return;
+  const int32_t pair_id = source.sensor_gauge_max;
+  if (pair_id <= 0 || pair_id > 0xFFFF) return;
+  // A half that was saved alone may still need to join its partner: adopt the
+  // first unpaired tile for the same entity only when no partner exists yet.
+  size_t join_index = TILES_PER_GRID;
+  if (!source.sensor_entity.length()) return;
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    if (i == edited_index) continue;
+    const Tile& other = grid.tiles[i];
+    if (other.type != TILE_WEATHER_GRAPH) continue;
+    if (other.sensor_gauge_max == pair_id) {
+      join_index = TILES_PER_GRID;
+      break;
+    }
+    if (join_index == TILES_PER_GRID && other.sensor_gauge_max == 0 &&
+        other.sensor_entity.equalsIgnoreCase(source.sensor_entity)) {
+      join_index = i;
+    }
+  }
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    if (i == edited_index) continue;
+    Tile& other = grid.tiles[i];
+    if (other.type != TILE_WEATHER_GRAPH) continue;
+    const bool same_pair = other.sensor_gauge_max == pair_id;
+    const bool joinable = !same_pair && i == join_index;
+    if (!same_pair && !joinable) continue;
+    other.sensor_gauge_max = pair_id;
+    other.sensor_entity = source.sensor_entity;
+    // The name stays per half: each side shows its own title over the shared
+    // graph (graph_renderer.cpp graph_title).
+    other.icon_name = source.icon_name;
+    other.icon_colors = source.icon_colors;
+    other.icon_disc_mode = source.icon_disc_mode;
+    other.icon_glow = source.icon_glow;
+    other.bg_color = source.bg_color;
+    other.background_opacity = source.background_opacity;
+    if (other.sensor_display_mode == source.sensor_display_mode) {
+      other.sensor_display_mode = source.sensor_display_mode == 0 ? 1 : 0;
+    }
+  }
 }
 
 void appendKeyValueMapJson(String& out, const String& map) {
@@ -832,8 +882,8 @@ void WebAdminServer::handleSaveTiles() {
     clamp_media_tile_layout(static_cast<TileType>(type), col, row, span_w, span_h, g_place_cols, g_place_rows);
     if ((type != TILE_EMPTY && (!tile_geometry::supported_size(type, col, row, span_w, span_h) ||
                                 col + span_w > g_place_cols || row + span_h > g_place_rows)) ||
-        (screensaver_grid &&
-         row < (screensaver_layout ? screensaver_places::first_row(grid_layout::active()) : GRID_ROWS - 2) - 0.001f)) {
+        // The screensaver uses the whole screen; only the grid bounds apply.
+        (screensaver_grid && (row < 0 || col < 0))) {
       tile = previous_tile;
       server.send(400, "application/json", "{\"success\":false,\"error\":\"Unsupported tile size\"}");
       return;
@@ -936,6 +986,9 @@ void WebAdminServer::handleSaveTiles() {
     screensaver_places::take(*grid, *classic_grid, static_cast<size_t>(index));
   }
   TileGridConfig& saved_grid = classic_grid ? *classic_grid : *grid;
+  if (saved_grid.tiles[index].type == TILE_WEATHER_GRAPH) {
+    syncWeatherGraphPair(saved_grid, static_cast<size_t>(index));
+  }
   // An emptied slot's places in the other layouts go too.
   if (screensaver_grid && !screensaver_layout && tile.type == TILE_EMPTY) {
     screensaver_places::forget(static_cast<size_t>(index));
@@ -1126,10 +1179,8 @@ void WebAdminServer::handleReorderTiles() {
     return;
   }
 
-  // The screensaver's rows at the bottom (three upright: from row 3.5).
-  const float first_row = screensaver_layout ? screensaver_places::first_row(grid_layout::active())
-                          : screensaver_grid && GRID_ROWS > 1 ? GRID_ROWS - 2
-                                                              : 0;
+  // The screensaver uses the whole screen (no reserved rows).
+  const float first_row = 0;
   if (!applySmartReorder(grid, static_cast<size_t>(from), target_col,
                          target_row, first_row)) {
     server.send(409, "application/json", "{\"success\":false,\"error\":\"Tile overlaps\"}");
@@ -1285,8 +1336,12 @@ void WebAdminServer::handleGetSensorValues() {
   // Weather and media previews draw what their tiles draw: the cached payload
   // of each configured entity, else the retained bridge value, without the
   // hourly forecast (popup only) and the embedded artwork, which the preview
-  // loads from its URL like the device without data.
-  auto append_preview_payloads = [&](const char* key, const String& entities) {
+  // loads from its URL like the device without data. The weather graph preview
+  // needs the hourly forecast, so its map keeps it; the panel's own hourly
+  // cache fills the missing past hours, so the preview draws the same whole
+  // day as the tile.
+  auto append_preview_payloads = [&](const char* key, const String& entities,
+                                     bool keep_hourly = false) {
     json += ",\"";
     json += key;
     json += "\":{";
@@ -1299,11 +1354,13 @@ void WebAdminServer::handleGetSensorValues() {
       payload.trim();
       if (!payload.length()) continue;
       for (const char* heavy : {"forecast_hourly", "entity_picture_data"}) {
+        if (keep_hourly && strcmp(heavy, "forecast_hourly") == 0) continue;
         int from = 0, to = 0;
         if (preview_payload::member_span(payload.c_str(), payload.length(), heavy, &from, &to)) {
           payload.remove(from, to - from);
         }
       }
+      if (keep_hourly) weather_graph_append_cache(payload, id.c_str());
       if (!first) json += ',';
       first = false;
       json += '"';
@@ -1315,6 +1372,7 @@ void WebAdminServer::handleGetSensorValues() {
     json += "}";
   };
   append_preview_payloads("weather_values", ha.weathers_text);
+  append_preview_payloads("weather_graph_values", ha.weathers_text, true);
   append_preview_payloads("media_values", ha.media_players_text);
   // "From cover": the color a shown media card sampled from its cover.
   json += ",\"media_cover_colors\":{";
@@ -1945,10 +2003,10 @@ void WebAdminServer::handleSaveLayouts() {
       sendJsonError(server, 409, error);
       return;
     }
-    // The screensaver's tiles on the screen keep to its two bottom rows.
+    // The screensaver uses the whole screen, so every inside place is valid.
     if (folder_id == screensaver_places::kFolder &&
         std::any_of(places.begin(), places.end(), [&](const LayoutPlace& place) {
-          return place.inside && place.place.row < screensaver_places::first_row(layout) - 0.001f;
+          return place.inside && (place.place.row < 0 || place.place.col < 0);
         })) {
       sendJsonError(server, 409, "Invalid place");
       return;

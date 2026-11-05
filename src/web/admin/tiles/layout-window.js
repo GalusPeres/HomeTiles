@@ -73,8 +73,8 @@
     return {cols: Math.max(...cols, Math.min(...cols) + 2),
       rows: Math.max(...rows, Math.min(...rows) + 2) + (layoutWindow?.extraRows || 0)};
   }
-  // On the layout's screen; a screensaver tile (`tab`) only in its rows at
-  // the bottom, the panel refuses a place above them (/api/layouts).
+  // On the layout's screen; a screensaver tile (`tab`) may use the whole
+  // screen of it (screensaver_places::first_row returns 0).
   function layoutInside(tile, key, tab) {
     const L = LAYOUTS[key];
     const top = tab !== undefined && isScreensaverTileTab(tab) ? screensaverFirstRow(key, L.rows) : 0;
@@ -291,9 +291,8 @@
     const L = LAYOUTS[key];
     const tiles = layoutBase(tab);
     const shift = isScreensaverTileTab(tab) ? L.rows - LAYOUTS[from].rows : 0;
-    // The screensaver's rows at the bottom: three upright, two otherwise. A
-    // tile above them there goes to the storage, as the panel leaves it out
-    // (screensaver_places::find).
+    // The screensaver tile may sit in any row of its screen
+    // (screensaver_places::first_row); `top` keeps that rule in one place.
     const top = isScreensaverTileTab(tab) ? screensaverFirstRow(key, L.rows) : 0;
     if (from === 'classic') {
       tiles.forEach(tile => {

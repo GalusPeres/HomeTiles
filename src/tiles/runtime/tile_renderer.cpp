@@ -16,6 +16,7 @@
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/types/climate/visuals.h"
+#include "src/types/weather/graph_renderer.h"
 #include "src/types/weather/weather_icons.h"
 #include "src/ui/shared/theme_schedule.h"
 #include "src/ui/shared/value_unit.h"
@@ -115,6 +116,10 @@ static void invalidate_queued_switch_slot(GridType grid_type,
 WeatherTileWidgets* g_tab0_weather = nullptr;
 WeatherTileWidgets* g_tab1_weather = nullptr;
 WeatherTileWidgets* g_tab2_weather = nullptr;
+WeatherGraphWidgets* g_tab0_weather_graph = nullptr;
+WeatherGraphWidgets* g_tab1_weather_graph = nullptr;
+WeatherGraphWidgets* g_tab2_weather_graph = nullptr;
+WeatherGraphWidgets* g_screensaver_weather_graph = nullptr;
 
 MediaTileWidgets* g_tab0_media = nullptr;
 MediaTileWidgets* g_tab1_media = nullptr;
@@ -141,7 +146,8 @@ ClimateTileWidgets* g_tab2_climate = nullptr;
 
 // The slot state changes only with tile state updates, so PSRAM is fast
 // enough, and internal RAM is scarce on both P4 and S3. Index 3 is the
-// screensaver grid; Weather and Climate exist only on the three tab grids.
+// screensaver grid; plain Weather and Climate exist only on the three tab
+// grids, the weather graph has a bank for the screensaver too.
 struct TileRendererStorage {
   SensorTileWidgets sensors[4][TILES_PER_GRID];
   SwitchTileWidgets switches[4][TILES_PER_GRID];
@@ -150,6 +156,7 @@ struct TileRendererStorage {
   CoverState cover_states[4][TILES_PER_GRID];
   ClimateTileWidgets climate[3][TILES_PER_GRID];
   WeatherTileWidgets weather[3][TILES_PER_GRID];
+  WeatherGraphWidgets weather_graphs[4][TILES_PER_GRID];
   MediaTileWidgets media[4][TILES_PER_GRID];
 };
 static TileRendererStorage* g_renderer_storage = nullptr;
@@ -236,6 +243,10 @@ bool tile_renderer_init_cold_storage() {
   g_tab0_weather = storage->weather[0];
   g_tab1_weather = storage->weather[1];
   g_tab2_weather = storage->weather[2];
+  g_tab0_weather_graph = storage->weather_graphs[0];
+  g_tab1_weather_graph = storage->weather_graphs[1];
+  g_tab2_weather_graph = storage->weather_graphs[2];
+  g_screensaver_weather_graph = storage->weather_graphs[3];
   g_tab0_media = storage->media[0];
   g_tab1_media = storage->media[1];
   g_tab2_media = storage->media[2];
@@ -265,6 +276,14 @@ WeatherTileWidgets* tile_renderer_get_weather_widgets(GridType grid_type) {
   if (grid_type == GridType::TAB1) return g_tab1_weather;
   if (grid_type == GridType::TAB2) return g_tab2_weather;
   return g_tab0_weather;
+}
+
+WeatherGraphWidgets* tile_renderer_get_weather_graph_widgets(GridType grid_type) {
+  if (!tile_renderer_init_cold_storage()) return nullptr;
+  if (grid_type == GridType::SCREENSAVER) return g_screensaver_weather_graph;
+  if (grid_type == GridType::TAB1) return g_tab1_weather_graph;
+  if (grid_type == GridType::TAB2) return g_tab2_weather_graph;
+  return g_tab0_weather_graph;
 }
 
 MediaTileWidgets* tile_renderer_get_media_widgets(GridType grid_type) {
@@ -465,6 +484,9 @@ void reset_climate_widgets(GridType grid_type) {
 }
 
 static void clear_weather_widgets(GridType grid_type) {
+  // Plain Weather tiles never live on the screensaver grid; its bank would
+  // alias TAB0's. The graph bank below is per-grid and safe everywhere.
+  if (grid_type == GridType::SCREENSAVER) return;
   WeatherTileWidgets* target = g_tab0_weather;
   if (grid_type == GridType::TAB1) target = g_tab1_weather;
   else if (grid_type == GridType::TAB2) target = g_tab2_weather;
@@ -475,14 +497,21 @@ static void clear_weather_widgets(GridType grid_type) {
 
 void reset_weather_widget(GridType grid_type, uint8_t grid_index) {
   if (grid_index >= TILES_PER_GRID) return;
-  WeatherTileWidgets* target = g_tab0_weather;
-  if (grid_type == GridType::TAB1) target = g_tab1_weather;
-  else if (grid_type == GridType::TAB2) target = g_tab2_weather;
-  target[grid_index] = {};
+  if (grid_type != GridType::SCREENSAVER) {
+    WeatherTileWidgets* target = g_tab0_weather;
+    if (grid_type == GridType::TAB1) target = g_tab1_weather;
+    else if (grid_type == GridType::TAB2) target = g_tab2_weather;
+    target[grid_index] = {};
+  }
+  WeatherGraphWidgets* graph = tile_renderer_get_weather_graph_widgets(grid_type);
+  if (graph) graph[grid_index] = {};
 }
 
 void reset_weather_widgets(GridType grid_type) {
   clear_weather_widgets(grid_type);
+  WeatherGraphWidgets* graph = tile_renderer_get_weather_graph_widgets(grid_type);
+  if (!graph) return;
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) graph[i] = {};
 }
 
 static void clear_media_widgets(GridType grid_type) {
@@ -617,6 +646,14 @@ static const lv_font_t* get_sensor_value_font(const Tile& tile) {
 
 static bool apply_decimals(String& value, uint8_t decimals) {
   const char* language = configManager.getConfig().language;
+  // A condition sensor shows a condition: translate it like the Weather tile
+  // does (i18n::weather_condition_label); any other text stays as it is.
+  if (i18n::is_weather_condition(value)) {
+    const String localized = i18n::weather_condition_label(language, value);
+    const bool changed = localized != value;
+    value = localized;
+    return changed;
+  }
   if (decimals == 0xFF) {
     String localized = i18n::localize_numeric_text(language, value);
     const bool changed = localized != value;
@@ -1136,6 +1173,10 @@ static String weather_icon_from_condition(const String& condition) {
   String key = condition;
   key.trim();
   key.toLowerCase();
+  // The Yandex Pogoda integration sends underscored states (light_rain).
+  key.replace("_", "-");
+  if (key == "sleet") key = "snowy-rainy";
+  else if (key == "snowfall") key = "snowy";
   if (!key.length()) return "";
   if (key == "clear-night") return "mdi:weather-night";
   if (key == "cloudy") return "mdi:weather-cloudy";
@@ -1152,6 +1193,24 @@ static String weather_icon_from_condition(const String& condition) {
   if (key == "sunny") return "mdi:weather-sunny";
   if (key == "windy") return "mdi:weather-windy";
   if (key == "windy-variant") return "mdi:weather-windy-variant";
+  // Yandex Pogoda's own codes (yandex/pogoda-home-assistant).
+  if (key == "clear") return "mdi:weather-sunny";
+  if (key == "partly-cloudy") return "mdi:weather-partly-cloudy";
+  if (key == "overcast") return "mdi:weather-cloudy";
+  if (key == "drizzle") return "mdi:weather-rainy";
+  if (key == "light-rain") return "mdi:weather-rainy";
+  if (key == "rain") return "mdi:weather-rainy";
+  if (key == "moderate-rain") return "mdi:weather-rainy";
+  if (key == "heavy-rain") return "mdi:weather-pouring";
+  if (key == "continuous-heavy-rain") return "mdi:weather-pouring";
+  if (key == "showers") return "mdi:weather-pouring";
+  if (key == "wet-snow") return "mdi:weather-snowy-rainy";
+  if (key == "light-snow") return "mdi:weather-snowy";
+  if (key == "snow") return "mdi:weather-snowy";
+  if (key == "snow-showers") return "mdi:weather-snowy";
+  if (key == "thunderstorm") return "mdi:weather-lightning";
+  if (key == "thunderstorm-with-rain") return "mdi:weather-lightning-rainy";
+  if (key == "thunderstorm-with-hail") return "mdi:weather-lightning";
   return "";
 }
 
@@ -2552,6 +2611,11 @@ static uint32_t g_weather_overflow_count = 0;
 
 static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, const char* payload) {
   if (grid_index >= TILES_PER_GRID || !payload) return;
+  const Tile* graph_tile = tile_renderer_get_tile_config(grid_type, grid_index);
+  if (graph_tile && graph_tile->type == TILE_WEATHER_GRAPH) {
+    update_weather_graph_tile_state(grid_type, grid_index, payload);
+    return;
+  }
   WeatherTileWidgets* target = g_tab0_weather;
   if (grid_type == GridType::TAB1) target = g_tab1_weather;
   else if (grid_type == GridType::TAB2) target = g_tab2_weather;
@@ -5355,6 +5419,11 @@ void update_sensor_tile_value(GridType grid_type, uint8_t grid_index, const char
   // only, since lv_label_set_text() always relayouts and redraws.
   String unit_text = unit && displayValue != "--" ? String(unit) : String();
   unit_text.trim();
+  // The unit in the panel's language: Home Assistant sends "m/s" for the wind
+  // speed, Russian reads "м/с" (i18n::unit_label).
+  if (unit_text.length()) {
+    unit_text = i18n::unit_label(configManager.getConfig().language, unit_text);
+  }
   value_unit::show(value_label, target[grid_index].unit_label, displayValue, unit_text);
 
   // Per-tile icon colors follow every state update; "--" covers empty,

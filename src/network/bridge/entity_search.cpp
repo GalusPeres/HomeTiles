@@ -57,6 +57,7 @@ struct ListTile {
 const ListTile kListTiles[] = {
     {"sensors", TILE_SENSOR},   {"binary_sensors", TILE_BINARY_SENSOR}, {"numbers", TILE_NUMBER},
     {"selects", TILE_SELECT},   {"datetimes", TILE_DATETIME},           {"weathers", TILE_WEATHER},
+    {"weathers", TILE_WEATHER_GRAPH},
     {"switches", TILE_SWITCH},  {"media", TILE_MEDIA},                  {"climates", TILE_CLIMATE},
     {"covers", TILE_COVER},     {"cameras", TILE_CAMERA},               {"locks", TILE_LOCK},
     {"alarm_panels", TILE_ALARM}, {"fans", TILE_FAN},          {"scenes", TILE_SCENE},

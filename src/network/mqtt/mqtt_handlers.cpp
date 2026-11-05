@@ -1724,6 +1724,20 @@ static void rebuildDynamicWeatherRoutes(std::vector<DynamicWeatherRoute>& routes
 
   const std::vector<FolderEntry>& folders = tileConfig.getFolders();
   FolderEntitySlotView slots[TILES_PER_GRID];
+  // Every offered weather entity keeps its forecast cached, like the other
+  // offered lists in rebuildDynamicRoutes: a Weather graph picked in the Web
+  // Admin shows its hours at once, before the first save subscribes the tile.
+  {
+    const HaBridgeConfigData& cfg = haBridgeConfig.get();
+    const String& list = cfg.weathers_text;
+    int start = 0;
+    while (start < static_cast<int>(list.length())) {
+      int end = list.indexOf('\n', start);
+      if (end < 0) end = list.length();
+      add_route(list.substring(start, end));
+      start = end + 1;
+    }
+  }
   for (const auto& folder : folders) {
     uint32_t t_load0 = millis();
     bool loaded = tileConfig.getFolderEntitiesCached(folder.id, slots, TILES_PER_GRID);
@@ -1734,7 +1748,7 @@ static void rebuildDynamicWeatherRoutes(std::vector<DynamicWeatherRoute>& routes
     if (loaded) {
       for (size_t i = 0; i < TILES_PER_GRID; ++i) {
         const FolderEntitySlotView& slot = slots[i];
-        if (slot.type == TILE_WEATHER && slot.entity[0]) {
+        if ((slot.type == TILE_WEATHER || slot.type == TILE_WEATHER_GRAPH) && slot.entity[0]) {
           add_route(String(slot.entity));
         }
       }

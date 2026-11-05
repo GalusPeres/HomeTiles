@@ -36,6 +36,11 @@ inline constexpr Device::Profile kProfile{
 bool init();
 void update();
 
+// The pixel clock guard around the blocking firmware update check: the rate
+// drops while TLS/WiFi hold the CPU and is restored afterwards.
+void displayUpdateCheckGuardBegin();
+void displayUpdateCheckGuardEnd();
+
 void displayPushPixels(int32_t x, int32_t y, int32_t w, int32_t h,
                        const uint16_t* data);
 void displayPushPixelsDMA(int32_t x, int32_t y, int32_t w, int32_t h,

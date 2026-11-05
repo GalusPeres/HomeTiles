@@ -392,6 +392,11 @@
     if (Number(type) === MEDIA_TILE_TYPE) return [Math.min(MEDIA_TILE_MIN_SPAN, placeCols()), Math.min(MEDIA_TILE_MIN_SPAN, placeRows())];
     // The Power flow needs room for its four nodes (types/power_flow).
     if (Number(type) === 28) return [Math.min(2, placeCols()), Math.min(2, placeRows())];
+    // The weather graph is a wide strip: 4 x 1.5 on a 4 x 3 screen, 7 x 2 on
+    // a 7 x 5 one (types/weather/graph_renderer.cpp).
+    if (Number(type) === 30) {
+      return [placeCols(), Math.min(placeCols() >= 7 ? 2 : 1.5, placeRows())];
+    }
     return [1, supportsHalfSize(type) ? 0.5 : 1];
   }
 

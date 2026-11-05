@@ -1551,7 +1551,7 @@ static inline void enqueue_cached_tile_state(GridType grid_type, const Tile& til
     queue_sensor_tile_update(grid_type, index, payload.c_str(), unit_cstr);
   } else if (tile.type == TILE_SWITCH) {
     queue_switch_tile_update(grid_type, index, payload.c_str());
-  } else if (tile.type == TILE_WEATHER) {
+  } else if (tile.type == TILE_WEATHER || tile.type == TILE_WEATHER_GRAPH) {
     queue_weather_tile_update(grid_type, index, payload.c_str());
   } else if (tile.type == TILE_MEDIA) {
     queue_media_tile_update(grid_type, index, payload.c_str());
@@ -3039,7 +3039,8 @@ void tiles_update_weather_by_entity(GridType grid_type, const char* entity_id, c
 
   for (uint8_t i = 0; i < TILES_PER_GRID; i++) {
     const Tile& tile = config.tiles[i];
-    if (tile.type == TILE_WEATHER && tile.sensor_entity.equalsIgnoreCase(entity_id)) {
+    if ((tile.type == TILE_WEATHER || tile.type == TILE_WEATHER_GRAPH) &&
+        tile.sensor_entity.equalsIgnoreCase(entity_id)) {
       queue_weather_tile_update(grid_type, i, payload);
       queue_weather_popup_payload(entity_id, payload);
       if (changed && tile_queue_log_due(grid_type, i)) {

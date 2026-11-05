@@ -83,6 +83,7 @@ struct Strings {
   const char* tile_type_sensor;
   const char* tile_type_energy;
   const char* tile_type_weather;
+  const char* tile_type_weather_graph;
   const char* tile_type_scene;
   const char* tile_type_folder;
   const char* tile_type_switch;
@@ -140,6 +141,9 @@ struct Strings {
   // the value pair beside the disc (climateTileShowsValue).
   const char* climate_layout_title_only;
   const char* climate_layout_with_value;
+  // A unit the language spells differently: Home Assistant sends "m/s" for
+  // the wind speed, Russian reads "м/с" (i18n::unit_label).
+  const char* unit_meters_per_second;
   const char* media_entity;
   const char* show_time;
   const char* show_date;
@@ -227,6 +231,9 @@ struct Strings {
   const char* screensaver_clock_heading;
   const char* screensaver_show_weekday;
   const char* screensaver_clock_shadow;
+  // The screensaver clock on one line: time beside the date, so the overlay
+  // fits the very top of the screen (user 2026-11-05).
+  const char* screensaver_clock_single_line;
   const char* screensaver_time_alignment;
   const char* screensaver_date_alignment;
   const char* alignment_left;
@@ -901,7 +908,10 @@ struct LocaleProfile {
   const char* weather_today_button;
   const char* weather_weekdays_short[7];
   const char* weather_months_short[12];
-  const char* weather_conditions[15];
+  // Home Assistant's conditions first, then Yandex Pogoda's own codes, which
+  // are richer (yandex/pogoda-home-assistant); keyed by kWeatherConditionKeys
+  // in i18n.cpp.
+  const char* weather_conditions[32];
 
   // Optional sensors shown instead of the weather entity's own current
   // temperature and humidity: temperature sensor, humidity sensor and the
@@ -1181,6 +1191,12 @@ String format_number(const char* language_code,
                      uint8_t decimals,
                      bool trim_trailing_zeros = false);
 String weather_condition_label(const char* language_code, const String& condition);
+// True when the text is a known condition key (Home Assistant's or Yandex
+// Pogoda's), so a sensor tile can translate it like the Weather tile.
+bool is_weather_condition(const String& condition);
+// A unit spelled by the language ("m/s" -> "м/с" in Russian); every other
+// unit passes through unchanged.
+String unit_label(const char* language_code, const String& unit);
 String weather_weekday_short(const char* language_code, const String& iso);
 const char* weather_month_short(const char* language_code, int month);
 const char* weather_today_label(const char* language_code);

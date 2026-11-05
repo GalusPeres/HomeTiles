@@ -583,9 +583,6 @@ static void appendTileTabHTML(
     float span_w = (tile.span_w < 0.5f) ? 1 : tile.span_w;
     float span_h = (tile.span_h < 0.5f) ? 1 : tile.span_h;
     clamp_media_tile_layout(tile.type, col, row, span_w, span_h, place_cols, place_rows);
-    if (screensaver_mode && GRID_ROWS > 1 && row < GRID_ROWS - 2) {
-      row = GRID_ROWS - 2;
-    }
     if (span_w > place_cols - col) span_w = place_cols - col;
     if (span_h > place_rows - row) span_h = place_rows - row;
 
@@ -638,10 +635,7 @@ static void appendTileTabHTML(
     tileStyle += " / span ";
     tileStyle += String(static_cast<unsigned>(span_h));
     tileStyle += ";";
-    if (screensaver_mode && tile.type == TILE_EMPTY &&
-        row < (GRID_ROWS > 1 ? GRID_ROWS - 2 : 0)) {
-      tileStyle += "display:none;";
-    }
+    // Empty screensaver cells stay clickable everywhere, like folder ones.
     // A fully transparent screensaver card casts no shadow
     // (apply_slot_tile_shadows).
     if (screensaver_mode && tile.type != TILE_EMPTY && screensaverConfig.get().tile_opacity == 0) {
@@ -828,6 +822,13 @@ static void appendTileTabHTML(
         html += "</span>";
       }
       html += "</div>";
+    }
+    if (preview_kind && strcmp(preview_kind, "weather_graph") == 0) {
+      html += "<div class=\"tile-weather-graph\" id=\"";
+      html += tab_id;
+      html += "-tile-";
+      html += String(i);
+      html += "-graph\"></div>";
     }
     if (tileTypeIsEditableValue(tile.type)) {
       html += "<div class=\"tile-value tile-editable-value sensor-value-size-";
@@ -1326,6 +1327,9 @@ static void appendTileTabHTML(
 <label class="inline-checkbox"><input id="screensaverClockShadow" type="checkbox"> )html";
     html += tr.screensaver_clock_shadow;
     html += R"html(</label>
+<label class="inline-checkbox"><input id="screensaverClockSingleLine" type="checkbox"> )html";
+    html += tr.screensaver_clock_single_line;
+    html += R"html(</label>
 </div>
 <div class="screensaver-two-fields">
 <label>)html";
@@ -1405,6 +1409,8 @@ static void appendTileTabHTML(
     html += tr.tile_type_switch;
     html += "</option><option value=\"15\">";
     html += tr.tile_type_media;
+    html += "</option><option value=\"30\">";
+    html += tr.tile_type_weather_graph;
     html += "</option>";
   } else {
     append_tile_type_select_options(html);
@@ -1648,6 +1654,10 @@ bool buildAdminFolderTabFragments(uint16_t folder_id, String& button_html, Strin
     String lower = v;
     lower.toLowerCase();
     if (lower == "unavailable") return String("--");
+    // A condition sensor shows a condition: translate it like the panel does.
+    if (i18n::is_weather_condition(v)) {
+      return i18n::weather_condition_label(configManager.getConfig().language, v);
+    }
     if (decimals == 0xFF) {
       return i18n::localize_numeric_text(
           configManager.getConfig().language, v);
@@ -2474,6 +2484,10 @@ String WebAdminServer::getAdminPage() {
     String lower = v;
     lower.toLowerCase();
     if (lower == "unavailable") return String("--");
+    // A condition sensor shows a condition: translate it like the panel does.
+    if (i18n::is_weather_condition(v)) {
+      return i18n::weather_condition_label(configManager.getConfig().language, v);
+    }
     if (decimals == 0xFF) {
       return i18n::localize_numeric_text(
           configManager.getConfig().language, v);

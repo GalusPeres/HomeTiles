@@ -1098,6 +1098,9 @@
           tile.weather_temperature_sensor || '', tile.weather_humidity_sensor || '', metaValues, metaUnits),
           tile, iconName, previewIconColor(typeValue, tile.icon_colors, tile.sensor_entity || '', sensorMeta, null, ''));
       }
+      if (previewKind === 'weather_graph' && typeof applyWeatherGraphPreview === 'function') {
+        applyWeatherGraphPreview(el, tile, sensorMeta);
+      }
       if (previewKind === 'media') {
         applyMediaPreview(el, parseMediaPreviewPayload(
           tile.sensor_entity ? (sensorMeta?.mediaValues?.[tile.sensor_entity] ?? '') : ''),

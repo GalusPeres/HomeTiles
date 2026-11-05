@@ -269,6 +269,7 @@ bool ScreensaverConfigStore::loadPath(const char* path) {
   loaded.show_date = doc["show_date"] | true;
   loaded.show_weekday = doc["show_weekday"] | false;
   loaded.clock_shadow = doc["clock_shadow"] | true;
+  loaded.clock_single_line = doc["clock_single_line"] | false;
   loaded.time_format = doc["time_format"] | 0;
   loaded.date_format = doc["date_format"] | 0;
   loaded.time_alignment = doc["time_alignment"] | 1;
@@ -492,6 +493,7 @@ String ScreensaverConfigStore::toJson(bool include_device_meta) const {
   doc["show_date"] = data_.show_date;
   doc["show_weekday"] = data_.show_weekday;
   doc["clock_shadow"] = data_.clock_shadow;
+  doc["clock_single_line"] = data_.clock_single_line;
   doc["time_format"] = data_.time_format;
   doc["date_format"] = data_.date_format;
   doc["time_alignment"] = data_.time_alignment;

@@ -1040,6 +1040,13 @@
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }
+    } else if (safeType === 30) {
+      // The weather graph's entity, day and pair id (types/weather/admin-graph.js).
+      fd.append('weather_graph_entity', tile.sensor_entity || tile.weather_graph_entity || '');
+      fd.append('weather_graph_day', Number(tile.sensor_display_mode) === 1 ? '1' : '0');
+      if (tile.sensor_gauge_max !== undefined && tile.sensor_gauge_max !== null) {
+        fd.append('weather_graph_pair_id', tile.sensor_gauge_max);
+      }
     } else if (safeType === 14) {
       fd.append('energy_entity', tile.sensor_entity || tile.energy_entity || '');
       fd.append('sensor_unit', tile.sensor_unit || '');

@@ -48,6 +48,7 @@
                     Object.prototype.hasOwnProperty.call(payload, 'energy_units') ||
                     Object.prototype.hasOwnProperty.call(payload, 'climate_values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'weather_values') ||
+                    Object.prototype.hasOwnProperty.call(payload, 'weather_graph_values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'media_values');
     if (!hasMeta) {
       return { values: payload || {}, units: {}, icons: {}, names: {}, sceneEntities: {}, loaded: true };
@@ -67,6 +68,8 @@
       calendarValues: payload.calendar_values || payload.calendarValues || {},
       // Weather and media tile states, the payloads their tiles draw.
       weatherValues: payload.weather_values || payload.weatherValues || {},
+      // The same for the graph: keeps the hourly forecast its line needs.
+      weatherGraphValues: payload.weather_graph_values || payload.weatherGraphValues || {},
       mediaValues: payload.media_values || payload.mediaValues || {},
       // "From cover": the color each shown media card sampled from its cover.
       mediaCoverColors: payload.media_cover_colors || payload.mediaCoverColors || {},

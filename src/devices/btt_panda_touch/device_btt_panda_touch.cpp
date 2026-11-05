@@ -42,6 +42,11 @@ constexpr int8_t kPanelData[16] = {17, 18, 48, 47, 39, 11, 12, 13,
 // what this panel accepts (the picture falls apart); 16 MHz holds a square
 // popup card, and the wider 640 px card needs 14 MHz to stay stable.
 constexpr uint32_t kPanelPclkHz = 14 * 1000 * 1000;
+// The firmware update check runs a blocking TLS handshake; while it holds the
+// CPU the panel's refill interrupt is starved and the picture jitters. The
+// guard drops the rate for the check (same 6 MHz as the Guition profile) and
+// restores the stable rate afterwards.
+constexpr uint32_t kUpdateCheckPclkHz = 6 * 1000 * 1000;
 
 constexpr int8_t kBacklightPin = 21;
 // The backlight is a plain LEDC PWM line. A fast rate sits in the range the
@@ -89,6 +94,8 @@ int32_t g_previousX1 = -1;
 int32_t g_previousY1 = -1;
 bool g_frameOpen = false;
 bool g_display_ready = false;
+// Set while the update check holds the reduced pixel clock.
+bool g_update_check_pclk_active = false;
 bool g_touch_ready = false;
 bool g_littlefs_ready = false;
 
@@ -338,6 +345,41 @@ bool init() {
     Serial.println("[Device/BTT Panda Touch] Touch unavailable; continuing");
   }
   return true;
+}
+
+// The pixel clock guard around the blocking firmware update check
+// (HomeTiles.ino perform_fw_check): 6 MHz while TLS/WiFi hold the CPU, the
+// stable 14 MHz again afterwards. The panel is wired for DE only, so the new
+// divider is applied by IDF itself and no frame restart is needed here.
+void displayUpdateCheckGuardBegin() {
+  if (g_update_check_pclk_active || !g_display_ready || !g_panel) return;
+  g_update_check_pclk_active = true;
+  const esp_err_t err = esp_lcd_rgb_panel_set_pclk(g_panel, kUpdateCheckPclkHz);
+  if (err == ESP_OK) {
+    Serial.printf(
+        "[Device/BTT Panda Touch] Update-check PCLK reduced to %u MHz\n",
+        static_cast<unsigned>(kUpdateCheckPclkHz / 1000000U));
+  } else {
+    Serial.printf(
+        "[Device/BTT Panda Touch] Update-check PCLK reduction failed: %s (0x%X)\n",
+        esp_err_to_name(err), static_cast<unsigned>(err));
+  }
+}
+
+void displayUpdateCheckGuardEnd() {
+  if (!g_update_check_pclk_active) return;
+  g_update_check_pclk_active = false;
+  if (!g_display_ready || !g_panel) return;
+  const esp_err_t err = esp_lcd_rgb_panel_set_pclk(g_panel, kPanelPclkHz);
+  if (err == ESP_OK) {
+    Serial.printf(
+        "[Device/BTT Panda Touch] Update-check PCLK restored to %u MHz\n",
+        static_cast<unsigned>(kPanelPclkHz / 1000000U));
+  } else {
+    Serial.printf(
+        "[Device/BTT Panda Touch] Update-check PCLK restore failed: %s (0x%X)\n",
+        esp_err_to_name(err), static_cast<unsigned>(err));
+  }
 }
 
 void update() {}

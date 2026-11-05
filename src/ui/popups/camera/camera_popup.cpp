@@ -25,7 +25,6 @@
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/media/media_popup.h"
 #include "src/ui/popups/media/media_popup_layout.h"
-#include "src/ui/popups/popup_nav_style.h"
 #include "src/ui/popups/popup_layout.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/popups/weather/weather_popup.h"
@@ -45,16 +44,26 @@ constexpr int kVideoFrameWidth = camera_geometry::kWidth;
 constexpr int kVideoHeight = camera_geometry::kHeight;
 // In card coordinates, as in the Media popup (mockup webcam-radar/radar.html):
 // with a time bar the picture one edge below the head like the Media cover,
-// without one in the middle between the head and the buttons.
+// without one in the middle of the card below the head. The full screen stays
+// a tap on the picture: no button for it (user 2026-11-05).
 constexpr int kHeadBottom = ml::kHeadTop + ml::kDisc;
 constexpr int kButtonTop = ml::kVolumeTop;
 constexpr int kVideoTopWithBar = kHeadBottom + ml::kEdge;
-constexpr int kVideoTopPlain = kHeadBottom + (kButtonTop - kHeadBottom - kVideoHeight) / 2;
+constexpr int kVideoTopPlain =
+    kHeadBottom + (popup_layout::kCardHeight - ml::kEdge - kHeadBottom - kVideoHeight) / 2;
 // The time bar: the frames of a camera with a history stay in the Bridge, the
 // panel knows only their times and shows the one it asks for over the stream.
 constexpr uint8_t kMaxFrames = 32;
 constexpr uint32_t kFrameSendMs = 120;
-constexpr uint32_t kPlayStepMs = 700;
+// Play runs in a loop: the newest picture stays a little longer.
+constexpr uint32_t kPlayStepMs = 500;
+constexpr uint32_t kPlayHoldMs = 1500;
+// The newest picture counts as "now" while it is this fresh (the sources update
+// every 10 minutes); older ones, a source that stopped, show their time.
+constexpr uint32_t kFreshFrameS = 30 * 60;
+constexpr time_t kClockSetEpoch = 1700000000;
+// No words for a picture that comes at once: they show only after this long.
+constexpr uint32_t kStatusDelayMs = 1500;
 constexpr uint8_t kRequiredBridgeCameraProtocol = 1;
 constexpr uint32_t kBridgeResponseTimeoutMs = 30000;
 // A full-screen request the Bridge does not answer goes back to the popup.
@@ -91,7 +100,6 @@ struct CameraPopupContext {
   lv_obj_t* time_newest = nullptr;
   lv_obj_t* play_button = nullptr;
   lv_obj_t* play_label = nullptr;
-  lv_obj_t* full_button = nullptr;
   // The history the Bridge told: the times, oldest first, and the shown one.
   uint32_t frame_times[kMaxFrames] = {};
   uint8_t frame_count = 0;
@@ -102,6 +110,9 @@ struct CameraPopupContext {
   uint32_t play_next_ms = 0;
   bool live_kind = false;
   bool with_bar = false;
+  // The opening, for the delayed status and the log.
+  uint32_t opened_ms = 0;
+  bool open_logged = false;
   // The camera last known to have a history: it opens in its layout at once.
   String bar_entity;
   size_t previous_draw_buffer_requested_lines = 0;
@@ -252,14 +263,25 @@ static void format_frame_time(uint32_t when, char* out, size_t size) {
   strftime(out, size, format == clock_tile::TIME_FORMAT_24H ? "%H:%M" : "%I:%M %p", &local);
 }
 
+// The head's second line: "Live", or where the shown picture lies: "Now" on
+// the newest, else how long before it. Its exact time stands under the bar.
 static void show_head_value(CameraPopupContext* ctx) {
   if (!ctx->value_label) return;
   char text[48] = "";
-  if (ctx->frame_count) {
-    char when[16] = "";
-    format_frame_time(ctx->frame_times[ctx->shown_frame], when, sizeof(when));
-    snprintf(text, sizeof(text), camera_text().camera_picture_time_fmt, when);
-  } else if (ctx->live_kind) {
+  if (ctx->frame_count >= 2) {
+    const uint32_t newest = ctx->frame_times[ctx->frame_count - 1];
+    if (ctx->shown_frame + 1 < ctx->frame_count) {
+      const uint32_t minutes = (newest - ctx->frame_times[ctx->shown_frame] + 30) / 60;
+      snprintf(text, sizeof(text), camera_text().camera_minutes_ago_fmt, static_cast<unsigned>(minutes));
+    } else {
+      const time_t now = time(nullptr);
+      if (now >= kClockSetEpoch && static_cast<uint32_t>(now) > newest + kFreshFrameS) {
+        format_frame_time(newest, text, sizeof(text));
+      } else {
+        snprintf(text, sizeof(text), "%s", camera_text().camera_now);
+      }
+    }
+  } else if (ctx->frame_count == 0 && ctx->live_kind) {
     snprintf(text, sizeof(text), "%s", camera_text().camera_live);
   }
   if (strcmp(lv_label_get_text(ctx->value_label), text) == 0) return;
@@ -277,7 +299,7 @@ static void set_playing(CameraPopupContext* ctx, bool playing) {
 // Bar, times and Play follow the history; a value from outside never moves the
 // knob under the finger (it follows on release, bar_event_cb).
 static void show_bar(CameraPopupContext* ctx) {
-  if (!ctx->bar) return;
+  if (!ctx->bar || ctx->full) return;
   const bool shown = ctx->frame_count >= 2;
   for (lv_obj_t* obj : {ctx->bar_track, ctx->bar_cap, ctx->bar, ctx->time_shown, ctx->time_newest, ctx->play_button}) {
     set_shown(obj, shown);
@@ -301,10 +323,6 @@ static void show_bar(CameraPopupContext* ctx) {
 static void apply_layout(CameraPopupContext* ctx, bool with_bar) {
   ctx->with_bar = with_bar;
   lv_obj_align(ctx->video, LV_ALIGN_TOP_MID, 0, (with_bar ? kVideoTopWithBar : kVideoTopPlain) - popup_layout::kCardPad);
-  if (ctx->full_button) {
-    const int center = popup_layout::kCardWidth / 2 + (with_bar ? popup_layout::scale(190) : 0);
-    lv_obj_set_pos(ctx->full_button, center - ml::kButton / 2, kButtonTop);
-  }
 }
 
 // The Bridge's times, the shown frame kept by its time: the newest stays the
@@ -332,20 +350,21 @@ static void take_frames(CameraPopupContext* ctx, JsonArrayConst frames) {
   if (ctx->frame_times[ctx->shown_frame] != shown_time) ctx->frame_dirty = true;
 }
 
-// One step while playing and the picked frame to the Bridge, at most every
+// One step of Play, in a loop: after the newest picture the oldest again.
+static void play_step(CameraPopupContext* ctx) {
+  ctx->shown_frame = ctx->shown_frame + 1 >= ctx->frame_count ? 0 : ctx->shown_frame + 1;
+  ctx->frame_dirty = true;
+  ctx->play_next_ms = millis() + (ctx->shown_frame + 1 >= ctx->frame_count ? kPlayHoldMs : kPlayStepMs);
+  if (ctx->full) return;
+  show_bar(ctx);
+  show_head_value(ctx);
+}
+
+// The steps of Play and the picked frame to the Bridge, at most every
 // kFrameSendMs: while dragging only the newest position goes out.
 static void process_time_bar(CameraPopupContext* ctx) {
   const uint32_t now = millis();
-  if (ctx->playing && static_cast<int32_t>(now - ctx->play_next_ms) >= 0) {
-    ctx->play_next_ms = now + kPlayStepMs;
-    if (ctx->shown_frame + 1 < ctx->frame_count) {
-      ++ctx->shown_frame;
-      ctx->frame_dirty = true;
-      show_bar(ctx);
-      show_head_value(ctx);
-    }
-    if (ctx->shown_frame + 1 >= ctx->frame_count) set_playing(ctx, false);
-  }
+  if (ctx->playing && static_cast<int32_t>(now - ctx->play_next_ms) >= 0) play_step(ctx);
   if (!ctx->frame_dirty || now - ctx->frame_sent_ms < kFrameSendMs) return;
   ctx->frame_dirty = false;
   ctx->frame_sent_ms = now;
@@ -367,7 +386,6 @@ static void open_popup_stream(CameraPopupContext* ctx) {
 static void enter_soft_full_screen() {
   CameraPopupContext* ctx = g_camera_popup;
   if (!ctx || !ctx->visible || ctx->full || !ctx->soft_full) return;
-  set_playing(ctx, false);
   // The popup's frames go with its stream; its video area drawn black.
   lv_image_set_src(ctx->image, nullptr);
   lv_obj_add_flag(ctx->image, LV_OBJ_FLAG_HIDDEN);
@@ -402,6 +420,7 @@ static void leave_soft_full_screen(bool reopen) {
   CameraPopupContext* ctx = g_camera_popup;
   if (!ctx || !ctx->full) return;
   ctx->full = false;
+  set_playing(ctx, false);
   ctx->full_request = 0;
   ctx->pending_url = String();
   // LVGL lets go of the frame before the stream frees it.
@@ -443,6 +462,7 @@ static void leave_full_screen(bool reopen) {
   CameraPopupContext* ctx = g_camera_popup;
   if (!ctx || !ctx->full) return;
   ctx->full = false;
+  set_playing(ctx, false);
   ctx->full_request = 0;
   ctx->pending_url = String();
   camera_stream_stop();
@@ -492,7 +512,6 @@ static void enter_full_screen() {
 #endif
   CameraPopupContext* ctx = g_camera_popup;
   if (!ctx || !ctx->visible || ctx->full) return;
-  set_playing(ctx, false);
   uint16_t width = 0;
   uint16_t height = 0;
   uint16_t turn = 0;
@@ -632,14 +651,9 @@ static void play_event_cb(lv_event_t* event) {
     set_playing(ctx, false);
     return;
   }
-  // From the newest it starts over at the oldest.
-  if (ctx->shown_frame + 1 >= ctx->frame_count) {
-    ctx->shown_frame = 0;
-    ctx->frame_dirty = true;
-    show_bar(ctx);
-    show_head_value(ctx);
-  }
+  // The next picture at once, from the newest the oldest.
   set_playing(ctx, true);
+  play_step(ctx);
 }
 
 static void full_touch_event_cb(lv_event_t* event) {
@@ -743,8 +757,6 @@ static void build_controls(CameraPopupContext* ctx) {
   ctx->play_button = control_button(ctx->root, "play", &ctx->play_label);
   lv_obj_set_pos(ctx->play_button, popup_layout::kCardWidth / 2 - ml::kButton / 2, kButtonTop);
   lv_obj_add_event_cb(ctx->play_button, play_event_cb, LV_EVENT_CLICKED, ctx);
-  ctx->full_button = control_button(ctx->root, "fullscreen", nullptr);
-  lv_obj_add_event_cb(ctx->full_button, video_event_cb, LV_EVENT_CLICKED, ctx);
 }
 
 // The colors follow the opener's card and icon, as in the Media popup.
@@ -769,9 +781,6 @@ static void style_controls(CameraPopupContext* ctx, uint32_t icon_color) {
   lv_obj_set_style_bg_color(ctx->play_button, lv_color_hex(ui_theme::text_soft()), LV_PART_MAIN | LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(ctx->play_button, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
   lv_obj_set_style_text_color(ctx->play_label, lv_color_hex(ctx->surface_color), 0);
-  // A press shows the control fill, like the pressed close button.
-  popup_nav_style::style_press_fill(ctx->full_button, control, control_opa);
-  lv_obj_set_style_text_color(lv_obj_get_child(ctx->full_button, 0), lv_color_hex(ui_theme::icon()), 0);
 }
 
 static CameraPopupContext* create_popup() {
@@ -1010,8 +1019,10 @@ void show_camera_popup(const CameraPopupInit& init) {
   lv_image_set_src(g_camera_popup->image, nullptr);
   lv_obj_add_flag(g_camera_popup->image, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(g_camera_popup->placeholder, LV_OBJ_FLAG_HIDDEN);
-  lv_label_set_text(g_camera_popup->placeholder,
-                    camera_text().camera_preparing);
+  // Black without words: they follow only if the picture takes long.
+  lv_label_set_text(g_camera_popup->placeholder, "");
+  g_camera_popup->opened_ms = millis();
+  g_camera_popup->open_logged = false;
   camera_popup_set_status(camera_text().camera_bridge_requesting, false);
   g_camera_popup->waiting_for_bridge = true;
   g_camera_popup->bridge_response_deadline_ms =
@@ -1160,10 +1171,20 @@ void process_camera_popup() {
     g_camera_popup->resuming = false;
   }
   process_time_bar(g_camera_popup);
-  // The status shows until the first frame; over a running picture only an
-  // error or a message that must stay.
-  set_shown(g_camera_popup->status, lv_obj_has_flag(g_camera_popup->image, LV_OBJ_FLAG_HIDDEN) ||
-                                        g_camera_popup->status_sticky || camera_stream_status_is_error());
+  // The words show only if the first frame takes long; over a running picture
+  // only an error or a message that must stay.
+  const bool no_frame = lv_obj_has_flag(g_camera_popup->image, LV_OBJ_FLAG_HIDDEN);
+  const bool waited = millis() - g_camera_popup->opened_ms >= kStatusDelayMs;
+  if (no_frame && waited && !lv_label_get_text(g_camera_popup->placeholder)[0]) {
+    lv_label_set_text(g_camera_popup->placeholder, camera_text().camera_preparing);
+  }
+  set_shown(g_camera_popup->status, (no_frame && waited) || g_camera_popup->status_sticky ||
+                                        camera_stream_status_is_error());
+  if (!no_frame && !g_camera_popup->open_logged) {
+    g_camera_popup->open_logged = true;
+    Serial.printf("[Camera] First frame shown %u ms after the opening\n",
+                  static_cast<unsigned>(millis() - g_camera_popup->opened_ms));
+  }
 }
 
 void camera_popup_handle_mqtt_status(const char* payload) {
@@ -1190,6 +1211,8 @@ void camera_popup_handle_mqtt_status(const char* payload) {
       take_frames(g_camera_popup, frames);
       show_bar(g_camera_popup);
       show_head_value(g_camera_popup);
+      // No controls in the full screen: a history plays by itself there.
+      if (g_camera_popup->full && g_camera_popup->frame_count >= 2) set_playing(g_camera_popup, true);
     }
     return;
   }
@@ -1267,6 +1290,10 @@ void camera_popup_handle_mqtt_status(const char* payload) {
     if (has_history != g_camera_popup->with_bar) apply_layout(g_camera_popup, has_history);
     show_bar(g_camera_popup);
     show_head_value(g_camera_popup);
+    // No controls in the full screen: a history plays by itself there.
+    if (full && g_camera_popup->frame_count >= 2) set_playing(g_camera_popup, true);
+    Serial.printf("[Camera] Bridge ready %u ms after the opening\n",
+                  static_cast<unsigned>(millis() - g_camera_popup->opened_ms));
     camera_popup_set_status(camera_text().camera_connecting, false);
     start_camera_stream(String(url), full);
     return;

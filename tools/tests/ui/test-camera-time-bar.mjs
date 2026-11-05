@@ -21,23 +21,35 @@ assert.doesNotMatch(stream, /camera_fps_fmt/);
 assert.match(stream, /\[CameraStream\] Present: %\.1f FPS/);
 assert.doesNotMatch(popup, /kStatusTop/);
 
+// The full screen stays a tap on the picture: no button (user 2026-11-05).
+assert.doesNotMatch(popup, /full_button|"fullscreen"/);
+assert.match(popup, /lv_obj_add_event_cb\(video, video_event_cb, LV_EVENT_CLICKED, ctx\)/);
+
 // Every language has both new texts, in the place of the old one.
-assert.match(header, /const char\* camera_live;[^\n]*\n\s*const char\* camera_picture_time_fmt;/);
-for (const [live, time] of [['Live', 'Stand %s'], ['Live', 'As of %s'], ['En direct', 'À %s'], ['Na żywo', 'Stan z %s'],
-                            ['Živě', 'Stav k %s'], ['En directo', 'A las %s'], ['Naživo', 'Stav k %s'], ['В эфире', 'На %s']]) {
-  assert.ok(strings.includes(`"${live}",\n    "${time}",`), `${live} / ${time}`);
+assert.match(header, /const char\* camera_live;[^\n]*\n\s*const char\* camera_now;[^\n]*\n\s*const char\* camera_minutes_ago_fmt;/);
+for (const texts of [['Live', 'Jetzt', 'vor %u Min'], ['Live', 'Now', '%u min ago'],
+                     ['En direct', 'Maintenant', 'il y a %u min'], ['Na żywo', 'Teraz', '%u min temu'],
+                     ['Živě', 'Teď', 'před %u min'], ['En directo', 'Ahora', 'hace %u min'],
+                     ['Naživo', 'Teraz', 'pred %u min'], ['В эфире', 'Сейчас', '%u мин назад']]) {
+  assert.ok(strings.includes(texts.map(text => `"${text}",`).join('\n    ')), texts.join(' / '));
 }
+assert.doesNotMatch(strings, /"As of %s"|"Stand %s"/);
 
 // The head's second line goes through the shell, like the Media popup's state.
 assert.match(popup, /show_popup_shell\(g_camera_popup->overlay,[^;]*g_camera_popup->value_label\);/);
 assert.match(popup, /show_popup_shell\(ctx->overlay,[^;]*ctx->value_label\);/);
-assert.match(popup, /snprintf\(text, sizeof\(text\), camera_text\(\)\.camera_picture_time_fmt, when\)/);
+assert.match(popup, /snprintf\(text, sizeof\(text\), camera_text\(\)\.camera_minutes_ago_fmt, static_cast<unsigned>\(minutes\)\)/);
+assert.match(popup, /snprintf\(text, sizeof\(text\), "%s", camera_text\(\)\.camera_now\)/);
 assert.match(popup, /snprintf\(text, sizeof\(text\), "%s", camera_text\(\)\.camera_live\)/);
 
-// The status stays in the picture's area: until the first frame, then only an
-// error or a message that must stay.
+// The status stays in the picture's area and shows only if the first frame
+// takes long; over a running picture only an error or a message that must stay.
 assert.match(popup, /ctx->status = lv_label_create\(video\)/);
-assert.match(popup, /set_shown\(g_camera_popup->status, lv_obj_has_flag\(g_camera_popup->image, LV_OBJ_FLAG_HIDDEN\) \|\|\s*g_camera_popup->status_sticky \|\| camera_stream_status_is_error\(\)\)/);
+assert.match(popup, /set_shown\(g_camera_popup->status, \(no_frame && waited\) \|\| g_camera_popup->status_sticky \|\|\s*camera_stream_status_is_error\(\)\)/);
+// No "Preparing stream" for a picture that comes at once.
+assert.match(popup, /lv_label_set_text\(g_camera_popup->placeholder, ""\);/);
+assert.match(popup, /if \(no_frame && waited && !lv_label_get_text\(g_camera_popup->placeholder\)\[0\]\)/);
+assert.match(popup, /\[Camera\] First frame shown %u ms after the opening/);
 assert.match(stream, /bool camera_stream_status_is_error\(\) \{ return false; \}/);
 
 // The bar as in the Media popup: its constants, the times under it on the edges.
@@ -78,19 +90,20 @@ assert.match(popup, /if \(!ctx->frame_dirty \|\| now - ctx->frame_sent_ms < kFra
 assert.match(popup, /if \(!lv_slider_is_dragged\(ctx->bar\)\)/);
 assert.match(popup, /code != LV_EVENT_RELEASED && code != LV_EVENT_PRESS_LOST/);
 
-// Dragging ends Play; Play from the newest starts at the oldest and stops at the newest.
+// Dragging ends Play; Play moves at once and runs in a loop, staying a little
+// longer on the newest picture.
 const event = popup.slice(popup.indexOf('static void bar_event_cb'), popup.indexOf('static void play_event_cb'));
 assert.match(event, /set_playing\(ctx, false\)/);
 const play = popup.slice(popup.indexOf('static void play_event_cb'), popup.indexOf('static void full_touch_event_cb'));
-assert.match(play, /ctx->shown_frame = 0;/);
-const step = popup.slice(popup.indexOf('static void process_time_bar'), popup.indexOf('static void open_popup_stream'));
-assert.match(step, /if \(ctx->shown_frame \+ 1 >= ctx->frame_count\) set_playing\(ctx, false\)/);
+assert.match(play, /set_playing\(ctx, true\);\s*play_step\(ctx\);/);
+const step = popup.slice(popup.indexOf('static void play_step'), popup.indexOf('static void process_time_bar'));
+assert.match(step, /ctx->shown_frame \+ 1 >= ctx->frame_count \? 0 : ctx->shown_frame \+ 1/);
+assert.match(step, /\? kPlayHoldMs : kPlayStepMs/);
 
-// Full screen ends Play on both ways of showing it.
-for (const name of ['enter_soft_full_screen', 'enter_full_screen']) {
-  const body = popup.slice(popup.indexOf(`static void ${name}() {`));
-  assert.match(body.slice(0, 320), /set_playing\(ctx, false\)/, name);
-}
+// The full screen has no controls: a history plays by itself there, both when
+// it opens and when the frames arrive later; leaving it ends Play.
+assert.equal(popup.match(/if \((g_camera_popup->)?full && g_camera_popup->frame_count >= 2\) set_playing\(g_camera_popup, true\);/g).length, 2);
+assert.equal(popup.match(/ctx->full = false;\n  set_playing\(ctx, false\);/g).length, 2);
 
 // A picked frame survives a new stream, and the frames are kept by their time.
 assert.match(popup, /if \(g_camera_popup->shown_frame \+ 1 < g_camera_popup->frame_count\) g_camera_popup->frame_dirty = true;/);

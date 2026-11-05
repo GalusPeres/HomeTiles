@@ -112,7 +112,6 @@ folder-open
 form-textbox-password
 format-list-bulleted
 forward
-fullscreen
 function
 gamma
 garage

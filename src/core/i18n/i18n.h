@@ -428,7 +428,8 @@ struct Strings {
   const char* camera_setup_failed;
   const char* camera_input_buffer_full;
   const char* camera_live;              // the head of a running live camera
-  const char* camera_picture_time_fmt;  // %s = the time of the shown picture
+  const char* camera_now;               // the head on a history's newest picture
+  const char* camera_minutes_ago_fmt;   // %u = minutes before the newest picture
   const char* camera_mqtt_disconnected;
   const char* camera_mqtt_topic_missing;
   const char* camera_mqtt_queue_full;

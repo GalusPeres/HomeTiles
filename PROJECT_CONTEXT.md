@@ -22,6 +22,7 @@ Last reviewed: 2026-10-29
 ## Active work
 
 - Vacuum tile 29 (#50, `src/types/vacuum/`), Bridge level 6; V2 HW ok, others pending.
+- Rain radar: Bridge v0.9.8b2 camera (`rain_radar.py`); HA/HW pending.
 - Power flow tile 28 ("Leistungsfluss", `src/types/power_flow/`, picture 65): nodes in `/_tile_flow_entities`, options in key_code, node tap = Sensor popup; V2 HW ok b542; smooth lines/dots b568.
 - Media popup: layouts `sensor_display_mode` 0 cover left, 1 centre; controls only with their HA feature bit; menu box: speakers, source, library; tile/head icon state form (`state_icon.h`).
 - #116 (JC4880 camera popup ends after 18-60 min): Bridge waits 45 s per chunk ACK; reporter pending.
@@ -68,7 +69,7 @@ Last reviewed: 2026-10-29
 - S3 mallocs > 32 B prefer PSRAM (b324): internal free 42 -> ~89 KB, text-heavy steps slower. Open: S3 Web Admin pages block the loop 1-6 s.
 - Icon file: all 7447 MDI icons in LittleFS `/_mdi_icons_<px>.bin`, 399 built in, one PSRAM raw cache; icon + text fonts unpack each glyph once (`glyph_cache.c`, P4 512 KB, S3 256, b599); a missing file downloads once from its release; System page Icons card.
 - `-fno-exceptions` (-300 KiB per image), unused LVGL widgets off, Admin CSS minified. LVGL 9.6.0 (lvgl#10306, caches `hometiles-lvgl96-*`).
-- Perf (released): nav preload (S3 max 3 grids), shadow/circle caches, P4 CPU rotation for small areas, S3 PCLK 12 MHz.
+- Perf (released): nav preload (S3 max 3 grids), S3 PCLK 12 MHz.
 - Cards/discs draw rounded fills and frame lines from kept corner masks (`rounded_corners.h`, b594); clock face one object.
 - Pending: artwork, sleep/wake, camera soak, memory minima, fixed screensaver picture slots (b648).
 
@@ -100,7 +101,7 @@ Last reviewed: 2026-10-29
 - Lock/Alarm/Fan (24-26, `src/types/device/`): sealed commands need pairing + Web Admin password; HW ok 2026-10-02.
 - Calendar 27 (PR #127, `docs-dev/calendar.md`): Bridge v0.9.6b1 `events` (`entity_search` 5); V2 HW pending.
 - Sensor graph (#131, mockup sensor-graph-3): pictures (`area_graph.h`), circle-color area fading low, 1 px 8 % lines, labels right; tile 24 h; numeric popup 30D/7D/24H/6H/1H; corners in masks. HW ok b613.
-- Energy: popup Year/Month/Week/Today (Bridge v0.9.6b3); tile mode 2 = today's bars, every 5 min (V2 ok b662); week start: Localization.
+- Energy: popup Year/Month/Week/Today; tile mode 2 = today's bars, every 5 min (V2 ok b662); week start: Localization.
 - Sensor looks (`build/analysis/2026-10-28-analyse.md`): modes 3-14 (`sensor_look.h`, `look_view.cpp`, `admin-look.js`), A8 masks rebuilt on value change; Switch-like menu; b570 HW pending.
 - Rule icons (b574): stop/state colors may carry an MDI icon (`RRGGBB,<icon>`); `tile_rule_icon.h` swaps/restores the glyph (renderers: `set_glyph`), popup head too; Switch & co. own rules b575. HW pending.
 - Switch layouts `sensor_decimals` 0-3, 4-6 upright bar (`bar_orientation.h`; Fan upright = 1; sim ok, HW pending); `command_pacer.h` pacing: reporter test pending (#11).

@@ -38,7 +38,7 @@ function maybeFillTitleFromSwitch(tab) {
     'camera_display', 'camera_fit',
     'camera_head', 'camera_tap', 'switch_orientation', 'fan_orientation', 'sensor_layout', 'sensor_form',
     'sensor_orientation', 'sensor_ring', 'sensor_place', 'sensor_value_font', 'sensor_popup_open_mode',
-    'energy_value_font', 'energy_display_mode', 'energy_popup_open_mode'];
+    'energy_value_font', 'energy_display_mode', 'energy_popup_open_mode', 'weather_graph_day'];
 
   function syncSwitchChoices(tab) {
     for (const field of SWITCH_CHOICE_FIELDS) {

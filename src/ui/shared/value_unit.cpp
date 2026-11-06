@@ -31,7 +31,7 @@ const FontSize kValueFonts[] = {
 #endif
     {&ui_font_16, 16}, {&ui_font_20, 20}, {&ui_font_24, 24}, {&ui_font_28, 28}, {&ui_font_32, 32},
     {&ui_font_40, 40}, {&ui_font_48, 48}, {&ui_font_56, 56}, {&ui_font_64, 64}, {&ui_font_72, 72},
-    {&ui_font_80, 80}, {&ui_font_96, 96},
+    {&ui_font_80, 80}, {&ui_font_96, 96}, {&ui_font_120, 120},
 };
 
 // A unit label carries this tag as its user data, so its value label finds
@@ -111,6 +111,9 @@ const uint8_t* unit_font_sizes(uint8_t& count) {
 const lv_font_t* unit_font(const lv_font_t* value_font) {
   const uint8_t px = px_of(value_font);
   if (!px) return value_font;
+  // The 120 px sensor value keeps the web preview's 80 % ratio as far as a
+  // full text font allows: 72 px. The 80 and 96 px fonts hold digits only.
+  if (px >= 120) return &ui_font_72;
   uint8_t sizes[kTextFontCount];
   for (uint8_t i = 0; i < kTextFontCount; ++i) sizes[i] = kTextFonts[i].px;
   const uint8_t want = unit_px(px, sizes, kTextFontCount);

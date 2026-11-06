@@ -406,6 +406,15 @@
         sensor_display_mode: document.getElementById(prefix + '_weather_colored_icons')?.checked === false ? 1 : 0
       }, iconName, previewIconColor(type, iconRecord, weatherEntity, sensorMetaCache, null, ''));
     }
+    if (previewKind === 'weather_graph' && typeof applyWeatherGraphPreview === 'function') {
+      applyWeatherGraphPreview(tileElem, {
+        sensor_entity: document.getElementById(prefix + '_weather_graph_entity')?.value || '',
+        sensor_display_mode: Number(document.getElementById(prefix + '_weather_graph_day')?.value || 0),
+        title: document.getElementById(prefix + '_tile_title')?.value || '',
+        span_w: tileSpan('span_w'),
+        span_h: tileSpan('span_h')
+      }, sensorMetaCache);
+    }
     if (previewKind === 'media') {
       applyMediaPreview(tileElem, parseMediaPreviewPayload(
         mediaEntity ? (sensorMetaCache.mediaValues?.[mediaEntity] ?? '') : ''), {

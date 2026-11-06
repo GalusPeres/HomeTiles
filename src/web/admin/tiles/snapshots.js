@@ -112,6 +112,16 @@
     if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'weather_entity')) {
       tile.sensor_entity = snapshot.weather_entity || '';
     }
+    if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'weather_graph_entity')) {
+      tile.sensor_entity = snapshot.weather_graph_entity || '';
+    }
+    if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'weather_graph_pair_id')) {
+      const pair = Number(snapshot.weather_graph_pair_id);
+      tile.sensor_gauge_max = Number.isFinite(pair) ? pair : 0;
+    }
+    if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'weather_graph_day')) {
+      tile.sensor_display_mode = String(snapshot.weather_graph_day) === '1' ? 1 : 0;
+    }
     if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'energy_entity')) {
       tile.sensor_entity = snapshot.energy_entity || '';
     }

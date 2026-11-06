@@ -423,6 +423,14 @@ static bool is_popup_visible(SensorPopupContext* ctx) {
 
 static bool apply_decimals(String& value, uint8_t decimals) {
   const char* language = configManager.getConfig().language;
+  // A condition sensor shows a condition: translate it like the Weather tile
+  // does (i18n::weather_condition_label); any other text stays as it is.
+  if (i18n::is_weather_condition(value)) {
+    const String localized = i18n::weather_condition_label(language, value);
+    const bool changed = localized != value;
+    value = localized;
+    return changed;
+  }
   if (decimals == 0xFF) {
     String localized = i18n::localize_numeric_text(language, value);
     const bool changed = localized != value;
@@ -535,7 +543,8 @@ static void apply_editable_icon_color(SensorPopupContext* ctx, const EditableVal
 // reused popup never keeps an old unit.
 static void show_header_value(SensorPopupContext* ctx, const String& value, const String& unit) {
   if (!ctx || !ctx->value_label) return;
-  String shown_unit = value != "--" ? unit : String();
+  String shown_unit =
+      value != "--" ? i18n::unit_label(configManager.getConfig().language, unit) : String();
   shown_unit.trim();
   value_unit::show(ctx->value_label, ctx->value_unit_label, value, shown_unit);
 }
@@ -550,7 +559,7 @@ static void update_value_label(SensorPopupContext* ctx, const String& value, con
   }
   String display_unit = unit;
   display_unit.trim();
-  ctx->unit = display_unit;
+  ctx->unit = i18n::unit_label(configManager.getConfig().language, display_unit);
   ctx->value_fraction_digits =
       categorical_state ? -1 : numeric_fraction_digits(value);
 }
@@ -753,7 +762,7 @@ static void apply_init_to_context(SensorPopupContext* ctx, const SensorPopupInit
                           init.icon_name);
     } else {
       ctx->state_history_value = normalize_state_live_value(ctx->editable_state);
-      if (ctx->editable) ctx->unit = editable_value.unit;
+      if (ctx->editable) ctx->unit = i18n::unit_label(configManager.getConfig().language, editable_value.unit);
       else update_value_label(ctx, init.value, init.unit);
     }
   } else {
@@ -781,7 +790,7 @@ static void apply_init_to_context(SensorPopupContext* ctx, const SensorPopupInit
   } else {
     lv_obj_remove_flag(ctx->value_box, LV_OBJ_FLAG_HIDDEN);
     ctx->history_language = configManager.getConfig().language;
-    ctx->history_unit = init.unit;
+    ctx->history_unit = i18n::unit_label(configManager.getConfig().language, init.unit);
   }
 }
 
@@ -3302,7 +3311,7 @@ static void apply_history_payload(SensorPopupContext* ctx, const char* payload) 
     String unit = String(doc["unit"].as<const char*>());
     unit.trim();
     if (!unit.isEmpty()) {
-      ctx->unit = unit;
+      ctx->unit = i18n::unit_label(configManager.getConfig().language, unit);
     }
   }
 
@@ -4052,7 +4061,8 @@ static bool reusable_sensor_body(const SensorPopupContext* ctx, const SensorPopu
       ctx->state_history_mode != (init.editable || init.binary_mode || init.state_history_mode) ||
       ctx->history_range != SensorHistoryRange::Day24 ||
       ctx->history_language != configManager.getConfig().language ||
-      ctx->decimals != init.decimals || ctx->history_unit != init.unit) return false;
+      ctx->decimals != init.decimals ||
+      ctx->history_unit != i18n::unit_label(configManager.getConfig().language, init.unit)) return false;
   return !init.editable || (ctx->history_loaded &&
       ctx->history_kind == parse_editable_value(haBridgeConfig.findEditableValue(init.entity_id)).kind);
 }
@@ -4298,7 +4308,7 @@ void process_sensor_popup_queue() {
       ctx->editable_state = value.state; ctx->editable_kind = value.kind;
       ctx->editable_available = value.available;
       if (value.last_changed) prepend_state_history_activity(ctx, value.last_changed, 2, value.available ? value.state : String("unavailable"));
-      ctx->unit = value.unit;
+      ctx->unit = i18n::unit_label(configManager.getConfig().language, value.unit);
       if (kind_changed) { layout_editable_history(ctx); request_history_for_context(ctx); }
       else schedule_state_history_refresh(ctx);
     }

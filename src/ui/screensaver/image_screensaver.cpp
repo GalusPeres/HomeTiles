@@ -47,6 +47,7 @@
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/core/config/tile_radius.h"
+#include "src/types/tile_type_policy.h"
 
 namespace {
 
@@ -1288,6 +1289,9 @@ void rebuild_global_clock(ScreensaverState* st) {
   widget_config.weekday_language = configManager.getConfig().language;
   widget_config.fill_parent = false;
   widget_config.text_shadow = config.clock_shadow;
+  // One row: the time beside the date, so the overlay fits the top edge.
+  widget_config.horizontal = config.clock_single_line;
+  widget_config.one_line = config.clock_single_line;
   widget_config.time_font_size = config.time_font_size;
   widget_config.date_font_size = config.date_font_size;
   widget_config.time_alignment = config.time_alignment;
@@ -1516,6 +1520,11 @@ void refresh_slot_values(ScreensaverState* st) {
       st->slot_payloads[i] = payload;
       queue_binary_sensor_tile_update(
           GridType::SCREENSAVER, static_cast<uint8_t>(i), payload.c_str());
+    } else if (tile.type == TILE_WEATHER_GRAPH) {
+      if (payload == st->slot_payloads[i]) continue;
+      st->slot_payloads[i] = payload;
+      queue_weather_tile_update(GridType::SCREENSAVER, static_cast<uint8_t>(i),
+                                payload.c_str());
     }
   }
   process_sensor_update_queue();
@@ -1523,6 +1532,7 @@ void refresh_slot_values(ScreensaverState* st) {
   process_cover_update_queue();
   process_binary_sensor_update_queue();
   process_media_update_queue();
+  process_weather_update_queue();
 }
 
 // Apply the global shadow option to existing screensaver tiles so a
@@ -1563,6 +1573,14 @@ void apply_slot_tile_borders(ScreensaverState* st) {
   }
 }
 
+// A tap on a screensaver tile that has no action of its own (tile_type_policy.h
+// tileTypeScreensaverTapIsInert) leaves the screensaver, exactly like a tap on
+// the wallpaper (on_global_screensaver_clicked).
+static void on_inert_slot_tile_clicked(lv_event_t* e) {
+  (void)e;
+  hide_image_screensaver();
+}
+
 // One slot card as the screensaver shows it: see-through background, veiled
 // circles and controls; the caller adds the global shadow and border.
 lv_obj_t* build_slot_tile(ScreensaverState* st, size_t i, const Tile& tile) {
@@ -1584,6 +1602,12 @@ lv_obj_t* build_slot_tile(ScreensaverState* st, size_t i, const Tile& tile) {
     tile_icon_source::refresh_controls(tile_obj);
   }
   lv_obj_remove_flag(tile_obj, LV_OBJ_FLAG_EVENT_BUBBLE);
+  // These tiles carry no tap action on the screensaver (their popup is
+  // disabled here), so without this the touch would land on nothing: a tap on
+  // them leaves the screensaver like a tap on the wallpaper does.
+  if (tileTypeScreensaverTapIsInert(tile.type)) {
+    lv_obj_add_event_cb(tile_obj, on_inert_slot_tile_clicked, LV_EVENT_CLICKED, nullptr);
+  }
   return tile_obj;
 }
 
@@ -1604,6 +1628,7 @@ void rebuild_slot_grid(ScreensaverState* st) {
   reset_cover_widgets(GridType::SCREENSAVER);
   reset_binary_sensor_widgets(GridType::SCREENSAVER);
   reset_media_widgets(GridType::SCREENSAVER);
+  reset_weather_widgets(GridType::SCREENSAVER);
   if (st->slot_grid) {
     // Keep the transparent full-screen container. Deleting it would invalidate
     // the entire underlying image and could redraw the wallpaper through the
@@ -1718,6 +1743,7 @@ bool update_slot_grid(ScreensaverState* st) {
     reset_cover_widget(GridType::SCREENSAVER, slot);
     reset_binary_sensor_widget(GridType::SCREENSAVER, slot);
     reset_media_widget(GridType::SCREENSAVER, slot);
+    reset_weather_widget(GridType::SCREENSAVER, slot);
     st->slot_payloads[i] = String();
     st->slot_units[i] = String();
     st->slot_rule_payloads[i] = String();
@@ -1915,6 +1941,7 @@ void on_global_overlay_delete(lv_event_t* e) {
     reset_cover_widgets(GridType::SCREENSAVER);
     reset_binary_sensor_widgets(GridType::SCREENSAVER);
     reset_media_widgets(GridType::SCREENSAVER);
+  reset_weather_widgets(GridType::SCREENSAVER);
     g_state = nullptr;
     restore_configured_display_brightness();
   }
@@ -2116,6 +2143,7 @@ void hide_image_screensaver() {
   reset_cover_widgets(GridType::SCREENSAVER);
   reset_binary_sensor_widgets(GridType::SCREENSAVER);
   reset_media_widgets(GridType::SCREENSAVER);
+  reset_weather_widgets(GridType::SCREENSAVER);
   if (st->timer) {
     lv_timer_delete(st->timer);
     st->timer = nullptr;

@@ -103,12 +103,15 @@
 
   function getScreensaverClockPreviewDate(d) {
     if (!d) return '';
-    const weekdayNames = getClockPreviewLanguage().toLowerCase().startsWith('de')
-      ? ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
-      : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    // The weekday comes from the same central table as the Clock tile's
+    // preview (CLOCK_I18N, the panel's language): every language, not only
+    // German and English.
+    const weekdayNames = typeof CLOCK_I18N === 'object' && CLOCK_I18N ? CLOCK_I18N.weekdays : null;
+    const weekday = weekdayNames && weekdayNames[new Date().getDay()]
+      ? weekdayNames[new Date().getDay()] : '';
     let text = d.show_date ? getClockPreviewDate(d.date_format) : '';
     if (d.show_weekday) {
-      text = weekdayNames[new Date().getDay()] + (text ? ', ' + text : '');
+      text = weekday + (text ? ', ' + text : '');
     }
     return text;
   }
@@ -219,6 +222,7 @@
       show_date: !!d.show_date,
       show_weekday: !!d.show_weekday,
       clock_shadow: !!d.clock_shadow,
+      clock_single_line: !!d.clock_single_line,
       time_format: Number(d.time_format || 0),
       date_format: Number(d.date_format || 0),
       time_alignment: ssClockAlignment(d.time_alignment),
@@ -468,6 +472,13 @@
     applyClockLine(date, place.date_font_size, 28, 8);
     date.style.marginTop = !time.hidden && !date.hidden
       ? devicePx('--screensaver-clock-gap', 6) * scale + 'px' : '0px';
+    // One line: the time beside the date, like the panel's row layout
+    // (ClockWidgetConfig.horizontal, image_screensaver.cpp).
+    clock.style.flexDirection = 'row';
+    clock.style.alignItems = 'baseline';
+    clock.style.gap = devicePx('--screensaver-clock-gap', 6) * scale + 'px';
+    clock.style.display = d.clock_single_line ? 'flex' : '';
+    if (d.clock_single_line) date.style.marginTop = '0px';
     setClockDigits(time, getClockPreviewTime(d.time_format));
     setClockDigits(date, getScreensaverClockPreviewDate(d));
     time.style.width = 'auto';
@@ -499,6 +510,7 @@
     document.getElementById('screensaverShowDate').checked = !!d.show_date;
     document.getElementById('screensaverShowWeekday').checked = !!d.show_weekday;
     document.getElementById('screensaverClockShadow').checked = !!d.clock_shadow;
+  document.getElementById('screensaverClockSingleLine').checked = !!d.clock_single_line;
     document.getElementById('screensaverTimeFont').value = String(d.time_font_size || 48);
     document.getElementById('screensaverDateFont').value = String(d.date_font_size || 28);
     document.getElementById('screensaverTimeAlignment').value = String(ssClockAlignment(d.time_alignment));
@@ -668,6 +680,7 @@
     bind('screensaverShowDate', 'change', el => { screensaverDraft.show_date = el.checked; });
     bind('screensaverShowWeekday', 'change', el => { screensaverDraft.show_weekday = el.checked; });
     bind('screensaverClockShadow', 'change', el => { screensaverDraft.clock_shadow = el.checked; });
+  bind('screensaverClockSingleLine', 'change', el => { screensaverDraft.clock_single_line = el.checked; });
     bind('screensaverTimeFont', 'change', el => {
       screensaverDraft.time_font_size = ssNearestClockFont(el.value, false);
     });

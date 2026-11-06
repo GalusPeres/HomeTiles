@@ -147,6 +147,46 @@ inline const lv_font_t* content_font_40() {
 #endif
 }
 
+inline const lv_font_t* content_font_48() {
+#if defined(DEVICE_LAYOUT_1024X600)
+  return &ui_font_40;
+#elif defined(DEVICE_LAYOUT_480X480)
+  return &ui_font_40;
+#else
+  return &ui_font_48;
+#endif
+}
+
+inline const lv_font_t* content_font_80() {
+#if defined(DEVICE_LAYOUT_1024X600)
+  return &ui_font_64;
+#elif defined(DEVICE_LAYOUT_480X480)
+  return &ui_font_80;
+#else
+  return &ui_font_80;
+#endif
+}
+
+inline const lv_font_t* content_font_96() {
+#if defined(DEVICE_LAYOUT_1024X600)
+  return &ui_font_80;
+#elif defined(DEVICE_LAYOUT_480X480)
+  return &ui_font_96;
+#else
+  return &ui_font_96;
+#endif
+}
+
+inline const lv_font_t* content_font_120() {
+#if defined(DEVICE_LAYOUT_1024X600)
+  return &ui_font_96;
+#elif defined(DEVICE_LAYOUT_480X480)
+  return &ui_font_120;
+#else
+  return &ui_font_120;
+#endif
+}
+
 inline const lv_font_t* value_font_for_choice(uint8_t choice, const lv_font_t* fallback) {
   switch (choice) {
     case 1: return content_font_20();
@@ -154,6 +194,10 @@ inline const lv_font_t* value_font_for_choice(uint8_t choice, const lv_font_t* f
     case 3: return content_font_32();
     case 4: return content_font_40();
     case 5: return content_font_28();
+    case 6: return content_font_48();
+    case 7: return content_font_80();
+    case 8: return content_font_96();
+    case 9: return content_font_120();
     default: return fallback;
   }
 }

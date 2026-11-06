@@ -1908,6 +1908,9 @@
       line-height:1;
     }
     .tile-value.sensor-value-size-default { font-size:var(--fs28, 14px); }
+    .tile-value.sensor-value-size-96 { font-size:var(--sensor-value-fs-96, 48px); }
+    .tile-value.sensor-value-size-120 { font-size:var(--sensor-value-fs-120, 60px); }
+    .tile-value.sensor-value-size-80 { font-size:var(--fs80, 40px); }
     .tile-value.sensor-value-size-40 { font-size:var(--fs40, 20px); }
     .tile-value.sensor-value-size-32 { font-size:var(--fs32, 16px); }
     .tile-value.tile-editable-value { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -1917,6 +1920,12 @@
        like the weather forecast (user 2026-10-26; value_unit_rules.h: 80 %,
        a thin gap, the digits' tops meeting). */
     .tile-unit { color:inherit; font-size:.8em; line-height:1; margin-left:.17em; vertical-align:.18em; }
+    /* Weather graph tile preview (types/weather/graph_admin.js). */
+    .tile-weather-graph { position:absolute; left:6%; right:6%; top:17%; bottom:7%; color:var(--pv-text, #fff); }
+    .tile-weather-graph svg { display:block; width:100%; height:100%; overflow:visible; }
+    .tile-weather-graph .weather-graph-empty {
+      display:flex; align-items:center; justify-content:center; height:100%; opacity:.7;
+    }
     .tile.binary_sensor,
     .tile.number,
     .tile.select,

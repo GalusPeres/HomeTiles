@@ -293,6 +293,8 @@ struct ClockTileData {
   const char* weekday_language = nullptr;
   bool fill_parent = false;
   bool horizontal = false;
+  // The screensaver's one-line clock shares the width of the longer line.
+  bool one_line = false;
   lv_obj_t* stack = nullptr;
   lv_obj_t* time_label = nullptr;
   lv_obj_t* date_label = nullptr;
@@ -302,7 +304,9 @@ struct ClockTileData {
 };
 
 static void apply_clock_line_alignment(ClockTileData* data) {
-  if (!data || data->fill_parent || data->horizontal) return;
+  // Half-height clock tiles keep their natural widths (their sizes were fitted
+  // to the tile); the screensaver's one line shares them like the Web preview.
+  if (!data || data->fill_parent || (data->horizontal && !data->one_line)) return;
   lv_coord_t width = 0;
   if (data->time_label) width = max(width, data->time_shadows.text_width);
   if (data->date_label) width = max(width, data->date_shadows.text_width);
@@ -649,6 +653,7 @@ lv_obj_t* create_clock_widget(lv_obj_t* parent,
   data->weekday_language = config.weekday_language;
   data->fill_parent = config.fill_parent;
   data->horizontal = config.horizontal;
+  data->one_line = config.one_line;
   data->stack = stack;
   data->time_label = time_label;
   data->date_label = date_label;

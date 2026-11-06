@@ -36,6 +36,15 @@ has('src/ui/shared/value_unit.cpp',
   'lv_obj_set_user_data(unit_label, const_cast<char*>(&kUnitTag));');
 // Units take text fonts only (the larger ones serve numbers and clocks).
 assert.match(read('src/ui/shared/value_unit.cpp'), /const FontSize kTextFonts\[\] = \{[\s\S]*?\{&ui_font_32, 32\},\s*\};/);
+// The 120 px value font must be in the value table: px_of() otherwise
+// returns 0 and unit_font() falls back to the 120 digits-only font, so a
+// unit such as "°C" becomes two missing-glyph boxes (user 2026-11-03).
+assert.match(read('src/ui/shared/value_unit.cpp'),
+  /const FontSize kValueFonts\[\] = \{[\s\S]*?\{&ui_font_120, 120\},\s*\};/);
+// The 120 px value's unit uses the largest full text font (72 px): larger
+// digit fonts (80/96) have no unit glyphs, and a 32 px unit nearly vanished
+// beside the digits (user 2026-11-03).
+assert.match(read('src/ui/shared/value_unit.cpp'), /if \(px >= 120\) return &ui_font_72;/);
 
 // Tiles: one place sets the sensor and energy tiles' values (also compact,
 // graph and gauge); the power flow values; every tile header state line

@@ -43,6 +43,8 @@ void set_tile_grid_cell(lv_obj_t* obj, uint8_t col, uint8_t row, uint8_t span_w,
 SensorTileWidgets* tile_renderer_get_sensor_widgets(GridType grid_type);
 SwitchTileWidgets* tile_renderer_get_switch_widgets(GridType grid_type);
 WeatherTileWidgets* tile_renderer_get_weather_widgets(GridType grid_type);
+struct WeatherGraphWidgets;
+WeatherGraphWidgets* tile_renderer_get_weather_graph_widgets(GridType grid_type);
 MediaTileWidgets* tile_renderer_get_media_widgets(GridType grid_type);
 SwitchState* tile_renderer_get_switch_states(GridType grid_type);
 ClimateTileWidgets* tile_renderer_get_climate_widgets(GridType grid_type);

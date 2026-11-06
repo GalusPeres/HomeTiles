@@ -762,10 +762,11 @@ void update_weather_graph_tile_state(GridType grid_type, uint8_t grid_index,
   if (!widgets.chart || !widgets.series) return;
   const uint32_t hash = fnv1a(payload);
   if (widgets.last_hash == hash) return;
-  widgets.last_hash = hash;
-
   const Tile* tile = tile_renderer_get_tile_config(grid_type, grid_index);
+  // Consume the hash only when the draw can run: a tile lookup that fails
+  // during a grid rebuild must not swallow the payload (the next call redraws).
   if (!tile) return;
+  widgets.last_hash = hash;
   GraphData data;
   parse_graph_data(String(payload), data);
   const char* entity_id = tile->sensor_entity.c_str();

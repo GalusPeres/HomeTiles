@@ -56,6 +56,11 @@ static bool g_tiles_reload_requested[3] = {false, false, false};
 static bool g_tiles_reload_only_if_loaded[3] = {true, true, true};
 static bool g_tiles_release_requested[3] = {false, false, false};
 static bool g_tiles_icon_refresh_requested = false;
+// A weather payload arrived while the panel slept or before its grid was
+// built: it is in the entity cache but was never queued for drawing
+// (tiles_update_weather_by_entity); tiles_replay_deferred_updates() replays
+// the cached states of the loaded grids as soon as the panel is awake.
+static bool g_weather_replay_pending = false;
 static uint32_t g_tiles_icon_generation = 1;
 
 static constexpr uint16_t kInvalidFolderId = 0xFFFF;
@@ -1610,6 +1615,21 @@ void tiles_refresh_visible_from_cache() {
   process_media_update_queue();
 }
 
+// Draws the weather payloads that only reached the entity cache (the panel
+// slept, or the grid did not exist yet). Called from
+// process_tile_update_queues(), so everything queued here is drained in the
+// same pass of the main loop.
+void tiles_replay_deferred_updates() {
+  if (!g_weather_replay_pending) return;
+  if (powerManager.isInSleep()) return;
+  g_weather_replay_pending = false;
+  for (uint8_t i = 0; i < 3; ++i) {
+    if (!g_tiles_loaded[i]) continue;
+    const GridType grid_type = static_cast<GridType>(i);
+    apply_cached_states(grid_type, getGridConfig(grid_type));
+  }
+}
+
 void tiles_request_visible_cache_refresh() {
   g_visible_cache_refresh_requested = true;
 }
@@ -3031,9 +3051,14 @@ void tiles_update_weather_by_entity(GridType grid_type, const char* entity_id, c
   if (!entity_id || !payload) return;
 
   const bool changed = cache_entity_payload(entity_id, payload);
-  // During sleep, cache only the latest state; leave UI queues empty.
-  if (powerManager.isInSleep()) return;
-  if (!tiles_is_loaded(grid_type)) return;
+  // During sleep, cache only the latest state; leave UI queues empty. The same
+  // before the grid exists. Remember it: a payload that only reaches the cache
+  // leaves its tiles stale until the grid is rebuilt (the Web Admin reads the
+  // cache and shows the value, the panel keeps its old drawing).
+  if (powerManager.isInSleep() || !tiles_is_loaded(grid_type)) {
+    g_weather_replay_pending = true;
+    return;
+  }
 
   const TileGridConfig& config = getGridConfig(grid_type);
 

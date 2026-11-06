@@ -279,4 +279,24 @@ assert.match(merged.host.innerHTML, />3°</, 'hist wins the past duplicate at ho
 assert.match(merged.host.innerHTML, />16°</, 'forecast wins the future duplicate at hour 12');
 assert.match(merged.host.innerHTML, /#3d8bfd/, 'hist rain colors the band');
 
+// A payload that only reaches the entity cache (the panel slept, or the grid
+// did not exist yet) must be replayed: the Web Admin reads the cache and shows
+// it, while the panel kept its old drawing until the grid was rebuilt (user
+// 2026-11-06: "Завтра" showed "--" in the panel and the value in the Web
+// Admin until the day toggle rebuilt the tile).
+const tabs = read('src/ui/tabs/tiles/tab_tiles_unified.cpp');
+assert.match(tabs, /static bool g_weather_replay_pending = false;/);
+assert.match(tabs,
+  /if \(powerManager\.isInSleep\(\) \|\| !tiles_is_loaded\(grid_type\)\) \{\s*g_weather_replay_pending = true;\s*return;\s*\}/,
+  'the skipped update is remembered');
+assert.match(tabs, /void tiles_replay_deferred_updates\(\) \{[\s\S]{0,400}apply_cached_states\(grid_type, getGridConfig\(grid_type\)\);/,
+  'the replay runs from the cached states');
+assert.match(read('src/tiles/runtime/tile_update_service.h'),
+  /tiles_replay_deferred_updates\(\);\s*\/\/ First the states|tiles_replay_deferred_updates\(\);\s*process_sensor_update_queue/,
+  'the main loop replays before it drains the queues');
+// The graph consumes its payload hash only when the draw can run.
+assert.match(renderer,
+  /if \(widgets\.last_hash == hash\) return;\s*const Tile\* tile = tile_renderer_get_tile_config\(grid_type, grid_index\);[\s\S]{0,200}?widgets\.last_hash = hash;/,
+  'a failed tile lookup does not swallow the payload');
+
 console.log('Weather graph tile: type, pair, renderer, routes and Web Admin contract');

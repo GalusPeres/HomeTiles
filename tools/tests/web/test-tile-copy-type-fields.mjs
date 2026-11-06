@@ -21,13 +21,17 @@ function form(values) {
 const camera = readRepoFile('src/types/camera/admin.js');
 const constants = camera.slice(camera.indexOf('const CAMERA_FITS'), camera.indexOf('function cameraEvery'));
 const cameraFunctions = ['cameraEvery', 'cameraTransparency', 'cameraPictureOptionsOf', 'cameraPictureOptions',
-  'saveCameraFields', 'loadCameraFields'].map(extractDeliveredFunction).join('\n');
+  'saveCameraFields', 'loadCameraFields', 'cameraEditor', 'cameraText', 'cameraSourceOfKind', 'cameraFnv1a', 'cameraHex', 'cameraCoordinates',
+  'cameraHundredths', 'cameraHttpsAddress', 'cameraEntryEntity', 'cameraEntryField', 'cameraParseRecord', 'cameraValidRows',
+  'cameraRecordOf', 'cameraRowTitle', 'cameraTileIcon', 'cameraSyncTile', 'renderCameraEntries'].map(extractDeliveredFunction).join('\n');
 const copied = form({t_camera_entity: 'camera.door', t_camera_display: '1', t_camera_fit: 'original',
   t_camera_every: '25', t_camera_transparency: '40', t_camera_head: 'dark', t_camera_tap: '1'});
 const sent = new Map();
 const cameraContext = vm.createContext({
-  document: copied, Number, String, Math, Array,
-  loadIconColorFields() {}, saveIconColorFields() {}, syncCameraFields() {}, maybeFillTitleFromEntity() {},
+  document: copied, Number, String, Math, Array, TextEncoder,
+  CAMERA_MAX_ENTRIES: 8, CAMERA_PLACE_KINDS: ['r', 'c'], cameraEditors: new Map(), sensorMetaCache: {names: {}},
+  titleFromEntity: entity => entity, normalizeTileTitle: title => title,
+  loadIconColorFields() {}, saveIconColorFields() {}, syncCameraFields() {},
 });
 vm.runInContext(constants + cameraFunctions, cameraContext);
 cameraContext.saveCameraFields('t', {append: (key, value) => sent.set(key, value)});
@@ -44,7 +48,7 @@ assert.deepEqual(['camera_entity', 'camera_display', 'camera_fit', 'camera_every
 const stored = {sensor_entity: 'camera.door', sensor_display_mode: 1, sensor_decimals: 1, image_slideshow_sec: 20,
   key_code: 30, key_modifier: 1 | 2};
 assert.deepEqual({...cameraContext.cameraPictureOptionsOf(stored)},
-  {picture: true, fit: 'fit', every: 20, transparency: 30, head: 'light', tap: '1'});
+  {picture: true, fit: 'fit', every: 20, transparency: 30, head: 'light', tap: '1', shows: ''});
 
 // --- Pixel animation ------------------------------------------------------------------------------
 const animation = readRepoFile('src/types/pixelanim/admin.js');

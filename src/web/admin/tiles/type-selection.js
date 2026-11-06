@@ -183,6 +183,9 @@
         delete element.dataset.typeAuto;
       }
     };
+    // A Camera tile's titles and icons belong to its entries.
+    document.getElementById(tab + '_tile_title')?.closest?.('.tile-head-row')
+      ?.classList?.toggle('hidden', !!fields?.id?.endsWith('_camera_fields'));
     typeAuto(document.getElementById(tab + '_tile_title_auto'), 'autoTitle', fields?.dataset.autoTitle || '');
     typeAuto(document.getElementById(tab + '_tile_icon'), 'autoIcon', fields?.dataset.autoIcon || '');
     if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons(tab);

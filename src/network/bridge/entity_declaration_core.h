@@ -19,6 +19,8 @@ constexpr size_t kMaxEntities = 300;    // entity_search.py MAX_PANEL_ENTITIES
 constexpr size_t kMaxEntityLength = 255;
 // {"v":4294967295,"p":7,"n":8,"lists":{ ... ]},"own":true,"web_auth":false}
 constexpr size_t kPartEnvelope = 80;
+constexpr size_t kMaxSources = 32;  // camera_sources.py MAX_PANEL_SOURCES
+constexpr size_t kMaxSourceBytes = 700;
 
 // A Home Assistant entity id: letters, digits and '_' around one '.'.
 // Anything else names no entity, and none of these characters needs JSON
@@ -85,6 +87,26 @@ class Declaration {
     ++count_;
   }
 
+  // A camera the Bridge provides (camera_entries::source_json), once per id.
+  void addSource(const std::string& id, const std::string& json) {
+    if (json.empty() || json.size() > kMaxSourceBytes) {
+      if (!json.empty()) ++dropped_;
+      return;
+    }
+    for (const Source& known : sources_) {
+      if (known.id == id) return;
+    }
+    if (sources_.size() >= kMaxSources) {
+      ++dropped_;
+      return;
+    }
+    sources_.push_back(Source{id, json});
+  }
+
+  // The radar's emergency address from the System page as a JSON string with
+  // its quotes ("": the Bridge's default).
+  void setRadarSource(const std::string& json_string) { radar_source_ = json_string; }
+
   size_t count() const { return count_; }
   size_t dropped() const { return dropped_; }
 
@@ -96,15 +118,18 @@ class Declaration {
       const uint32_t list_hash = fnv1a("|", fnv1a(item.name));
       for (const std::string& id : item.ids) sum += fnv1a(id.c_str(), list_hash);
     }
+    const uint32_t source_hash = fnv1a("src|");
+    for (const Source& source : sources_) sum += fnv1a(source.json.c_str(), source_hash);
+    if (!radar_source_.empty()) sum += fnv1a(radar_source_.c_str(), fnv1a("rs|"));
     return sum;
   }
 
-  // {"v":version,"p":part,"n":parts,"lists":{list:[entity ids]},"own":true,
-  // "web_auth":bool} in parts of at most kMaxPartBytes; what does not fit
-  // kMaxParts parts is left out and counted in `dropped`. "own" tells the
-  // Bridge that the declaration names everything the panel uses, so it gets
-  // its own entry's releases and these entities instead of every panel's
-  // releases.
+  // {"v":version,"p":part,"n":parts,"lists":{list:[entity ids]},"src":[...],
+  // "rs":"address","own":true,"web_auth":bool} in parts of at most
+  // kMaxPartBytes; what does not fit kMaxParts parts is left out and counted
+  // in `dropped`. "own" tells the Bridge that the declaration names everything
+  // the panel uses, so it gets its own entry's releases and these entities
+  // instead of every panel's releases. "src" and "rs" only when there are any.
   std::vector<std::string> parts(uint32_t version, bool web_auth, size_t* dropped) const {
     std::vector<std::string> lists(1);  // the "lists" object content of each part
     const char* open = nullptr;         // the list whose array is open in the last part
@@ -137,11 +162,41 @@ class Declaration {
       }
     }
     if (open) lists.back() += ']';
+    // The Bridge's own cameras after the lists; "extras" is what follows each
+    // part's lists.
+    std::vector<std::string> extras(lists.size());
+    const auto fits = [&](size_t index, size_t cost) {
+      return lists[index].size() + extras[index].size() + cost + kPartEnvelope + 8 <= kMaxPartBytes;
+    };
+    for (const Source& source : sources_) {
+      if (!fits(extras.size() - 1, source.json.size())) {
+        if (lists.size() == kMaxParts) {
+          if (dropped) ++*dropped;
+          continue;
+        }
+        if (!extras.back().empty()) extras.back() += ']';
+        lists.emplace_back();
+        extras.emplace_back();
+      }
+      std::string& extra = extras.back();
+      extra += extra.empty() ? ",\"src\":[" : ",";
+      extra += source.json;
+    }
+    if (!extras.back().empty()) extras.back() += ']';
+    if (!radar_source_.empty()) {
+      const std::string field = ",\"rs\":" + radar_source_;
+      if (!fits(extras.size() - 1, field.size()) && lists.size() < kMaxParts) {
+        lists.emplace_back();
+        extras.emplace_back();
+      }
+      if (fits(extras.size() - 1, field.size())) extras.back() += field;
+      else if (dropped) ++*dropped;
+    }
     std::vector<std::string> parts;
     for (size_t i = 0; i < lists.size(); ++i) {
       std::string part = "{\"v\":" + std::to_string(version) + ",\"p\":" + std::to_string(i) +
-                         ",\"n\":" + std::to_string(lists.size()) + ",\"lists\":{" + lists[i] +
-                         "},\"own\":true,\"web_auth\":" + (web_auth ? "true" : "false") + "}";
+                         ",\"n\":" + std::to_string(lists.size()) + ",\"lists\":{" + lists[i] + "}" + extras[i] +
+                         ",\"own\":true,\"web_auth\":" + (web_auth ? "true" : "false") + "}";
       parts.push_back(part);
     }
     return parts;
@@ -152,7 +207,13 @@ class Declaration {
     const char* name;  // a picker list name with static storage
     std::vector<std::string> ids;
   };
+  struct Source {
+    std::string id;
+    std::string json;
+  };
   std::vector<List> lists_;
+  std::vector<Source> sources_;
+  std::string radar_source_;  // a JSON string with its quotes
   size_t count_ = 0;
   size_t dropped_ = 0;
 };

@@ -2,8 +2,8 @@
 
 Developer reference for pictures the HomeTiles Bridge renders for linked
 panels: media covers, the screensaver picture (issue #69) and the Camera
-tile's picture (#50: webcams, vacuum maps, QR codes), also of the Bridge's rain radar
-camera (`rain_radar.py`, nothing to set up). Only panels on the
+tile's picture (#50: webcams, vacuum maps, QR codes), also of the Bridge's own cameras
+(`camera_sources.py`: rain radar places and webcams a panel declares). Only panels on the
 direct link (`bridge-link.md`) get them; panels on MQTT keep the cover
 embedded in the media state and the screensaver on its SD slideshow.
 

@@ -2090,6 +2090,22 @@ data-dhcp-note=")html";
 </div>
 )html";
   }
+  // The rain radar's emergency address: for the whole Bridge, so not at a tile
+  // (types/camera/admin.js saves it as it changes).
+  html += R"html(
+<div class="settings-section" id="radar_source_section">
+<div class="section-title">)html";
+  html += tr.camera_radar_source;
+  html += R"html(</div>
+<input type="url" id="radar_source" spellcheck="false" autocomplete="off" maxlength=")html";
+  html += String(CONFIG_RADAR_SOURCE_MAX - 1);
+  html += R"html(" placeholder=")html";
+  appendHtmlEscaped(html, tr.camera_radar_source_default);
+  html += R"html(" value=")html";
+  appendHtmlEscaped(html, cfg.radar_source);
+  html += R"html(">
+</div>
+)html";
   html += R"html(
 <div class="settings-section">
 <div class="section-title">)html";

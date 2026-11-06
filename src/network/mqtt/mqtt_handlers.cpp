@@ -1586,7 +1586,8 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
       if (slot.rule_entity[0]) add_route(String(slot.rule_entity), -1, "state");
       // Weather temperature/humidity sensors, one entity per line (a
       // Vacuum's chosen map comes as a picture, not as a state).
-      for (const char* extra = slot.type == TILE_VACUUM ? "" : slot.extra_entities; *extra;) {
+      // A Camera tile's record holds its entries, no states to follow.
+      for (const char* extra = slot.type == TILE_VACUUM || slot.type == TILE_CAMERA ? "" : slot.extra_entities; *extra;) {
         const char* end = strchr(extra, '\n');
         const size_t length = end ? static_cast<size_t>(end - extra) : strlen(extra);
         if (length) add_route(String(extra).substring(0, length), -1, "state");
@@ -3439,19 +3440,22 @@ void mqttPublishCameraCommand(const char* entity_id, const char* command,
   }
 
   const char* action = (command && *command) ? command : "open";
-  char payload[384];
+  char payload[408];
   if (strcmp(action, "open") == 0) {
     const camera_transport::Request transport = camera_transport::request();
     char quality[24];
     camera_quality_field(quality, sizeof(quality));
+    // "box": a still camera's frames take their own shape within it.
     snprintf(payload, sizeof(payload),
              "{\"entity_id\":\"%s\",\"command\":\"%s\","
-             "\"width\":%u,\"height\":%u,\"fps\":%u,"
+             "\"width\":%u,\"height\":%u,\"box\":[%u,%u],\"fps\":%u,"
              "\"chunk\":%u,\"window\":%u%s%s,"
              "\"transport\":\"tcp-ack-v1\",\"protocol_version\":1}",
              entity_id, action,
              camera_geometry::kWidth,
              camera_geometry::kHeight,
+             camera_geometry::kWidth,
+             camera_geometry::kBoxHeight,
              fps ? fps : camera_geometry::kFps,
              static_cast<unsigned>(transport.chunk_bytes),
              static_cast<unsigned>(transport.window), quality, camera_audio_field());

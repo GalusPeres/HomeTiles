@@ -78,7 +78,7 @@ struct FS {bool exists(const String&p){return files.count(p)||directories.count(
  return {p,{},0,files.count(p)>0,false};
  }} filesystem;
 FS& storageFS(){return filesystem;}bool storageReady(){return ready;}
-constexpr size_t TILES_PER_GRID=4;enum TileType{TILE_EMPTY=0,TILE_SENSOR=1,TILE_WEATHER=12,TILE_POWER_FLOW=28,TILE_VACUUM=29};
+constexpr size_t TILES_PER_GRID=4;enum TileType{TILE_EMPTY=0,TILE_SENSOR=1,TILE_WEATHER=12,TILE_CAMERA=18,TILE_POWER_FLOW=28,TILE_VACUUM=29};
 const char*kTitlePathDir="/_tile_titles",*kImagePathDir="/_tile_images",*kEntityPathDir="/_tile_entities",*kIconColorPathDir="/_tile_icon_colors",*kWeatherSensorPathDir="/_tile_weather_sensors",*kFlowEntityPathDir="/_tile_flow_entities";
 bool g_sidecar_index_built=false;std::vector<uint32_t> g_title_sidecar_keys,g_image_sidecar_keys,g_entity_sidecar_keys,g_icon_color_sidecar_keys,g_weather_sensor_sidecar_keys,g_flow_entity_sidecar_keys;
 using PsString=std::string;struct SidecarText{uint32_t key;PsString text;};using SidecarTexts=std::vector<SidecarText>;
@@ -87,12 +87,13 @@ struct SidecarTextsGuard{SidecarTextsGuard(){}~SidecarTextsGuard(){}};
 struct Tile {TileType type=TILE_EMPTY;uint8_t key_code=0;String flow_entities;};
 struct TileGridConfig{Tile tiles[TILES_PER_GRID];};
 static constexpr size_t kWeatherSensorEntityMax = 128;
+#include "${path.join(root, 'src/types/camera/camera_entries.h').replaceAll('\\', '/')}"
 ` + fnIn(header, 'normalizeWeatherSensorEntity') +
   '\nstatic constexpr size_t kFlowEntityLinesMax = 12;\n' +
   ['tileKeepsFlowEntities', 'normalizeFlowEntities', 'flowEntityAt'].map(name => fnIn(header, name)).join('\n') +
   '\nstatic constexpr uint8_t kFlowHeaderBit = 0x01;\nstatic constexpr uint8_t kFlowNoCardBit = 0x02;\n' +
   fnIn(header, 'powerFlowOption') +
-  '\nstatic constexpr size_t kFlowEntityRecordMax = kFlowEntityLinesMax * kWeatherSensorEntityMax;\n' +
+  '\nstatic constexpr size_t kFlowEntityRecordMax = camera_entries::kMaxRecord;\n' +
 ['sidecarKey', 'sidecarKeyPresent', 'sidecarKeyAdd', 'sidecarTextCached', 'sidecarTextStore', 'sidecarTextForget', 'sidecarTextsFor',
  'sidecarKeyRemove', 'scanSidecarDir', 'ensureSidecarIndexBuilt', 'tmpPathFor', 'backupPathFor', 'replaceFileWithPreparedTmp',
  'flowEntityPathFile', 'readFlowEntitiesSd', 'writeFlowEntitiesSd', 'applyFlowEntitiesFromSd'].map(fn).join('\n') + String.raw`
@@ -116,6 +117,9 @@ int main(){
  t=flow(" camera.robo_map \nsensor.x");t.type=TILE_VACUUM;normalizeFlowEntities(t);assert(t.flow_entities=="camera.robo_map");
  t=flow("image.floor_1");t.type=TILE_VACUUM;normalizeFlowEntities(t);assert(t.flow_entities=="image.floor_1");
  t=flow("sensor.robo_map");t.type=TILE_VACUUM;normalizeFlowEntities(t);assert(t.flow_entities.empty());
+ // A Camera tile's entries take the same way; what names nothing goes.
+ t=flow("w\thttps://x.example/a.jpg\t\t\tx.example\tx.example\nq\tbad\nh\tsensor.x");t.type=TILE_CAMERA;normalizeFlowEntities(t);
+ assert(t.flow_entities=="w\thttps://x.example/a.jpg\t\t\tx.example\tx.example");
  // Options: only Power flow tiles read their key_code bits.
  t=flow("");t.key_code=kFlowNoCardBit;assert(powerFlowOption(t,kFlowNoCardBit)&&!powerFlowOption(t,kFlowHeaderBit));
  t.type=TILE_SENSOR;assert(!powerFlowOption(t,kFlowNoCardBit));
@@ -157,7 +161,7 @@ int main(){
  assert(writeFlowEntitiesSd(6,2,"sensor.pv\nsensor.grid"));fail_write=true;
  assert(!writeFlowEntitiesSd(6,2,"sensor.pv2\nsensor.grid"));fail_write=false;
  assert(readFlowEntitiesSd(6,2,record)&&record=="sensor.pv\nsensor.grid");
- assert(!writeFlowEntitiesSd(6,2,String(2000,'x')));ready=false;assert(!writeFlowEntitiesSd(6,2,"sensor.a\n"));
+ assert(!writeFlowEntitiesSd(6,2,String(5000,'x')));ready=false;assert(!writeFlowEntitiesSd(6,2,"sensor.a\n"));
  std::cout<<"Power flow sidecar: normalize, options, save/reboot, no-op, clear, other types, recovery and failed writes passed\n";
 }
 `;

@@ -519,6 +519,11 @@ void WebAdminServer::handleGetTiles() {
       appendJsonEscaped(out, tile.flow_entities);
       out += "\"";
     }
+    if (tile.type == TILE_CAMERA) {
+      out += ",\"camera_entries\":\"";
+      appendJsonEscaped(out, tile.flow_entities);
+      out += "\"";
+    }
     if (tile.type == TILE_VACUUM) {
       out += ",\"vacuum_map\":\"";
       appendJsonEscaped(out, tile.flow_entities);
@@ -1575,6 +1580,32 @@ void WebAdminServer::handleStartEntitySearch() {
   json += "}";
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", json);
+}
+
+// How the Bridge's webcams fare, as the Bridge told it (entity_search.h).
+void WebAdminServer::handleGetCameraSources() {
+  webAdminMarkActivity();
+  server.sendHeader("Cache-Control", "no-store");
+  const String& status = entity_search::sourceStatus();
+  server.send(200, "application/json", status.length() ? status : String("{\"src\":{}}"));
+}
+
+// The rain radar's emergency address (System page): https only, empty for the
+// Bridge's default. The Bridge gets it with the next declaration.
+void WebAdminServer::handleSaveRadarSource() {
+  webAdminMarkActivity();
+  String url = server.arg("url");
+  url.trim();
+  if (url.length() && (url.length() >= CONFIG_RADAR_SOURCE_MAX || !camera_entries::https_address(url.c_str()))) {
+    server.send(400, "application/json", "{\"success\":false}");
+    return;
+  }
+  if (!configManager.saveRadarSource(url)) {
+    server.send(500, "application/json", "{\"success\":false}");
+    return;
+  }
+  entity_search::scheduleTilesReport();
+  server.send(200, "application/json", "{\"success\":true}");
 }
 
 void WebAdminServer::handleGetEntitySearch() {

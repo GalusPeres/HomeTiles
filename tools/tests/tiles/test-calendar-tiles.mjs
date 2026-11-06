@@ -130,7 +130,7 @@ for (const name of ['loadCalendarFields', 'saveCalendarFields', 'resetCalendarFi
   extractDeliveredFunction(name);
 }
 assert.match(read('src/web/admin/tiles/entity-picker.js'), /\['remote'\], \['calendar'\], \['vacuum'\]\s*\];/);
-assert.match(read('src/web/admin/tiles/entity-picker.js'), /'energy', 'scenes', 'calendars', 'vacuums'\]\);/);
+assert.match(read('src/web/admin/tiles/entity-picker.js'), /'energy', 'scenes', 'calendars', 'vacuums', 'places'\]\);/);
 assert.match(read('src/web/admin/tiles/import-export.js'), /\} else if \(safeType === 27\) \{/);
 assert.match(read('src/web/admin/tiles/snapshots.js'), /if \(Number\(tile\.type\) === 27 && snapshot\) \{/);
 // The preview's styles (lost once in a merge): the shared Sensor header and the

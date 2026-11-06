@@ -134,7 +134,8 @@
       tile.sensor_decimals = Math.max(0, CAMERA_FITS.indexOf(String(snapshot.camera_fit)));
       tile.image_slideshow_sec = cameraEvery(snapshot.camera_every);
       tile.key_code = cameraTransparency(snapshot.camera_transparency);
-      tile.key_modifier = cameraOptionFlags({head: snapshot.camera_head, tap: snapshot.camera_tap});
+      tile.key_modifier = cameraOptionFlags({head: snapshot.camera_head, tap: snapshot.camera_tap, shows: snapshot.camera_shows});
+      tile.camera_entries = snapshot.camera_entries || '';
     }
     for (const kind of ['lock', 'alarm', 'fan', 'vacuum']) {
       if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, kind + '_entity')) tile.sensor_entity = snapshot[kind + '_entity'] || '';

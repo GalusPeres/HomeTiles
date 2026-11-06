@@ -21,7 +21,7 @@
   // Lists the Bridge searches (entity_search.py LIST_DOMAINS).
   const ENTITY_REMOTE_LISTS = new Set(['sensors', 'binary_sensors', 'numbers', 'selects', 'datetimes',
     'weathers', 'switches', 'media', 'climates', 'covers', 'cameras', 'images', 'locks', 'alarm_panels', 'fans',
-    'energy', 'scenes', 'calendars', 'vacuums']);
+    'energy', 'scenes', 'calendars', 'vacuums', 'places']);
   const ENTITY_REMOTE_DELAY_MS = 250;
   const ENTITY_REMOTE_POLL_MS = 120;
   const ENTITY_REMOTE_TIMEOUT_MS = 5000;
@@ -117,7 +117,8 @@
       label: entityPickerShortName(name, item.d),
       icon: normalizeMdiIconName(item.i || ''),
       entity: value,
-      context: entityPickerContext(item.a, item.d),
+      // A town of the radar's place search: its region and country.
+      context: value.startsWith('geo:') ? [item.a, item.d].filter(Boolean).join(', ') : entityPickerContext(item.a, item.d),
       remote: true
     };
     if (value) entityRemoteInfo.set(value, entry);
@@ -544,6 +545,8 @@
     const tabs = entityPickerPopover?.querySelector('.entity-picker-tabs');
     const open = entityPickerOpen;
     if (!tabs || !open) return;
+    // The radar's places have no Recent or Favorites.
+    tabs.style.display = open.input.dataset.entityPicker === 'places' ? 'none' : '';
     tabs.innerHTML = ENTITY_PICKER_TABS.map(([tab, icon, label]) =>
       '<button type="button" class="icon-picker-choice entity-picker-tab' + (open.tab === tab ? ' selected' : '') +
       '" role="tab" aria-selected="' + (open.tab === tab ? 'true' : 'false') + '" data-tab="' + tab + '">' +
@@ -561,7 +564,7 @@
     // All waits for the Bridge; Recent and Favorites show their rows at once.
     const all = open.tab === 'all';
     // Without a Web Admin password the Bridge finds only released entities.
-    if (foot) foot.hidden = !(open.remote === 'ready' && !open.full);
+    if (foot) foot.hidden = !(open.remote === 'ready' && !open.full) || open.input.dataset.entityPicker === 'places';
     // Nothing of the Bridge's list is there yet: the list waits at full size
     // instead of showing the panel's short list first and then growing.
     const waiting = all && entityPickerBelowWaits();
@@ -591,7 +594,7 @@
     const current = open.input.value;
     const line = '<div class="entity-picker-divider" role="separator"></div>';
     list.innerHTML = rows.map((entry, index) => {
-      const kind = entityKindLabel(entry.entity);
+      const kind = (typeof cameraPickerKind === 'function' && cameraPickerKind(entry)) || entityKindLabel(entry.entity);
       return (index && index === rows.split ? line : '') +
         '<div class="entity-picker-item' + (index === open.active ? ' active' : '') +
         (entry.value === current ? ' selected' : '') + '" role="option" aria-selected="' +
@@ -611,6 +614,8 @@
     if (!open) return;
     const apply = data => {
       open.local = entityPickerEntries(data, open.input.dataset.entityPicker);
+      // A radar place by hand (types/camera/admin.js).
+      if (open.input.dataset.entityPicker === 'places') open.local = [cameraOwnCoordinatesEntry()];
       open.state = 'ready';
       // Without own entities the list opens on All.
       if (!open.local.length && !open.tabChosen) open.tab = 'all';
@@ -692,7 +697,8 @@
     entityPickerPopover.querySelector('.entity-picker-foot span').textContent = t('entityPickerReleased');
     entityPickerPopover.querySelector('.entity-picker-password').textContent = t('webAuthSet');
     entityPickerOpen = { input, local: [], entries: [], query: '', active: 0, state: 'loading',
-      remote: null, full: false, more: false, offset: 0, paging: false, tab: 'favorites', tabChosen: false };
+      remote: null, full: false, more: false, offset: 0, paging: false,
+      tab: input.dataset.entityPicker === 'places' ? 'all' : 'favorites', tabChosen: false };
     const field = entityPickerControl(input)?.querySelector('.entity-picker-field');
     field?.classList.add('open');
     field?.setAttribute('aria-expanded', 'true');

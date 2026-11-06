@@ -26,7 +26,6 @@ const fields = {
   'src/types/media/web_html.cpp': ['"media_entity"', '"media"'],
   'src/types/climate/web_html.cpp': ['"climate_entity"', '"climates"'],
   'src/types/cover/web_html.cpp': ['"cover_entity"', '"covers"'],
-  'src/types/camera/web_html.cpp': ['"camera_entity"', '"images"'],
   'src/types/scene/web_html.cpp': ['"scene_alias"', '"scenes"'],
   'src/types/device/web.cpp': ['"locks"', '"alarm_panels"', '"fans"']
 };

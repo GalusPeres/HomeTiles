@@ -5,8 +5,14 @@
 
 // full_screen (#65): frames in the panel's own size and orientation, decoded
 // straight into the framebuffer (Device::displayBeginFullFrames first).
+// width, height: the popup's frames as the Bridge announced them, at most
+// camera_geometry::kWidth x kBoxHeight (0: 16:9, kWidth x kHeight).
 bool camera_stream_start(const char* url, uint32_t corner_rgb,
-                         bool full_screen = false);
+                         bool full_screen = false, uint16_t width = 0, uint16_t height = 0);
+// A still camera's newest JPEG for the popup's next opening: while wanted a copy
+// now and then (the first frame at once), taken over by the UI (free() it).
+void camera_stream_keep_jpeg(bool keep);
+bool camera_stream_take_kept_jpeg(uint8_t*& jpeg, size_t& bytes);
 void camera_stream_stop();
 void camera_stream_process_ui(lv_obj_t* image,
                               lv_obj_t* placeholder,

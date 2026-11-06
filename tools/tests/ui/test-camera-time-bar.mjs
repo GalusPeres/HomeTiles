@@ -1,6 +1,8 @@
-// The camera popup with a history (the Bridge's rain radar, Bridge rain_radar.py):
-// a time bar with Play and dragging like the Media popup's, the frames stay in
-// the Bridge. No FPS line under a picture; "Live" or the picture's time in the head.
+// The camera popup (mockup build/design-mockups/webcam-radar/radar-tall.html): the
+// picture whole in its area, the bottom row with Play, the time bar with its times
+// under it like the Media popup's and the "..." menu of the tile's other entries.
+// The frames stay in the Bridge. No FPS line under a picture; "Live" or "Synced
+// 15:00" in the head.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -10,6 +12,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8').replaceAll('\r\n', '\n');
 const popup = read('src/ui/popups/camera/camera_popup.cpp');
 const stream = read('src/video/camera_stream.cpp');
+const geometry = read('src/video/camera_geometry.h');
 const mqtt = read('src/network/mqtt/mqtt_handlers.cpp');
 const strings = read('src/core/i18n/i18n.cpp');
 const header = read('src/core/i18n/i18n.h');
@@ -25,63 +28,114 @@ assert.doesNotMatch(popup, /kStatusTop/);
 assert.doesNotMatch(popup, /full_button|"fullscreen"/);
 assert.match(popup, /lv_obj_add_event_cb\(video, video_event_cb, LV_EVENT_CLICKED, ctx\)/);
 
-// Every language has both new texts, in the place of the old one.
-assert.match(header, /const char\* camera_live;[^\n]*\n\s*const char\* camera_now;[^\n]*\n\s*const char\* camera_minutes_ago_fmt;/);
-for (const texts of [['Live', 'Jetzt', 'vor %u Min'], ['Live', 'Now', '%u min ago'],
-                     ['En direct', 'Maintenant', 'il y a %u min'], ['Na żywo', 'Teraz', '%u min temu'],
-                     ['Živě', 'Teď', 'před %u min'], ['En directo', 'Ahora', 'hace %u min'],
-                     ['Naživo', 'Teraz', 'pred %u min'], ['В эфире', 'Сейчас', '%u мин назад']]) {
-  assert.ok(strings.includes(texts.map(text => `"${text}",`).join('\n    ')), texts.join(' / '));
+// The head (user 2026-11-06): "Synced" and the newest picture's time in every language.
+assert.match(header, /const char\* camera_live;[^\n]*\n\s*const char\* camera_synced_fmt;/);
+assert.doesNotMatch(header, /camera_now|camera_minutes_ago_fmt/);
+for (const text of ['Synchronisiert %s', 'Synced %s', 'Synchronisé %s', 'Zsynchronizowano %s', 'Synchronizováno %s',
+                    'Sincronizado %s', 'Synchronizované %s', 'Синхронизировано %s']) {
+  assert.ok(strings.includes(`"${text}",`), text);
 }
-assert.doesNotMatch(strings, /"As of %s"|"Stand %s"/);
+assert.doesNotMatch(strings, /"As of %s"|"Stand %s"|%u min ago|vor %u Min"/);
+// The type's name in every language, its id unchanged.
+for (const text of ['Kamera / Bild', 'Camera / Picture', 'Caméra / Image', 'Kamera / Obraz', 'Kamera / Obrázek',
+                    'Cámara / Imagen', 'Kamera / Obrázok', 'Камера / Изображение']) {
+  assert.ok(strings.includes(`"${text}",`), text);
+}
 
-// The head's second line goes through the shell, like the Media popup's state.
+// The head's second line goes through the shell, like the Media popup's state; also
+// with a single picture, and it stays while dragging: only the newest time counts.
 assert.match(popup, /show_popup_shell\(g_camera_popup->overlay,[^;]*g_camera_popup->value_label\);/);
 assert.match(popup, /show_popup_shell\(ctx->overlay,[^;]*ctx->value_label\);/);
-assert.match(popup, /snprintf\(text, sizeof\(text\), camera_text\(\)\.camera_minutes_ago_fmt, static_cast<unsigned>\(minutes\)\)/);
-assert.match(popup, /snprintf\(text, sizeof\(text\), "%s", camera_text\(\)\.camera_now\)/);
+assert.match(popup, /snprintf\(text, sizeof\(text\), camera_text\(\)\.camera_synced_fmt, when\)/);
 assert.match(popup, /snprintf\(text, sizeof\(text\), "%s", camera_text\(\)\.camera_live\)/);
+assert.match(popup, /show_head_text\(ctx, ctx->frame_count \? ctx->frame_times\[ctx->frame_count - 1\] : 0\);/);
 
-// The status stays in the picture's area and shows only if the first frame
-// takes long; over a running picture only an error or a message that must stay.
+// The status stays in the picture's area and shows only if the first frame takes
+// long; over a running or a kept picture only an error or a message that must stay.
 assert.match(popup, /ctx->status = lv_label_create\(video\)/);
 assert.match(popup, /set_shown\(g_camera_popup->status, \(no_frame && waited\) \|\| g_camera_popup->status_sticky \|\|\s*camera_stream_status_is_error\(\)\)/);
+assert.match(popup, /const bool waited = !g_camera_popup->kept_dsc && millis\(\) - g_camera_popup->opened_ms >= kStatusDelayMs;/);
 // No "Preparing stream" for a picture that comes at once.
 assert.match(popup, /lv_label_set_text\(g_camera_popup->placeholder, ""\);/);
 assert.match(popup, /if \(no_frame && waited && !lv_label_get_text\(g_camera_popup->placeholder\)\[0\]\)/);
 assert.match(popup, /\[Camera\] First frame shown %u ms after the opening/);
 assert.match(stream, /bool camera_stream_status_is_error\(\) \{ return false; \}/);
 
-// The bar as in the Media popup: its constants, the times under it on the edges.
-for (const name of ['kSeekHeight', 'kSeekKnob', 'kTimeGap', 'kEdge', 'kButton']) {
+// The picture's area: one edge under the head to one edge above the bottom row.
+assert.match(geometry, /kAreaTop = media_popup_layout::kHeadTop \+ media_popup_layout::kDisc \+ media_popup_layout::kEdge;/);
+assert.match(geometry, /kAreaBottom = media_popup_layout::kVolumeTop - media_popup_layout::kEdge;/);
+const layouts = { V2: { edge: 28, head: 28, disc: 72, card: 800, button: 78, box: [752, 538], top: 128, row: 694 },
+                  S3: { edge: 16, head: 16, disc: 48, card: 480, button: 52, box: [448, 316], top: 80, row: 412 } };
+for (const [name, m] of Object.entries(layouts)) {
+  assert.equal(m.head + m.disc + m.edge, m.top, name);
+  assert.equal(m.card - m.edge - m.button, m.row, name);
+  assert.equal(m.row - m.edge - m.top, m.box[1], name);
+}
+assert.match(popup, /lv_obj_align\(ctx->video, LV_ALIGN_TOP_MID, 0, kAreaTop \+ \(area - ctx->frame_h\) \/ 2 - popup_layout::kCardPad\);/);
+assert.match(popup, /const bool row = ctx->frame_count >= 2 \|\| ctx->entries\.size\(\) >= 2;/);
+
+// The stream takes the frame's own size within the box.
+assert.match(mqtt, /\\"box\\":\[%u,%u\]/);
+assert.match(popup, /camera_stream_start\(url\.c_str\(\), ctx->surface_color, full, ctx->frame_w, ctx->frame_h\)/);
+assert.match(popup, /width <= camera_geometry::kWidth && width % 8 == 0 &&\s*height >= 16 && height <= camera_geometry::kBoxHeight && height % 2 == 0;/);
+assert.match(stream, /picture_info\.width != g_frame_w \|\| picture_info\.height != g_frame_h/);
+assert.match(stream, /area\.x1, area\.y1, g_frame_w, g_frame_h, frame_stride\(\),/);
+assert.match(stream, /constexpr uint16_t kDecodedHeight = camera_geometry::kBoxDecodedHeight;/);
+
+// The bottom row: Play left, the bar from the Media popup's constants, the times
+// under it at its ends, the menu in the Media popup's corner, the bar gives way.
+for (const name of ['kSeekHeight', 'kSeekKnob', 'kEdge', 'kButton']) {
   assert.match(popup, new RegExp(`ml::${name}`), name);
 }
-assert.match(popup, /const int time_top = mid \+ ml::kSeekHeight \/ 2 \+ ml::kTimeGap;/);
-assert.match(popup, /lv_obj_set_pos\(ctx->time_shown, ml::kEdge, time_top\)/);
-assert.match(popup, /lv_obj_align\(ctx->time_newest, LV_ALIGN_TOP_RIGHT, -ml::kEdge, time_top\)/);
+assert.match(popup, /constexpr int kBarLeft = ml::kEdge \+ ml::kButton \+ kBarGap;/);
+assert.match(popup, /constexpr int kBarGap = popup_layout::scale\(22\);/);
+assert.match(popup, /const int knob_top = kButtonTop \+ \(ml::kButton - \(ml::kSeekKnob \+ kBarTimeGap \+ line\)\) \/ 2;/);
+assert.match(popup, /lv_obj_set_pos\(ctx->time_shown, kBarLeft, time_top\)/);
+assert.match(popup, /lv_obj_set_pos\(ctx->play_button, ml::kEdge, kButtonTop\)/);
+assert.match(popup, /lv_obj_set_pos\(ctx->menu_button, popup_layout::kCardWidth - ml::kEdge - ml::kButton, kButtonTop\)/);
+assert.match(popup, /control_button\(ctx->root, "dots-horizontal", &ctx->menu_label\)/);
+assert.match(popup, /const int bar_right = popup_layout::kCardWidth - ml::kEdge - \(many \? ml::kButton \+ kBarGap : 0\);/);
 assert.match(popup, /const lv_color_t fill = lv_color_hex\(tinted \? icon_color : ui_theme::icon\(\)\)/);
 assert.match(popup, /popup_shell_control_fill\(ctx->surface_color, icon_color, control, control_opa, &tinted\)/);
+// Play in the circle's color with the icon role.
+assert.match(popup, /lv_obj_set_style_bg_color\(ctx->play_button, control, 0\);/);
+assert.match(popup, /lv_obj_set_style_text_color\(ctx->play_label, lv_color_hex\(ui_theme::icon\(\)\), 0\);/);
 
-// The same space from the picture to the knob as from the digits to the buttons.
-const line = { V2: 24, S3: 17 };
-const ml = { V2: { top: 128, h: 424, button: 694, knob: 26, seek: 10, gap: 14 },
-             S3: { top: 80, h: 252, button: 412, knob: 17, seek: 7, gap: 9 } };
-for (const name of ['V2', 'S3']) {
-  const m = ml[name];
-  const mid = Math.trunc((m.button + m.top + m.h + Math.trunc(m.knob / 2) - Math.trunc(m.seek / 2) - m.gap -
-                          Math.trunc(line[name] * 4 / 5)) / 2);
-  const above = mid - Math.trunc(m.knob / 2) - (m.top + m.h);
-  const below = m.button - (mid + Math.trunc(m.seek / 2) + m.gap + Math.trunc(line[name] * 4 / 5));
-  assert.ok(Math.abs(above - below) <= 2, `${name}: ${above} above, ${below} below`);
-  assert.ok(below > 0, `${name}: the times stay clear of the buttons`);
-}
-assert.match(popup, /const int mid = \(kButtonTop \+ kVideoTopWithBar \+ kVideoHeight \+ ml::kSeekKnob \/ 2 - ml::kSeekHeight \/ 2 -\s*ml::kTimeGap - line \* 4 \/ 5\) \/ 2;/);
+// The menu as the Media popup's: only as high as its entries, a selected row in the
+// control fill, the picture stands under it (the P4 writes frames straight to the
+// panel), a tap beside it closes it; rows are never deleted from their own click.
+assert.match(popup, /const int top = kButtonTop - gap - list_height - gap - ml::kButton - pad;/);
+assert.match(popup, /constexpr size_t kMenuRowsShown = 5;/);
+assert.match(popup, /i == ctx->entry_index \? control_opa : LV_OPA_TRANSP/);
+assert.match(popup, /if \(g_camera_popup->menu_open\) \{\s*\} else/);
+assert.doesNotMatch(popup.slice(popup.indexOf('static void menu_row_event_cb'), popup.indexOf('static void menu_shield_event_cb')), /lv_obj_clean|lv_obj_delete/);
+assert.match(popup, /lv_label_set_text\(ctx->menu_title, kind == camera_entries::kWebcam\s*\? text\.camera_source_webcam/);
+// Switching: the other entity's stream, the old one closed, the tile told.
+const entry = popup.slice(popup.indexOf('static void open_entry'), popup.indexOf('static void menu_row_event_cb'));
+assert.match(entry, /mqttPublishCameraCommand\(ctx->entity_id\.c_str\(\), "close"\)/);
+assert.match(entry, /camera_stream_stop\(\);/);
+assert.match(entry, /show_kept_picture\(ctx\)/);
+assert.match(entry, /open_popup_stream\(ctx\);/);
+assert.match(entry, /if \(ctx->remember_key\) camera_tile_entry_chosen\(ctx->remember_key, index\);/);
 
-// The panel keeps no frames: it knows the times and asks for one.
+// The last picture: per entity, a few JPEGs, shown at once, gone with the first
+// frame, kept only for a still camera on its newest picture and never per frame.
+assert.match(popup, /constexpr size_t kKeptPictures = 4;/);
+assert.match(popup, /ctx->keeping = !full && !ctx->live_kind;/);
+assert.match(popup, /if \(!no_frame\) hide_kept_picture\(g_camera_popup\);/);
+assert.match(popup, /camera_stream_keep_jpeg\(g_camera_popup->keeping && !g_camera_popup->full && !g_camera_popup->playing &&/);
+assert.match(stream, /constexpr uint32_t kKeepEveryMs = 5000;/);
+assert.match(stream, /if \(g_keep_copied && now - g_keep_copied_ms < kKeepEveryMs\) return;/);
+
+// The panel keeps no history: it knows the times and asks for one.
 assert.match(popup, /uint32_t frame_times\[kMaxFrames\]/);
-assert.doesNotMatch(popup, /frame_jpeg|frame_cache/);
+assert.match(popup, /constexpr uint8_t kMaxFrames = 150;/);
+assert.doesNotMatch(popup, /frame_cache/);
 assert.match(popup, /mqttPublishCameraFrame\(ctx->entity_id\.c_str\(\), newest \? 0 : ctx->frame_times\[ctx->shown_frame\]\)/);
 assert.match(mqtt, /\\"command\\":\\"frame\\",\\"time\\":%lu/);
+// A long history comes as minutes after the first (camera_sources.py frames_payload).
+assert.match(popup, /doc\["frames_min"\]/);
+assert.match(popup, /base \+ item\.as<uint32_t>\(\) \* 60/);
 
 // At most one request per kFrameSendMs: while dragging only the newest position.
 assert.match(popup, /if \(!ctx->frame_dirty \|\| now - ctx->frame_sent_ms < kFrameSendMs\) return;/);
@@ -91,14 +145,15 @@ assert.match(popup, /if \(!lv_slider_is_dragged\(ctx->bar\)\)/);
 assert.match(popup, /code != LV_EVENT_RELEASED && code != LV_EVENT_PRESS_LOST/);
 
 // Dragging ends Play; Play moves at once and runs in a loop, staying a little
-// longer on the newest picture.
+// longer on the newest picture; a day of pictures goes in larger steps.
 const event = popup.slice(popup.indexOf('static void bar_event_cb'), popup.indexOf('static void play_event_cb'));
 assert.match(event, /set_playing\(ctx, false\)/);
 const play = popup.slice(popup.indexOf('static void play_event_cb'), popup.indexOf('static void full_touch_event_cb'));
 assert.match(play, /set_playing\(ctx, true\);\s*play_step\(ctx\);/);
 const step = popup.slice(popup.indexOf('static void play_step'), popup.indexOf('static void process_time_bar'));
-assert.match(step, /ctx->shown_frame \+ 1 >= ctx->frame_count \? 0 : ctx->shown_frame \+ 1/);
-assert.match(step, /\? kPlayHoldMs : kPlayStepMs/);
+assert.match(step, /if \(ctx->shown_frame >= last\) ctx->shown_frame = 0;/);
+assert.match(step, /last - ctx->shown_frame < step \? last : ctx->shown_frame \+ step/);
+assert.match(step, /ctx->shown_frame >= last \? kPlayHoldMs : long_history \? kPlayLongStepMs : kPlayStepMs/);
 
 // The full screen has no controls: a history plays by itself there, both when
 // it opens and when the frames arrive later; leaving it ends Play.
@@ -109,12 +164,11 @@ assert.equal(popup.match(/ctx->full = false;\n  set_playing\(ctx, false\);/g).le
 assert.match(popup, /if \(g_camera_popup->shown_frame \+ 1 < g_camera_popup->frame_count\) g_camera_popup->frame_dirty = true;/);
 assert.match(popup, /if \(ctx->frame_times\[i\] <= shown_time\) ctx->shown_frame = i;/);
 
-// An older Bridge sends no times: no bar, no Play, the plain layout.
+// An older Bridge sends no times: no bar, no Play.
 assert.match(popup, /const bool shown = ctx->frame_count >= 2;/);
-assert.match(popup, /if \(has_history != g_camera_popup->with_bar\) apply_layout\(g_camera_popup, has_history\);/);
 
 // The Bridge's new frames are not an answer: a pending request keeps its timeout.
 const handler = popup.slice(popup.indexOf('void camera_popup_handle_mqtt_status'));
 assert.ok(handler.indexOf('"frames") == 0') < handler.indexOf('waiting_for_bridge = false'));
 
-console.log('Camera time bar: PASS');
+console.log('Camera popup: PASS');

@@ -16,17 +16,17 @@ Last reviewed: 2026-10-29
 - Pairing by IP, no mDNS (#114, Bridge #16): `GET /api/link`.
 - Test builds stay `v0.6.12bNNN` (System Update offers releases); beta define in `firmware_version.h`.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build (warm: only repo headers changed, same LVGL config hash).
-- Docs CI: Chrome for Testing 154.0.8037.57; dispatch docs (`main`) after a release.
+- Docs CI: Chrome for Testing 154.0.8037.57; dispatch docs after a release.
 - Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need icons on HomeTiles-staging (tag = FW_VERSION).
 
 ## Active work
 
 - Vacuum tile 29 (#50, `src/types/vacuum/`), Bridge level 6; V2 HW ok, others pending.
-- Rain radar: Bridge camera (`rain_radar.py`), time bar b664; HW pending.
-- Power flow tile 28 ("Leistungsfluss", `src/types/power_flow/`, picture 65): nodes in `/_tile_flow_entities`, options in key_code, node tap = Sensor popup; V2 HW ok b542; smooth lines/dots b568.
+- Camera tile "Kamera / Bild" (b665, `camera_entries.h`, mockup `radar-tall.html`): one source per tile, entries in `/_tile_flow_entities`; Bridge v0.9.8b5 makes one `camera.ht_*` per thing. "Zuletzt gewählt" RAM only (decided). HA/HW pending.
+- Power flow tile 28 ("Leistungsfluss", `src/types/power_flow/`, picture 65): nodes in `/_tile_flow_entities`, options in key_code, node tap = Sensor popup; V2 HW ok.
 - Media popup: layouts `sensor_display_mode` 0 cover left, 1 centre; controls only with their HA feature bit; menu box: speakers, source, library; tile/head icon state form (`state_icon.h`).
 - #116 (JC4880 camera popup ends after 18-60 min): Bridge waits 45 s per chunk ACK; reporter pending.
-- Issue #119 (Guition V1): own Helix (b501, `src/audio/helix_mp3`): the core's overran on MPEG-2.5; TLS in PSRAM. Speaker audio from the Bridge (`docs-dev/audio-stream.md`): FFmpeg -> mono PCM over the camera tcp-ack listener (`HTAUD/1`); panels announce `"stream":"tcp-ack-v1"`. HW ok. Camera sound: lip-synced live track (b507 HW ok, b508 even gaps HW pending).
+- Issue #119 (Guition V1): own Helix (b501, `src/audio/helix_mp3`), TLS in PSRAM. Speaker audio from the Bridge (`docs-dev/audio-stream.md`): FFmpeg -> mono PCM over the camera tcp-ack listener (`HTAUD/1`); panels announce `"stream":"tcp-ack-v1"`. HW ok. Camera sound: lip-synced live track (b507 HW ok, b508 even gaps HW pending).
 - Voice: mic/wake word off on a new panel (b500), listening its own setting, the word stays; Bridge v0.9.4b6 Listening switch. HW/HA test pending. Mic button + audio settings: mockup first; #91 declined.
 
 ## Do not retry (rejected with evidence)
@@ -52,7 +52,7 @@ Last reviewed: 2026-10-29
 - JC1060 V2 rotation pair 0/2 (b478, #108); `test-rotation-profiles` checks every profile.
 - P4 v3 images (post_v3 301-399): WS 10.1 (PR #48, v3.2 ok), WS 7B `_rev3` (#41; 30 s Wi-Fi join, PR #120), JC8012 V3 = V2 code (#44), WS 4.3/8 `_rev3` (#135/#140); HW pending.
 - New in v0.9.3, HW pending by the reporters: GS-T3E v2 (#93, S3, relays GPIO45/46/44 at once), Waveshare 5-inch (#76, HX8394, own `dsi_driver`, pre-v3 + `_rev3`).
-- Voice (b477) HW ok 2026-10-16 on V2, Tab5, 8-inch, 4B; per-board `kVolumeLimit` (Guition 0.6, Tab5 0.9); none on S3 and JC1060 V1.
+- Voice (b477) HW ok on V2, Tab5, 8-inch, 4B; per-board `kVolumeLimit` (Guition 0.6, Tab5 0.9); none on S3 and JC1060 V1.
 
 ## P4 network, issues #37/#38
 
@@ -69,15 +69,15 @@ Last reviewed: 2026-10-29
 - S3 mallocs > 32 B prefer PSRAM (b324): internal free 42 -> ~89 KB, text-heavy steps slower. Open: S3 Web Admin pages block the loop 1-6 s.
 - Icon file: all 7447 MDI icons in LittleFS `/_mdi_icons_<px>.bin`, 399 built in, one PSRAM raw cache; icon + text fonts unpack each glyph once (`glyph_cache.c`, P4 512 KB, S3 256, b599); a missing file downloads once from its release; System page Icons card.
 - `-fno-exceptions` (-300 KiB per image), unused LVGL widgets off, Admin CSS minified. LVGL 9.6.0 (lvgl#10306, caches `hometiles-lvgl96-*`).
-- Perf (released): nav preload (S3 max 3 grids), S3 PCLK 12 MHz.
-- Cards/discs draw rounded fills and frame lines from kept corner masks (`rounded_corners.h`, b594); clock face one object.
+- Perf: nav preload (S3 max 3 grids), S3 PCLK 12 MHz.
+- Cards/discs draw rounded fills and frame lines from kept corner masks (`rounded_corners.h`, b594).
 - Pending: artwork, sleep/wake, camera soak, memory minima, fixed screensaver picture slots (b648).
 
 ## Camera
 
 - Stream: one Bridge FFmpeg per camera/size/fps/quality for all panels (lingers 30 s), thinned to the panel's rate before scaling; tcp-ack-v1 with 32 KB chunks x2, 8 KB x1 after a transport error. P4 decodes JPEG in hardware, S3 with tjpgd (~4.5 FPS popup).
 - Full screen (#65): frames in the panel's framebuffer size and turn, HW JPEG straight into the framebuffer, black until the first frame; V2/Tab5 30 FPS HW ok; "(Vollbild)" View targets (`full_targets`).
-- Camera tile with picture (#50, b377) HW pending. Screensaver SD/HA picture (#69) HW ok.
+- Camera tile with picture (#50, b377) HW pending.
 - Local camera: core `src/video/local_camera/`, drivers `sensors/*/`, boards `src/devices/*/local_camera_board.*`, opt-in `local_cam_en`. Window rule (b296): Bridge quarter turn = upright centred strip, no turn = whole image. `lcam_rot` (b387): one value for every layout, the mirror never turns. HW pending on most boards (#56). Open: TEST window `kChunkWindow = 4` (`local_camera_stream_contract.h`).
 
 ## UI decisions (do not reopen)
@@ -98,8 +98,8 @@ Last reviewed: 2026-10-29
 ## Tiles and Bridge contracts
 
 - Editable tiles 21 Number, 22 Select, 23 Date/Time reuse Sensor persistence/popups (`PackedTileV7` unchanged); drafts coalesce 600 ms, sliders publish on release. Open: S3 froze adding Number to an active screensaver.
-- Lock/Alarm/Fan (24-26, `src/types/device/`): sealed commands need pairing + Web Admin password; HW ok 2026-10-02.
-- Calendar 27 (PR #127, `docs-dev/calendar.md`): Bridge v0.9.6b1 `events` (`entity_search` 5); V2 HW pending.
+- Lock/Alarm/Fan (24-26, `src/types/device/`): sealed commands need pairing + Web Admin password; HW ok.
+- Calendar 27 (PR #127, `docs-dev/calendar.md`): Bridge `events` (`entity_search` 5); V2 HW pending.
 - Sensor graph (#131, mockup sensor-graph-3): pictures (`area_graph.h`), circle-color area fading low, 1 px 8 % lines, labels right; tile 24 h; numeric popup 30D/7D/24H/6H/1H; corners in masks. HW ok b613.
 - Energy: popup Year/Month/Week/Today; tile mode 2 = today's bars, every 5 min (V2 ok b662); week start: Localization.
 - Sensor looks (`build/analysis/2026-10-28-analyse.md`): modes 3-14 (`sensor_look.h`, `look_view.cpp`, `admin-look.js`), A8 masks rebuilt on value change; Switch-like menu; b570 HW pending.

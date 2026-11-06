@@ -62,6 +62,7 @@ static bool persisted_config_equal(const DeviceConfig& a,
          a.head_gear == b.head_gear &&
          a.head_clock == b.head_clock &&
          a.head_overview == b.head_overview &&
+         strcmp(a.radar_source, b.radar_source) == 0 &&
          strcmp(a.head_title, b.head_title) == 0 &&
          strcmp(a.head_icon, b.head_icon) == 0 &&
          a.theme == b.theme &&
@@ -394,6 +395,8 @@ bool ConfigManager::load() {
   config.head_gear = prefs.getBool("head_gear", false);
   config.head_clock = prefs.getBool("head_clock", true);
   config.head_overview = prefs.getBool("head_overview", true);
+  config.radar_source[0] = '\0';
+  if (prefs.isKey("radar_source")) prefs.getString("radar_source", config.radar_source, sizeof(config.radar_source));
   config.head_title[0] = '\0';
   config.head_icon[0] = '\0';
   if (prefs.isKey("head_title")) prefs.getString("head_title", config.head_title, sizeof(config.head_title));
@@ -726,6 +729,7 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
   prefs.putBool("head_gear", normalized.head_gear);
   prefs.putBool("head_clock", normalized.head_clock);
   prefs.putBool("head_overview", normalized.head_overview);
+  prefs.putString("radar_source", normalized.radar_source);
   prefs.putString("head_title", normalized.head_title);
   prefs.putString("head_icon", normalized.head_icon);
   prefs.putUChar("theme", normalized.theme);
@@ -984,6 +988,23 @@ bool ConfigManager::saveHomeHead(const String& title, const String& icon) {
   if (!written || !committed) return false;
   memcpy(config.head_title, new_title, sizeof(new_title));
   memcpy(config.head_icon, new_icon, sizeof(new_icon));
+  return true;
+}
+
+bool ConfigManager::saveRadarSource(const String& url) {
+  char value[sizeof(config.radar_source)];
+  copy_utf8(url, value, sizeof(value));
+  if (strcmp(value, config.radar_source) == 0) return true;
+  Device::ScopedStorageWrite storage_write(BatchedNvsWrite::kNeedsDisplayGuard);
+  BatchedNvsWrite::Preferences prefs;
+  if (!prefs.begin(PREF_NAMESPACE, false)) {
+    Serial.println("ConfigManager: Failed to open preferences for the radar source");
+    return false;
+  }
+  const bool written = prefs.putString("radar_source", value) == strlen(value);
+  const bool committed = BatchedNvsWrite::finish(prefs);
+  if (!written || !committed) return false;
+  memcpy(config.radar_source, value, sizeof(value));
   return true;
 }
 

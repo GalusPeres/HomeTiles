@@ -111,7 +111,7 @@ assert.match(body(tab5, 'bool DeviceM5StacksTab5::displayFullFrameInfo('),
 
 // The worker keeps the newest JPEG; the UI loop decodes it in the
 // framebuffer's own byte order and checks the size first.
-assert.match(stream, /return full \? queue_full_frame\(jpeg, jpeg_bytes\) : decode_jpeg_frame\(jpeg, jpeg_bytes\);/);
+assert.match(stream, /if \(full\) return queue_full_frame\(jpeg, jpeg_bytes\);\s*const bool shown = decode_jpeg_frame\(jpeg, jpeg_bytes\);/);
 assert.match(stream, /presented_ok = present_frame\(full, input, jpeg_bytes\);/);
 const process = body(stream, 'static void process_full_frame(');
 assert.match(process, /Device::displayAcquireFullFrame\(frame_bytes\)/);

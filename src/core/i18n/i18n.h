@@ -428,8 +428,34 @@ struct Strings {
   const char* camera_setup_failed;
   const char* camera_input_buffer_full;
   const char* camera_live;              // the head of a running live camera
-  const char* camera_now;               // the head on a history's newest picture
-  const char* camera_minutes_ago_fmt;   // %u = minutes before the newest picture
+  const char* camera_synced_fmt;  // %s = the newest picture's time
+  const char* camera_source_ha;
+  const char* camera_source_radar;
+  const char* camera_source_webcam;
+  const char* camera_list_places;
+  const char* camera_list_webcams;
+  const char* camera_place;
+  const char* camera_address;
+  const char* camera_add_entity;
+  const char* camera_add_place;
+  const char* camera_add_webcam;
+  const char* camera_new_webcam;
+  const char* camera_place_home;
+  const char* camera_kind_zone;
+  const char* camera_own_coordinates;
+  const char* camera_own_coordinates_hint;
+  const char* camera_no_coordinates;
+  const char* camera_latitude;
+  const char* camera_longitude;
+  const char* camera_latitude_range;
+  const char* camera_longitude_range;
+  const char* camera_no_picture_found;
+  const char* camera_tile_group;
+  const char* camera_tile_shows;
+  const char* camera_tile_shows_last;
+  const char* camera_radar_source;
+  const char* camera_radar_source_default;
+  const char* camera_remove;
   const char* camera_mqtt_disconnected;
   const char* camera_mqtt_topic_missing;
   const char* camera_mqtt_queue_full;

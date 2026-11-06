@@ -73,6 +73,8 @@ public:
   void handleGetMdiIcons();
   void handleStartEntitySearch();
   void handleGetEntitySearch();
+  void handleGetCameraSources();
+  void handleSaveRadarSource();
   void handleGetScreensaver();
   void handleSaveScreensaver();
   void handleGetHardwareIo();

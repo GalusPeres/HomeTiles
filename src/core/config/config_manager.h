@@ -21,6 +21,7 @@
 #define CONFIG_MQTT_CLIENT_ID_MAX 64
 #define CONFIG_MQTT_BASE_MAX     32
 #define CONFIG_HA_PREFIX_MAX     48
+#define CONFIG_RADAR_SOURCE_MAX  256
 #define CONFIG_LANG_MAX          8
 #define CONFIG_TIMEZONE_MAX      24
 #define CONFIG_TIMEZONE_RULE_MAX 48
@@ -115,6 +116,8 @@ struct DeviceConfig {
   // 2026-10-13); empty = "Home" in the panel's language and the house.
   char head_title[32];
   char head_icon[32];
+  // The rain radar's emergency list address, sent to the Bridge ("": its default).
+  char radar_source[CONFIG_RADAR_SOURCE_MAX];
   // The UI theme (ui_theme.h): 0 dark, 1 light, 2 automatic (light by day,
   // dark by night, theme_schedule.h). Read at boot; a change applies while
   // running (UIManager::processThemeChange).
@@ -196,6 +199,7 @@ public:
   bool saveHeadOverview(bool enabled);
   // Home's own head title and icon (empty = automatic), stored at once.
   bool saveHomeHead(const String& title, const String& icon);
+  bool saveRadarSource(const String& url);
   bool saveTheme(uint8_t theme);
   bool saveThemeAutoLast(uint8_t theme);
   // True when the rule changed and is stored.

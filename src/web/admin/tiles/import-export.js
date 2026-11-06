@@ -1103,7 +1103,9 @@
       }
     } else if (safeType === 18) {
       fd.append('camera_entity', tile.sensor_entity || tile.camera_entity || '');
+      fd.append('camera_entries', tile.camera_entries || '');
       const picture = cameraPictureOptionsOf(tile);
+      fd.append('camera_shows', picture.shows);
       fd.append('camera_display', picture.picture ? '1' : '0');
       fd.append('camera_fit', picture.fit);
       fd.append('camera_every', String(picture.every));

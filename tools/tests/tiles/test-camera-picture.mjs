@@ -109,7 +109,10 @@ if (output !== null) {
 // ---- Web Admin: the same rule, the fields and their stored values ----
 const names = ['cameraEvery', 'cameraTransparency', 'cameraPictureOptionsOf', 'cameraPictureOptions',
   'syncCameraFields', 'loadCameraFields', 'saveCameraFields', 'resetCameraFields', 'cameraPictureHead',
-  'cameraTitleMetric', 'cameraExtent', 'cameraHeadSurface', 'cameraHeadBackground', 'cameraOptionFlags'];
+  'cameraTitleMetric', 'cameraExtent', 'cameraHeadSurface', 'cameraHeadBackground', 'cameraOptionFlags',
+  'cameraEditor', 'cameraText', 'cameraSourceOfKind', 'cameraFnv1a', 'cameraHex', 'cameraCoordinates',
+  'cameraHundredths', 'cameraHttpsAddress', 'cameraEntryEntity', 'cameraEntryField', 'cameraParseRecord', 'cameraValidRows',
+  'cameraRecordOf', 'cameraRowTitle', 'cameraTileIcon', 'cameraSyncTile', 'renderCameraEntries'];
 const elements = new Map();
 function element(id, value = '') {
   const hidden = new Set(['hidden']);
@@ -125,7 +128,8 @@ function element(id, value = '') {
 }
 for (const field of ['camera_entity', 'camera_display', 'camera_fit', 'camera_every', 'camera_transparency',
                      'camera_transparency_value', 'camera_picture_fields', 'camera_every_row', 'camera_head',
-                     'camera_tap', 'camera_tap_row']) {
+                     'camera_tap', 'camera_tap_row', 'camera_entries', 'camera_source', 'camera_shows',
+                     'tile_title', 'tile_icon']) {
   element('t_' + field);
 }
 const context = {
@@ -135,6 +139,14 @@ const context = {
   CAMERA_TAP_FULL: 1,
   CAMERA_HEAD_LIGHT: 2,
   CAMERA_HEAD_DARK: 4,
+  CAMERA_LAST_CHOSEN: 8,
+  CAMERA_MAX_ENTRIES: 8,
+  CAMERA_PLACE_KINDS: ['r', 'c'],
+  cameraEditors: new Map(),
+  sensorMetaCache: {names: {}},
+  TextEncoder,
+  titleFromEntity: entity => entity,
+  normalizeTileTitle: title => title,
   loadIconColorFields() {}, saveIconColorFields() {}, resetIconColorFields() {},
   maybeFillTitleFromEntity() {}, syncSwitchChoices() {}
 };
@@ -151,24 +163,22 @@ context.loadCameraFields('t', {sensor_entity: 'camera.door', sensor_display_mode
 assert.deepEqual([value('camera_display'), value('camera_fit'), value('camera_every'), value('camera_transparency'),
                   value('camera_head'), value('camera_tap')],
   ['1', 'fit', '5', '30', 'light', '1']);
-assert.equal(hidden('camera_tap_row'), false);
 assert.equal(hidden('camera_picture_fields'), false);
 assert.equal(hidden('camera_every_row'), false);
 assert.equal(elements.get('t_camera_transparency_value').textContent, '30 %');
 const form = new FormData();
 context.saveCameraFields('t', form);
 assert.deepEqual(Object.fromEntries(form.entries()), {
-  camera_entity: 'camera.door', sensor_entity: 'camera.door', camera_display: '1', camera_fit: 'fit',
+  camera_entity: 'camera.door', sensor_entity: 'camera.door', camera_entries: 'h\tcamera.door\t\t\tcamera.door\tcamera.door',
+  camera_source: 'h', camera_shows: '', camera_display: '1', camera_fit: 'fit',
   camera_every: '5', camera_transparency: '30', camera_head: 'light', camera_tap: '1'});
 assert.equal(context.cameraOptionFlags({head: 'light', tap: '1'}), 3);
 assert.equal(context.cameraOptionFlags({head: 'dark', tap: '0'}), 4);
 assert.equal(context.cameraOptionFlags({head: 'auto', tap: '0'}), 0);
-// An image entity sends each new picture at once and has no popup: no
-// interval, no tap choice.
-elements.get('t_camera_entity').value = 'image.vacuum_map';
-context.syncCameraFields('t');
+assert.equal(context.cameraOptionFlags({head: 'auto', tap: '0', shows: 'last'}), 8);
+// An image entity sends each new picture at once: no interval.
+context.loadCameraFields('t', {sensor_entity: 'image.vacuum_map', sensor_display_mode: 1});
 assert.equal(hidden('camera_every_row'), true);
-assert.equal(hidden('camera_tap_row'), true);
 // A tile from before the picture (0xFF decimals come as -1): the icon, fill,
 // 10 s, opaque; the picture rows stay hidden.
 context.loadCameraFields('t', {sensor_entity: 'camera.door', sensor_display_mode: 0, sensor_decimals: -1,
@@ -179,7 +189,7 @@ assert.deepEqual([value('camera_display'), value('camera_fit'), value('camera_ev
 assert.equal(hidden('camera_picture_fields'), true);
 assert.deepEqual(plain(context.cameraPictureOptionsOf({sensor_display_mode: 1, sensor_decimals: 2, image_slideshow_sec: 99,
                                                  key_code: 250})),
-  {picture: true, fit: 'original', every: 10, transparency: 100, head: 'auto', tap: '0'});
+  {picture: true, fit: 'original', every: 10, transparency: 100, head: 'auto', tap: '0', shows: ''});
 context.resetCameraFields('t');
 assert.deepEqual([value('camera_entity'), value('camera_display'), value('camera_fit'), value('camera_every'),
                   value('camera_transparency'), value('camera_head'), value('camera_tap')],
@@ -229,10 +239,10 @@ assert.match(handler, /if \(every < bridge_images::kEveryMin \|\| every > bridge
 assert.match(handler, /tile\.key_code = static_cast<uint8_t>\(transparency\);/);
 
 const renderer = readRepoFile('src/types/camera/renderer.cpp');
-assert.match(renderer, /if \(!compact && grid_type != GridType::SCREENSAVER\) \{\s*camera_picture::attach\(card, icon, title_label, tile\);/,
+assert.match(renderer, /if \(!compact && grid_type != GridType::SCREENSAVER\) \{\s*camera_picture::attach\(card, icon, title_label, tile, shown_entity\);/,
   'half-height tiles keep the icon look');
-assert.match(renderer, /tile\.sensor_entity\.length\(\) &&\s*!camera_picture::is_image\(tile\.sensor_entity\)\) \{\s*CameraEventData\* event_data/,
-  'an image entity opens no camera stream');
+assert.match(renderer, /if \(grid_type != GridType::SCREENSAVER && shown_entity\.length\(\)\) \{\s*CameraEventData\* event_data/,
+  'an image entity has its popup too (the Bridge streams it like a still camera)');
 
 const picture = readRepoFile('src/types/camera/picture.cpp');
 assert.match(picture, /const bool awake = !powerManager\.isInSleep\(\) && !image_screensaver_covers_ui\(\) && !camera_popup_is_busy\(\);/);
@@ -262,7 +272,7 @@ assert.match(options, /inline bool light_head\(const Tile& tile\) \{ return \(ti
 assert.doesNotMatch(picture, /kDarkHeadFrom/, 'no switch at a transparency');
 // A tap can open a camera straight in full screen; a tap there closes it to
 // the tiles without the popup in between.
-assert.match(options, /return tile\.type == TILE_CAMERA && \(tile\.key_modifier & kTapFullScreen\) && is_camera\(tile\.sensor_entity\);/);
+assert.match(options, /return tile\.type == TILE_CAMERA && \(tile\.key_modifier & kTapFullScreen\) &&\s*\(is_camera\(tile\.sensor_entity\) \|\| is_image\(tile\.sensor_entity\)\);/);
 assert.match(readRepoFile('src/types/camera/renderer.cpp'), /init\.full_screen = data->full_screen;/);
 const popup = readRepoFile('src/ui/popups/camera/camera_popup.cpp');
 assert.match(popup, /g_camera_popup->open_full = g_open_next_full \|\| init\.full_screen;\s*g_camera_popup->close_on_leave = init\.full_screen;/);
@@ -274,7 +284,7 @@ assert.match(popup, /g_camera_popup->open_full = false;\s*g_camera_popup->close_
 assert.match(popup, /if \(g_camera_popup->shell_skipped\) \{\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*lv_obj_add_flag\(g_camera_popup->card, LV_OBJ_FLAG_HIDDEN\);\s*finish_camera_popup_open\(init\);/);
 assert.match(popup, /if \(g_camera_popup->open_full && !g_camera_popup->full\) \{\s*reveal_skipped_popup\(g_camera_popup\);\s*open_popup_stream\(g_camera_popup\);/);
 assert.match(popup, /if \(shell_shown\) \{\s*hide_popup_shell\(g_camera_popup->card\);\s*\} else \{[\s\S]*?lv_obj_invalidate\(lv_screen_active\(\)\);/);
-assert.match(handler, /tile\.key_modifier = static_cast<uint8_t>\(\(server\.arg\("camera_tap"\) == "1" \? camera_picture::kTapFullScreen : 0\) \|\s*\(server\.arg\("camera_head"\) == "light"  \? camera_picture::kHeadLight\s*: server\.arg\("camera_head"\) == "dark" \? camera_picture::kHeadDark\s*: 0\)\);/);
+assert.match(handler, /tile\.key_modifier = static_cast<uint8_t>\(\(server\.arg\("camera_tap"\) == "1" \? camera_picture::kTapFullScreen : 0\) \|\s*\(server\.arg\("camera_shows"\) == "last" \? camera_picture::kLastChosen : 0\) \|\s*\(server\.arg\("camera_head"\) == "light"  \? camera_picture::kHeadLight\s*: server\.arg\("camera_head"\) == "dark" \? camera_picture::kHeadDark\s*: 0\)\);/);
 const tiles = readRepoFile('src/tiles/runtime/tile_renderer.cpp');
 assert.match(tiles, /if \(grid_type != GridType::SCREENSAVER && camera_picture::head_over_picture\(tile\)\) \{\s*return camera_picture::light_head\(tile\)  \? tile_surface::kLight\s*: camera_picture::dark_head\(tile\) \? tile_surface::kDark\s*: tile_surface::kNone;/,
   'the head follows the design or draws on its fixed surface');
@@ -319,7 +329,7 @@ for (const text of ['"Transparenz von Kreis und Titel"', '"Circle and title tran
   assert.ok(strings.includes(text), text);
 }
 const html = readRepoFile('src/types/camera/web_html.cpp');
-assert.match(html, /appendEntityPickerField\(html, tab_id, "camera_entity", tr\.screensaver_picture_entity, "images"\);/);
+assert.match(html, /append_switch_choice\(html, tab_id, "camera_source", tr\.media_source, sources, 3\);/);
 assert.match(html, /append_switch_choice\(html, tab_id, "camera_display", tr\.camera_show, shows, 2\);/);
 assert.match(html, /append_switch_choice\(html, tab_id, "camera_fit", tr\.screensaver_picture_fit, fits, 3\);/);
 assert.match(html, /_camera_transparency" min="0" max="100" step="5" value="0">/);

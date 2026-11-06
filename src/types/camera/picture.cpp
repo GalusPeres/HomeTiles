@@ -153,20 +153,13 @@ void place(lv_obj_t* card, lv_obj_t* obj, int x, int y) {
                y - lv_obj_get_style_space_top(card, LV_PART_MAIN));
 }
 
-// The first picture turns the icon look into the head over the picture.
-bool show_head(PictureTile& tile) {
+// Circle and title pill over the picture, chosen by the title's width; again
+// when another entry brings another title.
+void build_head(PictureTile& tile) {
   lv_obj_t* card = tile.card;
-  tile.image = lv_image_create(card);
-  if (!tile.image) return false;
-  // The frame line stays visible over the picture (user 2026-10-11: "the
-  // camera tiles have no frame"); set before anything is placed.
-  ui_surface_style::draw_frame_over_children(card);
-  lv_obj_remove_flag(tile.image, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
-  lv_obj_add_flag(tile.image, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_IGNORE_LAYOUT));
-  lv_obj_set_size(tile.image, tile.width, tile.height);
-  place(card, tile.image, 0, 0);
-  lv_obj_move_to_index(tile.image, 0);
-
+  if (tile.circle) lv_obj_delete(tile.circle);
+  if (tile.pill) lv_obj_delete(tile.pill);
+  tile.circle = tile.pill = nullptr;
   const int inset = tile_icon_disc::inset();
   const int icon_w =
       FONT_MDI_ICONS ? lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0) : 0;
@@ -220,6 +213,22 @@ bool show_head(PictureTile& tile) {
   Serial.printf("[CameraTile] %s: picture %ux%u, %s head\n", tile.entity.c_str(),
                 static_cast<unsigned>(tile.width), static_cast<unsigned>(tile.height),
                 head.shared ? "shared" : "split");
+}
+
+// The first picture turns the icon look into the head over the picture.
+bool show_head(PictureTile& tile) {
+  lv_obj_t* card = tile.card;
+  tile.image = lv_image_create(card);
+  if (!tile.image) return false;
+  // The frame line stays visible over the picture (user 2026-10-11: "the
+  // camera tiles have no frame"); set before anything is placed.
+  ui_surface_style::draw_frame_over_children(card);
+  lv_obj_remove_flag(tile.image, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
+  lv_obj_add_flag(tile.image, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_IGNORE_LAYOUT));
+  lv_obj_set_size(tile.image, tile.width, tile.height);
+  place(card, tile.image, 0, 0);
+  lv_obj_move_to_index(tile.image, 0);
+  build_head(tile);
   return true;
 }
 
@@ -339,7 +348,18 @@ int title_metric(const lv_font_t* font, const char* text) {
       text, [font](uint32_t code) { return static_cast<int>(lv_font_get_glyph_width(font, code, 0)); });
 }
 
-void attach(lv_obj_t* card, lv_obj_t* icon, lv_obj_t* title, const Tile& tile) {
+void show_entity(lv_obj_t* card, const String& entity) {
+  for (PictureTile* tile : g_tiles) {
+    if (tile->card != card) continue;
+    tile->entity = entity;
+    tile->key[0] = '\0';
+    tile->due = true;
+    g_topics_due = true;
+    if (tile->image) build_head(*tile);
+  }
+}
+
+void attach(lv_obj_t* card, lv_obj_t* icon, lv_obj_t* title, const Tile& tile, const String& entity) {
   if (!card || !wanted(tile)) return;
   const int width = tile_geometry::extent(tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP);
   const int height = tile_geometry::extent(tile.row, std::max(1.0f, tile.span_h), GRID_CELL_H, GRID_GAP);
@@ -351,7 +371,7 @@ void attach(lv_obj_t* card, lv_obj_t* icon, lv_obj_t* title, const Tile& tile) {
   picture_tile->card = card;
   picture_tile->icon = icon;
   picture_tile->title = title;
-  picture_tile->entity = tile.sensor_entity;
+  picture_tile->entity = entity;
   picture_tile->width = static_cast<uint16_t>(width);
   picture_tile->height = static_cast<uint16_t>(height);
   picture_tile->fit = fit(tile);

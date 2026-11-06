@@ -14,6 +14,7 @@
 #include "src/ui/shared/ui_theme.h"
 #include "src/tiles/config/tile_icon_colors.h"
 #include "src/types/tile_type_policy.h"
+#include "src/types/camera/camera_entries.h"
 #include "src/types/scene/scene_target.h"
 
 // The stored grid: the profile's columns and rows. Tile positions and their
@@ -396,14 +397,19 @@ static inline void applyWeatherSensorsRecord(Tile& tile, const String& record) {
 // entity). Trailing empty lines are dropped, so "" means none at all.
 static constexpr size_t kFlowEntityLinesMax = 12;
 
-// The types that keep Tile::flow_entities.
+// The types that keep Tile::flow_entities. A Camera tile's record is its list
+// of entries (types/camera/camera_entries.h).
 static constexpr bool tileKeepsFlowEntities(int type) {
-  return type == TILE_POWER_FLOW || type == TILE_VACUUM;
+  return type == TILE_POWER_FLOW || type == TILE_VACUUM || type == TILE_CAMERA;
 }
 
 static inline void normalizeFlowEntities(Tile& tile) {
   if (!tileKeepsFlowEntities(tile.type)) {
     tile.flow_entities = "";
+    return;
+  }
+  if (tile.type == TILE_CAMERA) {
+    tile.flow_entities = camera_entries::normalize(tile.flow_entities.c_str()).c_str();
     return;
   }
   if (tile.type == TILE_VACUUM) {

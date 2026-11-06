@@ -6,7 +6,13 @@
 #include "src/ui/popups/camera/camera_popup.h"
 
 #include <ArduinoJson.h>
+#include <esp_heap_caps.h>
 #include <time.h>
+
+// lvgl.h no longer exports lv_image_cache_drop() (tile_renderer.cpp).
+#include <misc/cache/instance/lv_image_cache.h>
+
+#include <vector>
 
 #include "src/core/config/config_manager.h"
 #include "src/core/display/display_manager.h"
@@ -26,6 +32,7 @@
 #include "src/ui/popups/media/media_popup.h"
 #include "src/ui/popups/media/media_popup_layout.h"
 #include "src/ui/popups/popup_layout.h"
+#include "src/ui/popups/popup_nav_style.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/popups/weather/weather_popup.h"
 #include "src/video/camera_geometry.h"
@@ -33,8 +40,15 @@
 #include "src/video/camera_stream.h"
 #include "src/video/camera_transport.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
+#include "src/types/camera/camera_entries.h"
+#include "src/types/camera/picture_layout.h"
+#include "src/types/camera/renderer.h"
 #include "src/types/clock/clock_format.h"
+#include "src/ui/screensaver/image_screensaver.h"
+#include "src/ui/screensaver/wallpaper_cover.h"
+#include "src/ui/shared/title_label.h"
 #include "src/ui/shared/ui_theme.h"
+#include "src/ui/tabs/settings/settings_style.h"
 
 namespace {
 
@@ -42,26 +56,38 @@ namespace ml = media_popup_layout;
 
 constexpr int kVideoFrameWidth = camera_geometry::kWidth;
 constexpr int kVideoHeight = camera_geometry::kHeight;
-// In card coordinates, as in the Media popup (mockup webcam-radar/radar.html):
-// with a time bar the picture one edge below the head like the Media cover,
-// without one in the middle of the card below the head. The full screen stays
-// a tap on the picture: no button for it (user 2026-11-05).
-constexpr int kHeadBottom = ml::kHeadTop + ml::kDisc;
+// In card coordinates, as in the Media popup (mockup webcam-radar/radar-tall.html):
+// the picture whole, never cropped, centred in its area, which ends one edge above
+// the bottom row: Play, the time bar with its times under it, the "..." menu. With
+// neither a history nor a second entry there is no bottom row and the area also
+// takes its height. The full screen stays a tap on the picture: no button for it
+// (user 2026-11-05).
 constexpr int kButtonTop = ml::kVolumeTop;
-constexpr int kVideoTopWithBar = kHeadBottom + ml::kEdge;
-constexpr int kVideoTopPlain =
-    kHeadBottom + (popup_layout::kCardHeight - ml::kEdge - kHeadBottom - kVideoHeight) / 2;
+constexpr int kAreaTop = camera_geometry::kAreaTop;
+constexpr int kAreaHeightWithRow = camera_geometry::kBoxHeight;
+constexpr int kAreaHeightPlain = kButtonTop + ml::kButton - kAreaTop;
+constexpr int kBarGap = popup_layout::scale(22);
+constexpr int kBarTimeGap = popup_layout::scale(8);
+constexpr int kBarLeft = ml::kEdge + ml::kButton + kBarGap;
+// The menu, as the Media popup's (build_menu, list_row): only as high as its
+// entries, five rows at most, then it scrolls.
+constexpr int kMenuRow = popup_layout::scale(72);
+constexpr int kMenuRowGap = 2;  // settings_parts.cpp kOptionGap
+constexpr size_t kMenuRowsShown = 5;
 // The time bar: the frames of a camera with a history stay in the Bridge, the
 // panel knows only their times and shows the one it asks for over the stream.
-constexpr uint8_t kMaxFrames = 32;
+constexpr uint8_t kMaxFrames = 150;
 constexpr uint32_t kFrameSendMs = 120;
-// Play runs in a loop: the newest picture stays a little longer.
+// Play runs in a loop: the newest picture stays a little longer. A webcam's day
+// (up to 150 pictures, one per 10 minutes) goes in larger steps.
 constexpr uint32_t kPlayStepMs = 500;
 constexpr uint32_t kPlayHoldMs = 1500;
-// The newest picture counts as "now" while it is this fresh (the sources update
-// every 10 minutes); older ones, a source that stopped, show their time.
-constexpr uint32_t kFreshFrameS = 30 * 60;
-constexpr time_t kClockSetEpoch = 1700000000;
+constexpr uint8_t kPlayLongHistory = 40;
+constexpr uint8_t kPlayLongStep = 3;
+constexpr uint32_t kPlayLongStepMs = 400;
+// The last picture of a still camera per entity, shown at once at the next
+// opening instead of black (JPEG, 15-40 KB each).
+constexpr size_t kKeptPictures = 4;
 // No words for a picture that comes at once: they show only after this long.
 constexpr uint32_t kStatusDelayMs = 1500;
 constexpr uint8_t kRequiredBridgeCameraProtocol = 1;
@@ -91,6 +117,30 @@ struct CameraPopupContext {
   lv_obj_t* value_label = nullptr;
   // A neutral message that stays over the picture ("stopped").
   bool status_sticky = false;
+  // The tile's entries (one source, types/camera/camera_entries.h); empty for a
+  // single entity. The shown one and whether the tile follows a choice.
+  std::vector<camera_entries::Entry> entries;
+  size_t entry_index = 0;
+  uint32_t remember_key = 0;
+  // This stream's picture, and how it sits in its area.
+  uint16_t frame_w = kVideoFrameWidth;
+  uint16_t frame_h = kVideoHeight;
+  // The last picture of a still camera until the stream's first frame.
+  lv_obj_t* kept_image = nullptr;
+  lv_image_dsc_t* kept_dsc = nullptr;
+  // The stream runs and its JPEGs may be kept (a still camera).
+  bool keeping = false;
+  // The menu ("..."), its rows built once per opening.
+  lv_obj_t* menu_button = nullptr;
+  lv_obj_t* menu_label = nullptr;
+  lv_obj_t* menu_shield = nullptr;
+  lv_obj_t* menu_box = nullptr;
+  lv_obj_t* menu_title = nullptr;
+  lv_obj_t* menu_rule = nullptr;
+  lv_obj_t* menu_list = nullptr;
+  bool menu_open = false;
+  bool menu_rows_stale = true;
+  uint32_t icon_color = 0xFFFFFF;
   // The controls in card coordinates.
   lv_obj_t* root = nullptr;
   lv_obj_t* bar_track = nullptr;
@@ -109,12 +159,9 @@ struct CameraPopupContext {
   bool playing = false;
   uint32_t play_next_ms = 0;
   bool live_kind = false;
-  bool with_bar = false;
   // The opening, for the delayed status and the log.
   uint32_t opened_ms = 0;
   bool open_logged = false;
-  // The camera last known to have a history: it opens in its layout at once.
-  String bar_entity;
   size_t previous_draw_buffer_requested_lines = 0;
   bool previous_draw_buffer_fast = false;
   bool large_draw_buffer_active = false;
@@ -170,6 +217,16 @@ struct CameraPopupContext {
 CameraPopupContext* g_camera_popup = nullptr;
 // Set by the View select just before it opens a camera tile's popup.
 bool g_open_next_full = false;
+
+struct KeptPicture {
+  String entity;
+  uint8_t* jpeg = nullptr;
+  size_t bytes = 0;
+  uint16_t width = 0;
+  uint16_t height = 0;
+  uint32_t newest = 0;  // the history's newest time, 0 without one
+};
+std::vector<KeptPicture> g_kept_pictures;
 
 static const i18n::Strings& camera_text() {
   return i18n::strings(configManager.getConfig().language);
@@ -263,30 +320,27 @@ static void format_frame_time(uint32_t when, char* out, size_t size) {
   strftime(out, size, format == clock_tile::TIME_FORMAT_24H ? "%H:%M" : "%I:%M %p", &local);
 }
 
-// The head's second line: "Live", or where the shown picture lies: "Now" on
-// the newest, else how long before it. Its exact time stands under the bar.
-static void show_head_value(CameraPopupContext* ctx) {
+// The head's second line (user 2026-11-06, like RainViewer's own line): "Synced"
+// and the newest picture's clock time, also with a single picture, and it stays
+// while dragging or playing; "Live" for a running camera. The shown picture's
+// time stands under the bar.
+static void show_head_text(CameraPopupContext* ctx, uint32_t newest) {
   if (!ctx->value_label) return;
-  char text[48] = "";
-  if (ctx->frame_count >= 2) {
-    const uint32_t newest = ctx->frame_times[ctx->frame_count - 1];
-    if (ctx->shown_frame + 1 < ctx->frame_count) {
-      const uint32_t minutes = (newest - ctx->frame_times[ctx->shown_frame] + 30) / 60;
-      snprintf(text, sizeof(text), camera_text().camera_minutes_ago_fmt, static_cast<unsigned>(minutes));
-    } else {
-      const time_t now = time(nullptr);
-      if (now >= kClockSetEpoch && static_cast<uint32_t>(now) > newest + kFreshFrameS) {
-        format_frame_time(newest, text, sizeof(text));
-      } else {
-        snprintf(text, sizeof(text), "%s", camera_text().camera_now);
-      }
-    }
-  } else if (ctx->frame_count == 0 && ctx->live_kind) {
+  char text[64] = "";
+  if (newest) {
+    char when[16] = "";
+    format_frame_time(newest, when, sizeof(when));
+    snprintf(text, sizeof(text), camera_text().camera_synced_fmt, when);
+  } else if (ctx->live_kind) {
     snprintf(text, sizeof(text), "%s", camera_text().camera_live);
   }
   if (strcmp(lv_label_get_text(ctx->value_label), text) == 0) return;
   lv_label_set_text(ctx->value_label, text);
   if (ctx->visible && !ctx->shell_skipped && !ctx->full) sync_popup_shell();
+}
+
+static void show_head_value(CameraPopupContext* ctx) {
+  show_head_text(ctx, ctx->frame_count ? ctx->frame_times[ctx->frame_count - 1] : 0);
 }
 
 static void set_playing(CameraPopupContext* ctx, bool playing) {
@@ -301,8 +355,18 @@ static void set_playing(CameraPopupContext* ctx, bool playing) {
 static void show_bar(CameraPopupContext* ctx) {
   if (!ctx->bar || ctx->full) return;
   const bool shown = ctx->frame_count >= 2;
+  const bool many = ctx->entries.size() >= 2;
   for (lv_obj_t* obj : {ctx->bar_track, ctx->bar_cap, ctx->bar, ctx->time_shown, ctx->time_newest, ctx->play_button}) {
     set_shown(obj, shown);
+  }
+  set_shown(ctx->menu_button, many);
+  // The bar makes room for the menu button.
+  const int bar_right = popup_layout::kCardWidth - ml::kEdge - (many ? ml::kButton + kBarGap : 0);
+  if (lv_obj_get_width(ctx->bar_track) != bar_right - kBarLeft) {
+    lv_obj_set_width(ctx->bar_track, bar_right - kBarLeft);
+    lv_obj_set_width(ctx->bar, bar_right - kBarLeft);
+    lv_obj_align(ctx->time_newest, LV_ALIGN_TOP_RIGHT, bar_right - popup_layout::kCardWidth,
+                 lv_obj_get_y_aligned(ctx->time_shown));
   }
   if (!shown) {
     set_playing(ctx, false);
@@ -320,25 +384,43 @@ static void show_bar(CameraPopupContext* ctx) {
   lv_label_set_text(ctx->time_newest, when);
 }
 
-static void apply_layout(CameraPopupContext* ctx, bool with_bar) {
-  ctx->with_bar = with_bar;
-  lv_obj_align(ctx->video, LV_ALIGN_TOP_MID, 0, (with_bar ? kVideoTopWithBar : kVideoTopPlain) - popup_layout::kCardPad);
+// The picture in this stream's size, centred in its area.
+static void apply_layout(CameraPopupContext* ctx) {
+  const bool row = ctx->frame_count >= 2 || ctx->entries.size() >= 2;
+  const int area = row ? kAreaHeightWithRow : kAreaHeightPlain;
+  lv_obj_set_size(ctx->video, ctx->frame_w, ctx->frame_h);
+  lv_obj_set_size(ctx->image, ctx->frame_w, ctx->frame_h);
+  lv_obj_align(ctx->video, LV_ALIGN_TOP_MID, 0, kAreaTop + (area - ctx->frame_h) / 2 - popup_layout::kCardPad);
+  // The stream writes straight to the image's place on the panel (P4).
+  lv_obj_update_layout(ctx->card);
 }
 
 // The Bridge's times, the shown frame kept by its time: the newest stays the
-// newest, a frame that is gone becomes the next older one.
-static void take_frames(CameraPopupContext* ctx, JsonArrayConst frames) {
+// newest, a frame that is gone becomes the next older one. Up to 32 as they are,
+// more as minutes after the first (camera_sources.py frames_payload).
+static bool frames_in(JsonVariantConst doc) {
+  return !doc["frames"].isNull() || !doc["frames_min"].isNull();
+}
+
+static void take_frames(CameraPopupContext* ctx, JsonVariantConst doc) {
   const bool at_newest = ctx->frame_count == 0 || ctx->shown_frame + 1 >= ctx->frame_count;
   const uint32_t shown_time = ctx->frame_count ? ctx->frame_times[ctx->shown_frame] : 0;
   uint8_t count = 0;
-  for (JsonVariantConst item : frames) {
-    const uint32_t when = item.as<uint32_t>();
-    if (!when) continue;
+  const auto add = [&](uint32_t when) {
+    if (!when) return;
     if (count == kMaxFrames) {  // The newest are kept.
       memmove(ctx->frame_times, ctx->frame_times + 1, sizeof(ctx->frame_times[0]) * (kMaxFrames - 1));
       --count;
     }
     ctx->frame_times[count++] = when;
+  };
+  JsonArrayConst minutes = doc["frames_min"];
+  if (!minutes.isNull()) {
+    const uint32_t base = doc["frames_base"] | 0u;
+    for (JsonVariantConst item : minutes) add(base ? base + item.as<uint32_t>() * 60 : 0);
+  } else {
+    JsonArrayConst frames = doc["frames"];
+    for (JsonVariantConst item : frames) add(item.as<uint32_t>());
   }
   ctx->frame_count = count;
   ctx->shown_frame = count ? count - 1 : 0;
@@ -352,9 +434,13 @@ static void take_frames(CameraPopupContext* ctx, JsonArrayConst frames) {
 
 // One step of Play, in a loop: after the newest picture the oldest again.
 static void play_step(CameraPopupContext* ctx) {
-  ctx->shown_frame = ctx->shown_frame + 1 >= ctx->frame_count ? 0 : ctx->shown_frame + 1;
+  const bool long_history = ctx->frame_count > kPlayLongHistory;
+  const uint8_t last = ctx->frame_count - 1;
+  const uint8_t step = long_history ? kPlayLongStep : 1;
+  if (ctx->shown_frame >= last) ctx->shown_frame = 0;
+  else ctx->shown_frame = last - ctx->shown_frame < step ? last : ctx->shown_frame + step;
   ctx->frame_dirty = true;
-  ctx->play_next_ms = millis() + (ctx->shown_frame + 1 >= ctx->frame_count ? kPlayHoldMs : kPlayStepMs);
+  ctx->play_next_ms = millis() + (ctx->shown_frame >= last ? kPlayHoldMs : long_history ? kPlayLongStepMs : kPlayStepMs);
   if (ctx->full) return;
   show_bar(ctx);
   show_head_value(ctx);
@@ -370,6 +456,89 @@ static void process_time_bar(CameraPopupContext* ctx) {
   ctx->frame_sent_ms = now;
   const bool newest = ctx->shown_frame + 1 >= ctx->frame_count;
   mqttPublishCameraFrame(ctx->entity_id.c_str(), newest ? 0 : ctx->frame_times[ctx->shown_frame]);
+}
+
+// ---- The last picture, shown at once at the next opening ----------------------
+
+static void remember_kept_picture(CameraPopupContext* ctx, uint8_t* jpeg, size_t bytes) {
+  const uint32_t newest = ctx->frame_count ? ctx->frame_times[ctx->frame_count - 1] : 0;
+  for (KeptPicture& kept : g_kept_pictures) {
+    if (!kept.entity.equalsIgnoreCase(ctx->entity_id)) continue;
+    free(kept.jpeg);
+    kept.jpeg = jpeg;
+    kept.bytes = bytes;
+    kept.width = ctx->frame_w;
+    kept.height = ctx->frame_h;
+    kept.newest = newest;
+    return;
+  }
+  if (g_kept_pictures.size() >= kKeptPictures) {
+    free(g_kept_pictures.front().jpeg);
+    g_kept_pictures.erase(g_kept_pictures.begin());
+  }
+  KeptPicture kept;
+  kept.entity = ctx->entity_id;
+  kept.jpeg = jpeg;
+  kept.bytes = bytes;
+  kept.width = ctx->frame_w;
+  kept.height = ctx->frame_h;
+  kept.newest = newest;
+  g_kept_pictures.push_back(kept);
+}
+
+static void take_kept_jpeg(CameraPopupContext* ctx) {
+  uint8_t* jpeg = nullptr;
+  size_t bytes = 0;
+  if (camera_stream_take_kept_jpeg(jpeg, bytes)) remember_kept_picture(ctx, jpeg, bytes);
+}
+
+static void hide_kept_picture(CameraPopupContext* ctx) {
+  if (!ctx->kept_dsc) return;
+  lv_image_set_src(ctx->kept_image, nullptr);
+  lv_obj_add_flag(ctx->kept_image, LV_OBJ_FLAG_HIDDEN);
+  lv_image_cache_drop(ctx->kept_dsc);
+  free(const_cast<uint8_t*>(ctx->kept_dsc->data));
+  free(ctx->kept_dsc);
+  ctx->kept_dsc = nullptr;
+}
+
+// This entity's last picture over the black until the stream's first frame; its
+// size and the head's time come with it.
+static bool show_kept_picture(CameraPopupContext* ctx) {
+  hide_kept_picture(ctx);
+  for (const KeptPicture& kept : g_kept_pictures) {
+    if (!kept.entity.equalsIgnoreCase(ctx->entity_id)) continue;
+    uint16_t w = 0, h = 0;
+    uint16_t* pixels = image_screensaver_decode_picture(kept.jpeg, kept.bytes, kept.width, kept.height, w, h);
+    if (!pixels || w != kept.width || h != kept.height) {
+      free(pixels);
+      return false;
+    }
+    lv_image_dsc_t* dsc = static_cast<lv_image_dsc_t*>(malloc(sizeof(lv_image_dsc_t)));
+    if (!dsc) {
+      free(pixels);
+      return false;
+    }
+    const uint16_t radius = ui_surface_style::radius(camera_geometry::kCornerRadius);
+    camera_picture_layout::round_corners(pixels, w, h, radius, camera_picture_layout::rgb565(ctx->surface_color),
+                                         wallpaper_cover::rounded_pixel_coverage);
+    memset(dsc, 0, sizeof(*dsc));
+    dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
+    dsc->header.cf = LV_COLOR_FORMAT_RGB565;
+    dsc->header.w = w;
+    dsc->header.h = h;
+    dsc->header.stride = static_cast<uint32_t>(w) * 2;
+    dsc->data_size = static_cast<uint32_t>(w) * h * 2;
+    dsc->data = reinterpret_cast<const uint8_t*>(pixels);
+    ctx->kept_dsc = dsc;
+    ctx->frame_w = w;
+    ctx->frame_h = h;
+    lv_image_set_src(ctx->kept_image, dsc);
+    lv_obj_remove_flag(ctx->kept_image, LV_OBJ_FLAG_HIDDEN);
+    show_head_text(ctx, kept.newest);
+    return true;
+  }
+  return false;
 }
 
 static void open_popup_stream(CameraPopupContext* ctx) {
@@ -552,9 +721,16 @@ static void enter_full_screen() {
                                   width, height, turn);
 }
 
+static void close_menu(CameraPopupContext* ctx);
+
 static void close_camera_popup() {
   if (!g_camera_popup || !g_camera_popup->visible) return;
   leave_full_screen(false);
+  close_menu(g_camera_popup);
+  camera_stream_keep_jpeg(false);
+  g_camera_popup->keeping = false;
+  take_kept_jpeg(g_camera_popup);
+  hide_kept_picture(g_camera_popup);
   g_camera_popup->pending_url = String();
   g_camera_popup->resuming = false;
   g_camera_popup->switch_started_ms = 0;
@@ -614,10 +790,176 @@ static void overlay_event_cb(lv_event_t* event) {
   (void)event;
 }
 
+// ---- The menu ("..."): the tile's other entries ------------------------------
+
+static void set_shown_menu_parts(CameraPopupContext* ctx, bool shown) {
+  set_shown(ctx->menu_box, shown);
+  if (shown) lv_obj_add_flag(ctx->menu_shield, LV_OBJ_FLAG_CLICKABLE);
+  else lv_obj_remove_flag(ctx->menu_shield, LV_OBJ_FLAG_CLICKABLE);
+}
+
+static void close_menu(CameraPopupContext* ctx) {
+  if (!ctx || !ctx->menu_open) return;
+  ctx->menu_open = false;
+  set_shown_menu_parts(ctx, false);
+}
+
+// Switching keeps the popup: the other entity's stream, its last picture at once.
+static void open_entry(CameraPopupContext* ctx, size_t index) {
+  const camera_entries::Entry& entry = ctx->entries[index];
+  camera_stream_keep_jpeg(false);
+  ctx->keeping = false;
+  take_kept_jpeg(ctx);
+  if (ctx->entity_id.length()) mqttPublishCameraCommand(ctx->entity_id.c_str(), "close");
+  lv_image_set_src(ctx->image, nullptr);
+  lv_obj_add_flag(ctx->image, LV_OBJ_FLAG_HIDDEN);
+  ctx->pending_url = String();
+  camera_stream_stop();
+  ctx->entry_index = index;
+  ctx->entity_id = entry.entity.c_str();
+  hometiles_title::set(ctx->title_label, camera_entry_title(entry).c_str());
+  String icon_name = camera_entry_icon(entry);
+  if (!icon_name.length()) icon_name = "video";
+  lv_label_set_text(ctx->icon_label, getMdiChar(icon_name).c_str());
+  set_playing(ctx, false);
+  ctx->frame_count = 0;
+  ctx->shown_frame = 0;
+  ctx->frame_dirty = false;
+  ctx->live_kind = false;
+  ctx->status_sticky = false;
+  lv_label_set_text(ctx->value_label, "");
+  ctx->frame_w = kVideoFrameWidth;
+  ctx->frame_h = kVideoHeight;
+  const bool kept = show_kept_picture(ctx);
+  apply_layout(ctx);
+  show_bar(ctx);
+  lv_obj_clear_flag(ctx->placeholder, LV_OBJ_FLAG_HIDDEN);
+  lv_label_set_text(ctx->placeholder, "");
+  (void)kept;
+  ctx->opened_ms = millis();
+  ctx->open_logged = false;
+  camera_popup_set_status(camera_text().camera_bridge_requesting, false);
+  open_popup_stream(ctx);
+  if (ctx->visible && !ctx->shell_skipped) sync_popup_shell();
+  if (ctx->remember_key) camera_tile_entry_chosen(ctx->remember_key, index);
+}
+
+static void menu_row_event_cb(lv_event_t* event) {
+  const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
+  CameraPopupContext* ctx = g_camera_popup;
+  if (!ctx || lv_event_get_code(event) != LV_EVENT_CLICKED) return;
+  const size_t index = static_cast<size_t>(reinterpret_cast<intptr_t>(lv_event_get_user_data(event)));
+  close_menu(ctx);
+  if (index != ctx->entry_index && index < ctx->entries.size()) open_entry(ctx, index);
+}
+
+static void menu_shield_event_cb(lv_event_t* event) {
+  const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
+  if (lv_event_get_code(event) == LV_EVENT_CLICKED) close_menu(g_camera_popup);
+}
+
+lv_obj_t* plain_part(lv_obj_t* parent);
+
+// The rows are built once per opening of the popup; deleted only here, never from
+// their own click.
+static void build_menu_rows(CameraPopupContext* ctx) {
+  lv_color_t control = {};
+  lv_opa_t control_opa = 0;
+  popup_shell_control_fill(ctx->surface_color, ctx->icon_color, control, control_opa);
+  lv_obj_clean(ctx->menu_list);
+  const int pad = settings_style::kRowPadLeft - settings_style::kOptionInset;
+  for (size_t i = 0; i < ctx->entries.size(); ++i) {
+    lv_obj_t* row = plain_part(ctx->menu_list);
+    lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_size(row, LV_PCT(100), kMenuRow - kMenuRowGap);
+    settings_style::apply_radius(row, settings_style::kGroupRadius - settings_style::kOptionInset);
+    lv_obj_set_style_bg_color(row, control, 0);
+    lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_opa(row, control_opa, LV_PART_MAIN | LV_STATE_PRESSED);
+    popup_nav_style::no_press_filter(row, LV_PART_MAIN | LV_STATE_PRESSED);
+    disable_pressed_button_animation(row);
+    lv_obj_set_style_pad_left(row, pad, 0);
+    lv_obj_set_style_pad_right(row, pad, 0);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(row, Device::kGridGap, 0);
+    lv_obj_t* icon = lv_label_create(row);
+    lv_obj_set_style_text_font(icon, FONT_MDI_ICONS, 0);
+    lv_obj_set_style_text_color(icon, lv_color_hex(ui_theme::text_secondary()), 0);
+    lv_label_set_text(icon, getMdiChar(camera_entry_list_icon(ctx->entries[i])).c_str());
+    lv_obj_remove_flag(icon, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t* label = lv_label_create(row);
+    lv_obj_set_style_text_font(label, settings_style::row_font(), 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(ui_theme::text()), 0);
+    lv_label_set_text(label, camera_entry_title(ctx->entries[i]).c_str());
+    lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+    lv_obj_set_height(label, lv_font_get_line_height(settings_style::row_font()));
+    lv_obj_remove_flag(label, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_flex_grow(label, 1);
+    lv_obj_add_event_cb(row, menu_row_event_cb, LV_EVENT_CLICKED, reinterpret_cast<void*>(static_cast<intptr_t>(i)));
+  }
+  ctx->menu_rows_stale = false;
+}
+
+// A box inside the card as high as its entries (the Media popup's geometry): its
+// edge halfway in the card's edge, a head row as high as a button, a hairline, the
+// rows, and the menu button stays where it is.
+static void open_menu(CameraPopupContext* ctx) {
+  const int offset = ml::kEdge / 2;
+  const int pad = ml::kEdge - offset;
+  const int gap = Device::kGridGap;
+  const size_t shown = ctx->entries.size() < kMenuRowsShown ? ctx->entries.size() : kMenuRowsShown;
+  const int list_height = static_cast<int>(shown) * kMenuRow;
+  const int top = kButtonTop - gap - list_height - gap - ml::kButton - pad;
+  const int content = popup_layout::kCardWidth - 2 * ml::kEdge;
+  const int32_t card_radius = lv_obj_get_style_radius(ctx->card, LV_PART_MAIN);
+  lv_obj_set_pos(ctx->menu_box, offset, top);
+  lv_obj_set_size(ctx->menu_box, popup_layout::kCardWidth - 2 * offset, popup_layout::kCardHeight - offset - top);
+  lv_obj_set_style_radius(ctx->menu_box, card_radius > offset ? card_radius - offset : 0, 0);
+  lv_obj_set_style_bg_color(ctx->menu_box, lv_color_hex(ctx->surface_color), 0);
+  popup_layout::apply_card_shadow(ctx->menu_box);
+  lv_obj_set_style_shadow_width(ctx->menu_box, popup_layout::shadow_width_for(card_radius), 0);
+  const auto& text = camera_text();
+  const char kind = ctx->entries.empty() ? camera_entries::kHomeAssistant : ctx->entries[0].kind;
+  lv_label_set_text(ctx->menu_title, kind == camera_entries::kWebcam           ? text.camera_source_webcam
+                                     : kind == camera_entries::kHomeAssistant ? text.screensaver_picture_entity
+                                                                              : text.camera_place);
+  lv_obj_set_style_text_color(ctx->menu_title, lv_color_hex(ui_theme::text()), 0);
+  lv_obj_set_pos(ctx->menu_title, pad + settings_style::kRowPadLeft - settings_style::kOptionInset,
+                 pad + ml::kButton / 2 - lv_font_get_line_height(settings_style::row_font()) / 2);
+  lv_obj_set_pos(ctx->menu_rule, pad, pad + ml::kButton + gap / 2);
+  lv_obj_set_size(ctx->menu_rule, content, 1);
+  lv_obj_set_style_bg_color(ctx->menu_rule, lv_color_hex(ui_theme::text()), 0);
+  lv_obj_set_pos(ctx->menu_list, pad, pad + ml::kButton + gap);
+  lv_obj_set_size(ctx->menu_list, content, list_height);
+  if (ctx->menu_rows_stale) build_menu_rows(ctx);
+  lv_color_t control = {};
+  lv_opa_t control_opa = 0;
+  popup_shell_control_fill(ctx->surface_color, ctx->icon_color, control, control_opa);
+  const uint32_t rows = lv_obj_get_child_count(ctx->menu_list);
+  for (uint32_t i = 0; i < rows; ++i) {
+    lv_obj_set_style_bg_opa(lv_obj_get_child(ctx->menu_list, static_cast<int32_t>(i)),
+                            i == ctx->entry_index ? control_opa : LV_OPA_TRANSP, 0);
+  }
+  lv_obj_scroll_to_y(ctx->menu_list, 0, LV_ANIM_OFF);
+  set_shown_menu_parts(ctx, true);
+  lv_obj_move_foreground(ctx->menu_box);
+  lv_obj_move_foreground(ctx->menu_button);
+  ctx->menu_open = true;
+}
+
+static void menu_button_event_cb(lv_event_t* event) {
+  const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
+  CameraPopupContext* ctx = g_camera_popup;
+  if (!ctx || lv_event_get_code(event) != LV_EVENT_CLICKED || ctx->entries.size() < 2) return;
+  if (ctx->menu_open) close_menu(ctx);
+  else open_menu(ctx);
+}
+
 static void video_event_cb(lv_event_t* event) {
   const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
   if (lv_event_get_code(event) != LV_EVENT_CLICKED) return;
-  if (g_camera_popup && g_camera_popup->visible && !g_camera_popup->full &&
+  if (g_camera_popup && g_camera_popup->visible && !g_camera_popup->full && !g_camera_popup->menu_open &&
       camera_stream_is_active()) {
     g_camera_popup->full_request = kFullEnter;
     g_camera_popup->switch_started_ms = millis();
@@ -672,6 +1014,7 @@ static void overlay_deleted_cb(lv_event_t* e) {
   const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
   auto* ctx = static_cast<CameraPopupContext*>(lv_event_get_user_data(e));
   if (!ctx) return;
+  hide_kept_picture(ctx);
   if (ctx->full_touch) lv_obj_delete(ctx->full_touch);
 #if defined(DEVICE_ESP32_S3_RGB_480)
   if (ctx->soft_full) lv_obj_delete(ctx->soft_full);
@@ -680,7 +1023,7 @@ static void overlay_deleted_cb(lv_event_t* e) {
   delete ctx;
 }
 
-static lv_obj_t* plain_part(lv_obj_t* parent) {
+lv_obj_t* plain_part(lv_obj_t* parent) {
   lv_obj_t* obj = lv_obj_create(parent);
   lv_obj_remove_style_all(obj);
   lv_obj_remove_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
@@ -703,10 +1046,10 @@ static lv_obj_t* control_button(lv_obj_t* parent, const char* icon, lv_obj_t** l
   return button;
 }
 
-// The time bar as in the Media popup (make_slider, media_popup.cpp): from edge
-// to edge, the knob travelling inside it, the times under it on the edges,
-// with the same space from the picture to the knob as from the times' digits
-// to the buttons.
+// The bottom row (mockup webcam-radar/radar-tall.html): Play on the left, the time
+// bar as in the Media popup (make_slider, media_popup.cpp) with the knob travelling
+// inside it and the times under it, the menu button in the Media popup's corner.
+// Knob and times centred on the row.
 static void build_controls(CameraPopupContext* ctx) {
   ctx->root = plain_part(ctx->card);
   lv_obj_add_flag(ctx->root, LV_OBJ_FLAG_IGNORE_LAYOUT);
@@ -714,22 +1057,21 @@ static void build_controls(CameraPopupContext* ctx) {
   lv_obj_set_pos(ctx->root, -popup_layout::kCardPad, -popup_layout::kCardPad);
 
   const int line = lv_font_get_line_height(popup_layout::font20());
-  const int mid = (kButtonTop + kVideoTopWithBar + kVideoHeight + ml::kSeekKnob / 2 - ml::kSeekHeight / 2 -
-                   ml::kTimeGap - line * 4 / 5) / 2;
-  const int width = popup_layout::kCardWidth - 2 * ml::kEdge;
-  const int bar_y = mid - ml::kSeekHeight / 2;
+  const int knob_top = kButtonTop + (ml::kButton - (ml::kSeekKnob + kBarTimeGap + line)) / 2;
+  const int width = popup_layout::kCardWidth - ml::kEdge - kBarLeft;
+  const int bar_y = knob_top + ml::kSeekKnob / 2 - ml::kSeekHeight / 2;
   ctx->bar_track = plain_part(ctx->root);
-  lv_obj_set_pos(ctx->bar_track, ml::kEdge, bar_y);
+  lv_obj_set_pos(ctx->bar_track, kBarLeft, bar_y);
   lv_obj_set_size(ctx->bar_track, width, ml::kSeekHeight);
   lv_obj_set_style_radius(ctx->bar_track, LV_RADIUS_CIRCLE, 0);
   ctx->bar_cap = plain_part(ctx->root);
-  lv_obj_set_pos(ctx->bar_cap, ml::kEdge, bar_y);
+  lv_obj_set_pos(ctx->bar_cap, kBarLeft, bar_y);
   lv_obj_set_size(ctx->bar_cap, ml::kSeekKnob, ml::kSeekHeight);
   lv_obj_set_style_radius(ctx->bar_cap, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_style_bg_opa(ctx->bar_cap, LV_OPA_COVER, 0);
   ctx->bar = lv_slider_create(ctx->root);
   lv_obj_remove_style_all(ctx->bar);
-  lv_obj_set_pos(ctx->bar, ml::kEdge, bar_y);
+  lv_obj_set_pos(ctx->bar, kBarLeft, bar_y);
   lv_obj_set_size(ctx->bar, width, ml::kSeekHeight);
   lv_obj_set_style_pad_left(ctx->bar, ml::kSeekKnob / 2, LV_PART_MAIN);
   lv_obj_set_style_pad_right(ctx->bar, ml::kSeekKnob / 2, LV_PART_MAIN);
@@ -744,19 +1086,45 @@ static void build_controls(CameraPopupContext* ctx) {
     lv_obj_add_event_cb(ctx->bar, bar_event_cb, code, ctx);
   }
 
-  const int time_top = mid + ml::kSeekHeight / 2 + ml::kTimeGap;
+  const int time_top = knob_top + ml::kSeekKnob + kBarTimeGap;
   for (lv_obj_t** label : {&ctx->time_shown, &ctx->time_newest}) {
     *label = lv_label_create(ctx->root);
     lv_obj_set_style_text_font(*label, popup_layout::font20(), 0);
     lv_label_set_text(*label, "");
     lv_obj_remove_flag(*label, LV_OBJ_FLAG_CLICKABLE);
   }
-  lv_obj_set_pos(ctx->time_shown, ml::kEdge, time_top);
+  lv_obj_set_pos(ctx->time_shown, kBarLeft, time_top);
   lv_obj_align(ctx->time_newest, LV_ALIGN_TOP_RIGHT, -ml::kEdge, time_top);
 
   ctx->play_button = control_button(ctx->root, "play", &ctx->play_label);
-  lv_obj_set_pos(ctx->play_button, popup_layout::kCardWidth / 2 - ml::kButton / 2, kButtonTop);
+  lv_obj_set_pos(ctx->play_button, ml::kEdge, kButtonTop);
   lv_obj_add_event_cb(ctx->play_button, play_event_cb, LV_EVENT_CLICKED, ctx);
+
+  // The menu: a tap beside its box closes it, the box itself keeps a tap.
+  ctx->menu_shield = plain_part(ctx->root);
+  lv_obj_set_size(ctx->menu_shield, popup_layout::kCardWidth, popup_layout::kCardHeight);
+  lv_obj_add_event_cb(ctx->menu_shield, menu_shield_event_cb, LV_EVENT_CLICKED, ctx);
+  ctx->menu_box = plain_part(ctx->root);
+  lv_obj_add_flag(ctx->menu_box, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_style_bg_opa(ctx->menu_box, LV_OPA_COVER, 0);
+  lv_obj_add_flag(ctx->menu_box, LV_OBJ_FLAG_HIDDEN);
+  ctx->menu_title = lv_label_create(ctx->menu_box);
+  lv_obj_set_style_text_font(ctx->menu_title, settings_style::row_font(), 0);
+  lv_label_set_text(ctx->menu_title, "");
+  lv_obj_remove_flag(ctx->menu_title, LV_OBJ_FLAG_CLICKABLE);
+  ctx->menu_rule = plain_part(ctx->menu_box);
+  lv_obj_set_style_bg_opa(ctx->menu_rule, settings_style::kSeparatorOpa, 0);
+  ctx->menu_list = plain_part(ctx->menu_box);
+  lv_obj_set_flex_flow(ctx->menu_list, LV_FLEX_FLOW_COLUMN);
+  lv_obj_clear_flag(ctx->menu_list, LV_OBJ_FLAG_SCROLL_CHAIN);
+  lv_obj_add_flag(ctx->menu_list, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_SCROLL_ELASTIC |
+                                                            LV_OBJ_FLAG_SCROLL_MOMENTUM));
+  lv_obj_set_scroll_dir(ctx->menu_list, LV_DIR_VER);
+  lv_obj_set_scrollbar_mode(ctx->menu_list, LV_SCROLLBAR_MODE_OFF);
+  ctx->menu_button = control_button(ctx->root, "dots-horizontal", &ctx->menu_label);
+  lv_obj_set_pos(ctx->menu_button, popup_layout::kCardWidth - ml::kEdge - ml::kButton, kButtonTop);
+  lv_obj_add_event_cb(ctx->menu_button, menu_button_event_cb, LV_EVENT_CLICKED, ctx);
+  lv_obj_add_flag(ctx->menu_button, LV_OBJ_FLAG_HIDDEN);
 }
 
 // The colors follow the opener's card and icon, as in the Media popup.
@@ -775,12 +1143,23 @@ static void style_controls(CameraPopupContext* ctx, uint32_t icon_color) {
   for (lv_obj_t* label : {ctx->time_shown, ctx->time_newest}) {
     lv_obj_set_style_text_color(label, lv_color_hex(ui_theme::text_secondary()), 0);
   }
-  // Play stays the round button in the icon role with the card's color.
-  lv_obj_set_style_bg_color(ctx->play_button, lv_color_hex(ui_theme::icon()), 0);
-  lv_obj_set_style_bg_opa(ctx->play_button, LV_OPA_COVER, 0);
-  lv_obj_set_style_bg_color(ctx->play_button, lv_color_hex(ui_theme::text_soft()), LV_PART_MAIN | LV_STATE_PRESSED);
-  lv_obj_set_style_bg_opa(ctx->play_button, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
-  lv_obj_set_style_text_color(ctx->play_label, lv_color_hex(ctx->surface_color), 0);
+  // Play in the circle's color with the icon role (user 2026-11-06): dark the
+  // tone with a white icon, light the pale tone with the dark icon.
+  lv_color_t raised = {};
+  lv_opa_t raised_opa = 0;
+  popup_shell_control_raised_fill(ctx->surface_color, icon_color, raised, raised_opa);
+  lv_obj_set_style_bg_color(ctx->play_button, control, 0);
+  lv_obj_set_style_bg_opa(ctx->play_button, control_opa, 0);
+  lv_obj_set_style_bg_color(ctx->play_button, raised, LV_PART_MAIN | LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(ctx->play_button, raised_opa, LV_PART_MAIN | LV_STATE_PRESSED);
+  popup_nav_style::no_press_filter(ctx->play_button, LV_PART_MAIN | LV_STATE_PRESSED);
+  lv_obj_set_style_text_color(ctx->play_label, lv_color_hex(ui_theme::icon()), 0);
+  // The menu button: a circle only while pressed.
+  lv_obj_set_style_bg_color(ctx->menu_button, control, 0);
+  lv_obj_set_style_bg_opa(ctx->menu_button, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_bg_opa(ctx->menu_button, control_opa, LV_PART_MAIN | LV_STATE_PRESSED);
+  popup_nav_style::no_press_filter(ctx->menu_button, LV_PART_MAIN | LV_STATE_PRESSED);
+  lv_obj_set_style_text_color(ctx->menu_label, lv_color_hex(ui_theme::icon()), 0);
 }
 
 static CameraPopupContext* create_popup() {
@@ -840,6 +1219,13 @@ static CameraPopupContext* create_popup() {
   lv_obj_add_flag(ctx->soft_full_image, LV_OBJ_FLAG_HIDDEN);
 #endif
 
+  // The last picture lies under the stream's image until its first frame.
+  ctx->kept_image = lv_image_create(video);
+  lv_obj_set_size(ctx->kept_image, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_center(ctx->kept_image);
+  lv_obj_remove_flag(ctx->kept_image, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_flag(ctx->kept_image, LV_OBJ_FLAG_HIDDEN);
+
   ctx->image = lv_image_create(video);
   // The bridge delivers the native frame size requested by this device.
   // No LVGL scaling or letterboxing is needed.
@@ -868,7 +1254,7 @@ static CameraPopupContext* create_popup() {
   lv_obj_align(ctx->status, LV_ALIGN_CENTER, 0, popup_layout::scale480(48));
 
   build_controls(ctx);
-  apply_layout(ctx, false);
+  apply_layout(ctx);
   show_bar(ctx);
 
   lv_obj_move_foreground(ctx->icon_label);
@@ -909,7 +1295,7 @@ static void start_camera_stream(const String& url, bool full) {
             : displayManager.getBufferLines();
     const bool previous_fast =
         displayManager.isUsingFastInternalBuffer();
-    if (displayManager.setSinglePsramBufferLines(kVideoHeight)) {
+    if (displayManager.setSinglePsramBufferLines(camera_geometry::kBoxHeight)) {
       ctx->previous_draw_buffer_requested_lines =
           previous_requested_lines;
       ctx->previous_draw_buffer_fast = previous_fast;
@@ -921,9 +1307,10 @@ static void start_camera_stream(const String& url, bool full) {
     }
   }
   const bool fast = camera_transport::request().fast;
-  if (camera_stream_start(url.c_str(), ctx->surface_color, full)) {
+  if (camera_stream_start(url.c_str(), ctx->surface_color, full, ctx->frame_w, ctx->frame_h)) {
     ctx->stream_fast = fast;
     camera_transport::stream_started(fast);
+    ctx->keeping = !full && !ctx->live_kind;
     return;
   }
   if (full) {
@@ -991,6 +1378,14 @@ void show_camera_popup(const CameraPopupInit& init) {
       g_camera_popup->card,
       lv_color_hex(g_camera_popup->surface_color), 0);
 
+  g_camera_popup->entries = camera_entries::parse(init.entries.c_str());
+  g_camera_popup->entry_index = camera_entries::index_of(g_camera_popup->entries, init.entity_id.c_str());
+  g_camera_popup->remember_key = init.remember_key;
+  g_camera_popup->menu_rows_stale = true;
+  g_camera_popup->menu_open = false;
+  set_shown_menu_parts(g_camera_popup, false);
+  g_camera_popup->icon_color = init.icon_color;
+
   String title = init.title;
   title.trim();
   if (!title.length()) title = init.entity_id;
@@ -1003,8 +1398,8 @@ void show_camera_popup(const CameraPopupInit& init) {
   lv_obj_set_style_text_color(g_camera_popup->icon_label, lv_color_hex(init.icon_color), 0);
   popup_layout::alignHeader(g_camera_popup->card, g_camera_popup->title_label, g_camera_popup->icon_label);
 
-  // A new opening: the newest frame, no history until the Bridge tells it; a
-  // camera known to have one opens in its layout at once.
+  // A new opening: the newest frame, no history until the Bridge tells it; the
+  // last picture of a still camera shows at once in its size.
   set_playing(g_camera_popup, false);
   g_camera_popup->frame_count = 0;
   g_camera_popup->shown_frame = 0;
@@ -1013,7 +1408,11 @@ void show_camera_popup(const CameraPopupInit& init) {
   g_camera_popup->status_sticky = false;
   lv_label_set_text(g_camera_popup->value_label, "");
   style_controls(g_camera_popup, init.icon_color);
-  apply_layout(g_camera_popup, g_camera_popup->bar_entity.equalsIgnoreCase(init.entity_id));
+  g_camera_popup->frame_w = kVideoFrameWidth;
+  g_camera_popup->frame_h = kVideoHeight;
+  // Not on the way to the full screen.
+  if (!g_camera_popup->open_full) show_kept_picture(g_camera_popup);
+  apply_layout(g_camera_popup);
   show_bar(g_camera_popup);
 
   lv_image_set_src(g_camera_popup->image, nullptr);
@@ -1138,6 +1537,10 @@ void process_camera_popup() {
     close_camera_popup();
     return;
   }
+  // Under the open menu the picture stands: a new frame goes straight to the
+  // panel and would cover the menu (P4).
+  if (g_camera_popup->menu_open) {
+  } else
 #if defined(DEVICE_ESP32_S3_RGB_480)
   // The S3's full screen shows the frames in its own image (LVGL).
   if (g_camera_popup->full) {
@@ -1147,6 +1550,11 @@ void process_camera_popup() {
   camera_stream_process_ui(g_camera_popup->image,
                            g_camera_popup->placeholder,
                            g_camera_popup->resuming ? nullptr : g_camera_popup->status);
+  // A still camera's newest picture, for the next opening.
+  camera_stream_keep_jpeg(g_camera_popup->keeping && !g_camera_popup->full && !g_camera_popup->playing &&
+                          !g_camera_popup->frame_dirty &&
+                          g_camera_popup->shown_frame + 1 >= g_camera_popup->frame_count);
+  take_kept_jpeg(g_camera_popup);
   if (!g_camera_popup->switch_frame_logged && camera_stream_first_frame_ms()) {
     g_camera_popup->switch_frame_logged = true;
     note_switch(g_camera_popup, g_camera_popup->full ? "first full-screen frame" : "first popup frame");
@@ -1174,7 +1582,9 @@ void process_camera_popup() {
   // The words show only if the first frame takes long; over a running picture
   // only an error or a message that must stay.
   const bool no_frame = lv_obj_has_flag(g_camera_popup->image, LV_OBJ_FLAG_HIDDEN);
-  const bool waited = millis() - g_camera_popup->opened_ms >= kStatusDelayMs;
+  if (!no_frame) hide_kept_picture(g_camera_popup);
+  // The last picture needs no words while the stream comes.
+  const bool waited = !g_camera_popup->kept_dsc && millis() - g_camera_popup->opened_ms >= kStatusDelayMs;
   if (no_frame && waited && !lv_label_get_text(g_camera_popup->placeholder)[0]) {
     lv_label_set_text(g_camera_popup->placeholder, camera_text().camera_preparing);
   }
@@ -1194,7 +1604,7 @@ void camera_popup_handle_mqtt_status(const char* payload) {
   }
 
   // Room for a history's times (kMaxFrames) next to the stream's fields.
-  DynamicJsonDocument doc(1536);
+  DynamicJsonDocument doc(4096);
   if (deserializeJson(doc, payload)) {
     camera_popup_set_status(camera_text().camera_invalid_response, true);
     return;
@@ -1206,9 +1616,10 @@ void camera_popup_handle_mqtt_status(const char* payload) {
   }
   // New frames while the popup shows them: no answer to a pending request.
   if (strcmp(doc["status"] | "", "frames") == 0) {
-    JsonArrayConst frames = doc["frames"];
-    if (!frames.isNull()) {
-      take_frames(g_camera_popup, frames);
+    if (frames_in(doc.as<JsonVariantConst>())) {
+      const bool had_row = g_camera_popup->frame_count >= 2;
+      take_frames(g_camera_popup, doc.as<JsonVariantConst>());
+      if (had_row != (g_camera_popup->frame_count >= 2)) apply_layout(g_camera_popup);
       show_bar(g_camera_popup);
       show_head_value(g_camera_popup);
       // No controls in the full screen: a history plays by itself there.
@@ -1255,17 +1666,17 @@ void camera_popup_handle_mqtt_status(const char* payload) {
         full ? width == g_camera_popup->full_width &&
                    height == g_camera_popup->full_height &&
                    strcmp(view, "full") == 0
-             : width == camera_geometry::kWidth &&
-                   height == camera_geometry::kHeight;
+             : width >= 64 && width <= camera_geometry::kWidth && width % 8 == 0 &&
+                   height >= 16 && height <= camera_geometry::kBoxHeight && height % 2 == 0;
     if (!size_ok ||
         fps < 1 || fps > camera_geometry::kFps ||
         strcmp(transport, "tcp-ack-v1") != 0 ||
         strcmp(framing, "ack-jpeg-v1") != 0) {
       Serial.printf(
           "[Camera] Invalid stream format: %ux%u@%u transport=%s "
-          "framing=%s (expected %ux%u@<=%u tcp-ack-v1/ack-jpeg-v1)\n",
+          "framing=%s (expected at most %ux%u@<=%u tcp-ack-v1/ack-jpeg-v1)\n",
           width, height, fps, transport, framing,
-          camera_geometry::kWidth, camera_geometry::kHeight,
+          camera_geometry::kWidth, camera_geometry::kBoxHeight,
           camera_geometry::kFps);
       camera_popup_set_status(camera_text().camera_invalid_response, true);
       return;
@@ -1276,18 +1687,19 @@ void camera_popup_handle_mqtt_status(const char* payload) {
     // What this camera is: a history brings its times, the bar and Play. A
     // frame picked before a new stream (back from the full screen) goes out again.
     g_camera_popup->live_kind = strcmp(doc["kind"] | "", "live") == 0;
-    JsonArrayConst frames = doc["frames"];
-    const bool has_history = !frames.isNull();
-    if (has_history) {
-      take_frames(g_camera_popup, frames);
-      g_camera_popup->bar_entity = g_camera_popup->entity_id;
+    if (frames_in(doc.as<JsonVariantConst>())) {
+      take_frames(g_camera_popup, doc.as<JsonVariantConst>());
       if (g_camera_popup->shown_frame + 1 < g_camera_popup->frame_count) g_camera_popup->frame_dirty = true;
     } else {
       g_camera_popup->frame_count = 0;
       g_camera_popup->shown_frame = 0;
-      if (g_camera_popup->bar_entity.equalsIgnoreCase(g_camera_popup->entity_id)) g_camera_popup->bar_entity = String();
     }
-    if (has_history != g_camera_popup->with_bar) apply_layout(g_camera_popup, has_history);
+    if (!full) {
+      // The frames' own shape; the picture centred in its area.
+      g_camera_popup->frame_w = width;
+      g_camera_popup->frame_h = height;
+      apply_layout(g_camera_popup);
+    }
     show_bar(g_camera_popup);
     show_head_value(g_camera_popup);
     // No controls in the full screen: a history plays by itself there.

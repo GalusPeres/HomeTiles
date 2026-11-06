@@ -70,6 +70,24 @@ int main() {
     huge.add("sensors", id.c_str());
   }
   print_parts("h", huge, 7, true);
+
+  // The Bridge's own cameras: once per id, part of the version, in parts.
+  Declaration sources;
+  sources.add("cameras", "camera.ht_radar_home");
+  sources.addSource("camera.ht_radar_home", "{\"id\":\"ht_radar_home\"}");
+  sources.addSource("camera.ht_radar_home", "{\"id\":\"ht_radar_home\"}");
+  std::printf("source-version %d\n", sources.version(true) != Declaration().version(true) ? 1 : 0);
+  Declaration without;
+  without.add("cameras", "camera.ht_radar_home");
+  std::printf("source-counts %d\n", sources.version(true) != without.version(true) ? 1 : 0);
+  sources.setRadarSource("\"https://radar.example.org/list.json\"");
+  print_parts("s", sources, 9, true);
+  Declaration long_sources;
+  for (int i = 0; i < 12; ++i) {
+    const std::string id = "ht_cam_" + std::to_string(i);
+    long_sources.addSource(id, "{\"id\":\"" + id + "\",\"url\":\"https://example.org/" + std::string(380, 'x') + "\"}");
+  }
+  print_parts("l", long_sources, 11, false);
   return 0;
 }
 `;
@@ -123,4 +141,24 @@ if (output !== null) {
   assert.equal(kept + Number(value('h-dropped')), 300, 'what does not fit is counted, never cut into broken JSON');
 
   console.log('Entity declaration core: version, parts and entity ids pass');
+}
+
+{
+  const sourceLines = output === null ? [] : output.trim().split('\n');
+  if (sourceLines.length) {
+    assert.ok(sourceLines.includes('source-version 1') && sourceLines.includes('source-counts 1'));
+    const single = sourceLines.filter(line => line.startsWith('s {')).map(line => JSON.parse(line.slice(2)));
+    assert.equal(single.length, 1);
+    assert.deepEqual(single[0].src, [{id: 'ht_radar_home'}], 'A source once');
+    assert.equal(single[0].rs, 'https://radar.example.org/list.json');
+    assert.deepEqual(single[0].lists, {cameras: ['camera.ht_radar_home']});
+    const long = sourceLines.filter(line => line.startsWith('l {'));
+    assert.ok(long.length >= 2, 'Long addresses take several parts');
+    for (const line of long) {
+      const part = JSON.parse(line.slice(2));
+      assert.ok(line.length - 2 <= 1800, 'Within the sealed size');
+      assert.equal(part.n, long.length);
+    }
+    assert.equal(long.flatMap(line => JSON.parse(line.slice(2)).src || []).length, 12, 'None lost');
+  }
 }

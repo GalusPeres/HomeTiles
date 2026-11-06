@@ -72,7 +72,7 @@ for (const [name, m] of Object.entries(layouts)) {
   assert.equal(m.row - m.edge - m.top, m.box[1], name);
 }
 assert.match(popup, /lv_obj_align\(ctx->video, LV_ALIGN_TOP_MID, 0, kAreaTop \+ \(area - ctx->frame_h\) \/ 2 - popup_layout::kCardPad\);/);
-assert.match(popup, /const bool row = ctx->frame_count >= 2 \|\| ctx->entries\.size\(\) >= 2;/);
+assert.match(popup, /const bool row = ctx->frame_count >= 2 \|\| ctx->entries\.size\(\) >= 2 \|\| is_radar\(ctx\);/);
 
 // The stream takes the frame's own size within the box.
 assert.match(mqtt, /\\"box\\":\[%u,%u\]/);
@@ -80,7 +80,15 @@ assert.match(popup, /camera_stream_start\(url\.c_str\(\), ctx->surface_color, fu
 assert.match(popup, /width <= camera_geometry::kWidth && width % 8 == 0 &&\s*height >= 16 && height <= camera_geometry::kBoxHeight && height % 2 == 0;/);
 assert.match(stream, /picture_info\.width != g_frame_w \|\| picture_info\.height != g_frame_h/);
 assert.match(stream, /area\.x1, area\.y1, g_frame_w, g_frame_h, frame_stride\(\),/);
-assert.match(stream, /constexpr uint16_t kDecodedHeight = camera_geometry::kBoxDecodedHeight;/);
+// Buffers in this stream's size, no more (PSRAM is short on the S3), and the stream
+// comes before the kept picture.
+assert.match(stream, /static_cast<size_t>\(frame_stride\(\)\) \* \(\(g_frame_h \+ 15U\) & ~15U\) \* sizeof\(uint16_t\)/);
+assert.doesNotMatch(stream, /kPixelBytes|kDecodedHeight/);
+assert.match(stream, /\[CameraStream\] No frame buffer %u of %u bytes: psram free=%uKB largest=%uKB/);
+assert.match(popup, /if \(!started && ctx->kept_dsc\) \{[\s\S]{0,160}hide_kept_picture\(ctx\);\s*started = camera_stream_start/);
+// No 16:9 step for the radar; while switching the previous picture stays.
+assert.match(popup, /ctx->frame_h = is_radar\(ctx\) \? camera_geometry::kBoxHeight : kVideoHeight;/);
+assert.match(popup, /if \(!show_kept_picture\(ctx, ctx->entity_id, true\)\) show_kept_picture\(ctx, previous, false\);/);
 
 // The bottom row: Play left, the bar from the Media popup's constants, the times
 // under it at its ends, the menu in the Media popup's corner, the bar gives way.
@@ -114,7 +122,7 @@ assert.match(popup, /lv_label_set_text\(ctx->menu_title, kind == camera_entries:
 const entry = popup.slice(popup.indexOf('static void open_entry'), popup.indexOf('static void menu_row_event_cb'));
 assert.match(entry, /mqttPublishCameraCommand\(ctx->entity_id\.c_str\(\), "close"\)/);
 assert.match(entry, /camera_stream_stop\(\);/);
-assert.match(entry, /show_kept_picture\(ctx\)/);
+assert.match(entry, /show_kept_picture\(ctx, ctx->entity_id, true\)/);
 assert.match(entry, /open_popup_stream\(ctx\);/);
 assert.match(entry, /if \(ctx->remember_key\) camera_tile_entry_chosen\(ctx->remember_key, index\);/);
 

@@ -83,7 +83,6 @@ inline constexpr int kAreaTop = media_popup_layout::kHeadTop + media_popup_layou
 inline constexpr int kAreaBottom = media_popup_layout::kVolumeTop - media_popup_layout::kEdge;
 inline constexpr uint16_t kBoxHeight = static_cast<uint16_t>(
     (kAreaBottom - kAreaTop < kHeight ? kHeight : kAreaBottom - kAreaTop > 720 ? 720 : kAreaBottom - kAreaTop) & ~1);
-inline constexpr uint16_t kBoxDecodedHeight = (kBoxHeight + 15U) & ~15U;
 
 static_assert(kWidth >= 320 && kWidth <= 752,
               "Camera popup width is outside the supported P4 range");

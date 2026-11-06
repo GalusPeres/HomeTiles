@@ -384,9 +384,15 @@ static void show_bar(CameraPopupContext* ctx) {
   lv_label_set_text(ctx->time_newest, when);
 }
 
+// The Bridge's rain radar, by its entity (camera_sources.py): it always gets its time
+// bar, so its row is kept from the start and the picture never moves when it comes.
+static bool is_radar(const CameraPopupContext* ctx) {
+  return ctx->entity_id.startsWith("camera.ht_radar_");
+}
+
 // The picture in this stream's size, centred in its area.
 static void apply_layout(CameraPopupContext* ctx) {
-  const bool row = ctx->frame_count >= 2 || ctx->entries.size() >= 2;
+  const bool row = ctx->frame_count >= 2 || ctx->entries.size() >= 2 || is_radar(ctx);
   const int area = row ? kAreaHeightWithRow : kAreaHeightPlain;
   lv_obj_set_size(ctx->video, ctx->frame_w, ctx->frame_h);
   lv_obj_set_size(ctx->image, ctx->frame_w, ctx->frame_h);
@@ -502,12 +508,21 @@ static void hide_kept_picture(CameraPopupContext* ctx) {
   ctx->kept_dsc = nullptr;
 }
 
-// This entity's last picture over the black until the stream's first frame; its
-// size and the head's time come with it.
-static bool show_kept_picture(CameraPopupContext* ctx) {
+// The picture's size until the Bridge tells it: the radar fills the box in every
+// place, a camera or webcam is 16:9 unless it says otherwise. So the radar does not
+// open small and grow (user 2026-11-06).
+static void default_frame_size(CameraPopupContext* ctx) {
+  ctx->frame_w = kVideoFrameWidth;
+  ctx->frame_h = is_radar(ctx) ? camera_geometry::kBoxHeight : kVideoHeight;
+}
+
+// An entity's last picture over the black until the stream's first frame; its size
+// comes with it, and for the shown entity also the head's time. While switching the
+// previous entity's stays until the new one has a picture.
+static bool show_kept_picture(CameraPopupContext* ctx, const String& entity, bool own) {
   hide_kept_picture(ctx);
   for (const KeptPicture& kept : g_kept_pictures) {
-    if (!kept.entity.equalsIgnoreCase(ctx->entity_id)) continue;
+    if (!kept.entity.equalsIgnoreCase(entity)) continue;
     uint16_t w = 0, h = 0;
     uint16_t* pixels = image_screensaver_decode_picture(kept.jpeg, kept.bytes, kept.width, kept.height, w, h);
     if (!pixels || w != kept.width || h != kept.height) {
@@ -535,7 +550,7 @@ static bool show_kept_picture(CameraPopupContext* ctx) {
     ctx->frame_h = h;
     lv_image_set_src(ctx->kept_image, dsc);
     lv_obj_remove_flag(ctx->kept_image, LV_OBJ_FLAG_HIDDEN);
-    show_head_text(ctx, kept.newest);
+    if (own) show_head_text(ctx, kept.newest);
     return true;
   }
   return false;
@@ -815,6 +830,7 @@ static void open_entry(CameraPopupContext* ctx, size_t index) {
   lv_obj_add_flag(ctx->image, LV_OBJ_FLAG_HIDDEN);
   ctx->pending_url = String();
   camera_stream_stop();
+  const String previous = ctx->entity_id;
   ctx->entry_index = index;
   ctx->entity_id = entry.entity.c_str();
   hometiles_title::set(ctx->title_label, camera_entry_title(entry).c_str());
@@ -828,14 +844,12 @@ static void open_entry(CameraPopupContext* ctx, size_t index) {
   ctx->live_kind = false;
   ctx->status_sticky = false;
   lv_label_set_text(ctx->value_label, "");
-  ctx->frame_w = kVideoFrameWidth;
-  ctx->frame_h = kVideoHeight;
-  const bool kept = show_kept_picture(ctx);
+  default_frame_size(ctx);
+  if (!show_kept_picture(ctx, ctx->entity_id, true)) show_kept_picture(ctx, previous, false);
   apply_layout(ctx);
   show_bar(ctx);
   lv_obj_clear_flag(ctx->placeholder, LV_OBJ_FLAG_HIDDEN);
   lv_label_set_text(ctx->placeholder, "");
-  (void)kept;
   ctx->opened_ms = millis();
   ctx->open_logged = false;
   camera_popup_set_status(camera_text().camera_bridge_requesting, false);
@@ -1307,7 +1321,15 @@ static void start_camera_stream(const String& url, bool full) {
     }
   }
   const bool fast = camera_transport::request().fast;
-  if (camera_stream_start(url.c_str(), ctx->surface_color, full, ctx->frame_w, ctx->frame_h)) {
+  bool started = camera_stream_start(url.c_str(), ctx->surface_color, full, ctx->frame_w, ctx->frame_h);
+  // The stream comes before the kept picture when PSRAM is short.
+  if (!started && ctx->kept_dsc) {
+    Serial.println("[Camera] Stream did not start; the kept picture makes room");
+    hide_kept_picture(ctx);
+    started = camera_stream_start(url.c_str(), ctx->surface_color, full, ctx->frame_w, ctx->frame_h);
+    if (started) camera_popup_set_status(camera_text().camera_connecting, false);
+  }
+  if (started) {
     ctx->stream_fast = fast;
     camera_transport::stream_started(fast);
     ctx->keeping = !full && !ctx->live_kind;
@@ -1408,10 +1430,9 @@ void show_camera_popup(const CameraPopupInit& init) {
   g_camera_popup->status_sticky = false;
   lv_label_set_text(g_camera_popup->value_label, "");
   style_controls(g_camera_popup, init.icon_color);
-  g_camera_popup->frame_w = kVideoFrameWidth;
-  g_camera_popup->frame_h = kVideoHeight;
+  default_frame_size(g_camera_popup);
   // Not on the way to the full screen.
-  if (!g_camera_popup->open_full) show_kept_picture(g_camera_popup);
+  if (!g_camera_popup->open_full) show_kept_picture(g_camera_popup, g_camera_popup->entity_id, true);
   apply_layout(g_camera_popup);
   show_bar(g_camera_popup);
 

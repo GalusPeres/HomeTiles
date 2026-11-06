@@ -4,7 +4,7 @@
 // tile's own fields, so previews, drafts and saving work as for every tile. Runs the
 // whole delivered editor in a browser against the real CSS.
 import assert from 'node:assert/strict';
-import {inlineScriptSafe, readRepoFile} from '../../lib/admin-source.mjs';
+import {extractDeliveredFunction, inlineScriptSafe, readRepoFile} from '../../lib/admin-source.mjs';
 import {runDomHarness} from '../../lib/headless-dom.mjs';
 
 const admin = readRepoFile('src/types/camera/admin.js');
@@ -14,12 +14,15 @@ const scripts = readRepoFile('src/types/camera/web_scripts.cpp');
 // The fields of the panel: Quelle, the list, then what applies to the whole tile.
 const source = html.indexOf('"camera_source", tr.media_source');
 const list = html.indexOf('_camera_list');
-const group = html.indexOf('tr.camera_tile_group');
 const display = html.indexOf('"camera_display", tr.camera_show');
 const shows = html.indexOf('tr.camera_tile_shows');
 const tap = html.indexOf('"camera_tap", tr.camera_tap');
-assert.ok(source > 0 && source < list && list < group && group < display && display < shows && shows < tap, 'The mockup\'s order');
+assert.ok(source > 0 && source < list && list < display && display < shows && shows < tap, 'The mockup\'s order');
 assert.doesNotMatch(html, /appendEntityPickerField/, 'The entity pickers belong to the entries');
+// Like every tile, only with more entities: source and entries where a tile's entity
+// stands, the options under Advanced.
+assert.ok(html.indexOf('data-tile-place=\\"head\\"') > 0 && html.indexOf('data-tile-place=\\"head\\"') < source, 'In the head');
+assert.doesNotMatch(html, /camera_tile_group/, 'No heading of its own');
 // Every word through the central strings, in the type's own script block.
 for (const key of ['camera_list_places', 'camera_add_entity', 'camera_add_place', 'camera_add_webcam', 'camera_own_coordinates',
                    'camera_no_picture_found', 'camera_latitude_range', 'camera_longitude_range', 'camera_tile_shows_last']) {
@@ -43,12 +46,17 @@ assert.match(iconPicker, /entry: !!button\?\.dataset\.iconEntry/, 'An entry\'s i
 
 const css = readRepoFile('src/web/assets/admin.css');
 const harness = `<!doctype html><html><head><meta charset="utf-8"><style>${css.replaceAll('</', '<\\/')}</style></head><body data-result="running">
-<div class="tile-settings"><div class="tile-head-row"><textarea id="t_tile_title"></textarea><input id="t_tile_icon"></div>
+<div class="tile-settings"><div id="tSettings"><div class="tile-head-row"><textarea id="t_tile_title"></textarea><input id="t_tile_icon"></div>
+<div class="tile-place-slot" id="t_tile_head_slot"></div>
+<div class="tile-settings-body"><div class="tile-place-slot" id="t_tile_top_slot"></div>
+<div class="tile-settings-group" id="t_tile_group_advanced">Advanced</div>
 <div id="t_camera_fields" class="type-fields show">
 <input type="hidden" id="t_camera_entity"><input type="hidden" id="t_camera_entries">
+<div class="tile-place camera-tile-fields" data-tile-place="head">
 <select id="t_camera_source"><option value="h">H</option><option value="r">R</option><option value="w">W</option></select>
 <label id="t_camera_list_label"></label>
 <div class="camera-entries-wrap" data-tab="t"><div class="camera-entries" id="t_camera_list"></div><button type="button" class="camera-entry-add" id="t_camera_add" data-camera-add></button></div>
+</div>
 <select id="t_camera_display"><option value="0">0</option><option value="1">1</option></select>
 <div class="camera-shows-row hidden" id="t_camera_shows_row"><label>x</label><select id="t_camera_shows"></select></div>
 <select id="t_camera_tap"><option value="0">0</option><option value="1">1</option></select>
@@ -57,7 +65,7 @@ const harness = `<!doctype html><html><head><meta charset="utf-8"><style>${css.r
 <div id="t_camera_every_row"><input id="t_camera_every" value="10"></div>
 <input id="t_camera_transparency" value="0"><output id="t_camera_transparency_value"></output></div>
 <input type="hidden" id="t_tile_icon_color" value="#FFFFFF" data-unset="1">
-</div></div>
+</div></div></div></div>
 <script>${inlineScriptSafe(`
 const CAMERA_TEXT = Object.freeze({entity:'Picture or camera',listPlaces:'Places',listWebcams:'Webcams',place:'Place',address:'Address',
   addEntity:'Add picture',addPlace:'Add place',addWebcam:'Add webcam',newWebcam:'New webcam',placeHome:'Home',kindZone:'Zone',kindImage:'Picture',
@@ -92,6 +100,8 @@ function entityPickerEntryFor(input, value) {
     context: value === 'zone.arbeit' ? 'Home Assistant' : value.startsWith('geo:') ? 'Trentino, Italia' : ''};
 }
 ${admin}
+${extractDeliveredFunction('placeTileTypeParts')}
+${extractDeliveredFunction('syncTileAdvancedCaption')}
 function check(ok, what) { if (!ok) throw new Error(what); }
 const $ = id => document.getElementById(id);
 const click = selector => { const el = document.querySelector(selector); check(el, 'missing ' + selector); el.click(); };
@@ -104,6 +114,14 @@ const saved = () => {
   return out;
 };
 try {
+  // Source and entries in the head where a tile's entity stands, the options under Advanced.
+  placeTileTypeParts('t');
+  syncTileAdvancedCaption('t');
+  check($('t_tile_head_slot').contains($('t_camera_source')) && $('t_tile_head_slot').contains($('t_camera_list')), 'in the head');
+  check(!$('t_tile_top_slot').children.length, 'nothing else moved');
+  check($('t_camera_fields').contains($('t_camera_display')) && $('t_camera_fields').contains($('t_camera_fit')), 'the options stay');
+  check(!$('t_tile_group_advanced').classList.contains('hidden'), 'under Advanced');
+  check($('t_tile_title').closest('.tile-head-row').classList.contains('hidden'), 'title and icon belong to the entries');
   // A tile from before the entries: its one entity becomes the first row.
   $('t_tile_title').value = 'Door';
   loadCameraFields('t', {sensor_entity: 'camera.door', sensor_display_mode: 1});

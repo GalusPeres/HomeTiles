@@ -11,7 +11,10 @@
 // the Bridge's picture of its entry (picture.h), its placement, a camera's
 // interval, the colors and transparency of the circle and the title pill; a tap
 // opens the popup or the full screen. The editor shows those rows only where they
-// apply (syncCameraFields). No hint text (user 2026-10-11: too much text).
+// apply (syncCameraFields). Laid out like every tile, only with more entities (user
+// 2026-11-06): source and entries in the head under Type, where a tile's entity
+// stands (data-tile-place, type-selection.js placeTileTypeParts), the options under
+// Advanced. No hint text (user 2026-10-11: too much text).
 void append_camera_fields_html(String& html, const String& tab_id) {
   const auto& tr = i18n::strings(configManager.getConfig().language);
   html += R"html(
@@ -21,16 +24,14 @@ void append_camera_fields_html(String& html, const String& tab_id) {
               )html";
   html += "<input type=\"hidden\" id=\"" + tab_id + "_camera_entity\"><input type=\"hidden\" id=\"" + tab_id +
           "_camera_entries\">\n";
+  html += "              <div class=\"tile-place camera-tile-fields\" data-tile-place=\"head\">\n";
   const SwitchChoice sources[] = {
       {"h", tr.camera_source_ha}, {"r", tr.camera_source_radar}, {"w", tr.camera_source_webcam}};
   append_switch_choice(html, tab_id, "camera_source", tr.media_source, sources, 3);
   html += "              <label class=\"switch-choice-label\" id=\"" + tab_id + "_camera_list_label\"></label>\n";
   html += "              <div class=\"camera-entries-wrap\" data-tab=\"" + tab_id + "\"><div class=\"camera-entries\" id=\"" +
           tab_id + "_camera_list\"></div><button type=\"button\" class=\"camera-entry-add\" id=\"" + tab_id +
-          "_camera_add\" data-camera-add></button></div>\n";
-  html += "              <div class=\"tile-settings-group\">";
-  appendHtmlEscaped(html, tr.camera_tile_group);
-  html += "</div>\n";
+          "_camera_add\" data-camera-add></button></div>\n              </div>\n";
   const SwitchChoice shows[] = {{"0", tr.camera_show_icon}, {"1", tr.camera_show_picture}};
   append_switch_choice(html, tab_id, "camera_display", tr.camera_show, shows, 2);
   // Which entry the tile shows, only with more than one (cameraRenderShows).

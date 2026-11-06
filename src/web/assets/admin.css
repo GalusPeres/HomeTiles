@@ -4087,7 +4087,10 @@ select.setup-from:hover { background-color:#333333; }
 /* A Camera tile's entries (types/camera/admin.js): one frame per entry, its head
    stays exactly the same when it folds out downward. */
 .camera-entries-wrap { display:grid; gap:6px; }
-.camera-entries { display:grid; gap:6px; }
+/* The head stays while the settings scroll: a long list scrolls in itself. */
+.camera-entries {
+  display:grid; gap:6px; max-height:max(220px, calc(100vh - 420px)); overflow-y:auto; overscroll-behavior:contain;
+}
 .camera-entries:empty { display:none; }
 .camera-entry { border:1px solid var(--line-strong); border-radius:10px; background:var(--well); min-width:0; }
 .camera-entry-head {
@@ -4132,7 +4135,7 @@ select.setup-from:hover { background-color:#333333; }
 #radar_source[aria-invalid="true"] { border-color:var(--danger); }
 /* The choices in the Camera tile's wrappers span the panel like all others, its
    interval stands beside its label like the other single fields. */
-[id$="_camera_tap_row"] > .switch-choices, .camera-picture-fields > .switch-choices {
+.camera-tile-fields > .switch-choices, [id$="_camera_tap_row"] > .switch-choices, .camera-picture-fields > .switch-choices {
   display:grid; grid-auto-columns:auto; width:100%; box-sizing:border-box;
 }
 [id$="_camera_every_row"] {

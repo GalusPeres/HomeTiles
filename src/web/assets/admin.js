@@ -23731,6 +23731,7 @@ function maybeFillTitleFromMedia(tab) {
       const index = Number(toggle.dataset.cameraToggle);
       editor.open = editor.open === index ? -1 : index;
       renderCameraEntries(tab);
+      if (editor.open >= 0) document.querySelector('#' + tab + '_camera_list [data-camera-entry="' + index + '"]')?.scrollIntoView({ block: 'nearest' });
     }
   });
 

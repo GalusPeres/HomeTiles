@@ -361,6 +361,11 @@ int main() {
     CHECK(seeks.empty() && volumes.empty());
   }
   hide_media_popup(); media_progress_timer_cb(nullptr);
+  // Every close hid the shell, cancelled a pending open, reset the library and
+  // freed the menu shadow; none of these paths queued an asynchronous delete.
+  CHECK(shell_hides > 0 && shell_hides == opens_cancelled &&
+        opens_cancelled == browse_resets && browse_resets == shadows_freed);
+  CHECK(async_calls == 0);
   return failures ? 1 : 0;
 }
 `;

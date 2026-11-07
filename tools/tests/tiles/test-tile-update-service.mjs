@@ -96,13 +96,13 @@ int main() {
   process_tile_update_queues<TileUpdateBudget::Active>();
   expect_calls(active);
   for (std::size_t i = 0; i < pending.size(); ++i) {
-    assert(pending[i] == 20 - active[i]);
+    assert(pending[i] == 20u - active[i]);
   }
 
   process_tile_update_queues<TileUpdateBudget::Active>();
   expect_calls(active);
   for (std::size_t i = 0; i < pending.size(); ++i) {
-    assert(pending[i] == 20 - 2 * active[i]);
+    assert(pending[i] == 20u - 2u * active[i]);
   }
 
   process_tile_update_queues<TileUpdateBudget::DrainAll>();
@@ -113,6 +113,11 @@ int main() {
   process_tile_update_queues<TileUpdateBudget::Active>();
   expect_calls(active);
   for (unsigned count : pending) assert(count == 0);
+
+  // Power flow and icon/title recolors run once in every pass, including the
+  // drain pass and the empty pass.
+  assert(power_flow_calls == 4u);
+  assert(icon_source_calls == 4u);
   return 0;
 }
 `;

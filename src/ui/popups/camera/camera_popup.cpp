@@ -20,6 +20,7 @@
 #include "src/core/power/power_manager.h"
 #include "src/fonts/ui_fonts.h"
 #include "src/network/mqtt/mqtt_handlers.h"
+#include "src/network/network_manager.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
@@ -96,6 +97,9 @@ constexpr uint8_t kSourceRetries = 6;
 constexpr uint32_t kBridgeResponseTimeoutMs = 30000;
 // A full-screen request the Bridge does not answer goes back to the popup.
 constexpr uint32_t kFullScreenResponseTimeoutMs = 10000;
+// Without a connection to the Bridge (Home Assistant restarting, Wi-Fi gone) the
+// picture stays without words; only a connection gone this long is told.
+constexpr uint32_t kBridgeLostTellMs = 30000;
 constexpr uint8_t kFullEnter = 1;
 constexpr uint8_t kFullLeave = 2;
 // A tap in a full screen a tile opened straight (CameraPopupInit::full_screen):
@@ -179,6 +183,10 @@ struct CameraPopupContext {
   // rejects camera_geometry::kFps.
   uint8_t requested_fps = camera_geometry::kFps;
   bool waiting_for_bridge = false;
+  // Since when the connection to the Bridge is gone while the popup is open
+  // (0 = it is there), and whether that was told.
+  uint32_t bridge_lost_ms = 0;
+  bool bridge_lost_told = false;
   bool visible = false;
   // Camera full screen (#65): the stream in the panel's own size straight in
   // the framebuffer (Device full frames). A tap on the video asks for it, a
@@ -1545,6 +1553,8 @@ void show_camera_popup(const CameraPopupInit& init) {
   g_camera_popup->live_kind = false;
   g_camera_popup->status_sticky = false;
   set_shown(g_camera_popup->status, false);
+  g_camera_popup->bridge_lost_ms = 0;
+  g_camera_popup->bridge_lost_told = false;
   lv_label_set_text(g_camera_popup->value_label, "");
   style_controls(g_camera_popup, init.icon_color);
   default_frame_size(g_camera_popup);
@@ -1603,6 +1613,50 @@ bool camera_popup_is_busy() {
           g_camera_popup->large_draw_buffer_active);
 }
 
+// The same view again on a new stream: the full screen in its size, else the popup's.
+static void reopen_view(CameraPopupContext* ctx) {
+  if (ctx->full) {
+    ctx->waiting_for_bridge = true;
+    ctx->bridge_response_deadline_ms = millis() + kFullScreenResponseTimeoutMs;
+    mqttPublishCameraFullScreenOpen(ctx->entity_id.c_str(), camera_geometry::kFps,
+                                    ctx->full_width, ctx->full_height, ctx->full_turn);
+  } else {
+    open_popup_stream(ctx);
+  }
+}
+
+// The connection to the Bridge (the direct link or MQTT). Without it nothing can be
+// asked: the last picture stays without words, and once the connection is back the
+// same view is asked for again. Only a connection gone for kBridgeLostTellMs is
+// told (user 2026-11-07: "MQTT disconnected" while Home Assistant restarted).
+static void process_bridge_link(CameraPopupContext* ctx) {
+  const uint32_t now = millis();
+  if (!networkManager.isMqttConnected()) {
+    if (!ctx->bridge_lost_ms) {
+      ctx->bridge_lost_ms = now ? now : 1;
+      ctx->bridge_lost_told = false;
+      Serial.println("[Camera] No connection to the Bridge; the popup waits for it");
+    }
+    // No answer can come before the connection: no "no response" meanwhile.
+    if (ctx->waiting_for_bridge) ctx->bridge_response_deadline_ms = now + kBridgeResponseTimeoutMs;
+    ctx->source_retry_at_ms = 0;
+    if (!ctx->bridge_lost_told && now - ctx->bridge_lost_ms >= kBridgeLostTellMs) {
+      ctx->bridge_lost_told = true;
+      if (ctx->full) leave_full_screen(true);
+      camera_popup_set_status(camera_text().camera_bridge_disconnected, true);
+    }
+    return;
+  }
+  if (!ctx->bridge_lost_ms) return;
+  Serial.printf("[Camera] Bridge connection back after %u ms; asking again\n",
+                static_cast<unsigned>(now - ctx->bridge_lost_ms));
+  ctx->bridge_lost_ms = 0;
+  ctx->bridge_lost_told = false;
+  ctx->status_sticky = false;
+  camera_popup_set_status(camera_text().camera_bridge_requesting, false);
+  reopen_view(ctx);
+}
+
 void process_camera_popup() {
   const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
   if (!g_camera_popup) return;
@@ -1655,6 +1709,7 @@ void process_camera_popup() {
     const String url = g_camera_popup->pending_url;
     start_camera_stream(url, g_camera_popup->pending_full);
   }
+  process_bridge_link(g_camera_popup);
   if (g_camera_popup->waiting_for_bridge &&
       static_cast<int32_t>(
           millis() - g_camera_popup->bridge_response_deadline_ms) >= 0) {
@@ -1699,15 +1754,7 @@ void process_camera_popup() {
   if (camera_stream_take_transport_failure() && g_camera_popup->stream_fast) {
     g_camera_popup->stream_fast = false;
     camera_transport::fall_back("the stream ended in a transport error");
-    if (g_camera_popup->full) {
-      g_camera_popup->waiting_for_bridge = true;
-      g_camera_popup->bridge_response_deadline_ms = millis() + kFullScreenResponseTimeoutMs;
-      mqttPublishCameraFullScreenOpen(g_camera_popup->entity_id.c_str(), camera_geometry::kFps,
-                                      g_camera_popup->full_width, g_camera_popup->full_height,
-                                      g_camera_popup->full_turn);
-    } else {
-      open_popup_stream(g_camera_popup);
-    }
+    reopen_view(g_camera_popup);
   }
   if (g_camera_popup->resuming && !lv_obj_has_flag(g_camera_popup->image, LV_OBJ_FLAG_HIDDEN)) {
     g_camera_popup->resuming = false;
@@ -1721,7 +1768,11 @@ void process_camera_popup() {
   // that must stay.
   const bool no_frame = lv_obj_has_flag(g_camera_popup->image, LV_OBJ_FLAG_HIDDEN);
   if (!no_frame) hide_kept_picture(g_camera_popup, false);
-  set_shown(g_camera_popup->status, g_camera_popup->status_sticky || camera_stream_status_is_error());
+  // While the connection is gone only its own message, once it lasted (not the
+  // stream's "connection ended" from the same cause).
+  const bool bridge_quiet = g_camera_popup->bridge_lost_ms && !g_camera_popup->bridge_lost_told;
+  set_shown(g_camera_popup->status,
+            !bridge_quiet && (g_camera_popup->status_sticky || camera_stream_status_is_error()));
   if (!no_frame && !g_camera_popup->open_logged) {
     g_camera_popup->open_logged = true;
     Serial.printf("[Camera] First frame shown %u ms after the opening\n",

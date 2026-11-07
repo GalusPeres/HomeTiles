@@ -455,7 +455,7 @@ struct Strings {
   const char* camera_radar_source;
   const char* camera_radar_source_default;
   const char* camera_remove;
-  const char* camera_mqtt_disconnected;
+  const char* camera_bridge_disconnected;
   const char* camera_mqtt_topic_missing;
   const char* camera_mqtt_queue_full;
   // View select (Home Assistant): a camera tile opened straight in full screen.

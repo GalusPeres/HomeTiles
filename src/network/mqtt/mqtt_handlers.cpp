@@ -3384,8 +3384,10 @@ void mqttPublishCameraFullScreenOpen(const char* entity_id, uint8_t fps,
   const auto& text = i18n::strings(configManager.getConfig().language);
   const camera_transport::Request transport = camera_transport::request();
   const char* topic = mqttTopics.topic(TopicKey::CAMERA_CMND);
-  if (!networkManager.isMqttConnected() || !topic || !*topic) {
-    camera_popup_set_status(text.camera_mqtt_disconnected, true);
+  // Without a connection the popup waits for it and asks again (camera_popup.cpp).
+  if (!networkManager.isMqttConnected()) return;
+  if (!topic || !*topic) {
+    camera_popup_set_status(text.camera_mqtt_topic_missing, true);
     return;
   }
   char quality[24];
@@ -3428,10 +3430,8 @@ void mqttPublishCameraCommand(const char* entity_id, const char* command,
                               uint8_t fps) {
   if (!entity_id || !*entity_id) return;
   const auto& text = i18n::strings(configManager.getConfig().language);
-  if (!networkManager.isMqttConnected()) {
-    camera_popup_set_status(text.camera_mqtt_disconnected, true);
-    return;
-  }
+  // Without a connection the popup waits for it and asks again (camera_popup.cpp).
+  if (!networkManager.isMqttConnected()) return;
 
   const char* topic = mqttTopics.topic(TopicKey::CAMERA_CMND);
   if (!topic || !*topic) {

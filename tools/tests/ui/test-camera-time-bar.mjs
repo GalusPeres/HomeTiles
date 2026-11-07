@@ -53,7 +53,7 @@ assert.match(popup, /show_head_text\(ctx, ctx->frame_count \? ctx->frame_times\[
 // No words in the picture while it comes (Ready, Buffering, Preparing): only an
 // error or a message that must stay, and none left over from the last opening.
 assert.match(popup, /ctx->status = lv_label_create\(video\)/);
-assert.match(popup, /set_shown\(g_camera_popup->status, g_camera_popup->status_sticky \|\| camera_stream_status_is_error\(\)\);/);
+assert.match(popup, /set_shown\(g_camera_popup->status,\s*!bridge_quiet && \(g_camera_popup->status_sticky \|\| camera_stream_status_is_error\(\)\)\);/);
 assert.match(popup, /g_camera_popup->status_sticky = false;\s*set_shown\(g_camera_popup->status, false\);/);
 assert.match(popup, /ctx->status_sticky = false;\s*set_shown\(ctx->status, false\);/);
 assert.doesNotMatch(popup, /placeholder|kStatusDelayMs|camera_preparing|camera_text\(\)\.camera_ready/);

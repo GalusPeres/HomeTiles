@@ -39,11 +39,44 @@ for (const translation of [
   assert.ok(stringsSource.includes(translation), `missing translation: ${translation}`);
 }
 for (const specificError of [
-  'camera_mqtt_disconnected',
   'camera_mqtt_topic_missing',
   'camera_mqtt_queue_full',
 ]) {
   assert.ok(mqtt.includes(specificError), `missing MQTT error path: ${specificError}`);
 }
+
+// No connection to the Bridge (user 2026-11-07: "MQTT disconnected" while Home
+// Assistant restarted): the popup waits without words, asks again once the
+// connection is back, and tells only a connection gone for 30 s.
+assert.doesNotMatch(mqtt, /camera_mqtt_disconnected/);
+for (const name of ['mqttPublishCameraFullScreenOpen', 'mqttPublishCameraCommand']) {
+  const body = mqtt.slice(mqtt.indexOf(`void ${name}(`), mqtt.indexOf('\n}\n', mqtt.indexOf(`void ${name}(`)));
+  assert.match(body, /Without a connection the popup waits for it and asks again \(camera_popup\.cpp\)\.\s*if \(!networkManager\.isMqttConnected\(\)\) return;/,
+    `${name} waits for the connection without an error`);
+}
+assert.match(popup, /constexpr uint32_t kBridgeLostTellMs = 30000;/);
+assert.match(popup, /static void process_bridge_link\(CameraPopupContext\* ctx\) \{/);
+assert.match(popup, /process_bridge_link\(g_camera_popup\);\s*if \(g_camera_popup->waiting_for_bridge &&/);
+assert.match(popup, /if \(ctx->waiting_for_bridge\) ctx->bridge_response_deadline_ms = now \+ kBridgeResponseTimeoutMs;/);
+assert.match(popup, /camera_popup_set_status\(camera_text\(\)\.camera_bridge_disconnected, true\);/);
+assert.match(popup, /ctx->bridge_lost_told = false;\s*ctx->status_sticky = false;\s*camera_popup_set_status\(camera_text\(\)\.camera_bridge_requesting, false\);\s*reopen_view\(ctx\);/);
+assert.match(popup, /const bool bridge_quiet = g_camera_popup->bridge_lost_ms && !g_camera_popup->bridge_lost_told;/);
+assert.match(popup, /g_camera_popup->bridge_lost_ms = 0;\s*g_camera_popup->bridge_lost_told = false;/);
+assert.ok(stringsHeader.includes('const char* camera_bridge_disconnected;'));
+// The camera's connection texts name the Bridge, never MQTT, which a linked panel
+// does not use; one per language.
+for (const text of [
+  'Keine Kamera-Antwort von der Bridge', 'Keine Verbindung zur Bridge',
+  'No camera response from the Bridge', 'No connection to the Bridge',
+  'Aucune réponse caméra du bridge', 'Pas de connexion au bridge',
+  'Brak odpowiedzi kamery z mostu', 'Brak połączenia z mostem',
+  'Žádná odpověď kamery od Bridge', 'Žádné spojení s Bridge',
+  'Sin respuesta de la cámara desde el Bridge', 'Sin conexión con el Bridge',
+  'Žiadna odpoveď kamery z Bridge', 'Žiadne spojenie s Bridge',
+  'Нет ответа камеры от Bridge', 'Нет соединения с Bridge',
+]) {
+  assert.ok(stringsSource.includes(`    "${text}",\n`), `missing translation: ${text}`);
+}
+assert.doesNotMatch(stringsSource, /MQTT (oder|or|ou|lub|nebo|o|alebo|или) ([Bb]ridge|most)/);
 
 console.log('Camera bridge timeout contract: PASS');

@@ -88,9 +88,11 @@ constexpr uint32_t kPlayLongStepMs = 400;
 // The last picture of a still camera per entity, shown at once at the next
 // opening instead of black (JPEG, 15-40 KB each).
 constexpr size_t kKeptPictures = 4;
-// No words for a picture that comes at once: they show only after this long.
-constexpr uint32_t kStatusDelayMs = 1500;
 constexpr uint8_t kRequiredBridgeCameraProtocol = 1;
+// One of the Bridge's own cameras may just be coming into being (its first picture,
+// its entity right after the Web Admin saved it): asked again a few times.
+constexpr uint32_t kSourceRetryMs = 3000;
+constexpr uint8_t kSourceRetries = 6;
 constexpr uint32_t kBridgeResponseTimeoutMs = 30000;
 // A full-screen request the Bridge does not answer goes back to the popup.
 constexpr uint32_t kFullScreenResponseTimeoutMs = 10000;
@@ -109,7 +111,6 @@ struct CameraPopupContext {
   lv_obj_t* icon_label = nullptr;
   lv_obj_t* title_label = nullptr;
   lv_obj_t* image = nullptr;
-  lv_obj_t* placeholder = nullptr;
   lv_obj_t* status = nullptr;
   lv_obj_t* video = nullptr;
   // The head's second line ("Live", the picture's time): the shell's hidden
@@ -138,6 +139,9 @@ struct CameraPopupContext {
   lv_obj_t* menu_title = nullptr;
   lv_obj_t* menu_rule = nullptr;
   lv_obj_t* menu_list = nullptr;
+  lv_obj_t* menu_shadow = nullptr;
+  lv_draw_buf_t* menu_shadow_parts[8] = {};
+  int menu_shadow_rows = 0;
   bool menu_open = false;
   bool menu_rows_stale = true;
   uint32_t icon_color = 0xFFFFFF;
@@ -159,6 +163,9 @@ struct CameraPopupContext {
   bool playing = false;
   uint32_t play_next_ms = 0;
   bool live_kind = false;
+  // Asked again after the Bridge had no picture of its own camera yet.
+  uint32_t source_retry_at_ms = 0;
+  uint8_t source_retries = 0;
   // The opening, for the delayed status and the log.
   uint32_t opened_ms = 0;
   bool open_logged = false;
@@ -224,7 +231,9 @@ struct KeptPicture {
   size_t bytes = 0;
   uint16_t width = 0;
   uint16_t height = 0;
-  uint32_t newest = 0;  // the history's newest time, 0 without one
+  // The history's times: bar and Play are there at once, the Bridge's answer
+  // only corrects them.
+  std::vector<uint32_t> times;
 };
 std::vector<KeptPicture> g_kept_pictures;
 
@@ -301,6 +310,12 @@ static void note_switch(CameraPopupContext* ctx, const char* step) {
 }
 
 static void reveal_skipped_popup(CameraPopupContext* ctx);
+
+// The Bridge's rain radar, by its entity (camera_sources.py): it always gets its time
+// bar, so its row is kept from the start and the picture never moves when it comes.
+static bool is_radar(const CameraPopupContext* ctx) {
+  return ctx->entity_id.startsWith("camera.ht_radar_");
+}
 
 // ---- The time bar and the head's second line --------------------------------
 
@@ -379,15 +394,9 @@ static void show_bar(CameraPopupContext* ctx) {
   }
   char when[16] = "";
   format_frame_time(ctx->frame_times[ctx->shown_frame], when, sizeof(when));
-  lv_label_set_text(ctx->time_shown, when);
+  if (strcmp(lv_label_get_text(ctx->time_shown), when) != 0) lv_label_set_text(ctx->time_shown, when);
   format_frame_time(ctx->frame_times[ctx->frame_count - 1], when, sizeof(when));
-  lv_label_set_text(ctx->time_newest, when);
-}
-
-// The Bridge's rain radar, by its entity (camera_sources.py): it always gets its time
-// bar, so its row is kept from the start and the picture never moves when it comes.
-static bool is_radar(const CameraPopupContext* ctx) {
-  return ctx->entity_id.startsWith("camera.ht_radar_");
+  if (strcmp(lv_label_get_text(ctx->time_newest), when) != 0) lv_label_set_text(ctx->time_newest, when);
 }
 
 // The picture in this stream's size, centred in its area.
@@ -406,6 +415,12 @@ static void apply_layout(CameraPopupContext* ctx) {
 // more as minutes after the first (camera_sources.py frames_payload).
 static bool frames_in(JsonVariantConst doc) {
   return !doc["frames"].isNull() || !doc["frames_min"].isNull();
+}
+
+// A radar place that is still loading has fewer frames than the bar already shows:
+// the bar stays until the place's own come ("frames").
+static bool keep_shown_frames(const CameraPopupContext* ctx, JsonVariantConst doc) {
+  return is_radar(ctx) && ctx->frame_count >= 2 && doc["frames"].size() + doc["frames_min"].size() < 2;
 }
 
 static void take_frames(CameraPopupContext* ctx, JsonVariantConst doc) {
@@ -467,7 +482,6 @@ static void process_time_bar(CameraPopupContext* ctx) {
 // ---- The last picture, shown at once at the next opening ----------------------
 
 static void remember_kept_picture(CameraPopupContext* ctx, uint8_t* jpeg, size_t bytes) {
-  const uint32_t newest = ctx->frame_count ? ctx->frame_times[ctx->frame_count - 1] : 0;
   for (KeptPicture& kept : g_kept_pictures) {
     if (!kept.entity.equalsIgnoreCase(ctx->entity_id)) continue;
     free(kept.jpeg);
@@ -475,7 +489,7 @@ static void remember_kept_picture(CameraPopupContext* ctx, uint8_t* jpeg, size_t
     kept.bytes = bytes;
     kept.width = ctx->frame_w;
     kept.height = ctx->frame_h;
-    kept.newest = newest;
+    kept.times.assign(ctx->frame_times, ctx->frame_times + ctx->frame_count);
     return;
   }
   if (g_kept_pictures.size() >= kKeptPictures) {
@@ -488,7 +502,7 @@ static void remember_kept_picture(CameraPopupContext* ctx, uint8_t* jpeg, size_t
   kept.bytes = bytes;
   kept.width = ctx->frame_w;
   kept.height = ctx->frame_h;
-  kept.newest = newest;
+  kept.times.assign(ctx->frame_times, ctx->frame_times + ctx->frame_count);
   g_kept_pictures.push_back(kept);
 }
 
@@ -498,10 +512,16 @@ static void take_kept_jpeg(CameraPopupContext* ctx) {
   if (camera_stream_take_kept_jpeg(jpeg, bytes)) remember_kept_picture(ctx, jpeg, bytes);
 }
 
-static void hide_kept_picture(CameraPopupContext* ctx) {
+// `redraw` false: the stream's frame already lies over it in the same place, and a
+// whole picture drawn again by LVGL stalls the loop for nothing.
+static void hide_kept_picture(CameraPopupContext* ctx, bool redraw = true) {
   if (!ctx->kept_dsc) return;
+  lv_display_t* display = lv_obj_get_display(ctx->kept_image);
+  const bool invalidating = display && lv_display_is_invalidation_enabled(display);
+  if (!redraw && invalidating) lv_display_enable_invalidation(display, false);
   lv_image_set_src(ctx->kept_image, nullptr);
   lv_obj_add_flag(ctx->kept_image, LV_OBJ_FLAG_HIDDEN);
+  if (!redraw && invalidating) lv_display_enable_invalidation(display, true);
   lv_image_cache_drop(ctx->kept_dsc);
   free(const_cast<uint8_t*>(ctx->kept_dsc->data));
   free(ctx->kept_dsc);
@@ -550,13 +570,20 @@ static bool show_kept_picture(CameraPopupContext* ctx, const String& entity, boo
     ctx->frame_h = h;
     lv_image_set_src(ctx->kept_image, dsc);
     lv_obj_remove_flag(ctx->kept_image, LV_OBJ_FLAG_HIDDEN);
-    if (own) show_head_text(ctx, kept.newest);
+    if (own && !kept.times.empty()) {
+      ctx->frame_count = static_cast<uint8_t>(kept.times.size() < kMaxFrames ? kept.times.size() : kMaxFrames);
+      memcpy(ctx->frame_times, kept.times.data() + kept.times.size() - ctx->frame_count,
+             sizeof(ctx->frame_times[0]) * ctx->frame_count);
+      ctx->shown_frame = ctx->frame_count - 1;
+      show_head_value(ctx);
+    }
     return true;
   }
   return false;
 }
 
 static void open_popup_stream(CameraPopupContext* ctx) {
+  ctx->source_retry_at_ms = 0;
   ctx->waiting_for_bridge = true;
   ctx->bridge_response_deadline_ms = millis() + kBridgeResponseTimeoutMs;
   ctx->requested_fps = camera_geometry::kFps;
@@ -573,7 +600,6 @@ static void enter_soft_full_screen() {
   // The popup's frames go with its stream; its video area drawn black.
   lv_image_set_src(ctx->image, nullptr);
   lv_obj_add_flag(ctx->image, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_add_flag(ctx->placeholder, LV_OBJ_FLAG_HIDDEN);
   lv_obj_invalidate(lv_obj_get_parent(ctx->image));
   ctx->pending_url = String();
   camera_stream_stop();
@@ -704,7 +730,6 @@ static void enter_full_screen() {
   // The popup's frames go with its stream; its video area drawn black.
   lv_image_set_src(ctx->image, nullptr);
   lv_obj_add_flag(ctx->image, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_add_flag(ctx->placeholder, LV_OBJ_FLAG_HIDDEN);
   lv_obj_invalidate(lv_obj_get_parent(ctx->image));
   lv_refr_now(display);
   if (display) lv_display_enable_invalidation(display, false);
@@ -736,12 +761,15 @@ static void enter_full_screen() {
                                   width, height, turn);
 }
 
+lv_obj_t* plain_part(lv_obj_t* parent);
 static void close_menu(CameraPopupContext* ctx);
+static void free_menu_shadow(CameraPopupContext* ctx, bool delete_objects);
 
 static void close_camera_popup() {
   if (!g_camera_popup || !g_camera_popup->visible) return;
   leave_full_screen(false);
   close_menu(g_camera_popup);
+  free_menu_shadow(g_camera_popup, true);
   camera_stream_keep_jpeg(false);
   g_camera_popup->keeping = false;
   take_kept_jpeg(g_camera_popup);
@@ -807,7 +835,89 @@ static void overlay_event_cb(lv_event_t* event) {
 
 // ---- The menu ("..."): the tile's other entries ------------------------------
 
+// The box's shadow as pictures, freed with the popup (media_popup.cpp
+// build_menu_shadow, which measured why): drawn by LVGL at the box's own radius it
+// pushes the card's shadow corner out of LVGL's one-entry shadow cache, and every
+// band of a frame computes both corners again. LVGL draws it once around a small
+// probe; its four corners and a short piece of each side stay as alpha pictures.
+constexpr int32_t kMenuShadowSidePiece = 16;  // px along a side, tiled
+
+static void free_menu_shadow(CameraPopupContext* ctx, bool delete_objects) {
+  if (ctx->menu_shadow && delete_objects) lv_obj_delete(ctx->menu_shadow);
+  ctx->menu_shadow = nullptr;
+  ctx->menu_shadow_rows = 0;
+  for (lv_draw_buf_t*& part : ctx->menu_shadow_parts) {
+    if (!part) continue;
+    lv_image_cache_drop(part);
+    lv_draw_buf_destroy(part);
+    part = nullptr;
+  }
+}
+
+static void build_menu_shadow(CameraPopupContext* ctx, int box_x, int box_y, int box_w, int box_h) {
+  free_menu_shadow(ctx, true);
+  const int32_t card_radius = lv_obj_get_style_radius(ctx->card, LV_PART_MAIN);
+  const int32_t radius = lv_obj_get_style_radius(ctx->menu_box, LV_PART_MAIN);
+  const int32_t blur = popup_layout::shadow_width_for(card_radius);
+  const int32_t corner = blur + radius;
+  lv_obj_t* probe = plain_part(ctx->root);
+  lv_obj_set_size(probe, 2 * corner + kMenuShadowSidePiece, 2 * corner + kMenuShadowSidePiece);
+  lv_obj_set_style_radius(probe, radius, 0);
+  popup_layout::apply_card_shadow(probe);
+  lv_obj_set_style_shadow_width(probe, blur, 0);
+  lv_obj_update_layout(probe);
+  const int32_t ext = lv_obj_get_ext_draw_size(probe);
+  lv_draw_buf_t* snap = lv_snapshot_take(probe, LV_COLOR_FORMAT_A8);
+  lv_obj_delete(probe);
+  if (!snap) return;
+  const int32_t sw = snap->header.w;
+  const int32_t sh = snap->header.h;
+  const int32_t piece = kMenuShadowSidePiece;
+  const lv_area_t from[8] = {{0, 0, corner - 1, corner - 1},
+                             {sw - corner, 0, sw - 1, corner - 1},
+                             {0, sh - corner, corner - 1, sh - 1},
+                             {sw - corner, sh - corner, sw - 1, sh - 1},
+                             {corner, 0, corner + piece - 1, ext - 1},
+                             {corner, sh - ext, corner + piece - 1, sh - 1},
+                             {0, corner, ext - 1, corner + piece - 1},
+                             {sw - ext, corner, sw - 1, corner + piece - 1}};
+  const int32_t w = box_w + 2 * ext;
+  const int32_t h = box_h + 2 * ext;
+  const lv_area_t to[8] = {{0, 0, corner - 1, corner - 1},
+                           {w - corner, 0, w - 1, corner - 1},
+                           {0, h - corner, corner - 1, h - 1},
+                           {w - corner, h - corner, w - 1, h - 1},
+                           {corner, 0, w - corner - 1, ext - 1},
+                           {corner, h - ext, w - corner - 1, h - 1},
+                           {0, corner, ext - 1, h - corner - 1},
+                           {w - ext, corner, w - 1, h - corner - 1}};
+  ctx->menu_shadow = plain_part(ctx->root);
+  lv_obj_set_pos(ctx->menu_shadow, box_x - ext, box_y - ext);
+  lv_obj_set_size(ctx->menu_shadow, w, h);
+  lv_obj_add_flag(ctx->menu_shadow, LV_OBJ_FLAG_HIDDEN);
+  for (int i = 0; i < 8; ++i) {
+    const lv_area_t& a = from[i];
+    const int32_t pw = lv_area_get_width(&a);
+    const int32_t ph = lv_area_get_height(&a);
+    lv_draw_buf_t* part = lv_draw_buf_create(pw, ph, LV_COLOR_FORMAT_A8, LV_STRIDE_AUTO);
+    if (!part) continue;
+    for (int32_t y = 0; y < ph; ++y) {
+      memcpy(part->data + y * part->header.stride, snap->data + (a.y1 + y) * snap->header.stride + a.x1, pw);
+    }
+    ctx->menu_shadow_parts[i] = part;
+    lv_obj_t* image = lv_image_create(ctx->menu_shadow);
+    lv_image_set_src(image, part);
+    lv_obj_set_pos(image, to[i].x1, to[i].y1);
+    lv_obj_set_size(image, lv_area_get_width(&to[i]), lv_area_get_height(&to[i]));
+    if (i >= 4) lv_image_set_inner_align(image, LV_IMAGE_ALIGN_TILE);
+    lv_obj_set_style_image_recolor(image, lv_color_black(), 0);
+    lv_obj_remove_flag(image, LV_OBJ_FLAG_CLICKABLE);
+  }
+  lv_draw_buf_destroy(snap);
+}
+
 static void set_shown_menu_parts(CameraPopupContext* ctx, bool shown) {
+  set_shown(ctx->menu_shadow, shown);
   set_shown(ctx->menu_box, shown);
   if (shown) lv_obj_add_flag(ctx->menu_shield, LV_OBJ_FLAG_CLICKABLE);
   else lv_obj_remove_flag(ctx->menu_shield, LV_OBJ_FLAG_CLICKABLE);
@@ -831,6 +941,7 @@ static void open_entry(CameraPopupContext* ctx, size_t index) {
   ctx->pending_url = String();
   camera_stream_stop();
   const String previous = ctx->entity_id;
+  const bool radar_before = is_radar(ctx);
   ctx->entry_index = index;
   ctx->entity_id = entry.entity.c_str();
   hometiles_title::set(ctx->title_label, camera_entry_title(entry).c_str());
@@ -838,18 +949,25 @@ static void open_entry(CameraPopupContext* ctx, size_t index) {
   if (!icon_name.length()) icon_name = "video";
   lv_label_set_text(ctx->icon_label, getMdiChar(icon_name).c_str());
   set_playing(ctx, false);
-  ctx->frame_count = 0;
-  ctx->shown_frame = 0;
+  ctx->source_retries = 0;
+  // The bottom row and the head stay while switching (user 2026-11-07: they came
+  // back later each time): every radar place has the same times; the Bridge's
+  // answer corrects them.
+  if (radar_before && is_radar(ctx) && ctx->frame_count) {
+    ctx->shown_frame = ctx->frame_count - 1;
+  } else {
+    ctx->frame_count = 0;
+    ctx->shown_frame = 0;
+    lv_label_set_text(ctx->value_label, "");
+  }
   ctx->frame_dirty = false;
   ctx->live_kind = false;
   ctx->status_sticky = false;
-  lv_label_set_text(ctx->value_label, "");
+  set_shown(ctx->status, false);
   default_frame_size(ctx);
   if (!show_kept_picture(ctx, ctx->entity_id, true)) show_kept_picture(ctx, previous, false);
   apply_layout(ctx);
   show_bar(ctx);
-  lv_obj_clear_flag(ctx->placeholder, LV_OBJ_FLAG_HIDDEN);
-  lv_label_set_text(ctx->placeholder, "");
   ctx->opened_ms = millis();
   ctx->open_logged = false;
   camera_popup_set_status(camera_text().camera_bridge_requesting, false);
@@ -871,8 +989,6 @@ static void menu_shield_event_cb(lv_event_t* event) {
   const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
   if (lv_event_get_code(event) == LV_EVENT_CLICKED) close_menu(g_camera_popup);
 }
-
-lv_obj_t* plain_part(lv_obj_t* parent);
 
 // The rows are built once per opening of the popup; deleted only here, never from
 // their own click.
@@ -931,8 +1047,6 @@ static void open_menu(CameraPopupContext* ctx) {
   lv_obj_set_size(ctx->menu_box, popup_layout::kCardWidth - 2 * offset, popup_layout::kCardHeight - offset - top);
   lv_obj_set_style_radius(ctx->menu_box, card_radius > offset ? card_radius - offset : 0, 0);
   lv_obj_set_style_bg_color(ctx->menu_box, lv_color_hex(ctx->surface_color), 0);
-  popup_layout::apply_card_shadow(ctx->menu_box);
-  lv_obj_set_style_shadow_width(ctx->menu_box, popup_layout::shadow_width_for(card_radius), 0);
   const auto& text = camera_text();
   const char kind = ctx->entries.empty() ? camera_entries::kHomeAssistant : ctx->entries[0].kind;
   lv_label_set_text(ctx->menu_title, kind == camera_entries::kWebcam           ? text.camera_source_webcam
@@ -956,9 +1070,14 @@ static void open_menu(CameraPopupContext* ctx) {
                             i == ctx->entry_index ? control_opa : LV_OPA_TRANSP, 0);
   }
   lv_obj_scroll_to_y(ctx->menu_list, 0, LV_ANIM_OFF);
-  set_shown_menu_parts(ctx, true);
+  if (!ctx->menu_shadow || ctx->menu_shadow_rows != static_cast<int>(shown)) {
+    build_menu_shadow(ctx, offset, top, popup_layout::kCardWidth - 2 * offset, popup_layout::kCardHeight - offset - top);
+    ctx->menu_shadow_rows = static_cast<int>(shown);
+  }
   lv_obj_move_foreground(ctx->menu_box);
   lv_obj_move_foreground(ctx->menu_button);
+  if (ctx->menu_shadow) lv_obj_move_to_index(ctx->menu_shadow, lv_obj_get_index(ctx->menu_box));
+  set_shown_menu_parts(ctx, true);
   ctx->menu_open = true;
 }
 
@@ -1029,6 +1148,7 @@ static void overlay_deleted_cb(lv_event_t* e) {
   auto* ctx = static_cast<CameraPopupContext*>(lv_event_get_user_data(e));
   if (!ctx) return;
   hide_kept_picture(ctx);
+  free_menu_shadow(ctx, false);
   if (ctx->full_touch) lv_obj_delete(ctx->full_touch);
 #if defined(DEVICE_ESP32_S3_RGB_480)
   if (ctx->soft_full) lv_obj_delete(ctx->soft_full);
@@ -1130,6 +1250,7 @@ static void build_controls(CameraPopupContext* ctx) {
   lv_obj_set_style_bg_opa(ctx->menu_rule, settings_style::kSeparatorOpa, 0);
   ctx->menu_list = plain_part(ctx->menu_box);
   lv_obj_set_flex_flow(ctx->menu_list, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_style_pad_row(ctx->menu_list, kMenuRowGap, 0);
   lv_obj_clear_flag(ctx->menu_list, LV_OBJ_FLAG_SCROLL_CHAIN);
   lv_obj_add_flag(ctx->menu_list, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_SCROLL_ELASTIC |
                                                             LV_OBJ_FLAG_SCROLL_MOMENTUM));
@@ -1248,24 +1369,17 @@ static CameraPopupContext* create_popup() {
   lv_obj_center(ctx->image);
   lv_obj_add_flag(ctx->image, LV_OBJ_FLAG_HIDDEN);
 
-  ctx->placeholder = lv_label_create(video);
-  lv_obj_set_style_text_font(ctx->placeholder, popup_layout::font24(), 0);
-  lv_obj_set_style_text_color(ctx->placeholder, lv_color_hex(ui_theme::text_secondary()), 0);
-  lv_obj_set_width(ctx->placeholder, LV_PCT(90));
-  lv_obj_set_style_text_align(ctx->placeholder, LV_TEXT_ALIGN_CENTER, 0);
-  lv_label_set_text(ctx->placeholder, camera_text().camera_preparing);
-  lv_obj_center(ctx->placeholder);
-
-  // In the video area until the first frame shows, afterwards only an error
-  // (process_camera_popup): no status line under a running picture.
+  // In the video area, only for an error or a message that must stay
+  // (process_camera_popup): no words while a picture comes.
   ctx->status = lv_label_create(video);
   lv_obj_set_width(ctx->status, LV_PCT(90));
   lv_obj_set_style_text_align(ctx->status, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_font(ctx->status, popup_layout::font20(), 0);
   lv_obj_set_style_text_color(ctx->status, lv_color_hex(ui_theme::text_secondary()), 0);
   lv_label_set_long_mode(ctx->status, LV_LABEL_LONG_WRAP);
-  lv_label_set_text(ctx->status, camera_text().camera_ready);
-  lv_obj_align(ctx->status, LV_ALIGN_CENTER, 0, popup_layout::scale480(48));
+  lv_label_set_text(ctx->status, "");
+  lv_obj_align(ctx->status, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_add_flag(ctx->status, LV_OBJ_FLAG_HIDDEN);
 
   build_controls(ctx);
   apply_layout(ctx);
@@ -1423,11 +1537,14 @@ void show_camera_popup(const CameraPopupInit& init) {
   // A new opening: the newest frame, no history until the Bridge tells it; the
   // last picture of a still camera shows at once in its size.
   set_playing(g_camera_popup, false);
+  g_camera_popup->source_retries = 0;
+  g_camera_popup->source_retry_at_ms = 0;
   g_camera_popup->frame_count = 0;
   g_camera_popup->shown_frame = 0;
   g_camera_popup->frame_dirty = false;
   g_camera_popup->live_kind = false;
   g_camera_popup->status_sticky = false;
+  set_shown(g_camera_popup->status, false);
   lv_label_set_text(g_camera_popup->value_label, "");
   style_controls(g_camera_popup, init.icon_color);
   default_frame_size(g_camera_popup);
@@ -1438,9 +1555,6 @@ void show_camera_popup(const CameraPopupInit& init) {
 
   lv_image_set_src(g_camera_popup->image, nullptr);
   lv_obj_add_flag(g_camera_popup->image, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_clear_flag(g_camera_popup->placeholder, LV_OBJ_FLAG_HIDDEN);
-  // Black without words: they follow only if the picture takes long.
-  lv_label_set_text(g_camera_popup->placeholder, "");
   g_camera_popup->opened_ms = millis();
   g_camera_popup->open_logged = false;
   camera_popup_set_status(camera_text().camera_bridge_requesting, false);
@@ -1565,11 +1679,10 @@ void process_camera_popup() {
 #if defined(DEVICE_ESP32_S3_RGB_480)
   // The S3's full screen shows the frames in its own image (LVGL).
   if (g_camera_popup->full) {
-    camera_stream_process_ui(g_camera_popup->soft_full_image, nullptr, nullptr);
+    camera_stream_process_ui(g_camera_popup->soft_full_image, nullptr);
   } else
 #endif
   camera_stream_process_ui(g_camera_popup->image,
-                           g_camera_popup->placeholder,
                            g_camera_popup->resuming ? nullptr : g_camera_popup->status);
   // A still camera's newest picture, for the next opening.
   camera_stream_keep_jpeg(g_camera_popup->keeping && !g_camera_popup->full && !g_camera_popup->playing &&
@@ -1600,17 +1713,15 @@ void process_camera_popup() {
     g_camera_popup->resuming = false;
   }
   process_time_bar(g_camera_popup);
-  // The words show only if the first frame takes long; over a running picture
-  // only an error or a message that must stay.
-  const bool no_frame = lv_obj_has_flag(g_camera_popup->image, LV_OBJ_FLAG_HIDDEN);
-  if (!no_frame) hide_kept_picture(g_camera_popup);
-  // The last picture needs no words while the stream comes.
-  const bool waited = !g_camera_popup->kept_dsc && millis() - g_camera_popup->opened_ms >= kStatusDelayMs;
-  if (no_frame && waited && !lv_label_get_text(g_camera_popup->placeholder)[0]) {
-    lv_label_set_text(g_camera_popup->placeholder, camera_text().camera_preparing);
+  if (g_camera_popup->source_retry_at_ms &&
+      static_cast<int32_t>(millis() - g_camera_popup->source_retry_at_ms) >= 0) {
+    open_popup_stream(g_camera_popup);
   }
-  set_shown(g_camera_popup->status, (no_frame && waited) || g_camera_popup->status_sticky ||
-                                        camera_stream_status_is_error());
+  // No words while a picture comes (Ready, Buffering): only an error or a message
+  // that must stay.
+  const bool no_frame = lv_obj_has_flag(g_camera_popup->image, LV_OBJ_FLAG_HIDDEN);
+  if (!no_frame) hide_kept_picture(g_camera_popup, false);
+  set_shown(g_camera_popup->status, g_camera_popup->status_sticky || camera_stream_status_is_error());
   if (!no_frame && !g_camera_popup->open_logged) {
     g_camera_popup->open_logged = true;
     Serial.printf("[Camera] First frame shown %u ms after the opening\n",
@@ -1637,7 +1748,7 @@ void camera_popup_handle_mqtt_status(const char* payload) {
   }
   // New frames while the popup shows them: no answer to a pending request.
   if (strcmp(doc["status"] | "", "frames") == 0) {
-    if (frames_in(doc.as<JsonVariantConst>())) {
+    if (frames_in(doc.as<JsonVariantConst>()) && !keep_shown_frames(g_camera_popup, doc.as<JsonVariantConst>())) {
       const bool had_row = g_camera_popup->frame_count >= 2;
       take_frames(g_camera_popup, doc.as<JsonVariantConst>());
       if (had_row != (g_camera_popup->frame_count >= 2)) apply_layout(g_camera_popup);
@@ -1708,7 +1819,9 @@ void camera_popup_handle_mqtt_status(const char* payload) {
     // What this camera is: a history brings its times, the bar and Play. A
     // frame picked before a new stream (back from the full screen) goes out again.
     g_camera_popup->live_kind = strcmp(doc["kind"] | "", "live") == 0;
-    if (frames_in(doc.as<JsonVariantConst>())) {
+    if (keep_shown_frames(g_camera_popup, doc.as<JsonVariantConst>())) {
+      // The bar stays as it is.
+    } else if (frames_in(doc.as<JsonVariantConst>())) {
       take_frames(g_camera_popup, doc.as<JsonVariantConst>());
       if (g_camera_popup->shown_frame + 1 < g_camera_popup->frame_count) g_camera_popup->frame_dirty = true;
     } else {
@@ -1754,6 +1867,13 @@ void camera_popup_handle_mqtt_status(const char* payload) {
       return;
     }
     Serial.printf("[Camera] Bridge error: %s\n", error);
+    const bool own_source = g_camera_popup->entity_id.startsWith("camera.ht_");
+    if (own_source && g_camera_popup->source_retries < kSourceRetries &&
+        (strcmp(error, "camera_image_unavailable") == 0 || strcmp(error, "unknown_camera") == 0)) {
+      g_camera_popup->source_retry_at_ms = millis() + kSourceRetryMs;
+      // The first answer stays quiet: it may simply not be there yet.
+      if (g_camera_popup->source_retries++ == 0) return;
+    }
     camera_popup_set_status(localize_camera_error(error), true);
     return;
   }

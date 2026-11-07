@@ -2085,9 +2085,7 @@ static void log_wifi_at_stream_end() {
                 static_cast<int>(WiFi.RSSI()));
 }
 
-void camera_stream_process_ui(lv_obj_t* image,
-                              lv_obj_t* placeholder,
-                              lv_obj_t* status_label) {
+void camera_stream_process_ui(lv_obj_t* image, lv_obj_t* status_label) {
   log_wifi_at_stream_end();
   if (g_full_shown) {
     process_full_frame();
@@ -2195,8 +2193,17 @@ void camera_stream_process_ui(lv_obj_t* image,
 #endif
 
   if (direct_preview) {
+#if CAMERA_STREAM_HW_JPEG
+    // The frame already lies on the panel: LVGL drawing the whole picture again only
+    // stalls the loop (it draws from this frame whenever something over it changes).
+    lv_display_t* display = lv_obj_get_display(image);
+    const bool invalidating = display && lv_display_is_invalidation_enabled(display);
+    if (invalidating) lv_display_enable_invalidation(display, false);
+#endif
     lv_obj_clear_flag(image, LV_OBJ_FLAG_HIDDEN);
-    if (placeholder) lv_obj_add_flag(placeholder, LV_OBJ_FLAG_HIDDEN);
+#if CAMERA_STREAM_HW_JPEG
+    if (invalidating) lv_display_enable_invalidation(display, true);
+#endif
   }
 
   if (ready >= 0) {
@@ -2278,7 +2285,7 @@ bool camera_stream_start(const char*, uint32_t, bool, uint16_t, uint16_t) {
 }
 
 void camera_stream_stop() {}
-void camera_stream_process_ui(lv_obj_t*, lv_obj_t*, lv_obj_t*) {}
+void camera_stream_process_ui(lv_obj_t*, lv_obj_t*) {}
 void camera_stream_set_external_status(const char*, bool) {}
 bool camera_stream_status_is_error() { return false; }
 bool camera_stream_is_active() { return false; }

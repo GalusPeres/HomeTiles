@@ -188,7 +188,7 @@ assert.match(body(popup, 'static void close_camera_popup('), /camera_transport::
 // back black until its stream runs (not with its last frame).
 assert.doesNotMatch(presenter, /drawPreview/);
 assert.doesNotMatch(stream, /camera_stream_shown_frame/);
-assert.match(enter, /lv_obj_add_flag\(ctx->placeholder, LV_OBJ_FLAG_HIDDEN\);/);
+assert.match(enter, /lv_obj_add_flag\(ctx->image, LV_OBJ_FLAG_HIDDEN\);/);
 assert.match(presenter, /void Presenter::end\(\) \{\s*\/\/ A stream stopping under the full screen leaves it to endFullFrames\(\)\.\s*if \(full_frames_ \|\| !double_buffer_active_\) return;/);
 
 // Back from the full screen: only the screen outside the popup is drawn
@@ -201,7 +201,6 @@ assert.match(leave, skippedRedraw);
 assert.doesNotMatch(leave.replace(skippedRedraw, ''), /lv_obj_invalidate\(lv_screen_active\(\)\)/);
 assert.match(leave, /lv_obj_invalidate_area\(lv_screen_active\(\), &area\)/);
 assert.match(leave, /ctx->resuming = reopen && ctx->visible;/);
-assert.doesNotMatch(enter, /lv_obj_clear_flag\(ctx->placeholder/);
 assert.match(popup, /g_camera_popup->resuming \? nullptr : g_camera_popup->status/);
 assert.match(body(popup, 'void camera_popup_set_status('),
   /if \(!error && g_camera_popup && g_camera_popup->resuming\) \{\s*camera_stream_set_external_status\(text, error\);\s*return;/);

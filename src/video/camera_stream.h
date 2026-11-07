@@ -14,9 +14,7 @@ bool camera_stream_start(const char* url, uint32_t corner_rgb,
 void camera_stream_keep_jpeg(bool keep);
 bool camera_stream_take_kept_jpeg(uint8_t*& jpeg, size_t& bytes);
 void camera_stream_stop();
-void camera_stream_process_ui(lv_obj_t* image,
-                              lv_obj_t* placeholder,
-                              lv_obj_t* status_label);
+void camera_stream_process_ui(lv_obj_t* image, lv_obj_t* status_label);
 void camera_stream_set_external_status(const char* text, bool error = false);
 // The last status was an error (the popup shows it over the picture).
 bool camera_stream_status_is_error();

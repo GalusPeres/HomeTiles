@@ -50,14 +50,14 @@ assert.match(popup, /snprintf\(text, sizeof\(text\), camera_text\(\)\.camera_syn
 assert.match(popup, /snprintf\(text, sizeof\(text\), "%s", camera_text\(\)\.camera_live\)/);
 assert.match(popup, /show_head_text\(ctx, ctx->frame_count \? ctx->frame_times\[ctx->frame_count - 1\] : 0\);/);
 
-// The status stays in the picture's area and shows only if the first frame takes
-// long; over a running or a kept picture only an error or a message that must stay.
+// No words in the picture while it comes (Ready, Buffering, Preparing): only an
+// error or a message that must stay, and none left over from the last opening.
 assert.match(popup, /ctx->status = lv_label_create\(video\)/);
-assert.match(popup, /set_shown\(g_camera_popup->status, \(no_frame && waited\) \|\| g_camera_popup->status_sticky \|\|\s*camera_stream_status_is_error\(\)\)/);
-assert.match(popup, /const bool waited = !g_camera_popup->kept_dsc && millis\(\) - g_camera_popup->opened_ms >= kStatusDelayMs;/);
-// No "Preparing stream" for a picture that comes at once.
-assert.match(popup, /lv_label_set_text\(g_camera_popup->placeholder, ""\);/);
-assert.match(popup, /if \(no_frame && waited && !lv_label_get_text\(g_camera_popup->placeholder\)\[0\]\)/);
+assert.match(popup, /set_shown\(g_camera_popup->status, g_camera_popup->status_sticky \|\| camera_stream_status_is_error\(\)\);/);
+assert.match(popup, /g_camera_popup->status_sticky = false;\s*set_shown\(g_camera_popup->status, false\);/);
+assert.match(popup, /ctx->status_sticky = false;\s*set_shown\(ctx->status, false\);/);
+assert.doesNotMatch(popup, /placeholder|kStatusDelayMs|camera_preparing|camera_text\(\)\.camera_ready/);
+assert.doesNotMatch(header, /camera_preparing/);
 assert.match(popup, /\[Camera\] First frame shown %u ms after the opening/);
 assert.match(stream, /bool camera_stream_status_is_error\(\) \{ return false; \}/);
 
@@ -130,7 +130,6 @@ assert.match(entry, /if \(ctx->remember_key\) camera_tile_entry_chosen\(ctx->rem
 // frame, kept only for a still camera on its newest picture and never per frame.
 assert.match(popup, /constexpr size_t kKeptPictures = 4;/);
 assert.match(popup, /ctx->keeping = !full && !ctx->live_kind;/);
-assert.match(popup, /if \(!no_frame\) hide_kept_picture\(g_camera_popup\);/);
 assert.match(popup, /camera_stream_keep_jpeg\(g_camera_popup->keeping && !g_camera_popup->full && !g_camera_popup->playing &&/);
 assert.match(stream, /constexpr uint32_t kKeepEveryMs = 5000;/);
 assert.match(stream, /if \(g_keep_copied && now - g_keep_copied_ms < kKeepEveryMs\) return;/);
@@ -178,5 +177,24 @@ assert.match(popup, /const bool shown = ctx->frame_count >= 2;/);
 // The Bridge's new frames are not an answer: a pending request keeps its timeout.
 const handler = popup.slice(popup.indexOf('void camera_popup_handle_mqtt_status'));
 assert.ok(handler.indexOf('"frames") == 0') < handler.indexOf('waiting_for_bridge = false'));
+
+// The bottom row stays while switching and is there at once when opening (user
+// 2026-11-07): the times are kept with the picture, every radar place has the same.
+assert.match(popup, /std::vector<uint32_t> times;/);
+assert.match(popup, /if \(radar_before && is_radar\(ctx\) && ctx->frame_count\) \{\s*ctx->shown_frame = ctx->frame_count - 1;/);
+assert.match(popup, /return is_radar\(ctx\) && ctx->frame_count >= 2 && doc\["frames"\]\.size\(\) \+ doc\["frames_min"\]\.size\(\) < 2;/);
+// A small gap between the menu's rows, its shadow as pictures like the Media popup's.
+assert.match(popup, /lv_obj_set_style_pad_row\(ctx->menu_list, kMenuRowGap, 0\);/);
+assert.match(popup, /lv_snapshot_take\(probe, LV_COLOR_FORMAT_A8\)/);
+assert.doesNotMatch(popup, /apply_card_shadow\(ctx->menu_box\)/);
+assert.match(popup, /free_menu_shadow\(g_camera_popup, true\);/);
+assert.match(popup, /free_menu_shadow\(ctx, false\);/);
+// No whole picture drawn again when the first frame already lies on the panel.
+assert.match(popup, /if \(!no_frame\) hide_kept_picture\(g_camera_popup, false\);/);
+assert.match(stream, /The frame already lies on the panel[\s\S]{0,400}lv_display_enable_invalidation\(display, false\);[\s\S]{0,120}lv_obj_clear_flag\(image, LV_OBJ_FLAG_HIDDEN\);/);
+
+// One message at a time; the Bridge's own camera that is just coming gets asked again.
+assert.match(popup, /const bool own_source = g_camera_popup->entity_id\.startsWith\("camera\.ht_"\);/);
+assert.match(popup, /if \(g_camera_popup->source_retries\+\+ == 0\) return;/);
 
 console.log('Camera popup: PASS');

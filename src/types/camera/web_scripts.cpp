@@ -61,6 +61,7 @@ void append_camera_scripts(String& html) {
   add_text("longitudeRange", tr.camera_longitude_range);
   add_text("noPictureFound", tr.camera_no_picture_found);
   add_text("showsLast", tr.camera_tile_shows_last);
+  add_text("siteBlocked", tr.camera_site_blocked);
   add_text("remove", tr.camera_remove);
   add_text("title", tr.admin_title);
   add_text("auto", tr.tile_title_auto);

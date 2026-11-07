@@ -573,7 +573,10 @@
         .then(status => {
           const id = cameraEntryEntity('w', row.value).slice(7);
           const current = document.getElementById(tab + '_camera_entry_fail');
-          if (current && id) current.hidden = status?.src?.[id] !== 'none';
+          if (!current || !id) return;
+          const state = status?.src?.[id];
+          current.textContent = cameraText(state === 'blocked' ? 'siteBlocked' : 'noPictureFound');
+          current.hidden = state !== 'none' && state !== 'blocked';
         })
         .catch(() => {});
       cameraSourcesTimer = window.setTimeout(ask, 5000);

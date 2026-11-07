@@ -400,7 +400,6 @@ struct Strings {
   // Camera tile, popup and video runtime status.
   const char* camera_tile_type;
   const char* camera_ready;
-  const char* camera_preparing;
   const char* camera_bridge_requesting;
   const char* camera_bridge_update_required;
   const char* camera_bridge_no_response;
@@ -450,7 +449,7 @@ struct Strings {
   const char* camera_latitude_range;
   const char* camera_longitude_range;
   const char* camera_no_picture_found;
-  const char* camera_tile_group;
+  const char* camera_site_blocked;
   const char* camera_tile_shows;
   const char* camera_tile_shows_last;
   const char* camera_radar_source;

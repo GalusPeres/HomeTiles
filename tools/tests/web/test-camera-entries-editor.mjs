@@ -23,6 +23,8 @@ assert.doesNotMatch(html, /appendEntityPickerField/, 'The entity pickers belong 
 // stands, the options under Advanced.
 assert.ok(html.indexOf('data-tile-place=\\"head\\"') > 0 && html.indexOf('data-tile-place=\\"head\\"') < source, 'In the head');
 assert.doesNotMatch(html, /camera_tile_group/, 'No heading of its own');
+assert.match(scripts, /tr\.camera_site_blocked/, 'A site that refuses is named');
+assert.match(admin, /state === 'blocked' \? 'siteBlocked' : 'noPictureFound'/);
 // Every word through the central strings, in the type's own script block.
 for (const key of ['camera_list_places', 'camera_add_entity', 'camera_add_place', 'camera_add_webcam', 'camera_own_coordinates',
                    'camera_no_picture_found', 'camera_latitude_range', 'camera_longitude_range', 'camera_tile_shows_last']) {
@@ -71,7 +73,7 @@ const CAMERA_TEXT = Object.freeze({entity:'Picture or camera',listPlaces:'Places
   addEntity:'Add picture',addPlace:'Add place',addWebcam:'Add webcam',newWebcam:'New webcam',placeHome:'Home',kindZone:'Zone',kindImage:'Picture',
   ownCoordinates:'Own coordinates',ownCoordinatesHint:'Enter',noCoordinates:'No coordinates yet',latitudeLabel:'Lat',longitudeLabel:'Lon',
   latitudeRange:'Latitude: from -90 to 90.',longitudeRange:'Longitude: from -180 to 180.',noPictureFound:'No picture',showsLast:'Last chosen',
-  remove:'Remove',title:'Title',auto:'Auto',icon:'Icon'});
+  siteBlocked:'This site blocks',remove:'Remove',title:'Title',auto:'Auto',icon:'Icon'});
 const entityRemoteInfo = new Map();
 const sensorMetaCache = {names:{'camera.door':'Door'},icons:{}};
 let previews = 0, drafts = 0, saves = 0;

@@ -39,6 +39,9 @@
 #elif defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B)
 #define FW_META_TARGET_DEVICE_KEY "waveshare_s3_touch_lcd_4b"
 #define FW_META_TARGET_DISPLAY_NAME "Waveshare ESP32-S3 Touch LCD 4B"
+#elif defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_7)
+#define FW_META_TARGET_DEVICE_KEY "waveshare_s3_touch_lcd_7"
+#define FW_META_TARGET_DISPLAY_NAME "Waveshare ESP32-S3 Touch LCD 7"
 #elif defined(DEVICE_WAVESHARE_TOUCH_LCD_4_3)
 #define FW_META_TARGET_DEVICE_KEY "waveshare_touch_lcd_4_3"
 #define FW_META_TARGET_DISPLAY_NAME "Waveshare Touch LCD 4.3"

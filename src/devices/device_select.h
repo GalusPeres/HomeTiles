@@ -12,6 +12,7 @@
 // #define DEVICE_WAVESHARE_TOUCH_LCD_7B
 // #define DEVICE_WAVESHARE_TOUCH_LCD_8
 // #define DEVICE_WAVESHARE_TOUCH_LCD_10_1
+// #define DEVICE_WAVESHARE_S3_TOUCH_LCD_7
 // #define DEVICE_WAVESHARE_S3_TOUCH_LCD_4
 // #define DEVICE_WAVESHARE_S3_TOUCH_LCD_4B
 // #define DEVICE_LAYOUT_TEST_1024X600
@@ -43,6 +44,7 @@
      defined(DEVICE_WAVESHARE_TOUCH_LCD_7B) + \
      defined(DEVICE_WAVESHARE_TOUCH_LCD_8) + \
      defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1) + \
+     defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_7) + \
      defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4) + \
      defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B) + \
      defined(DEVICE_LAYOUT_TEST_1024X600) + \
@@ -65,6 +67,7 @@
     !defined(DEVICE_WAVESHARE_TOUCH_LCD_7B) && \
     !defined(DEVICE_WAVESHARE_TOUCH_LCD_8) && \
     !defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1) && \
+    !defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_7) && \
     !defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4) && \
     !defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B) && \
     !defined(DEVICE_LAYOUT_TEST_1024X600) && \
@@ -88,6 +91,7 @@
     !defined(DEVICE_WAVESHARE_TOUCH_LCD_7B) && \
     !defined(DEVICE_WAVESHARE_TOUCH_LCD_8) && \
     !defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1) && \
+    !defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_7) && \
     !defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4) && \
     !defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B) && \
     !defined(DEVICE_LAYOUT_TEST_1024X600) && \
@@ -206,8 +210,13 @@
 #define DEVICE_LAYOUT_1024X600
 #endif
 
+// This is the small-panel layout class, not a 480 px width class: the
+// Waveshare 4.3" uses it with an 800x480 panel. The S3 7" board has the same
+// 800x480 panel and needs the same 2/3 UI scale instead of the 720x720
+// identity geometry, which rendered fonts and popups larger than the panel.
 #if defined(DEVICE_LAYOUT_TEST_480X480) || \
     defined(DEVICE_WAVESHARE_TOUCH_LCD_4_3) || \
+    defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_7) || \
     defined(DEVICE_GUITION_JC4880P443_PORTRAIT) || \
     defined(DEVICE_GUITION_ESP32_4848S040) || \
     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) || \

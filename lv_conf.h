@@ -58,8 +58,9 @@
 
 #if LV_USE_STDLIB_MALLOC == LV_STDLIB_BUILTIN
 /** Size of the pool `lv_malloc()` allocates from. Needs to be at least 2kB (2048). */
-#if defined(DEVICE_ESP32_S3_RGB_480)
-/* This ESP32-S3 board has 8 MB PSRAM in total. Reserving the generic
+#if defined(DEVICE_ESP32_S3_RGB_480) || \
+    defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_7)
+/* These ESP32-S3 boards have 8 MB PSRAM in total. Reserving the generic
  * 12 MB LVGL arena fails and makes LVGL dereference a null TLSF pool
  * during theme initialization. */
 #define LV_MEM_SIZE (2 * 1024 * 1024U)

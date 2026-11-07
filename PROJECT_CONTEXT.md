@@ -1,6 +1,6 @@
 # HomeTiles shared project context
 
-Last reviewed: 2026-10-29
+Last reviewed: 2026-11-07
 
 ## Sources of truth
 
@@ -15,7 +15,7 @@ Last reviewed: 2026-10-29
 - FW + Bridge v0.9.7 released 2026-10-30.
 - Pairing by IP, no mDNS (#114, Bridge #16): `GET /api/link`.
 - Test builds stay `v0.6.12bNNN` on purpose (System Update offers releases); beta define in `firmware_version.h`, last b632.
-- Run `node tools/fast-build-check.mjs --build-path <cache>` before every build (warm: only repo headers changed, same LVGL config hash).
+- Run `node tools/fast-build-check.mjs --build-path <cache>` before every build.
 - Docs CI: Chrome for Testing 154.0.8037.57; dispatch docs (`main`) after a release.
 - Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need icons on HomeTiles-staging (tag = FW_VERSION).
 
@@ -27,6 +27,7 @@ Last reviewed: 2026-10-29
 - #116 (JC4880 camera popup ends after 18-60 min): Bridge waits 45 s per chunk ACK; reporter pending.
 - Issue #119 (Guition V1): own Helix (b501, `src/audio/helix_mp3`): the core's overran on MPEG-2.5; TLS in PSRAM. Speaker audio from the Bridge (`docs-dev/audio-stream.md`): FFmpeg -> mono PCM over the camera tcp-ack listener (`HTAUD/1`); panels announce `"stream":"tcp-ack-v1"`. HW ok. Camera sound: lip-synced live track (b507 HW ok, b508 even gaps HW pending).
 - Voice: mic/wake word off on a new panel (b500), listening its own setting, the word stays; Bridge v0.9.4b6 Listening switch. HW/HA test pending. Mic button + audio settings: mockup first; #91 declined.
+- Waveshare S3 7": GT911 ok; display fix HW pending.
 
 ## Do not retry (rejected with evidence)
 

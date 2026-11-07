@@ -178,13 +178,15 @@ assert.match(read('src/devices/waveshare_touch_lcd_5/board.h'),
 const neverCamera = ['DEVICE_GUITION_JC1060P470C', 'DEVICE_GUITION_ESP32_4848S040',
   'DEVICE_GOLDEN_SECURITY_GS_T3E_V2',
   'DEVICE_WAVESHARE_S3_TOUCH_LCD_4', 'DEVICE_WAVESHARE_S3_TOUCH_LCD_4B',
+  'DEVICE_WAVESHARE_S3_TOUCH_LCD_7',
   'DEVICE_LAYOUT_TEST_1024X600', 'DEVICE_LAYOUT_TEST_480X480'];
 for (const define of neverCamera) {
   assert.ok(!cameraBlock.includes(`defined(${define})`), `${define} must not select the camera`);
   assert.ok(!cameraSelect.includes(`defined(${define})`), `${define} has no camera board`);
 }
 for (const dir of ['guition_jc1060p470c', 'guition_esp32_4848s040', 'waveshare_s3_touch_lcd_4',
-                   'waveshare_s3_touch_lcd_4b', 'golden_security_gs_t3e_v2']) {
+                   'waveshare_s3_touch_lcd_4b', 'waveshare_s3_touch_lcd_7',
+                   'golden_security_gs_t3e_v2']) {
   assert.ok(!exists(`src/devices/${dir}/local_camera_board.h`) && !exists(`src/devices/${dir}/local_camera_board.cpp`),
     `${dir} has no camera board file`);
   for (const file of fs.readdirSync(path.join(root, 'src/devices', dir)).filter(name => name.endsWith('.h'))) {

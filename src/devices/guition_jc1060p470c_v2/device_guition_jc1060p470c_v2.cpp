@@ -2,7 +2,7 @@
 
 #include "src/devices/device_select.h"
 
-#if defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470_V3)
+#if defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)
 
 #include <Arduino.h>
 #include <LittleFS.h>
@@ -32,8 +32,8 @@
 #include "src/devices/guition_jc1060p470c_v2/vendor/guition_sdmmc.h"
 #include "src/devices/guition_jc1060p470c_v2/vendor/i2c.h"
 
-#if defined(DEVICE_GUITION_JC1060P470_V3)
-#define JC1060_LOG_PREFIX "[Device/Guition JC1060P470 V3] "
+#if defined(DEVICE_GUITION_JC1060P470C_V3)
+#define JC1060_LOG_PREFIX "[Device/Guition JC1060P470C V3] "
 #else
 #define JC1060_LOG_PREFIX "[Device/Guition JC1060P470C V2] "
 #endif
@@ -1391,7 +1391,7 @@ i2c_master_bus_handle_t DeviceGuitionJC1060P470CV2::sharedI2cBus() {
 }
 
 bool DeviceGuitionJC1060P470CV2::initSDCard() {
-#if defined(DEVICE_GUITION_JC1060P470_V3)
+#if defined(DEVICE_GUITION_JC1060P470C_V3)
   // The V3 reference confirms panel wiring, not the V2 SD pin map.
   return false;
 #else
@@ -1604,4 +1604,4 @@ void DeviceGuitionJC1060P470CV2::migrateStorageFromSD() {
   }
 }
 
-#endif  // defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470_V3)
+#endif  // defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)

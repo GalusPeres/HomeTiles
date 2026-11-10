@@ -11,7 +11,7 @@ const POST_V3_TARGETS = Object.freeze({
   waveshare_touch_lcd_7b_rev3: { metadataDeviceKey: 'waveshare_touch_lcd_7b', define: 'DEVICE_WAVESHARE_TOUCH_LCD_7B' },
   waveshare_touch_lcd_10_1_rev3: { metadataDeviceKey: 'waveshare_touch_lcd_10_1', define: 'DEVICE_WAVESHARE_TOUCH_LCD_10_1' },
   guition_jc8012p4a1_v3: { metadataDeviceKey: 'guition_jc8012p4a1_v2', define: 'DEVICE_GUITION_JC8012P4A1_V2' },
-  guition_jc1060p470_v3: { metadataDeviceKey: 'guition_jc1060p470_v3', define: 'DEVICE_GUITION_JC1060P470_V3' },
+  guition_jc1060p470c_v3: { metadataDeviceKey: 'guition_jc1060p470c_v3', define: 'DEVICE_GUITION_JC1060P470C_V3' },
   waveshare_touch_lcd_5_rev3: { metadataDeviceKey: 'waveshare_touch_lcd_5', define: 'DEVICE_WAVESHARE_TOUCH_LCD_5' },
   waveshare_touch_lcd_4_3_rev3: { metadataDeviceKey: 'waveshare_touch_lcd_4_3', define: 'DEVICE_WAVESHARE_TOUCH_LCD_4_3' },
   waveshare_touch_lcd_8_rev3: { metadataDeviceKey: 'waveshare_touch_lcd_8', define: 'DEVICE_WAVESHARE_TOUCH_LCD_8' },

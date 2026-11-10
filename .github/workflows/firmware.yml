@@ -277,10 +277,10 @@ jobs:
             silicon_variant: post_v3
             rx_variant: repo-a8204
             publish: true
-          - label: Guition JC1060P470 V3 (ESP32-P4 v3.1 or newer, experimental)
-            profile: guition_jc1060p470_v3
-            key: guition_jc1060p470_v3
-            define: DEVICE_GUITION_JC1060P470_V3
+          - label: Guition JC1060P470C V3 (ESP32-P4 v3.1 or newer, experimental)
+            profile: guition_jc1060p470c_v3
+            key: guition_jc1060p470c_v3
+            define: DEVICE_GUITION_JC1060P470C_V3
             silicon_variant: post_v3
             rx_variant: repo-a8204
             publish: true

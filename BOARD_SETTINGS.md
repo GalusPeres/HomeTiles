@@ -399,14 +399,14 @@ Arduino IDE:
 - Upload Speed: `921600`
 - USB Mode: `USB-OTG (TinyUSB)`
 
-## Guition JC1060P470 V3
+## Guition JC1060P470C V3
 
 Used for:
-- `src/devices/guition_jc1060p470_v3`
-- build profile `guition_jc1060p470_v3`
+- `src/devices/guition_jc1060p470c_v3`
+- build profile `guition_jc1060p470c_v3`
 
 Important:
-- Use this profile for the JC1060P470 V3 with ESP32-P4 production silicon,
+- Use this profile for the JC1060P470C V3 with ESP32-P4 production silicon,
   revisions v3.1-v3.99 (301-399). The pre-v3 V1/V2 images do not support this
   silicon range.
 - The upstream V3 device definition confirms the 7-inch 1024x600 panel, GT911

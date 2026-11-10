@@ -314,7 +314,7 @@ profiles:
       - OneWire (2.3.8)
       - PubSubClient (2.8)
 
-  guition_jc1060p470_v3:
+  guition_jc1060p470c_v3:
     fqbn: esp32:esp32:esp32p4:UploadSpeed=921600,USBMode=default,CDCOnBoot=default,MSCOnBoot=default,DFUOnBoot=default,UploadMode=default,FlashFreq=80,FlashMode=qio,FlashSize=16M,PartitionScheme=custom,DebugLevel=none,PSRAM=enabled,EraseFlash=none,JTAGAdapter=default,ChipVariant=postv3
     platforms:
       - platform: esp32:esp32 (3.3.7)

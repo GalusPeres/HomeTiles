@@ -175,7 +175,7 @@ assert.match(read('src/devices/waveshare_touch_lcd_5/board.h'),
 }
 
 // --- Profiles without a proven camera never get the capture path -----------
-const neverCamera = ['DEVICE_GUITION_JC1060P470C', 'DEVICE_GUITION_JC1060P470_V3',
+const neverCamera = ['DEVICE_GUITION_JC1060P470C', 'DEVICE_GUITION_JC1060P470C_V3',
   'DEVICE_GUITION_ESP32_4848S040',
   'DEVICE_GOLDEN_SECURITY_GS_T3E_V2',
   'DEVICE_WAVESHARE_S3_TOUCH_LCD_4', 'DEVICE_WAVESHARE_S3_TOUCH_LCD_4B',

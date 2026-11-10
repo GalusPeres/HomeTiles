@@ -1,6 +1,7 @@
 #include "src/devices/guition_jc1060p470c_v2/local_camera_board.h"
 
-#if defined(DEVICE_GUITION_JC1060P470C_V2) && defined(HOMETILES_LOCAL_CAMERA)
+#if (defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)) && \
+    defined(HOMETILES_LOCAL_CAMERA)
 
 #include <esp_ldo_regulator.h>
 

@@ -1,6 +1,7 @@
 #pragma once
 
-// Camera board file of the Guition JC1060P470C_I_W_Y V2 profile
+// Camera board file of the Guition JC1060P470C_I_W_Y V2 profile and the
+// provisional V3 compatibility profile
 // (contract: src/video/local_camera/camera_driver.h). Board
 // facts come from Guition's official JC1060P470C_I_W_Y schematic V1.0 and
 // video_lcd_display demo (see the OV02C10 PROVENANCE.md):
@@ -19,7 +20,8 @@
 
 #include "src/video/local_camera/camera_select.h"
 
-#if defined(DEVICE_GUITION_JC1060P470C_V2) && defined(HOMETILES_LOCAL_CAMERA)
+#if (defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)) && \
+    defined(HOMETILES_LOCAL_CAMERA)
 
 #include <driver/i2c_master.h>
 
@@ -43,7 +45,7 @@ inline constexpr local_camera::SensorMode kMode = {
     static_cast<uint16_t>(ov02c10::kFrameHeight),
     static_cast<uint8_t>(ov02c10::kDataLanes),
     static_cast<uint16_t>(ov02c10::kLaneBitRateMbps),
-    true,   // V2 default; orientation pending hardware check.
+    true,   // V2 default; V3 orientation pending hardware check.
     false,
     false,  // Landscape like the demo, no quarter turn.
     COLOR_RAW_ELEMENT_ORDER_GBRG,

@@ -39,12 +39,12 @@ const BOARDS = {
     out: 'Es8388', codec: 0x10, inp: 'Es7210', mic: 0x40, amp: 'NC', byBoard: true, limit: 0.9},
 };
 // No voice: the ESP32-S3 panels (user decision), the host layout tests and
-// the original-panel JC1060 (board identity unproven, like its camera).
+// the original-panel and V3 JC1060 profiles (audio wiring not verified).
 const WITHOUT_VOICE = [
   'DEVICE_WAVESHARE_S3_TOUCH_LCD_4', 'DEVICE_WAVESHARE_S3_TOUCH_LCD_4B',
   'DEVICE_GUITION_ESP32_4848S040', 'DEVICE_GOLDEN_SECURITY_GS_T3E_V2',
   'DEVICE_LAYOUT_TEST_1024X600', 'DEVICE_LAYOUT_TEST_480X480',
-  'DEVICE_GUITION_JC1060P470C',
+  'DEVICE_GUITION_JC1060P470C', 'DEVICE_GUITION_JC1060P470_V3',
 ];
 
 const deviceSelect = read('src/devices/device_select.h');

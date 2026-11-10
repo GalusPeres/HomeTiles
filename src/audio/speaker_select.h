@@ -29,8 +29,8 @@
 #elif defined(DEVICE_WAVESHARE_4B)
 #define HOMETILES_SPEAKER_BOARD "src/devices/waveshare_4b/speaker_board.h"
 // Guition boards (Guition schematics): one ES8311 for speaker and microphone,
-// NS4150 amplifier. The original-panel JC1060P470C stays out: its board
-// identity is unproven (like its camera, see device_select.h).
+// NS4150 amplifier. The original-panel and V3 JC1060 profiles stay out:
+// their audio wiring is unverified.
 #elif defined(DEVICE_GUITION_JC8012P4A1)
 #define HOMETILES_SPEAKER_BOARD "src/devices/guition_jc8012p4a1/speaker_board.h"
 #elif defined(DEVICE_GUITION_JC8012P4A1_V2)

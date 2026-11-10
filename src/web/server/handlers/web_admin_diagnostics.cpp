@@ -500,7 +500,7 @@ void WebAdminServer::handleSdDiagnosticsDownload() {
   };
 
   const bool ready = Device::sdReady();
-#if defined(DEVICE_GUITION_JC1060P470C_FAMILY)
+#if defined(DEVICE_GUITION_JC1060P470C) || defined(DEVICE_GUITION_JC1060P470C_V2)
   report += "SD bus: SDMMC slot 0, 4-bit, CLK=43 CMD=44 D0-D3=39-42\n";
   report += "SD power: LDO VO4, GPIO45 active-low, 200 ms reset before each mount attempt\n";
   report += "Last driver phase: ";

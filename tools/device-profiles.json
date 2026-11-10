@@ -446,6 +446,29 @@
       }
     },
     {
+      "buildProfile": "guition_jc1060p470_v3",
+      "key": "guition_jc1060p470_v3",
+      "metadataDeviceKey": "guition_jc1060p470_v3",
+      "define": "DEVICE_GUITION_JC1060P470_V3",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 16777216,
+      "siliconVariant": "post_v3",
+      "minimumRevision": 301,
+      "maximumRevision": 399,
+      "rxVariant": "repo-a8204",
+      "elfFlags": "",
+      "publish": true,
+      "ciOrder": 23,
+      "ciLabel": "Guition JC1060P470 V3 (ESP32-P4 v3.1 or newer, experimental)",
+      "legacySlug": "guition-jc1060p470-v3",
+      "installer": {
+        "label": "Guition JC1060P470 V3 (ESP32-P4 v3.1 or newer, experimental)",
+        "status": "validation-pending",
+        "hardwareCheck": "The rear label identifies a Guition JC1060P470 V3 and esptool reports ESP32-P4 revision v3.1 or newer. Revision v3.0 is unsupported by the pinned toolchain.",
+        "acceptsLegacyDescriptor": false
+      }
+    },
+    {
       "buildProfile": "guition_jc4880p443_portrait",
       "key": "guition_jc4880p443_portrait",
       "metadataDeviceKey": "guition_jc4880p443_portrait",

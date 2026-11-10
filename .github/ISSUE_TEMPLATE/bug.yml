@@ -30,6 +30,7 @@ body:
         - Guition JC8012P4A1 V3 (experimental)
         - Guition JC1060P470C_I_W_Y
         - Guition JC1060P470C V2 (New Panel)
+        - Guition JC1060P470 V3 (ESP32-P4 v3.1 or newer)
         - Guition JC4880P443C_I_W
         - Guition ESP32-4848S040C_I
         - Golden Security GS-T3E v2 (PCB v2.3)

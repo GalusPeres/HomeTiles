@@ -6,7 +6,7 @@
 
 #include "src/devices/device_select.h"
 
-#if defined(DEVICE_GUITION_JC1060P470C_V2)
+#if defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470_V3)
 
 #include "i2c.h"
 
@@ -41,4 +41,4 @@ DEV_I2C_Port DEV_I2C_Init() {
   return DEV_I2C_Port{g_bus};
 }
 
-#endif  // defined(DEVICE_GUITION_JC1060P470C_V2)
+#endif  // defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470_V3)

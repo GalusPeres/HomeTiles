@@ -92,7 +92,7 @@ for (const device of DEVICE_PROFILES.filter((candidate) => candidate.chipFamily 
     waveshare_touch_lcd_7b_rev3: ["post_v3", 301, 399],
     waveshare_touch_lcd_10_1_rev3: ["post_v3", 301, 399],
     guition_jc8012p4a1_v3: ["post_v3", 301, 399],
-    guition_jc1060p470_v3: ["post_v3", 301, 399],
+    guition_jc1060p470c_v3: ["post_v3", 301, 399],
     waveshare_touch_lcd_5_rev3: ["post_v3", 301, 399],
     waveshare_touch_lcd_4_3_rev3: ["post_v3", 301, 399],
     waveshare_touch_lcd_8_rev3: ["post_v3", 301, 399],
@@ -119,7 +119,7 @@ for (const [key, chipFamily, flashSize, labelPattern, status = "validation-pendi
   ["waveshare_touch_lcd_7b", "ESP32-P4", 32 * 1024 * 1024, /before v3\.0/],
   ["waveshare_touch_lcd_7b_rev3", "ESP32-P4", 32 * 1024 * 1024, /7B-C \(ESP32-P4 v3\.1 or newer, experimental\)/],
   ["guition_jc8012p4a1_v3", "ESP32-P4", 16 * 1024 * 1024, /JC8012P4A1 V3 \(experimental\)/],
-  ["guition_jc1060p470_v3", "ESP32-P4", 16 * 1024 * 1024, /JC1060P470 V3 \(ESP32-P4 v3\.1 or newer, experimental\)/],
+  ["guition_jc1060p470c_v3", "ESP32-P4", 16 * 1024 * 1024, /JC1060P470C V3 \(ESP32-P4 v3\.1 or newer, experimental\)/],
   ["waveshare_touch_lcd_10_1_rev3", "ESP32-P4", 32 * 1024 * 1024, /10\.1 inch \(ESP32-P4 v3\.1 or newer, experimental\)/],
   ["guition_jc1060p470c_v2", "ESP32-P4", 16 * 1024 * 1024, /V2 \(New Panel\)/],
   ["guition_jc4880p443_portrait", "ESP32-P4", 16 * 1024 * 1024, /JC4880P443/],
@@ -341,7 +341,7 @@ const legacy7bRelease = fixtureRelease("v0.6.7");
 legacy7bRelease.assets = legacy7bRelease.assets.filter(
   (asset) => !asset.name.includes("_waveshare_touch_lcd_7b_rev3") &&
     !asset.name.includes("_guition_jc4880p443_portrait") &&
-    !asset.name.includes("_guition_jc1060p470_v3"),
+    !asset.name.includes("_guition_jc1060p470c_v3"),
 );
 assert.throws(() => buildReleaseIndex(legacy7bRelease), /waveshare_touch_lcd_7b_rev3/);
 const legacy7bIndex = buildReleaseIndex(legacy7bRelease, { allowMissingProfiles: true });
@@ -358,7 +358,7 @@ assert.equal(
 );
 const previousRelease = fixtureRelease("v0.6.7");
 const pendingDeviceKeys = new Set([
-  "guition_jc1060p470_v3",
+  "guition_jc1060p470c_v3",
   "waveshare_touch_lcd_4_3",
   "waveshare_touch_lcd_4_3_rev3",
   "waveshare_touch_lcd_8_rev3",
@@ -402,7 +402,7 @@ assert.throws(
 const beforeLcd4Release = fixtureRelease("v0.6.9");
 const lcd4AssetNames = Object.values(releaseAssetNames("v0.6.9", waveshareS3Lcd4.key));
 const jc4880AssetNames = Object.values(releaseAssetNames("v0.6.9", "guition_jc4880p443_portrait"));
-const jc1060V3AssetNames = Object.values(releaseAssetNames("v0.6.9", "guition_jc1060p470_v3"));
+const jc1060V3AssetNames = Object.values(releaseAssetNames("v0.6.9", "guition_jc1060p470c_v3"));
 beforeLcd4Release.assets = beforeLcd4Release.assets.filter(
   (asset) => !lcd4AssetNames.includes(asset.name) &&
     !jc4880AssetNames.includes(asset.name) && !jc1060V3AssetNames.includes(asset.name),

@@ -252,13 +252,13 @@ export const DEVICE_PROFILES = Object.freeze([
     "acceptsLegacyDescriptor": true
   }),
   Object.freeze({
-    "key": "guition_jc1060p470_v3",
-    "buildProfile": "guition_jc1060p470_v3",
-    "label": "Guition JC1060P470 V3 (ESP32-P4 v3.1 or newer, experimental)",
+    "key": "guition_jc1060p470c_v3",
+    "buildProfile": "guition_jc1060p470c_v3",
+    "label": "Guition JC1060P470C V3 (ESP32-P4 v3.1 or newer, experimental)",
     "chipFamily": "ESP32-P4",
     "flashSize": 16777216,
     "status": "validation-pending",
-    "hardwareCheck": "The rear label identifies a Guition JC1060P470 V3 and esptool reports ESP32-P4 revision v3.1 or newer. Revision v3.0 is unsupported by the pinned toolchain.",
+    "hardwareCheck": "The rear label identifies a Guition JC1060P470C V3 and esptool reports ESP32-P4 revision v3.1 or newer. Revision v3.0 is unsupported by the pinned toolchain.",
     "siliconVariant": "post_v3",
     "minimumRevision": 301,
     "maximumRevision": 399,

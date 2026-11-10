@@ -73,7 +73,7 @@ void displayEndFullFrames() {}
 bool ppaCooldownActive() {
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || \
     defined(DEVICE_GUITION_JC1060P470C) || defined(DEVICE_GUITION_JC1060P470C_V2) || \
-    defined(DEVICE_GUITION_JC1060P470_V3) || \
+    defined(DEVICE_GUITION_JC1060P470C_V3) || \
     defined(DEVICE_GUITION_JC4880P443_PORTRAIT) || \
     defined(DEVICE_GUITION_JC8012P4A1) || \
     defined(DEVICE_GUITION_JC8012P4A1_V2)

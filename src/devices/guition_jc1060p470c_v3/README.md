@@ -1,6 +1,6 @@
-# Guition JC1060P470 V3
+# Guition JC1060P470C V3
 
-This experimental target is for the 7-inch 1024x600 Guition JC1060P470 V3
+This experimental target is for the 7-inch 1024x600 Guition JC1060P470C V3
 with ESP32-P4 production silicon (v3.1-v3.99). It uses the V2 panel wiring,
 timing and JD9165 initialization sequence with the post-v3 firmware build.
 

@@ -2,13 +2,13 @@
 
 #include "src/devices/guition_jc1060p470c_v2/device_guition_jc1060p470c_v2.h"
 
-namespace DeviceGuitionJC1060P470V3 {
+namespace DeviceGuitionJC1060P470CV3 {
 
 using namespace DeviceGuitionJC1060P470CV2;
 
 inline constexpr Device::Profile kProfile{
-    "guition_jc1060p470_v3",
-    "Guition JC1060P470 V3",
+    "guition_jc1060p470c_v3",
+    "Guition JC1060P470C V3",
     1024,
     600,
     6,
@@ -26,4 +26,4 @@ inline constexpr Device::Profile kProfile{
     Device::kNoHardwareIoProfile,
 };
 
-}  // namespace DeviceGuitionJC1060P470V3
+}  // namespace DeviceGuitionJC1060P470CV3

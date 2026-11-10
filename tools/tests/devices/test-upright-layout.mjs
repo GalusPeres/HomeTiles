@@ -170,11 +170,11 @@ assert.ok(!/M5\.Display\.setRotation\([^)]*g_upright/.test(tab5), 'M5GFX keeps i
 // above against the shared touch turn.
 const upright = /constexpr bool upright_ready\(\) \{\n#if ([\s\S]*?)\n  return true;/.exec(read('src/tiles/config/grid_layout.h'))[1];
 for (const name of ['JC8012P4A1)', 'JC8012P4A1_V2)', 'LCD_4_3)', 'LCD_7)', 'LCD_8)', 'LCD_10_1)', 'TAB5)',
-  'JC1060P470C)', 'JC1060P470C_V2)', 'JC1060P470_V3)', 'LCD_7B)', 'JC4880P443_PORTRAIT)']) {
+  'JC1060P470C)', 'JC1060P470C_V2)', 'JC1060P470C_V3)', 'LCD_7B)', 'JC4880P443_PORTRAIT)']) {
   assert.ok(upright.includes(name), name);
 }
 const reversed = /constexpr bool turn_reversed\(\) \{\n#if ([\s\S]*?)\n  return true;/.exec(read('src/tiles/config/grid_layout.h'))[1];
-for (const name of ['JC1060P470C)', 'JC1060P470C_V2)', 'JC1060P470_V3)', 'LCD_7B)', 'JC4880P443_PORTRAIT)']) assert.ok(reversed.includes(name), name);
+for (const name of ['JC1060P470C)', 'JC1060P470C_V2)', 'JC1060P470C_V3)', 'LCD_7B)', 'JC4880P443_PORTRAIT)']) assert.ok(reversed.includes(name), name);
 assert.ok(!reversed.includes('JC8012') && !reversed.includes('TAB5'), 'the panels upright by themselves turn as before');
 const displaySetUpright = /void displaySetUpright\(bool upright\) \{([\s\S]*?)\n\}/
   .exec(read('src/devices/device.cpp'))[1];

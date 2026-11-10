@@ -54,6 +54,8 @@ for (const [source, marker, label] of [
   [v3DeviceHeader, 'using namespace DeviceGuitionJC1060P470CV2;', 'shared panel lifecycle'],
   [v3DeviceHeader, '"guition_jc1060p470c_v3"', 'V3 runtime identity'],
   [v3DeviceHeader, 'Device::kNoHardwareIoProfile', 'unverified expansion GPIOs'],
+  [v3DeviceHeader, 'Device::Capabilities{false, false, false, false, false, false, kBuiltinCamera}',
+    'provisional local camera capability'],
   [v2DeviceHeader, '"guition_jc1060p470c_v2"', 'unchanged V2 runtime identity'],
   [displayConfig, '52000000', 'V2 pixel clock'],
   [displayConfig, '750', 'V2 DSI lane rate'],

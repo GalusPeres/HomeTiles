@@ -10,8 +10,10 @@ Do not flash the V1 or V2 image to this board: the V3 build selects the
 ESP32-P4 v3.1-v3.99 silicon range and its own firmware identity.
 
 HomeTiles touch input and the remainder of the board still need validation on
-the exact hardware. SD, expansion GPIOs, camera and audio are not enabled for
-this profile until their V3 wiring is verified.
+the exact hardware. Local camera support reuses the V2 OV02C10 CSI/SCCB and
+shared MIPI PHY-supply setup; a contributor confirms that the camera works on
+V3 hardware. SD, expansion GPIOs and audio remain disabled until their V3
+wiring is verified.
 
 Hardware references:
 

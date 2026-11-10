@@ -413,8 +413,10 @@ Important:
   touch, LCD reset GPIO 0, backlight GPIO 23, and touch I2C SDA 7 / SCL 8.
   HomeTiles reuses the established V2 JD9165 timings and initialization; exact
   touch behavior still needs validation on this board.
-- The upstream definition does not establish V3 SD, expansion GPIO, camera,
-  or audio wiring. These capabilities are disabled for this profile.
+- The upstream definition does not establish V3 SD, expansion GPIO, or audio
+  wiring. These capabilities remain disabled. Local camera support reuses the
+  V2 OV02C10 CSI/SCCB and shared PHY-supply setup; a contributor confirms the
+  camera works on V3 hardware.
 - ESP32-P4 with `16MB` flash. The profile uses the repository's `partitions.csv`
   and two 6.5MB OTA slots.
 - A contributor reports that the first factory image boots and displays on

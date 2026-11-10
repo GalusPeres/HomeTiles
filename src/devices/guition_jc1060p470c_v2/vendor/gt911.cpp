@@ -6,7 +6,7 @@
 
 #include "src/devices/device_select.h"
 
-#if defined(DEVICE_GUITION_JC1060P470C_V2)
+#if defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)
 
 #include <stdio.h>
 #include <string.h>
@@ -525,4 +525,4 @@ static esp_err_t touch_gt911_i2c_write(esp_lcd_touch_handle_t tp, uint16_t reg, 
     // *INDENT-ON*
 }
 
-#endif  // defined(DEVICE_GUITION_JC1060P470C_V2)
+#endif  // defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)

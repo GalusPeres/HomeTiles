@@ -10,7 +10,7 @@
 
 #include "src/devices/device_select.h"
 
-#if defined(DEVICE_GUITION_JC1060P470C_V2)
+#if defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)
 
 struct DisplayConfig {
   const char* name;
@@ -55,4 +55,4 @@ static constexpr DisplayConfig SCREEN_DEFAULT = {
 
 inline constexpr const DisplayConfig& display_cfg = SCREEN_DEFAULT;
 
-#endif  // defined(DEVICE_GUITION_JC1060P470C_V2)
+#endif  // defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)

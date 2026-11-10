@@ -2,7 +2,7 @@
 
 #include "src/devices/device_select.h"
 
-#if defined(DEVICE_GUITION_JC1060P470C_V2)
+#if defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)
 
 #include <Arduino.h>
 #include <LittleFS.h>
@@ -31,6 +31,12 @@
 #include "src/devices/guition_jc1060p470c_v2/vendor/gt911.h"
 #include "src/devices/guition_jc1060p470c_v2/vendor/guition_sdmmc.h"
 #include "src/devices/guition_jc1060p470c_v2/vendor/i2c.h"
+
+#if defined(DEVICE_GUITION_JC1060P470C_V3)
+#define JC1060_LOG_PREFIX "[Device/Guition JC1060P470C V3] "
+#else
+#define JC1060_LOG_PREFIX "[Device/Guition JC1060P470C V2] "
+#endif
 
 namespace {
 
@@ -139,7 +145,7 @@ void pause_ppa_for(uint32_t duration_ms) {
 }
 
 void log_step(const char* message) {
-  Serial.print("[Device/Guition JC1060P470C V2] ");
+  Serial.print(JC1060_LOG_PREFIX);
   Serial.println(message);
   Serial.flush();
 }
@@ -195,7 +201,7 @@ void reset_ppa_client() {
       g_ppa_handle = old;
       g_ppa_reinit_at_ms = millis() + kPpaReinitRetryMs;
       if (!g_ppa_reinit_at_ms) g_ppa_reinit_at_ms = 1;
-      Serial.printf("[Device/Guition JC1060P470C V2] PPA client busy err=%d, retry reset in %lu ms\n",
+      Serial.printf(JC1060_LOG_PREFIX "PPA client busy err=%d, retry reset in %lu ms\n",
                     static_cast<int>(unregister_err),
                     static_cast<unsigned long>(kPpaReinitRetryMs));
       return;
@@ -210,7 +216,7 @@ void reset_ppa_client() {
   if (reg_err != ESP_OK || !fresh) {
     g_ppa_reinit_at_ms = millis() + kPpaReinitRetryMs;
     if (!g_ppa_reinit_at_ms) g_ppa_reinit_at_ms = 1;
-    Serial.printf("[Device/Guition JC1060P470C V2] PPA reset failed err=%d (int free=%u KB, largest=%u KB), retry in %lu ms\n",
+    Serial.printf(JC1060_LOG_PREFIX "PPA reset failed err=%d (int free=%u KB, largest=%u KB), retry in %lu ms\n",
                   static_cast<int>(reg_err),
                   static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
                   static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024),
@@ -232,12 +238,12 @@ void reset_ppa_client() {
   if (!g_ppa_async_ready) {
     g_ppa_reinit_at_ms = millis() + kPpaReinitRetryMs;
     if (!g_ppa_reinit_at_ms) g_ppa_reinit_at_ms = 1;
-    Serial.println("[Device/Guition JC1060P470C V2] PPA timeout callback unavailable, retrying client reset");
+    Serial.println(JC1060_LOG_PREFIX "PPA timeout callback unavailable, retrying client reset");
     return;
   }
   g_ppa_reinit_at_ms = 0;
   g_ppa_reset_pending = false;
-  Serial.println("[Device/Guition JC1060P470C V2] PPA client reset after fault");
+  Serial.println(JC1060_LOG_PREFIX "PPA client reset after fault");
 }
 
 // Called when a PPA rotate stalls or is rejected. The first stray fault only cools
@@ -267,7 +273,7 @@ void wait_transfer_done(size_t pixels) {
 
   const TickType_t timeout = pdMS_TO_TICKS(pixels >= 32768 ? 250 : 50);
   if (xSemaphoreTake(g_transfer_done, timeout) != pdTRUE) {
-    Serial.printf("[Device/Guition JC1060P470C V2] draw transfer timeout (%u px)\n",
+    Serial.printf(JC1060_LOG_PREFIX "draw transfer timeout (%u px)\n",
                   static_cast<unsigned>(pixels));
   }
 }
@@ -286,7 +292,7 @@ void wait_refresh_done() {
   }
 
   if (xSemaphoreTake(g_refresh_done, pdMS_TO_TICKS(50)) != pdTRUE) {
-    Serial.println("[Device/Guition JC1060P470C V2] refresh timeout");
+    Serial.println(JC1060_LOG_PREFIX "refresh timeout");
   }
 }
 
@@ -328,7 +334,7 @@ bool ensure_rotate_buffer(size_t pixels) {
         heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA));
   }
   if (!g_rotate_buf) {
-    Serial.printf("[Device/Guition JC1060P470C V2] Rotate buffer allocation failed (%u bytes)\n",
+    Serial.printf(JC1060_LOG_PREFIX "Rotate buffer allocation failed (%u bytes)\n",
                   static_cast<unsigned>(bytes));
     return false;
   }
@@ -345,7 +351,7 @@ bool draw_physical(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t* d
   const int32_t panel_w = display_cfg.width;
   const int32_t panel_h = display_cfg.height;
   if (x < 0 || y < 0 || (x + w) > panel_w || (y + h) > panel_h) {
-    Serial.printf("[Device/Guition JC1060P470C V2] Reject out-of-range draw x=%ld y=%ld w=%ld h=%ld\n",
+    Serial.printf(JC1060_LOG_PREFIX "Reject out-of-range draw x=%ld y=%ld w=%ld h=%ld\n",
                   static_cast<long>(x), static_cast<long>(y),
                   static_cast<long>(w), static_cast<long>(h));
     return false;
@@ -355,7 +361,7 @@ bool draw_physical(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t* d
   flush_cache_for_dma(data, static_cast<size_t>(w) * static_cast<size_t>(h) * sizeof(uint16_t));
   const esp_err_t err = esp_lcd_panel_draw_bitmap(g_panel, x, y, x + w, y + h, data);
   if (err != ESP_OK) {
-    Serial.printf("[Device/Guition JC1060P470C V2] draw_bitmap failed: %d\n", static_cast<int>(err));
+    Serial.printf(JC1060_LOG_PREFIX "draw_bitmap failed: %d\n", static_cast<int>(err));
     return false;
   }
   wait_transfer_done(static_cast<size_t>(w) * static_cast<size_t>(h));
@@ -486,7 +492,7 @@ bool init_panel_framebuffer() {
                                                            kPanelFrameBufferCount,
                                                            &fb0, &fb1);
   if (err != ESP_OK || !fb0 || !fb1) {
-    Serial.printf("[Device/Guition JC1060P470C V2] Panel framebuffers unavailable err=%d fb0=%p fb1=%p\n",
+    Serial.printf(JC1060_LOG_PREFIX "Panel framebuffers unavailable err=%d fb0=%p fb1=%p\n",
                   static_cast<int>(err), fb0, fb1);
     g_panel_fb_ready = false;
     return false;
@@ -507,11 +513,11 @@ bool init_panel_framebuffer() {
       g_panel_fbs[1]);
   if (!g_panel_fb_ready) {
     Serial.println(
-        "[Device/Guition JC1060P470C V2] Shared camera presenter init failed");
+        JC1060_LOG_PREFIX "Shared camera presenter init failed");
     return false;
   }
   reset_dirty_rect();
-  Serial.printf("[Device/Guition JC1060P470C V2] Panel framebuffers OK fb0=%p fb1=%p\n",
+  Serial.printf(JC1060_LOG_PREFIX "Panel framebuffers OK fb0=%p fb1=%p\n",
                 fb0, fb1);
   return true;
 }
@@ -524,7 +530,7 @@ bool write_physical_to_panel(int32_t x, int32_t y, int32_t w, int32_t h, const u
   const int32_t panel_w = display_cfg.width;
   const int32_t panel_h = display_cfg.height;
   if (x < 0 || y < 0 || (x + w) > panel_w || (y + h) > panel_h) {
-    Serial.printf("[Device/Guition JC1060P470C V2] Reject out-of-range framebuffer draw x=%ld y=%ld w=%ld h=%ld\n",
+    Serial.printf(JC1060_LOG_PREFIX "Reject out-of-range framebuffer draw x=%ld y=%ld w=%ld h=%ld\n",
                   static_cast<long>(x), static_cast<long>(y),
                   static_cast<long>(w), static_cast<long>(h));
     return false;
@@ -549,7 +555,7 @@ bool draw_landscape_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint1
   const int32_t logical_w = display_cfg.width;
   const int32_t logical_h = display_cfg.height;
   if (x < 0 || y < 0 || (x + w) > logical_w || (y + h) > logical_h) {
-    Serial.printf("[Device/Guition JC1060P470C V2] Reject out-of-range landscape draw x=%ld y=%ld w=%ld h=%ld\n",
+    Serial.printf(JC1060_LOG_PREFIX "Reject out-of-range landscape draw x=%ld y=%ld w=%ld h=%ld\n",
                   static_cast<long>(x), static_cast<long>(y),
                   static_cast<long>(w), static_cast<long>(h));
     return false;
@@ -629,7 +635,7 @@ bool draw_landscape_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint1
                 g_rotation, kPpaRotateTimeoutMs + kPpaPreviewGraceMs);
           }
         } else {
-          Serial.printf("[Device/Guition JC1060P470C V2] PPA rotate submit failed err=%d -> CPU cooldown\n",
+          Serial.printf(JC1060_LOG_PREFIX "PPA rotate submit failed err=%d -> CPU cooldown\n",
                         static_cast<int>(err));
           note_ppa_fault();
         }
@@ -639,7 +645,7 @@ bool draw_landscape_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint1
         if (!g_camera_presenter.noteUiWrite(
                 dst_x, dst_y, dst_w, dst_h, true)) {
           Serial.println(
-              "[Device/Guition JC1060P470C V2] UI framebuffer cache sync failed");
+              JC1060_LOG_PREFIX "UI framebuffer cache sync failed");
           return false;
         }
         mark_dirty_rect(dst_x, dst_y, dst_w, dst_h);
@@ -724,7 +730,7 @@ bool init_backlight() {
   timer_cfg.freq_hz = kBacklightFreq;
   timer_cfg.clk_cfg = LEDC_AUTO_CLK;
   if (ledc_timer_config(&timer_cfg) != ESP_OK) {
-    Serial.println("[Device/Guition JC1060P470C V2] Backlight timer init failed");
+    Serial.println(JC1060_LOG_PREFIX "Backlight timer init failed");
     return false;
   }
 
@@ -736,7 +742,7 @@ bool init_backlight() {
   ch_cfg.duty = kBacklightActiveLow ? ((1u << 10) - 1u) : 0;
   ch_cfg.hpoint = 0;
   if (ledc_channel_config(&ch_cfg) != ESP_OK) {
-    Serial.println("[Device/Guition JC1060P470C V2] Backlight channel init failed");
+    Serial.println(JC1060_LOG_PREFIX "Backlight channel init failed");
     return false;
   }
 
@@ -752,7 +758,7 @@ bool init_i2c() {
 
   g_i2c = DEV_I2C_Init();
   if (!g_i2c.bus) {
-    Serial.println("[Device/Guition JC1060P470C V2] I2C init failed");
+    Serial.println(JC1060_LOG_PREFIX "I2C init failed");
     return false;
   }
   g_i2c_ready = true;
@@ -771,7 +777,7 @@ bool init_mipi_phy_power() {
   log_step("MIPI PHY LDO init start");
   const esp_err_t err = esp_ldo_acquire_channel(&ldo_cfg, &g_mipi_phy_ldo);
   if (err != ESP_OK) {
-    Serial.printf("[Device/Guition JC1060P470C V2] MIPI PHY LDO init failed err=%d\n",
+    Serial.printf(JC1060_LOG_PREFIX "MIPI PHY LDO init failed err=%d\n",
                   static_cast<int>(err));
     return false;
   }
@@ -791,7 +797,7 @@ bool init_display() {
   g_transfer_done = xSemaphoreCreateBinary();
   g_refresh_done = xSemaphoreCreateBinary();
   if (!g_transfer_done || !g_refresh_done) {
-    Serial.println("[Device/Guition JC1060P470C V2] Transfer semaphore allocation failed");
+    Serial.println(JC1060_LOG_PREFIX "Transfer semaphore allocation failed");
     return false;
   }
   log_step("Transfer semaphore OK");
@@ -799,17 +805,20 @@ bool init_display() {
   esp_lcd_dsi_bus_config_t bus_cfg = {};
   bus_cfg.bus_id = 0;
   bus_cfg.num_data_lanes = kPanelLaneCount;
-  // The Arduino board must be selected as "Before v3.00" for this hardware.
-  // That ESP32-P4 path accepts PLL_F20M/RC_FAST/PLL_F25M only; XTAL/default
-  // aborts in the low-level MIPI DSI clock-source switch.
+#if CONFIG_ESP_REV_MIN_FULL >= 300
+  // Production ESP32-P4 silicon requires the default DSI PHY clock source.
+  bus_cfg.phy_clk_src = MIPI_DSI_PHY_PLLREF_CLK_SRC_DEFAULT;
+#else
+  // The pre-v3 ESP32-P4 path accepts PLL_F20M/RC_FAST/PLL_F25M only.
   bus_cfg.phy_clk_src = MIPI_DSI_PHY_PLLREF_CLK_SRC_PLL_F20M;
+#endif
   bus_cfg.lane_bit_rate_mbps = static_cast<float>(display_cfg.lane_bit_rate);
-  Serial.printf("[Device/Guition JC1060P470C V2] DSI bus init start lane=%u Mbps\n",
+  Serial.printf(JC1060_LOG_PREFIX "DSI bus init start lane=%u Mbps\n",
                 static_cast<unsigned>(display_cfg.lane_bit_rate));
   Serial.flush();
   esp_err_t err = esp_lcd_new_dsi_bus(&bus_cfg, &g_dsi_bus);
   if (err != ESP_OK) {
-    Serial.printf("[Device/Guition JC1060P470C V2] DSI bus init failed err=%d\n", static_cast<int>(err));
+    Serial.printf(JC1060_LOG_PREFIX "DSI bus init failed err=%d\n", static_cast<int>(err));
     return false;
   }
   log_step("DSI bus init OK");
@@ -821,7 +830,7 @@ bool init_display() {
   log_step("DSI DBI IO init start");
   err = esp_lcd_new_panel_io_dbi(g_dsi_bus, &dbi_cfg, &g_panel_io);
   if (err != ESP_OK) {
-    Serial.printf("[Device/Guition JC1060P470C V2] DSI DBI IO init failed err=%d\n", static_cast<int>(err));
+    Serial.printf(JC1060_LOG_PREFIX "DSI DBI IO init failed err=%d\n", static_cast<int>(err));
     return false;
   }
   log_step("DSI DBI IO init OK");
@@ -863,7 +872,7 @@ bool init_display() {
   log_step("JD9165 panel create start");
   err = esp_lcd_new_panel_jd9165(g_panel_io, &panel_cfg, &g_panel);
   if (err != ESP_OK) {
-    Serial.printf("[Device/Guition JC1060P470C V2] JD9165 panel create failed err=%d\n", static_cast<int>(err));
+    Serial.printf(JC1060_LOG_PREFIX "JD9165 panel create failed err=%d\n", static_cast<int>(err));
     return false;
   }
   log_step("JD9165 panel create OK");
@@ -878,7 +887,7 @@ bool init_display() {
   log_step("DPI callback register start");
   err = esp_lcd_dpi_panel_register_event_callbacks(g_panel, &cbs, g_transfer_done);
   if (err != ESP_OK) {
-    Serial.printf("[Device/Guition JC1060P470C V2] DPI callback register failed err=%d\n", static_cast<int>(err));
+    Serial.printf(JC1060_LOG_PREFIX "DPI callback register failed err=%d\n", static_cast<int>(err));
     return false;
   }
   log_step("DPI callback register OK");
@@ -886,7 +895,7 @@ bool init_display() {
   log_step("Panel reset start");
   err = esp_lcd_panel_reset(g_panel);
   if (err != ESP_OK) {
-    Serial.printf("[Device/Guition JC1060P470C V2] Panel reset failed err=%d\n", static_cast<int>(err));
+    Serial.printf(JC1060_LOG_PREFIX "Panel reset failed err=%d\n", static_cast<int>(err));
     return false;
   }
   log_step("Panel reset OK");
@@ -894,7 +903,7 @@ bool init_display() {
   log_step("Panel init start");
   err = esp_lcd_panel_init(g_panel);
   if (err != ESP_OK) {
-    Serial.printf("[Device/Guition JC1060P470C V2] Panel init failed err=%d\n", static_cast<int>(err));
+    Serial.printf(JC1060_LOG_PREFIX "Panel init failed err=%d\n", static_cast<int>(err));
     return false;
   }
   log_step("Panel init OK");
@@ -902,7 +911,7 @@ bool init_display() {
   log_step("Panel display on start");
   err = esp_lcd_panel_disp_on_off(g_panel, true);
   if (err != ESP_OK) {
-    Serial.printf("[Device/Guition JC1060P470C V2] Panel display on failed err=%d\n", static_cast<int>(err));
+    Serial.printf(JC1060_LOG_PREFIX "Panel display on failed err=%d\n", static_cast<int>(err));
     return false;
   }
   log_step("Panel display on OK");
@@ -911,7 +920,7 @@ bool init_display() {
   ppa_cfg.oper_type = PPA_OPERATION_SRM;
   const esp_err_t ppa_err = ppa_register_client(&ppa_cfg, &g_ppa_handle);
   if (ppa_err != ESP_OK) {
-    Serial.printf("[Device/Guition JC1060P470C V2] PPA client register failed err=%d, falling back to CPU rotate\n",
+    Serial.printf(JC1060_LOG_PREFIX "PPA client register failed err=%d, falling back to CPU rotate\n",
                   static_cast<int>(ppa_err));
     g_ppa_handle = nullptr;
     g_ppa_reset_pending = true;
@@ -931,7 +940,7 @@ bool init_display() {
         g_ppa_async_ready = true;
         log_step("PPA timeout-safe mode ready");
       } else {
-        Serial.println("[Device/Guition JC1060P470C V2] PPA event cb register failed, retrying safely");
+        Serial.println(JC1060_LOG_PREFIX "PPA event cb register failed, retrying safely");
       }
     }
     if (!g_ppa_async_ready) {
@@ -957,13 +966,13 @@ bool init_touch() {
     if (g_touch) {
       return true;
     }
-    Serial.printf("[Device/Guition JC1060P470C V2] Touch init attempt %u failed\n",
+    Serial.printf(JC1060_LOG_PREFIX "Touch init attempt %u failed\n",
                   static_cast<unsigned>(attempt));
     delay(150);
   }
 
   if (!g_touch) {
-    Serial.println("[Device/Guition JC1060P470C V2] Touch init failed");
+    Serial.println(JC1060_LOG_PREFIX "Touch init failed");
     return false;
   }
 
@@ -1018,7 +1027,7 @@ bool draw_turned_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t
 }  // namespace
 
 bool DeviceGuitionJC1060P470CV2::init() {
-  Serial.println("[Device/Guition JC1060P470C V2] Initialising board...");
+  Serial.println(JC1060_LOG_PREFIX "Initialising board...");
 
   if (!init_backlight()) {
     return false;
@@ -1028,12 +1037,12 @@ bool DeviceGuitionJC1060P470CV2::init() {
   if (!init_display()) {
     return false;
   }
-  Serial.println("[Device/Guition JC1060P470C V2] Display OK");
+  Serial.println(JC1060_LOG_PREFIX "Display OK");
 
   if (!init_touch()) {
-    Serial.println("[Device/Guition JC1060P470C V2] Touch init failed, continuing without touch");
+    Serial.println(JC1060_LOG_PREFIX "Touch init failed, continuing without touch");
   } else {
-    Serial.println("[Device/Guition JC1060P470C V2] Touch OK");
+    Serial.println(JC1060_LOG_PREFIX "Touch OK");
   }
 
   // Keep the boot path dark until HomeTiles has rendered the first complete
@@ -1046,7 +1055,7 @@ bool DeviceGuitionJC1060P470CV2::init() {
   delay(kBootBlackGapMs);
   displayFillScreen(0x0000);
   apply_backlight(0);
-  Serial.println("[Device/Guition JC1060P470C V2] Init complete");
+  Serial.println(JC1060_LOG_PREFIX "Init complete");
   return true;
 }
 
@@ -1382,6 +1391,10 @@ i2c_master_bus_handle_t DeviceGuitionJC1060P470CV2::sharedI2cBus() {
 }
 
 bool DeviceGuitionJC1060P470CV2::initSDCard() {
+#if defined(DEVICE_GUITION_JC1060P470C_V3)
+  // The V3 reference confirms panel wiring, not the V2 SD pin map.
+  return false;
+#else
   if (g_sd_available && JC1060SDMMC.cardType() != JC1060_CARD_NONE) {
     return true;
   }
@@ -1415,7 +1428,7 @@ bool DeviceGuitionJC1060P470CV2::initSDCard() {
     const int requested_frequency = kSdFrequenciesKHz[attempt];
     mounted = JC1060SDMMC.begin("/sdcard", requested_frequency, 5);
     if (!mounted) {
-      Serial.printf("[Device/Guition JC1060P470C V2] SD mount attempt failed at %d kHz\n",
+      Serial.printf(JC1060_LOG_PREFIX "SD mount attempt failed at %d kHz\n",
                     requested_frequency);
       continue;
     }
@@ -1430,11 +1443,11 @@ bool DeviceGuitionJC1060P470CV2::initSDCard() {
     if (last_attempt) {
       // Keep the final mount available for read-only functions such as image
       // listing and downloads, but reject mutations with a precise error.
-      Serial.println("[Device/Guition JC1060P470C V2] SD remains readable but failed every write test");
+      Serial.println(JC1060_LOG_PREFIX "SD remains readable but failed every write test");
       break;
     }
 
-    Serial.printf("[Device/Guition JC1060P470C V2] Retrying SD writes below %d kHz\n",
+    Serial.printf(JC1060_LOG_PREFIX "Retrying SD writes below %d kHz\n",
                   JC1060SDMMC.frequencyKHz());
     JC1060SDMMC.end();
     mounted = false;
@@ -1442,7 +1455,7 @@ bool DeviceGuitionJC1060P470CV2::initSDCard() {
   if (!mounted) {
     g_sd_available = false;
     g_sd_writable = false;
-    Serial.println("[Device/Guition JC1060P470C V2] SD card mount failed");
+    Serial.println(JC1060_LOG_PREFIX "SD card mount failed");
     return false;
   }
 
@@ -1450,18 +1463,19 @@ bool DeviceGuitionJC1060P470CV2::initSDCard() {
   if (card_type == JC1060_CARD_NONE) {
     g_sd_available = false;
     g_sd_writable = false;
-    Serial.println("[Device/Guition JC1060P470C V2] SD card absent after mount");
+    Serial.println(JC1060_LOG_PREFIX "SD card absent after mount");
     JC1060SDMMC.end();
     return false;
   }
 
   g_sd_available = true;
-  Serial.printf("[Device/Guition JC1060P470C V2] SD card OK, type=%u, size=%llu MB, freq=%d kHz, writable=%u\n",
+  Serial.printf(JC1060_LOG_PREFIX "SD card OK, type=%u, size=%llu MB, freq=%d kHz, writable=%u\n",
                 static_cast<unsigned>(card_type),
                 static_cast<unsigned long long>(JC1060SDMMC.cardSize() / (1024ULL * 1024ULL)),
                 JC1060SDMMC.frequencyKHz(),
                 g_sd_writable ? 1u : 0u);
   return true;
+#endif
 }
 
 bool DeviceGuitionJC1060P470CV2::storageReady() {
@@ -1493,7 +1507,7 @@ bool DeviceGuitionJC1060P470CV2::suspendSDCardForNetworkTransition() {
   g_sd_available = false;
   g_sd_writable = false;
   g_sd_init_attempted = false;
-  Serial.println("[Device/Guition JC1060P470C V2] SD card suspended for network transition");
+  Serial.println(JC1060_LOG_PREFIX "SD card suspended for network transition");
   return true;
 }
 
@@ -1501,7 +1515,7 @@ bool DeviceGuitionJC1060P470CV2::resumeSDCardAfterNetworkTransition() {
   g_sd_available = false;
   g_sd_init_attempted = false;
   const bool mounted = initSDCard();
-  Serial.printf("[Device/Guition JC1060P470C V2] SD card remount after network transition: %s\n",
+  Serial.printf(JC1060_LOG_PREFIX "SD card remount after network transition: %s\n",
                 mounted ? "OK" : "failed");
   return mounted;
 }
@@ -1511,11 +1525,11 @@ bool DeviceGuitionJC1060P470CV2::initLittleFS() {
     return true;
   }
   if (!LittleFS.begin(true, "/littlefs", 10, "spiffs")) {
-    Serial.println("[Device/Guition JC1060P470C V2] LittleFS mount failed");
+    Serial.println(JC1060_LOG_PREFIX "LittleFS mount failed");
     return false;
   }
   g_littlefs_ready = true;
-  Serial.printf("[Device/Guition JC1060P470C V2] LittleFS ready, total=%u, used=%u\n",
+  Serial.printf(JC1060_LOG_PREFIX "LittleFS ready, total=%u, used=%u\n",
                 static_cast<unsigned>(LittleFS.totalBytes()),
                 static_cast<unsigned>(LittleFS.usedBytes()));
   ensure_storage_layout();
@@ -1590,4 +1604,4 @@ void DeviceGuitionJC1060P470CV2::migrateStorageFromSD() {
   }
 }
 
-#endif  // defined(DEVICE_GUITION_JC1060P470C_V2)
+#endif  // defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)

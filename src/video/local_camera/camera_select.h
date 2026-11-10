@@ -58,7 +58,7 @@
 #define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/guition_jc8012p4a1/local_camera_board.h"
 #endif
 
-#if defined(DEVICE_GUITION_JC1060P470C_V2)
+#if defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)
 #define HOMETILES_CAMERA_SENSOR_OV02C10 1
 #define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/guition_jc1060p470c_v2/local_camera_board.h"
 #endif

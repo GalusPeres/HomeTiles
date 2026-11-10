@@ -9,7 +9,7 @@
 
 #include "src/devices/device_select.h"
 
-#if defined(DEVICE_GUITION_JC1060P470C_V2)
+#if defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)
 
 #include <FS.h>
 #include <driver/sdmmc_host.h>
@@ -58,4 +58,4 @@ class JC1060SDMMCFS : public FS {
 
 extern fs::JC1060SDMMCFS JC1060SDMMC;
 
-#endif  // defined(DEVICE_GUITION_JC1060P470C_V2)
+#endif  // defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)

@@ -11,7 +11,7 @@
 
 #include "guition_sdmmc.h"
 
-#if defined(DEVICE_GUITION_JC1060P470C_V2)
+#if defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)
 
 #include <Arduino.h>
 #include <cerrno>
@@ -303,4 +303,4 @@ uint64_t JC1060SDMMCFS::cardSize() const {
 
 fs::JC1060SDMMCFS JC1060SDMMC(FSImplPtr(new VFSImpl()));
 
-#endif  // defined(DEVICE_GUITION_JC1060P470C_V2)
+#endif  // defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)

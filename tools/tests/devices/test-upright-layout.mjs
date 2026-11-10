@@ -170,13 +170,16 @@ assert.ok(!/M5\.Display\.setRotation\([^)]*g_upright/.test(tab5), 'M5GFX keeps i
 // above against the shared touch turn.
 const upright = /constexpr bool upright_ready\(\) \{\n#if ([\s\S]*?)\n  return true;/.exec(read('src/tiles/config/grid_layout.h'))[1];
 for (const name of ['JC8012P4A1)', 'JC8012P4A1_V2)', 'LCD_4_3)', 'LCD_7)', 'LCD_8)', 'LCD_10_1)', 'TAB5)',
-  'JC1060P470C)', 'JC1060P470C_V2)', 'LCD_7B)', 'JC4880P443_PORTRAIT)']) {
+  'JC1060P470C)', 'JC1060P470C_V2)', 'JC1060P470C_V3)', 'LCD_7B)', 'JC4880P443_PORTRAIT)']) {
   assert.ok(upright.includes(name), name);
 }
 const reversed = /constexpr bool turn_reversed\(\) \{\n#if ([\s\S]*?)\n  return true;/.exec(read('src/tiles/config/grid_layout.h'))[1];
-for (const name of ['JC1060P470C)', 'JC1060P470C_V2)', 'LCD_7B)', 'JC4880P443_PORTRAIT)']) assert.ok(reversed.includes(name), name);
+for (const name of ['JC1060P470C)', 'JC1060P470C_V2)', 'JC1060P470C_V3)', 'LCD_7B)', 'JC4880P443_PORTRAIT)']) assert.ok(reversed.includes(name), name);
 assert.ok(!reversed.includes('JC8012') && !reversed.includes('TAB5'), 'the panels upright by themselves turn as before');
-assert.ok(read('src/devices/device.cpp').includes('void displaySetUpright(bool upright) {\n#if ' + upright + '\n  DeviceImpl::displaySetUpright(upright);'));
+const displaySetUpright = /void displaySetUpright\(bool upright\) \{([\s\S]*?)\n\}/
+  .exec(read('src/devices/device.cpp'))[1];
+assert.ok(displaySetUpright.includes('defined(DEVICE_GUITION_JC1060P470C_FAMILY)') &&
+  displaySetUpright.includes('DeviceImpl::displaySetUpright(upright);'));
 const turnedDraw = body => body.slice(body.indexOf('bool draw_turned_area('), body.indexOf('}  // namespace\n\nbool Device'));
 const turnedRef = turnedDraw(read('src/devices/guition_jc1060p470c_v2/device_guition_jc1060p470c_v2.cpp'));
 assert.ok(turnedRef.includes('g_turn_ppa.rotate(g_camera_presenter, panel_w, panel_h, x, y, w, h, data, turn);') &&

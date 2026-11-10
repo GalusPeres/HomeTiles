@@ -21,6 +21,7 @@
 // #define DEVICE_GUITION_JC8012P4A1_V2
 // #define DEVICE_GUITION_JC1060P470C
 // #define DEVICE_GUITION_JC1060P470C_V2
+// #define DEVICE_GUITION_JC1060P470C_V3
 // #define DEVICE_GUITION_JC4880P443_PORTRAIT
 // #define DEVICE_GUITION_ESP32_4848S040
 // #define DEVICE_GOLDEN_SECURITY_GS_T3E_V2
@@ -52,6 +53,7 @@
      defined(DEVICE_GUITION_JC8012P4A1_V2) + \
      defined(DEVICE_GUITION_JC1060P470C) + \
      defined(DEVICE_GUITION_JC1060P470C_V2) + \
+     defined(DEVICE_GUITION_JC1060P470C_V3) + \
      defined(DEVICE_GUITION_JC4880P443_PORTRAIT) + \
      defined(DEVICE_GUITION_ESP32_4848S040) + \
      defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)) > 1
@@ -74,6 +76,7 @@
     !defined(DEVICE_GUITION_JC8012P4A1_V2) && \
     !defined(DEVICE_GUITION_JC1060P470C) && \
     !defined(DEVICE_GUITION_JC1060P470C_V2) && \
+    !defined(DEVICE_GUITION_JC1060P470C_V3) && \
     !defined(DEVICE_GUITION_JC4880P443_PORTRAIT) && \
     !defined(DEVICE_GUITION_ESP32_4848S040) && \
     !defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) && \
@@ -97,6 +100,7 @@
     !defined(DEVICE_GUITION_JC8012P4A1_V2) && \
     !defined(DEVICE_GUITION_JC1060P470C) && \
     !defined(DEVICE_GUITION_JC1060P470C_V2) && \
+    !defined(DEVICE_GUITION_JC1060P470C_V3) && \
     !defined(DEVICE_GUITION_JC4880P443_PORTRAIT) && \
     !defined(DEVICE_GUITION_ESP32_4848S040) && \
     !defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) && \
@@ -132,22 +136,23 @@
 #define DEVICE_WAVESHARE_P4_DSI_BOARD
 #endif
 
-// Both JC1060 panel revisions share board-level storage, touch, backlight and
-// lifecycle behavior. Their panel reset pin, timing and init table stay in
-// separate exact device drivers.
+// The JC1060P470C V3 uses the V2 panel wiring and timing. Keep its exact P4
+// silicon identity separate while sharing the common board lifecycle.
 #if defined(DEVICE_GUITION_JC1060P470C) || \
-    defined(DEVICE_GUITION_JC1060P470C_V2)
+    defined(DEVICE_GUITION_JC1060P470C_V2) || \
+    defined(DEVICE_GUITION_JC1060P470C_V3)
 #define DEVICE_GUITION_JC1060P470C_FAMILY
 #endif
 
 // Built-in camera on every ESP32-P4 board with a camera: the Guition
-// JC8012P4A1 V2 and V1 cameras and the JC1060P470C V2 / JC4880P443 CSI
+// JC8012P4A1 V2 and V1 cameras and the JC1060P470C V2 / V3 and JC4880P443 CSI
 // connectors (OV02C10), the Waveshare 8-inch, 7-inch and 10.1-inch front
 // cameras and the OV5647 CSI connectors of the Waveshare 7B, 4.3-inch, 5-inch
-// and 4B, and the M5Stack Tab5 camera (SC202CS/SC2356). The camera stays off
-// until the user enables it in the Web Admin; only then is the sensor probed.
-// The original-panel JC1060P470C (board identity unproven) and the ESP32-S3
-// boards keep the capture path out.
+// and 4B, and the M5Stack Tab5 camera (SC202CS/SC2356). V3 provisionally
+// reuses the V2 CSI, SCCB and PHY-supply configuration; validate with its
+// exact camera module. The camera stays off until enabled in Web Admin, when
+// the sensor is probed. The original-panel JC1060P470C and ESP32-S3 boards
+// keep the capture path out.
 #if defined(DEVICE_GUITION_JC8012P4A1_V2) || \
     defined(DEVICE_WAVESHARE_TOUCH_LCD_8) || \
     defined(DEVICE_WAVESHARE_TOUCH_LCD_7) || \
@@ -158,6 +163,7 @@
     defined(DEVICE_WAVESHARE_4B) || \
     defined(DEVICE_GUITION_JC8012P4A1) || \
     defined(DEVICE_GUITION_JC1060P470C_V2) || \
+    defined(DEVICE_GUITION_JC1060P470C_V3) || \
     defined(DEVICE_GUITION_JC4880P443_PORTRAIT) || \
     defined(DEVICE_M5STACKS_TAB5)
 #define HOMETILES_LOCAL_CAMERA 1
@@ -176,6 +182,7 @@
     defined(DEVICE_GUITION_JC8012P4A1_V2) || \
     defined(DEVICE_GUITION_JC1060P470C) || \
     defined(DEVICE_GUITION_JC1060P470C_V2) || \
+    defined(DEVICE_GUITION_JC1060P470C_V3) || \
     defined(DEVICE_GUITION_JC4880P443_PORTRAIT)
 #define DEVICE_P4_IDF_DSI
 #endif

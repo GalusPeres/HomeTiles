@@ -6,7 +6,7 @@
 
 #include "src/devices/device_select.h"
 
-#if defined(DEVICE_GUITION_JC1060P470C_V2)
+#if defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)
 
 #include "soc/soc_caps.h"
 
@@ -347,4 +347,4 @@ static esp_err_t panel_jd9165_disp_on_off(esp_lcd_panel_t *panel, bool on_off)
 }
 #endif  // SOC_MIPI_DSI_SUPPORTED
 
-#endif  // defined(DEVICE_GUITION_JC1060P470C_V2)
+#endif  // defined(DEVICE_GUITION_JC1060P470C_V2) || defined(DEVICE_GUITION_JC1060P470C_V3)

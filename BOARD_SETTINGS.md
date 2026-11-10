@@ -399,6 +399,31 @@ Arduino IDE:
 - Upload Speed: `921600`
 - USB Mode: `USB-OTG (TinyUSB)`
 
+## Guition JC1060P470C V3
+
+Used for:
+- `src/devices/guition_jc1060p470c_v3`
+- build profile `guition_jc1060p470c_v3`
+
+Important:
+- Use this profile for the JC1060P470C V3 with ESP32-P4 production silicon,
+  revisions v3.1-v3.99 (301-399). The pre-v3 V1/V2 images do not support this
+  silicon range.
+- The upstream V3 device definition confirms the 7-inch 1024x600 panel, GT911
+  touch, LCD reset GPIO 0, backlight GPIO 23, and touch I2C SDA 7 / SCL 8.
+  HomeTiles reuses the established V2 JD9165 timings and initialization; exact
+  touch behavior still needs validation on this board.
+- The upstream definition does not establish V3 SD, expansion GPIO, or audio
+  wiring. These capabilities remain disabled. Local camera support reuses the
+  V2 OV02C10 CSI/SCCB and shared PHY-supply setup; a contributor confirms the
+  camera works on V3 hardware.
+- ESP32-P4 with `16MB` flash. The profile uses the repository's `partitions.csv`
+  and two 6.5MB OTA slots.
+- A contributor reports that the first factory image boots and displays on
+  the target. Touch and full-device validation remain pending.
+- Hardware reference:
+  [Upstream V3 device definition](https://github.com/jtenniswood/espcontrol/tree/main/devices/guition-esp32-p4-jc1060p470-v3)
+
 ## Guition JC4880P443
 
 Used for:

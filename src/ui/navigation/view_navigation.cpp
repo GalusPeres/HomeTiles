@@ -142,6 +142,13 @@ void forgetPopup(lv_event_t* event) {
   if (lv_event_get_target(event) == popup_card) popup_card = nullptr;
 }
 
+// A Camera tile set to open in full screen hides the popup card while its
+// full screen shows (camera_popup.cpp shell_skipped): the popup is still open.
+bool popupShown() {
+  if (!popup_card) return false;
+  return !lv_obj_has_flag(popup_card, LV_OBJ_FLAG_HIDDEN) || camera_popup_is_visible();
+}
+
 void cancelPending() {
   if (pending.waiting) tiles_cancel_folder_switch(pending.waiting_folder);
   pending.active = false;
@@ -312,7 +319,7 @@ DisplayedView displayedView() {
   else if (is_image_screensaver_visible()) mode = "screensaver";
   else if (is_pin_popup_visible()) mode = "pin";
   else if (uiManager.activeTab() != 0) mode = "settings";
-  else if (popup_card && !lv_obj_has_flag(popup_card, LV_OBJ_FLAG_HIDDEN)) {
+  else if (popupShown()) {
     mode = "popup";
     if (popup_source) {
       current = "tile:" + String(popup_source);
@@ -368,7 +375,7 @@ void viewNavigationSource(lv_obj_t* source) {
 }
 
 uint16_t viewNavigationVisiblePopupTile() {
-  if (!popup_source || !popup_card || lv_obj_has_flag(popup_card, LV_OBJ_FLAG_HIDDEN)) return 0;
+  if (!popup_source || !popupShown()) return 0;
   return popup_source;
 }
 
@@ -492,7 +499,7 @@ void viewNavigationService() {
   static uint32_t last_service = 0;
   if (now - last_service < 100) return;
   last_service = now;
-  if (popup_card && !lv_obj_has_flag(popup_card, LV_OBJ_FLAG_HIDDEN) && popup_source) {
+  if (popupShown() && popup_source) {
     bool still_configured = false;
     for (const Tile& tile : tileConfig.getActiveGrid().tiles) {
       if (tile.view_id == popup_source && popupSupported(tile) &&

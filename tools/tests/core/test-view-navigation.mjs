@@ -132,6 +132,8 @@ void viewNavigationPopupShown(lv_obj_t*,const char*);
 bool next_full=false, last_open_full=false, camera_full=false;
 void camera_popup_open_next_in_full_screen(bool on){next_full=on;}
 bool camera_popup_is_full_screen(){return camera_full;}
+bool camera_visible=false;
+bool camera_popup_is_visible(){return camera_visible;}
 void lv_obj_send_event(lv_obj_t* obj,int event,void*){
   if(event==LV_EVENT_PRESSED)return;
   const auto& tile=tileConfig.grid.tiles[0];
@@ -161,6 +163,7 @@ struct Preferences {
   + definition(navigation, 'String folderTarget(')
   + definition(navigation, 'String boundedLabel(')
   + definition(navigation, 'String folderLabel(')
+  + definition(navigation, 'bool popupShown(')
   + definition(navigation, 'void cancelPending(')
   + definition(navigation, 'void serviceLanguage(')
   + definition(tiles, 'bool tiles_open_view_popup(')
@@ -325,6 +328,14 @@ int main(){
   assert(displayedView().current==String("tile:")+String(id)&&!displayedView().full);
   camera_full=true;assert(displayedView().full);
   card.hidden=true;assert(!displayedView().full);camera_full=false;
+  // A tile set to open in full screen hides the popup card: still the open
+  // camera, not its folder.
+  camera_visible=true;assert(displayedView().current==String("tile:")+String(id)&&
+    String(displayedView().mode)=="popup"&&!displayedView().full);
+  camera_full=true;assert(displayedView().current==String("tile:")+String(id)&&
+    String(displayedView().mode)=="popup"&&displayedView().full);
+  camera_full=false;camera_visible=false;
+  assert(displayedView().current!=String("tile:")+String(id));
   prepare(2,id,{0,1,2});pending.step=firstRequiredFolderStep(pending.path);
   servicePending(100);assert(!last_open_full);
   prepare(2,id,{0,1,2});pending.full=true;cancelPending();assert(!pending.full);

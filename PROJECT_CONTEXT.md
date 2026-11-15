@@ -74,8 +74,8 @@ Last reviewed: 2026-10-29
 
 ## Camera
 
-- Stream: one Bridge FFmpeg per camera/size/fps/quality for all panels (lingers 30 s), thinned to the panel's rate before scaling; tcp-ack-v1 with 32 KB chunks x2, 8 KB x1 after a transport error. P4 decodes JPEG in hardware, S3 with tjpgd (~4.5 FPS popup).
-- Full screen (#65): frames in the panel's framebuffer size and turn, HW JPEG straight into the framebuffer, black until the first frame; V2/Tab5 30 FPS HW ok; "(Vollbild)" View targets (`full_targets`).
+- Stream: one Bridge FFmpeg per camera/size/fps/quality for all panels (lingers 30 s), thinned to the panel's rate, then scaled; tcp-ack-v1 with 32 KB chunks x2, 8 KB x1 after a transport error. P4 decodes JPEG in hardware, S3 with tjpgd (~4.5 FPS popup).
+- Full screen (#65): HW JPEG into the framebuffer (its size/turn), black till frame 1; V2/Tab5 30 FPS HW ok; View `full_targets`. Full-screen tile: card hidden, `popupShown()` gives `tile:<id>`+`full` (7B ok).
 - Camera tile with picture (#50, b377) HW pending. Screensaver SD/HA picture (#69) HW ok.
 - Local camera: core `src/video/local_camera/`, drivers `sensors/*/`, boards `src/devices/*/local_camera_board.*`, opt-in `local_cam_en`. Window rule (b296): Bridge quarter turn = upright centred strip, no turn = whole image. `lcam_rot` (b387): one value for every layout, the mirror never turns. HW pending on most boards (#56). Open: TEST window `kChunkWindow = 4` (`local_camera_stream_contract.h`).
 

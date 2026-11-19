@@ -410,7 +410,7 @@ static void show_bar(CameraPopupContext* ctx) {
 
 // The picture in this stream's size, its middle on the card's middle (user
 // 2026-11-19: centred in its area below the head, a picture without the bottom
-// row sat 32 px low at 480 x 480, 50 px on the V2), kept within its area: never
+// row sat 33 px low at 480 x 480, 41 at 1024 x 600, 50 on the larger cards), kept within its area: never
 // over the head or the bottom row. The radar fills its area as before.
 static void apply_layout(CameraPopupContext* ctx) {
   const bool row = ctx->frame_count >= 2 || ctx->entries.size() >= 2 || is_radar(ctx);

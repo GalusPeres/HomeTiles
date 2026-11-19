@@ -72,7 +72,7 @@ for (const [name, m] of Object.entries(layouts)) {
   assert.equal(m.row - m.edge - m.top, m.box[1], name);
 }
 // The picture's middle on the card's middle, kept within its area (user
-// 2026-11-19: without the bottom row it sat 32 px low at 480 x 480).
+// 2026-11-19: without the bottom row it sat 33 to 50 px low).
 assert.match(popup, /const int centred = \(popup_layout::kCardHeight - ctx->frame_h\) \/ 2;\s*const int top = std::max\(kAreaTop, std::min\(centred, kAreaTop \+ area - ctx->frame_h\)\);\s*lv_obj_align\(ctx->video, LV_ALIGN_TOP_MID, 0, top - popup_layout::kCardPad\);/);
 for (const [name, m, frame] of [['V2', layouts.V2, 424], ['S3', layouts.S3, 252]]) {
   for (const row of [false, true]) {

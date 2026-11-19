@@ -18,6 +18,8 @@
 #include "src/devices/guition_jc1060p470c/vendor/guition_sdmmc.h"
 #elif defined(DEVICE_GUITION_JC1060P470C_V2)
 #include "src/devices/guition_jc1060p470c_v2/vendor/guition_sdmmc.h"
+#elif defined(DEVICE_GUITION_JC1060P470C_V3)
+#include "src/devices/guition_jc1060p470c_v3/vendor/guition_sdmmc.h"
 #endif
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
 #include <img_converters.h>
@@ -500,7 +502,8 @@ void WebAdminServer::handleSdDiagnosticsDownload() {
   };
 
   const bool ready = Device::sdReady();
-#if defined(DEVICE_GUITION_JC1060P470C_FAMILY)
+#if defined(DEVICE_GUITION_JC1060P470C) || defined(DEVICE_GUITION_JC1060P470C_V2) || \
+    defined(DEVICE_GUITION_JC1060P470C_V3)
   report += "SD bus: SDMMC slot 0, 4-bit, CLK=43 CMD=44 D0-D3=39-42\n";
   report += "SD power: LDO VO4, GPIO45 active-low, 200 ms reset before each mount attempt\n";
   report += "Last driver phase: ";

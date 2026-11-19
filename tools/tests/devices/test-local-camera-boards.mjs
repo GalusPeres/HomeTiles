@@ -60,6 +60,11 @@ const boards = [
   {define: 'DEVICE_GUITION_JC1060P470C_V2', dir: 'guition_jc1060p470c_v2', sensor: 'ov02c10',
    flag: 'device_guition_jc1060p470c_v2.h', driver: 'device_guition_jc1060p470c_v2.cpp', ldo: literalLdo,
    accessor: 'DeviceGuitionJC1060P470CV2::sharedI2cBus()', owner: sharedBus('DeviceGuitionJC1060P470CV2')},
+  {define: 'DEVICE_GUITION_JC1060P470C_V3', dir: 'guition_jc1060p470c_v3', sensor: 'ov02c10',
+   flag: 'device_guition_jc1060p470c_v3.h',
+   driver: 'device_guition_jc1060p470c_v3.cpp', ldo: literalLdo,
+   accessor: 'DeviceGuitionJC1060P470CV3::sharedI2cBus()', owner: sharedBus('DeviceGuitionJC1060P470CV3'),
+   orientationConfirmed: true},
   // Guition's demo turns the frame 270 degrees onto the portrait panel.
   {define: 'DEVICE_GUITION_JC4880P443_PORTRAIT', dir: 'guition_jc4880p443_portrait', sensor: 'ov02c10',
    flag: 'profile.h', driver: 'device_guition_jc4880p443_portrait.cpp', ldo: literalLdo, quarterTurn: 'true',
@@ -109,11 +114,14 @@ for (const board of boards) {
     `${label}: camera_select.h entry`);
 
   // Board file guards, as on the existing boards.
-  assert.ok(header.indexOf('#include "src/video/local_camera/camera_select.h"') < header.indexOf(`#if ${guard}`),
+  const expectedBoardGuard = new RegExp(`#if ${escape(guard)}\\n`);
+  assert.ok(header.indexOf('#include "src/video/local_camera/camera_select.h"') < header.search(expectedBoardGuard),
     `${label}: the guard needs camera_select.h first`);
   for (const text of [header, cpp]) {
-    assert.match(text, new RegExp(`#if ${escape(guard)}\\n`), `${label}: board guard`);
-    assert.match(text.trimEnd(), new RegExp(`#endif  // ${escape(guard)}$`), `${label}: board guard end`);
+    assert.match(text, expectedBoardGuard, `${label}: board guard`);
+    if (!board.sharedV2CameraProfile) {
+      assert.match(text.trimEnd(), new RegExp(`#endif  // ${escape(guard)}$`), `${label}: board guard end`);
+    }
   }
   assert.match(header, new RegExp(`#include "src/video/local_camera/sensors/${board.sensor}/${board.sensor}_sensor\\.h"`));
   assert.match(header, new RegExp(`using Sensor = ${board.sensor}::Sensor;`), `${label}: sensor driver`);
@@ -123,7 +131,9 @@ for (const board of boards) {
   const expected = [...referenceMode[board.sensor]];
   if (board.quarterTurn) expected[kQuarterTurnField] = board.quarterTurn;
   assert.deepEqual(modeFields(header), expected, `${label}: kMode`);
-  assert.match(header, /orientation pending hardware check/, `${label}: unproven orientation is marked`);
+  if (!board.orientationConfirmed) {
+    assert.match(header, /orientation pending hardware check/, `${label}: unproven orientation is marked`);
+  }
 
   // The existing board bus: never create, reset or delete a bus.
   assert.doesNotMatch(maskCpp(cpp), /i2c_new_master_bus|i2c_del_master_bus|i2c_master_bus_reset|i2c_master_bus_add_device/,
@@ -145,8 +155,9 @@ for (const board of boards) {
 
   // Capability flag follows the build, never a literal true.
   const flag = read(`${base}/${board.flag}`);
-  assert.ok(flag.indexOf('#include "src/devices/device_select.h"') !== -1 &&
-    flag.indexOf('#include "src/devices/device_select.h"') < flag.indexOf('#if defined(HOMETILES_LOCAL_CAMERA)'),
+  const selectionInclude = '#include "src/devices/device_select.h"';
+  assert.ok(flag.indexOf(selectionInclude) !== -1 &&
+    flag.indexOf(selectionInclude) < flag.indexOf('#if defined(HOMETILES_LOCAL_CAMERA)'),
     `${label}: the capability sees HOMETILES_LOCAL_CAMERA`);
   assert.match(flag, /#if defined\(HOMETILES_LOCAL_CAMERA\)\ninline constexpr bool kBuiltinCamera = true;\n#else\ninline constexpr bool kBuiltinCamera = false;\n#endif/);
   assert.match(flag, /Device::Capabilities\{(?:(?:true|false), ){6}kBuiltinCamera\}/, `${label}: capability`);
@@ -174,8 +185,9 @@ assert.match(read('src/devices/waveshare_touch_lcd_5/board.h'),
   assert.match(body(driver, 'init_display_power'), /^\{\s*power_cycle_mipi_phy\(\);/);
 }
 
-// --- Profiles without a proven camera never get the capture path -----------
-const neverCamera = ['DEVICE_GUITION_JC1060P470C', 'DEVICE_GUITION_ESP32_4848S040',
+// --- Profiles without a selected camera board never get the capture path ----
+const neverCamera = ['DEVICE_GUITION_JC1060P470C',
+  'DEVICE_GUITION_ESP32_4848S040',
   'DEVICE_GOLDEN_SECURITY_GS_T3E_V2',
   'DEVICE_WAVESHARE_S3_TOUCH_LCD_4', 'DEVICE_WAVESHARE_S3_TOUCH_LCD_4B',
   'DEVICE_LAYOUT_TEST_1024X600', 'DEVICE_LAYOUT_TEST_480X480'];

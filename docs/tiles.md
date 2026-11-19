@@ -527,9 +527,18 @@ Shows pictures and video. Choose the tile's **Source**; the tile holds up to eig
 
 - **Home Assistant:** `camera` and `image` entities. A camera can also be the [built-in camera](bridge.md#built-in-camera) of another HomeTiles display.
 - **Rain radar:** a place: **Home** (Home Assistant's location), a Home Assistant **Zone**, a town found by its name, or **Own coordinates** (latitude and longitude). The Bridge draws the radar from RainViewer (in Germany the DWD, elsewhere NASA, when it fails), with nothing to set up.
-- **Webcam:** the `https` address of a webcam picture, or of a webcam's own page that names its picture (Foto-Webcam, Panomax, snow-online and many others). When the Web Admin says the site blocks the request and the site allows its pictures to be used, paste the address of the picture itself (in the browser: right-click the picture, **Copy image address**).
+- **Webcam:** the `https` address of a webcam picture, or of a webcam's own page that names its picture (Foto-Webcam, Panomax, snow-online and many others). See [Add a webcam](#add-a-webcam).
 
 The Bridge keeps the rain radar's and the webcams' pictures for 24 hours, at fixed times every 10 minutes. The popup shows **Synced 10:20** in its head, and a time bar with **Play** once there are two pictures: the radar brings its last two hours at once, Foto-Webcam and snow-online their last day, other webcams collect from when they are added. Webcam pictures belong to the webcam's operator: show only pictures the site allows you to use. Some portals ask for consent first, some do not allow it at all.
+
+#### Add a webcam
+
+1. Open the webcam in your browser: the page of that one webcam, not an overview of several. Copy the address from the browser's address bar.
+2. In the tile, choose **Source: Webcam**, then **Add webcam**, and paste the address.
+3. After a few seconds the tile shows the picture. What the Web Admin may say under the entry:
+    - **No picture was found on this page.** The page does not name its picture. Right-click the webcam picture in the browser, choose **Copy image address**, and paste that address instead.
+    - **This site blocks the request.** The site does not let the Bridge read the page. Paste the picture's own address the same way, but only where the site allows its pictures to be used.
+4. New pictures come every 10 minutes; **Play** appears in the popup once there are two.
 
 - **Tile shows:** the entry on the tile, or **Last chosen**: the one last chosen in the popup, until the display restarts.
 - **Show:** the icon, or the **Picture**: the tile shows the current image in its own size, with the title in a pill. **Circle and title** can be **Automatic**, **Dark** or **Light**, with an adjustable transparency.

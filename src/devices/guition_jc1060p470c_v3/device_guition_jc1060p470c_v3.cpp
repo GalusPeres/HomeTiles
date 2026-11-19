@@ -1387,10 +1387,6 @@ i2c_master_bus_handle_t DeviceGuitionJC1060P470CV3::sharedI2cBus() {
 }
 
 bool DeviceGuitionJC1060P470CV3::initSDCard() {
-#if defined(DEVICE_GUITION_JC1060P470C_V3)
-  // The V3 reference confirms panel wiring, not the V2 SD pin map.
-  return false;
-#else
   if (g_sd_available && JC1060SDMMC.cardType() != JC1060_CARD_NONE) {
     return true;
   }
@@ -1471,7 +1467,6 @@ bool DeviceGuitionJC1060P470CV3::initSDCard() {
                 JC1060SDMMC.frequencyKHz(),
                 g_sd_writable ? 1u : 0u);
   return true;
-#endif
 }
 
 bool DeviceGuitionJC1060P470CV3::storageReady() {

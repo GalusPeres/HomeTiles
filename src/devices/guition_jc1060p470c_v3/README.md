@@ -11,8 +11,10 @@ ESP32-P4 v3.1-v3.99 silicon range and its own firmware identity.
 
 Display, touch and local OV02C10 camera operation are confirmed on V3 hardware
 by the contributor. The V3 camera driver has its own OV02C10 board
-configuration and panel PHY-supply handling. SD, expansion GPIOs and audio
-remain disabled because their V3 wiring is unverified.
+configuration and panel PHY-supply handling. SD access uses the JC1060P470C
+SDMMC slot 0 wiring contract (GPIO39-44, LDO VO4 and active-low GPIO45 power
+switch); a contributor confirms SD-card operation on V3 hardware. Expansion
+GPIOs and audio remain disabled.
 
 Hardware references:
 

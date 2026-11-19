@@ -414,10 +414,12 @@ Important:
   HomeTiles has its own V3 driver and vendor panel/touch copies, using the
   established JD9165 timings and initialization. A contributor confirms
   display and touch operation on V3 hardware.
-- The upstream definition does not establish V3 SD, expansion GPIO, or audio
-  wiring. These capabilities remain disabled. The V3 local-camera board driver
-  has its own OV02C10 CSI/SCCB and shared PHY-supply configuration; a
-  contributor confirms camera operation on V3 hardware.
+- V3 SD wiring is not described in the upstream definition. HomeTiles enables
+  SDMMC slot 0 using the JC1060P470C mapping (CLK 43, CMD 44, D0-D3 39-42,
+  LDO VO4, active-low power switch GPIO45); a contributor confirms microSD
+  operation on V3 hardware. Expansion GPIOs and audio remain disabled. The V3
+  local-camera board driver has its own OV02C10 CSI/SCCB and shared PHY-supply
+  configuration; a contributor confirms camera operation.
 - ESP32-P4 with `16MB` flash. The profile uses the repository's `partitions.csv`
   and two 6.5MB OTA slots.
 - A contributor confirms that the image boots and that display, touch, and

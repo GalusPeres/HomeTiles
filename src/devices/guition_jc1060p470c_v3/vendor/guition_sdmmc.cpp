@@ -5,13 +5,15 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Modified for HomeTiles from Espressif's ESP32-P4 Function EV Board SDMMC
- * setup, also distributed in Guition's JC1060P470C examples. The
- * board uses SDMMC slot 0 IO-MUX pins: CLK 43, CMD 44, D0-D3 39-42.
+ * setup, also distributed in Guition's JC1060P470C examples. The V3 board uses
+ * the JC1060 SDMMC slot 0 IO-MUX mapping: CLK 43, CMD 44, D0-D3 39-42.
  */
 
 #include "guition_sdmmc.h"
 
 #if defined(DEVICE_GUITION_JC1060P470C_V3)
+
+#define JC1060_SD_LOG_PREFIX "[Device/Guition JC1060P470C V3] "
 
 #include <Arduino.h>
 #include <cerrno>
@@ -47,14 +49,14 @@ esp_err_t ensure_sd_power() {
   config.ldo_chan_id = kSdLdoChannel;
   const esp_err_t err = sd_pwr_ctrl_new_on_chip_ldo(&config, &g_sd_power_handle);
   if (err != ESP_OK) {
-    Serial.printf("[Device/Guition JC1060P470C V2] SD power control on LDO VO%d failed: %s (0x%x)\n",
+    Serial.printf(JC1060_SD_LOG_PREFIX "SD power control on LDO VO%d failed: %s (0x%x)\n",
                   kSdLdoChannel,
                   esp_err_to_name(err),
                   static_cast<unsigned>(err));
     return err;
   }
 
-  Serial.printf("[Device/Guition JC1060P470C V2] SD power control uses LDO VO%d\n",
+  Serial.printf(JC1060_SD_LOG_PREFIX "SD power control uses LDO VO%d\n",
                 kSdLdoChannel);
   return ESP_OK;
 }
@@ -69,7 +71,7 @@ void reset_sd_card_power() {
   delay(kSdPowerOffMs);
   digitalWrite(BOARD_SDMMC_POWER_PIN, BOARD_SDMMC_POWER_ON_LEVEL);
   perimanSetPinBusExtraType(BOARD_SDMMC_POWER_PIN, "SDMMC_POWER");
-  Serial.printf("[Device/Guition JC1060P470C V2] SD power reset: gpio=%d off_ms=%lu on_level=%s\n",
+  Serial.printf(JC1060_SD_LOG_PREFIX "SD power reset: gpio=%d off_ms=%lu on_level=%s\n",
                 BOARD_SDMMC_POWER_PIN,
                 static_cast<unsigned long>(kSdPowerOffMs),
                 BOARD_SDMMC_POWER_ON_LEVEL == LOW ? "LOW" : "HIGH");
@@ -132,7 +134,7 @@ bool JC1060SDMMCFS::begin(const char* mountpoint,
   if (err != ESP_OK) {
     last_error_phase_ = "mount";
     last_error_ = err;
-    Serial.printf("[Device/Guition JC1060P470C V2] SD mount failed: %s (0x%x), freq=%d kHz\n",
+    Serial.printf(JC1060_SD_LOG_PREFIX "SD mount failed: %s (0x%x), freq=%d kHz\n",
                   esp_err_to_name(err),
                   static_cast<unsigned>(err),
                   sdmmc_frequency);
@@ -146,7 +148,7 @@ bool JC1060SDMMCFS::begin(const char* mountpoint,
   frequency_khz_ = card_ ? card_->real_freq_khz : sdmmc_frequency;
   last_error_phase_ = "none";
   last_error_ = ESP_OK;
-  Serial.printf("[Device/Guition JC1060P470C V2] SD mounted, requested=%d kHz, real=%d kHz, host_flags=0x%lx\n",
+  Serial.printf(JC1060_SD_LOG_PREFIX "SD mounted, requested=%d kHz, real=%d kHz, host_flags=0x%lx\n",
                 sdmmc_frequency,
                 frequency_khz_,
                 static_cast<unsigned long>(host.flags));
@@ -162,7 +164,7 @@ void JC1060SDMMCFS::end() {
 
   const esp_err_t err = esp_vfs_fat_sdcard_unmount(_impl->mountpoint(), card_);
   if (err != ESP_OK) {
-    Serial.printf("[Device/Guition JC1060P470C V2] SD unmount failed: %s (0x%x)\n",
+    Serial.printf(JC1060_SD_LOG_PREFIX "SD unmount failed: %s (0x%x)\n",
                   esp_err_to_name(err),
                   static_cast<unsigned>(err));
   }
@@ -175,7 +177,7 @@ void JC1060SDMMCFS::end() {
 bool JC1060SDMMCFS::testWritable() {
   writable_ = false;
   if (!card_ || !_impl->mountpoint()) {
-    Serial.println("[Device/Guition JC1060P470C V2] SD write test skipped: card is not mounted");
+    Serial.println(JC1060_SD_LOG_PREFIX "SD write test skipped: card is not mounted");
     return false;
   }
 
@@ -192,7 +194,7 @@ bool JC1060SDMMCFS::testWritable() {
 
   auto log_failure = [&](const char* phase, int error_number) {
     const esp_err_t status = sdmmc_get_status(card_);
-    Serial.printf("[Device/Guition JC1060P470C V2] SD write test failed: phase=%s freq=%d kHz errno=%d (%s) card_status=%s (0x%x)\n",
+    Serial.printf(JC1060_SD_LOG_PREFIX "SD write test failed: phase=%s freq=%d kHz errno=%d (%s) card_status=%s (0x%x)\n",
                   phase,
                   frequency_khz_,
                   error_number,
@@ -263,7 +265,7 @@ bool JC1060SDMMCFS::testWritable() {
   }
 
   writable_ = true;
-  Serial.printf("[Device/Guition JC1060P470C V2] SD write test OK, freq=%d kHz, bytes=%u\n",
+  Serial.printf(JC1060_SD_LOG_PREFIX "SD write test OK, freq=%d kHz, bytes=%u\n",
                 frequency_khz_,
                 static_cast<unsigned>(sizeof(kProbeData)));
   return true;

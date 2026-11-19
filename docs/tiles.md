@@ -540,6 +540,15 @@ The Bridge keeps the rain radar's and the webcams' pictures for 24 hours, at fix
     - **This site blocks the request.** The site does not let the Bridge read the page. Paste the picture's own address the same way, but only where the site allows its pictures to be used.
 4. New pictures come every 10 minutes; **Play** appears in the popup once there are two.
 
+You can simply try a link: the Web Admin tells within seconds whether the Bridge finds a picture. These portals were checked with HomeTiles:
+
+| Portal | Paste | What the tile gets |
+| --- | --- | --- |
+| Foto-Webcam | the webcam's page, `https://www.foto-webcam.eu/webcam/<name>/` | a new picture every 10 minutes, the last day at once |
+| Panomax | the webcam's page, `https://<place>.panomax.com/` | the current preview of the panorama |
+| snow-online | the webcam's page | the current picture; the archive holds only a few a day |
+| Any other site | the page, or the picture's own address | collects from when it is added |
+
 - **Tile shows:** the entry on the tile, or **Last chosen**: the one last chosen in the popup, until the display restarts.
 - **Show:** the icon, or the **Picture**: the tile shows the current image in its own size, with the title in a pill. **Circle and title** can be **Automatic**, **Dark** or **Light**, with an adjustable transparency.
 - **Tap opens:** the **Popup**, or the **Full screen** at once.

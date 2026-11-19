@@ -59,13 +59,12 @@ const boards = [
    owner: /i2c_master_bus_handle_t gsl3680_i2c_bus\(\) \{\s*return g_state\.initialized \? g_state\.bus : nullptr;\s*\}/},
   {define: 'DEVICE_GUITION_JC1060P470C_V2', dir: 'guition_jc1060p470c_v2', sensor: 'ov02c10',
    flag: 'device_guition_jc1060p470c_v2.h', driver: 'device_guition_jc1060p470c_v2.cpp', ldo: literalLdo,
-   accessor: 'DeviceGuitionJC1060P470CV2::sharedI2cBus()', owner: sharedBus('DeviceGuitionJC1060P470CV2'),
-   sharedV2CameraProfile: true},
-  {define: 'DEVICE_GUITION_JC1060P470C_V3', dir: 'guition_jc1060p470c_v2', sensor: 'ov02c10',
-   flag: '../guition_jc1060p470c_v3/device_guition_jc1060p470c_v3.h',
-   driver: 'device_guition_jc1060p470c_v2.cpp', ldo: literalLdo,
-   accessor: 'DeviceGuitionJC1060P470CV2::sharedI2cBus()', owner: sharedBus('DeviceGuitionJC1060P470CV2'),
-   sharedV2CameraProfile: true},
+   accessor: 'DeviceGuitionJC1060P470CV2::sharedI2cBus()', owner: sharedBus('DeviceGuitionJC1060P470CV2')},
+  {define: 'DEVICE_GUITION_JC1060P470C_V3', dir: 'guition_jc1060p470c_v3', sensor: 'ov02c10',
+   flag: 'device_guition_jc1060p470c_v3.h',
+   driver: 'device_guition_jc1060p470c_v3.cpp', ldo: literalLdo,
+   accessor: 'DeviceGuitionJC1060P470CV3::sharedI2cBus()', owner: sharedBus('DeviceGuitionJC1060P470CV3'),
+   orientationConfirmed: true},
   // Guition's demo turns the frame 270 degrees onto the portrait panel.
   {define: 'DEVICE_GUITION_JC4880P443_PORTRAIT', dir: 'guition_jc4880p443_portrait', sensor: 'ov02c10',
    flag: 'profile.h', driver: 'device_guition_jc4880p443_portrait.cpp', ldo: literalLdo, quarterTurn: 'true',
@@ -109,20 +108,13 @@ for (const board of boards) {
   const label = board.dir;
 
   assert.ok(selected.includes(board.define), `${label}: device_select.h camera entry`);
-  if (board.sharedV2CameraProfile) {
-    assert.match(cameraSelect, /#if defined\(DEVICE_GUITION_JC1060P470C_V2\) \|\| defined\(DEVICE_GUITION_JC1060P470C_V3\)\n#define HOMETILES_CAMERA_SENSOR_OV02C10 1\n#define HOMETILES_LOCAL_CAMERA_BOARD "src\/devices\/guition_jc1060p470c_v2\/local_camera_board\.h"/,
-      `${label}: shared V2 camera profile`);
-  } else {
-    assert.match(cameraSelect, new RegExp(`#if defined\\(${board.define}\\)\\n` +
-      `#define HOMETILES_CAMERA_SENSOR_${board.sensor.toUpperCase()} 1\\n` +
-      `#define HOMETILES_LOCAL_CAMERA_BOARD "${escape(base)}/local_camera_board\\.h"\\n#endif`),
-      `${label}: camera_select.h entry`);
-  }
+  assert.match(cameraSelect, new RegExp(`#if defined\\(${board.define}\\)\\n` +
+    `#define HOMETILES_CAMERA_SENSOR_${board.sensor.toUpperCase()} 1\\n` +
+    `#define HOMETILES_LOCAL_CAMERA_BOARD "${escape(base)}/local_camera_board\\.h"\\n#endif`),
+    `${label}: camera_select.h entry`);
 
   // Board file guards, as on the existing boards.
-  const expectedBoardGuard = board.sharedV2CameraProfile
-    ? /#if \(defined\(DEVICE_GUITION_JC1060P470C_V2\) \|\| defined\(DEVICE_GUITION_JC1060P470C_V3\)\) && \\\n    defined\(HOMETILES_LOCAL_CAMERA\)/
-    : new RegExp(`#if ${escape(guard)}\\n`);
+  const expectedBoardGuard = new RegExp(`#if ${escape(guard)}\\n`);
   assert.ok(header.indexOf('#include "src/video/local_camera/camera_select.h"') < header.search(expectedBoardGuard),
     `${label}: the guard needs camera_select.h first`);
   for (const text of [header, cpp]) {
@@ -139,7 +131,9 @@ for (const board of boards) {
   const expected = [...referenceMode[board.sensor]];
   if (board.quarterTurn) expected[kQuarterTurnField] = board.quarterTurn;
   assert.deepEqual(modeFields(header), expected, `${label}: kMode`);
-  assert.match(header, /orientation pending hardware check/, `${label}: unproven orientation is marked`);
+  if (!board.orientationConfirmed) {
+    assert.match(header, /orientation pending hardware check/, `${label}: unproven orientation is marked`);
+  }
 
   // The existing board bus: never create, reset or delete a bus.
   assert.doesNotMatch(maskCpp(cpp), /i2c_new_master_bus|i2c_del_master_bus|i2c_master_bus_reset|i2c_master_bus_add_device/,
@@ -161,9 +155,7 @@ for (const board of boards) {
 
   // Capability flag follows the build, never a literal true.
   const flag = read(`${base}/${board.flag}`);
-  const selectionInclude = board.sharedV2CameraProfile && board.define.endsWith('_V3')
-    ? '#include "src/devices/guition_jc1060p470c_v2/device_guition_jc1060p470c_v2.h"'
-    : '#include "src/devices/device_select.h"';
+  const selectionInclude = '#include "src/devices/device_select.h"';
   assert.ok(flag.indexOf(selectionInclude) !== -1 &&
     flag.indexOf(selectionInclude) < flag.indexOf('#if defined(HOMETILES_LOCAL_CAMERA)'),
     `${label}: the capability sees HOMETILES_LOCAL_CAMERA`);

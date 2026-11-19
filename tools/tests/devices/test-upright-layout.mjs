@@ -188,6 +188,7 @@ assert.ok(turnedRef.includes('g_turn_ppa.rotate(g_camera_presenter, panel_w, pan
 for (const [file, ns, own] of [
   ['guition_jc1060p470c/device_guition_jc1060p470c.cpp', 'DeviceGuitionJC1060P470C', 'draw_landscape_area'],
   ['guition_jc1060p470c_v2/device_guition_jc1060p470c_v2.cpp', 'DeviceGuitionJC1060P470CV2', 'draw_landscape_area'],
+  ['guition_jc1060p470c_v3/device_guition_jc1060p470c_v3.cpp', 'DeviceGuitionJC1060P470CV3', 'draw_landscape_area'],
   ['waveshare_touch_lcd_7b/device_waveshare_touch_lcd_7b.cpp', 'DeviceWaveshareTouchLCD7B', 'draw_landscape_area'],
   ['guition_jc4880p443_portrait/device_guition_jc4880p443_portrait.cpp', 'DeviceGuitionJC4880P443Portrait', 'draw_portrait_area']]) {
   const source = read('src/devices/' + file);

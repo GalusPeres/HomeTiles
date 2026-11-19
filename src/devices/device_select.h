@@ -136,8 +136,8 @@
 #define DEVICE_WAVESHARE_P4_DSI_BOARD
 #endif
 
-// The JC1060P470C V3 uses the V2 panel wiring and timing. Keep its exact P4
-// silicon identity separate while sharing the common board lifecycle.
+// The JC1060P470C V3 keeps its exact P4 silicon identity and driver while
+// using the same proven panel wiring and timing as V2.
 #if defined(DEVICE_GUITION_JC1060P470C) || \
     defined(DEVICE_GUITION_JC1060P470C_V2) || \
     defined(DEVICE_GUITION_JC1060P470C_V3)
@@ -148,11 +148,10 @@
 // JC8012P4A1 V2 and V1 cameras and the JC1060P470C V2 / V3 and JC4880P443 CSI
 // connectors (OV02C10), the Waveshare 8-inch, 7-inch and 10.1-inch front
 // cameras and the OV5647 CSI connectors of the Waveshare 7B, 4.3-inch, 5-inch
-// and 4B, and the M5Stack Tab5 camera (SC202CS/SC2356). V3 provisionally
-// reuses the V2 CSI, SCCB and PHY-supply configuration; validate with its
-// exact camera module. The camera stays off until enabled in Web Admin, when
-// the sensor is probed. The original-panel JC1060P470C and ESP32-S3 boards
-// keep the capture path out.
+// and 4B, and the M5Stack Tab5 camera (SC202CS/SC2356). The contributor
+// confirms V3 camera operation using its own board driver. The camera stays
+// off until enabled in Web Admin, when the sensor is probed. The original-
+// panel JC1060P470C and ESP32-S3 boards keep the capture path out.
 #if defined(DEVICE_GUITION_JC8012P4A1_V2) || \
     defined(DEVICE_WAVESHARE_TOUCH_LCD_8) || \
     defined(DEVICE_WAVESHARE_TOUCH_LCD_7) || \

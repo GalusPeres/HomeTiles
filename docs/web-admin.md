@@ -228,7 +228,7 @@ See the [Screensaver guide](screensaver.md) for images, activation, and availabl
 
 - **WiFi:** WiFi credentials, connection type on Ethernet-capable devices, and an optional static IP shared by WiFi and Ethernet.
 - **Localization:** language, time zone (**Auto (Home Assistant)** takes Home Assistant's zone through the Bridge), date/time formats, and the first day of the week for the Energy popup, the Calendar, and the 30-day graph lines.
-- **System:** firmware update, the [icon file](#icons), the connection to Home Assistant, pairing, and the [Web Admin password](#web-admin-password). The **MQTT** settings are folded in here; while the direct link is active they stay saved but unused.
+- **System:** firmware update, the [icon file](#icons), the **Radar source** for the [rain radar](bridge.md#rain-radar-and-webcams) (empty uses the default), the connection to Home Assistant, pairing, and the [Web Admin password](#web-admin-password). The **MQTT** settings are folded in here; while the direct link is active they stay saved but unused.
 - **I/O:** [local hardware](hardware-io.md).
 - **Built-in camera:** on displays with a camera, see below.
 - **Files** and **Diagnostics:** see below.

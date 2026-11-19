@@ -521,12 +521,21 @@ Lock and Alarm Panel tiles show only states the device reports: a command waits 
 
 <a id="camera-experimental"></a>
 
-### Camera
+### Camera / Picture { #camera }
 
-Shows a `camera` or `image` entity. The camera can also be the [built-in camera](bridge.md#built-in-camera) of another HomeTiles display.
+Shows pictures and video. Choose the tile's **Source**; the tile holds up to eight entries of that source, and the popup's **…** button switches between them.
 
-- **Show:** the icon, or the **Picture**: the tile shows the camera's current image in its own size, with the title in a pill. **Circle and title** can be **Automatic**, **Dark** or **Light**, with an adjustable transparency.
-- **Tap opens:** the **Popup** with a 16:9 live video, or the **Full screen** video at once.
+- **Home Assistant:** `camera` and `image` entities. A camera can also be the [built-in camera](bridge.md#built-in-camera) of another HomeTiles display.
+- **Rain radar:** a place: **Home** (Home Assistant's location), a Home Assistant **Zone**, a town found by its name, or **Own coordinates** (latitude and longitude). The Bridge draws the radar from RainViewer (in Germany the DWD, elsewhere NASA, when it fails), with nothing to set up.
+- **Webcam:** the `https` address of a webcam picture, or of a webcam's own page that names its picture (Foto-Webcam, Panomax, snow-online and many others). When the Web Admin says the site blocks the request, paste the address of the picture itself (in the browser: right-click the picture, **Copy image address**).
+
+The Bridge keeps the rain radar's and the webcams' pictures for 24 hours, at fixed times every 10 minutes. The popup shows **Synced 10:20** in its head, and a time bar with **Play** once there are two pictures: the radar brings its last two hours at once, Foto-Webcam and snow-online their last day, other webcams collect from when they are added. Check a webcam site's terms; some ask for consent before their pictures are used.
+
+- **Tile shows:** the entry on the tile, or **Last chosen**: the one last chosen in the popup, until the display restarts.
+- **Show:** the icon, or the **Picture**: the tile shows the current image in its own size, with the title in a pill. **Circle and title** can be **Automatic**, **Dark** or **Light**, with an adjustable transparency.
+- **Tap opens:** the **Popup**, or the **Full screen** at once.
+
+**Radar source** (Web Admin → System): an emergency address for a frame list like RainViewer's; empty uses the default. Rain radar and webcams need HomeTiles Bridge v0.9.8.
 
 <div class="ht-type-shots ht-type-pair" markdown>
 <div class="ht-type-stack" markdown>

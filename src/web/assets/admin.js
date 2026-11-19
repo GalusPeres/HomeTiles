@@ -4488,6 +4488,12 @@ async function saveGestureEdge(select) {
 
     for (const [key, value] of Object.entries(snapshot || {})) {
       if (key === '_dirty' || key === '_rev' || key === 'icon' || key === 'color' || key === 'bg_color_default' || key === 'col' || key === 'row' || key === 'span_w' || key === 'span_h' || key === 'type' || key === 'title') continue;
+      if (key === 'sensor_decimals' && String(value ?? '').trim() === '') {
+        // An empty decimals field shows the value as it comes (-1 as the server
+        // sends it, 0xFF on the panel), never 0: "4, 7, 9m" became "4" (#157).
+        tile[key] = -1;
+        continue;
+      }
       if (numericFields.includes(key)) {
         const num = Number(value);
         tile[key] = Number.isFinite(num) ? num : value;

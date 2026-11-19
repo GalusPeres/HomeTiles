@@ -100,9 +100,12 @@ const tab5Begin = body(tab5, 'bool DeviceM5StacksTab5::displayBeginFullFrames(')
 assert.ok(tab5Begin.indexOf('std::memcpy(g_full_ui_copy, g_panel_fb') < tab5Begin.indexOf('std::memset(g_panel_fb, 0'));
 assert.match(body(tab5, 'void DeviceM5StacksTab5::displayEndFullFrames('), /std::memcpy\(g_panel_fb, g_full_ui_copy, kPanelFrameBytes\);\s*sync_panel_fb\(false\);/);
 const b4 = read('src/devices/waveshare_4b/device_waveshare_4b.cpp');
+// The 4B: every rotation, the Bridge turns as Arduino_GFX turns the UI
+// (#155; test-camera-preview-rotations runs it).
 assert.match(body(b4, 'bool DeviceWaveshare4B::displayFullFrameInfo('),
-  /\(g_gfx->getRotation\(\) & 0x01\) != 0[\s\S]*?turn_cw = g_gfx->getRotation\(\) == 2 \? 180 : 0;/,
-  'the 4B: only rotations 0 and 180, like its direct popup frames');
+  /turn_cw = static_cast<uint16_t>\(\(g_gfx->getRotation\(\) & 0x03\) \* 90U\);/,
+  'the 4B: full screen in every rotation');
+assert.doesNotMatch(body(b4, 'bool DeviceWaveshare4B::displayFullFrameInfo('), /& 0x01\) != 0/);
 const b4Begin = body(b4, 'bool DeviceWaveshare4B::displayBeginFullFrames(');
 assert.ok(b4Begin.indexOf('memcpy(g_full_ui_copy, framebuffer, bytes);') < b4Begin.indexOf('memset(framebuffer, 0, bytes);'));
 assert.match(body(b4, 'bool DeviceWaveshare4B::displaySubmitFullFrame('), /ESP_CACHE_MSYNC_FLAG_DIR_M2C \| ESP_CACHE_MSYNC_FLAG_INVALIDATE/);

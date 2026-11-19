@@ -47,6 +47,11 @@ bool g_littlefs_ready = false;
 // Camera full screen (#65): the UI kept while the frames own the framebuffer.
 uint16_t* g_full_ui_copy = nullptr;
 bool g_full_active = false;
+// Byte-swapped camera frames in native order for a turned panel (#155); kept
+// while the stream runs, freed when it ends.
+uint16_t* g_turn_copy = nullptr;
+size_t g_turn_copy_bytes = 0;
+bool g_turn_copy_failure_logged = false;
 
 void apply_backlight(uint8_t value);
 
@@ -325,14 +330,15 @@ bool DeviceWaveshare4B::displayTryFullFramePreview(
     int32_t x, int32_t y, int32_t w, int32_t h,
     int32_t source_stride, const uint16_t* data, size_t data_size,
     bool byte_swap) {
-  // The B4's logical coordinates map directly to its DSI framebuffer. Copy
-  // prepared preview rectangles straight into that framebuffer so camera
-  // frames do not trigger a complete LVGL image redraw. The same path still
-  // accepts native full-screen images used by the image screensaver.
+  // Prepared preview rectangles go straight into the B4's DSI framebuffer, so
+  // camera frames do not trigger a complete LVGL image redraw. The same path
+  // still accepts native full-screen images used by the image screensaver.
+  // Arduino_GFX turns every bitmap into the panel's rotation like the LVGL
+  // flush above, so every rotation is drawn: a turned panel used to skip each
+  // camera frame and stayed black while the sound played (#155).
   if (!g_gfx || !data || x < 0 || y < 0 || w <= 0 || h <= 0 ||
       source_stride != w ||
-      (x + w) > display_cfg.width || (y + h) > display_cfg.height ||
-      g_gfx->getRotation() != 0) {
+      (x + w) > g_gfx->width() || (y + h) > g_gfx->height()) {
     return false;
   }
 
@@ -345,11 +351,38 @@ bool DeviceWaveshare4B::displayTryFullFramePreview(
   uint16_t* framebuffer = g_gfx->getFramebuffer();
   if (!framebuffer) return false;
 
-  if (x == 0 && y == 0 &&
+  const uint8_t rotation = g_gfx->getRotation();
+  if (rotation == 0 && x == 0 && y == 0 &&
       w == display_cfg.width && h == display_cfg.height &&
       !byte_swap) {
     if (framebuffer != data) memcpy(framebuffer, data, required_bytes);
     g_gfx->flush(true);
+    return true;
+  }
+
+  if (byte_swap && rotation != 0) {
+    // Arduino_GFX turns only native RGB565 by its framebuffer copy; a
+    // byte-swapped bitmap on a turned panel would go one pixel at a time
+    // through writePixel. Swap the frame once into native order instead.
+    if (g_turn_copy_bytes < required_bytes) {
+      heap_caps_free(g_turn_copy);
+      g_turn_copy = static_cast<uint16_t*>(
+          heap_caps_aligned_alloc(64, required_bytes, MALLOC_CAP_SPIRAM));
+      g_turn_copy_bytes = g_turn_copy ? required_bytes : 0;
+    }
+    if (!g_turn_copy) {
+      if (!g_turn_copy_failure_logged) {
+        g_turn_copy_failure_logged = true;
+        Serial.printf("[Device/Waveshare4B] Turned frame: no memory for a %u-byte native copy\n",
+                      static_cast<unsigned>(required_bytes));
+      }
+      return false;
+    }
+    const size_t pixels = static_cast<size_t>(w) * static_cast<size_t>(h);
+    for (size_t i = 0; i < pixels; ++i) g_turn_copy[i] = __builtin_bswap16(data[i]);
+    g_gfx->draw16bitRGBBitmap(
+        static_cast<int16_t>(x), static_cast<int16_t>(y), g_turn_copy,
+        static_cast<int16_t>(w), static_cast<int16_t>(h));
     return true;
   }
 
@@ -367,20 +400,28 @@ bool DeviceWaveshare4B::displayTryFullFramePreview(
   return true;
 }
 
-// Camera full screen (#65): the Bridge's frames (720 x 720, turned by 180
-// when the panel is) go from the JPEG decoder straight into the one
-// framebuffer Arduino_GFX scans. Its DSI panel handle is private, so there is
-// no refresh signal to start on; the decoder fills 720 x 720 in a few ms. Only
-// rotations 0 and 180, like the direct popup frames above.
+void DeviceWaveshare4B::displayEndFullFramePreview() {
+  heap_caps_free(g_turn_copy);
+  g_turn_copy = nullptr;
+  g_turn_copy_bytes = 0;
+}
+
+// Camera full screen (#65): the Bridge's frames (720 x 720) go from the JPEG
+// decoder straight into the one framebuffer Arduino_GFX scans. Its DSI panel
+// handle is private, so there is no refresh signal to start on; the decoder
+// fills 720 x 720 in a few ms. The Bridge turns each frame clockwise as
+// Arduino_GFX turns the UI into that framebuffer: rotation 1 puts a bitmap's
+// top edge on the panel's right edge (90), rotation 3 on its left (270), so
+// every rotation shows full screen (#155).
 bool DeviceWaveshare4B::displayFullFrameInfo(uint16_t& width, uint16_t& height,
                                              uint16_t& turn_cw) {
-  if (!g_gfx || !g_gfx->getFramebuffer() || (g_gfx->getRotation() & 0x01) != 0 ||
+  if (!g_gfx || !g_gfx->getFramebuffer() ||
       display_cfg.width % 16 != 0 || display_cfg.height % 16 != 0) {
     return false;
   }
   width = static_cast<uint16_t>(display_cfg.width);
   height = static_cast<uint16_t>(display_cfg.height);
-  turn_cw = g_gfx->getRotation() == 2 ? 180 : 0;
+  turn_cw = static_cast<uint16_t>((g_gfx->getRotation() & 0x03) * 90U);
   return true;
 }
 

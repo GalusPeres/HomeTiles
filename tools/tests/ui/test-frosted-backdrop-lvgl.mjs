@@ -65,8 +65,13 @@ assert.match(disc, /< LV_OPA_50 && !tile_glass::is_glass\(host\); \+\+depth\)/);
 assert.match(header, /tile_glass::mark\(card\);/);
 assert.match(header, /lv_obj_add_event_cb\(card, on_card_draw_end, LV_EVENT_DRAW_MAIN_END/,
   'drawn after LVGL\'s shadow, fill and line');
-assert.match(header, /#if \(defined\(HOMETILES_ISSUE38_BETA\) \|\| defined\(HOMETILES_TEST_BETA\)\) && !defined\(HOMETILES_FROSTED_TILES\)/,
-  'test builds only for now');
+// In every build since v0.9.8 (user 2026-11-19: two weeks on V2, S3 and 8-inch);
+// only its measurement log stays in test builds.
+assert.match(header, /#if !defined\(HOMETILES_NO_FROSTED_TILES\) && !defined\(HOMETILES_FROSTED_TILES\)\n#define HOMETILES_FROSTED_TILES 1/,
+  'frosted glass in release builds too');
+assert.doesNotMatch(header, /HOMETILES_ISSUE38_BETA|HOMETILES_TEST_BETA/);
+assert.match(screensaver, /g_frosted_logged_ms = millis\(\);\n#if defined\(HOMETILES_ISSUE38_BETA\) \|\| defined\(HOMETILES_TEST_BETA\)\n[^\n]*\n    Serial\.printf\("\[Frosted\]/,
+  'the measurement log only in test builds');
 
 // ---- Real LVGL ------------------------------------------------------------------
 const host = await lvglHost(root);

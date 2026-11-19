@@ -12,8 +12,8 @@
 #include "src/core/display/display_flush_gate.h"
 #include "src/tiles/runtime/tile_glass.h"
 
-// Frosted glass behind see-through screensaver tiles (user 2026-11-02, test
-// builds only for now). The slide's picture is averaged down to a quarter of
+// Frosted glass behind see-through screensaver tiles (user 2026-11-02; in every
+// build since v0.9.8 after two weeks on V2, S3 and 8-inch). The slide's picture is averaged down to a quarter of
 // its size per axis with 8 bits per channel (V2 320x200 = 188 KB, S3 120x120
 // = 42 KB) and blurred there, once per slide. A see-through tile card writes
 // its part straight into LVGL's draw buffer before its own translucent fill
@@ -26,7 +26,7 @@
 // 2026-11-02, b646). The pixels are written like the clock's kept pixels
 // (clock_pixel_cache.h): only on a settled RGB565 layer at full opacity;
 // otherwise the card shows its plain tint.
-#if (defined(HOMETILES_ISSUE38_BETA) || defined(HOMETILES_TEST_BETA)) && !defined(HOMETILES_FROSTED_TILES)
+#if !defined(HOMETILES_NO_FROSTED_TILES) && !defined(HOMETILES_FROSTED_TILES)
 #define HOMETILES_FROSTED_TILES 1
 #endif
 

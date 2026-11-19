@@ -2113,11 +2113,14 @@ void global_screensaver_timer_cb(lv_timer_t* timer) {
   frosted_backdrop::Stats& frosted = frosted_backdrop::g_stats;
   if (frosted.draws && static_cast<uint32_t>(millis() - g_frosted_logged_ms) >= 1000U) {
     g_frosted_logged_ms = millis();
+#if defined(HOMETILES_ISSUE38_BETA) || defined(HOMETILES_TEST_BETA)
+    // The measurement only in test builds; a release keeps its log quiet.
     Serial.printf("[Frosted] %u card draws: band wait %u.%u ms, drawn %u.%u ms (%u computed in %u.%u ms)\n",
                   static_cast<unsigned>(frosted.draws), static_cast<unsigned>(frosted.wait_us / 1000),
                   static_cast<unsigned>(frosted.wait_us / 100 % 10), static_cast<unsigned>(frosted.draw_us / 1000),
                   static_cast<unsigned>(frosted.draw_us / 100 % 10), static_cast<unsigned>(frosted.fills),
                   static_cast<unsigned>(frosted.fill_us / 1000), static_cast<unsigned>(frosted.fill_us / 100 % 10));
+#endif
     frosted = frosted_backdrop::Stats{};
   }
 #endif

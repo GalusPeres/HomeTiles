@@ -12,6 +12,7 @@
 // lvgl.h no longer exports lv_image_cache_drop() (tile_renderer.cpp).
 #include <misc/cache/instance/lv_image_cache.h>
 
+#include <algorithm>
 #include <vector>
 
 #include "src/core/config/config_manager.h"
@@ -407,13 +408,18 @@ static void show_bar(CameraPopupContext* ctx) {
   if (strcmp(lv_label_get_text(ctx->time_newest), when) != 0) lv_label_set_text(ctx->time_newest, when);
 }
 
-// The picture in this stream's size, centred in its area.
+// The picture in this stream's size, its middle on the card's middle (user
+// 2026-11-19: centred in its area below the head, a picture without the bottom
+// row sat 32 px low at 480 x 480, 50 px on the V2), kept within its area: never
+// over the head or the bottom row. The radar fills its area as before.
 static void apply_layout(CameraPopupContext* ctx) {
   const bool row = ctx->frame_count >= 2 || ctx->entries.size() >= 2 || is_radar(ctx);
   const int area = row ? kAreaHeightWithRow : kAreaHeightPlain;
   lv_obj_set_size(ctx->video, ctx->frame_w, ctx->frame_h);
   lv_obj_set_size(ctx->image, ctx->frame_w, ctx->frame_h);
-  lv_obj_align(ctx->video, LV_ALIGN_TOP_MID, 0, kAreaTop + (area - ctx->frame_h) / 2 - popup_layout::kCardPad);
+  const int centred = (popup_layout::kCardHeight - ctx->frame_h) / 2;
+  const int top = std::max(kAreaTop, std::min(centred, kAreaTop + area - ctx->frame_h));
+  lv_obj_align(ctx->video, LV_ALIGN_TOP_MID, 0, top - popup_layout::kCardPad);
   // The stream writes straight to the image's place on the panel (P4).
   lv_obj_update_layout(ctx->card);
 }

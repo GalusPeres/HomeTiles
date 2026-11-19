@@ -71,7 +71,17 @@ for (const [name, m] of Object.entries(layouts)) {
   assert.equal(m.card - m.edge - m.button, m.row, name);
   assert.equal(m.row - m.edge - m.top, m.box[1], name);
 }
-assert.match(popup, /lv_obj_align\(ctx->video, LV_ALIGN_TOP_MID, 0, kAreaTop \+ \(area - ctx->frame_h\) \/ 2 - popup_layout::kCardPad\);/);
+// The picture's middle on the card's middle, kept within its area (user
+// 2026-11-19: without the bottom row it sat 32 px low at 480 x 480).
+assert.match(popup, /const int centred = \(popup_layout::kCardHeight - ctx->frame_h\) \/ 2;\s*const int top = std::max\(kAreaTop, std::min\(centred, kAreaTop \+ area - ctx->frame_h\)\);\s*lv_obj_align\(ctx->video, LV_ALIGN_TOP_MID, 0, top - popup_layout::kCardPad\);/);
+for (const [name, m, frame] of [['V2', layouts.V2, 424], ['S3', layouts.S3, 252]]) {
+  for (const row of [false, true]) {
+    const area = row ? m.box[1] : m.card - m.edge - m.top;
+    const top = Math.max(m.top, Math.min(Math.floor((m.card - frame) / 2), m.top + area - frame));
+    assert.equal(top + frame / 2, m.card / 2, `${name} ${row ? 'with' : 'without'} the row: the picture on the card's middle`);
+    assert.ok(top >= m.top && top + frame <= (row ? m.row - m.edge : m.card - m.edge), `${name}: within its area`);
+  }
+}
 assert.match(popup, /const bool row = ctx->frame_count >= 2 \|\| ctx->entries\.size\(\) >= 2 \|\| is_radar\(ctx\);/);
 
 // The stream takes the frame's own size within the box.

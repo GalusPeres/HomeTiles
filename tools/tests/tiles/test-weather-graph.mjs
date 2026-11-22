@@ -299,4 +299,16 @@ assert.match(renderer,
   /if \(widgets\.last_hash == hash\) return;\s*const Tile\* tile = tile_renderer_get_tile_config\(grid_type, grid_index\);[\s\S]{0,200}?widgets\.last_hash = hash;/,
   'a failed tile lookup does not swallow the payload');
 
+// The graph's texts scale with the card height like the Web Admin preview
+// (admin-graph.js: 7.5 % for the hour marks, 13 % for the readouts): the
+// panel picks the nearest built-in size and widens the label boxes with it.
+const graph = read('src/types/weather/graph_renderer.cpp');
+assert.match(graph, /uint8_t graph_font_size\(lv_coord_t card_h, float fraction\)/);
+assert.match(graph, /graph_font_size\(tile_h, 0\.075f\)/);
+assert.match(graph, /graph_font_size\(tile_h, 0\.13f\)/);
+assert.match(graph, /widgets\.mark_font_size \* 2/);
+assert.match(graph, /widgets\.readout_font_size \* 3/);
+assert.match(read('src/types/weather/admin-graph.js'), /Math\.round\(height \* 0\.075\)/);
+assert.match(read('src/types/weather/admin-graph.js'), /Math\.round\(height \* 0\.13\)/);
+
 console.log('Weather graph tile: type, pair, renderer, routes and Web Admin contract');

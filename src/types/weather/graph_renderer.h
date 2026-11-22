@@ -24,6 +24,10 @@ struct WeatherGraphWidgets {
   // The current hour on the today half: a vertical dashed line with its dot
   // on the curve (LVGL chart cursor, LV_PART_CURSOR).
   lv_chart_cursor_t* now_cursor = nullptr;
+  // The height-based font sizes of the graph's texts (the Web Admin preview
+  // uses the same fractions, admin-graph.js); 0 before the first update.
+  uint8_t mark_font_size = 0;
+  uint8_t readout_font_size = 0;
   uint32_t last_hash = 0;
 };
 

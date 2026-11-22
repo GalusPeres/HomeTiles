@@ -480,13 +480,40 @@ struct GraphBox {
   lv_coord_t band_y = 0;
 };
 
-GraphBox graph_box(int tile_w, int tile_h) {
+// The graph's texts scale with the card height like the Web Admin preview
+// (admin-graph.js: 7.5 % for the hour marks, 13 % for the temperature
+// readouts); the panel picks the nearest built-in size so both look the same
+// on the same card. The row heights follow the chosen fonts, so the bigger
+// digits keep their clearance and the band stays inside the card.
+uint8_t graph_font_size(lv_coord_t card_h, float fraction) {
+  static constexpr uint8_t kSizes[] = {16, 20, 24, 28, 32, 40, 48, 56, 64, 72, 80, 96, 120};
+  const int wanted = static_cast<int>(card_h * fraction + 0.5f);
+  uint8_t best = kSizes[0];
+  int best_delta = abs(static_cast<int>(best) - wanted);
+  for (const uint8_t size : kSizes) {
+    const int delta = abs(static_cast<int>(size) - wanted);
+    if (delta < best_delta) {
+      best = size;
+      best_delta = delta;
+    }
+  }
+  return best;
+}
+
+GraphBox graph_box(int tile_w, int tile_h, uint8_t mark_size = 0,
+                   uint8_t readout_size = 0) {
   const lv_coord_t pad_hor = tile_layout::scale_480(20);
   const lv_coord_t pad_ver = tile_layout::scale_480(24);
   const lv_coord_t content_w = tile_w - 2 * pad_hor;
   const lv_coord_t content_h = tile_h - 2 * pad_ver;
   const lv_coord_t title_h = lv_font_get_line_height(tile_layout::header_title_font());
-  const lv_coord_t label_h = lv_font_get_line_height(FONT_SMALL);
+  // The row heights come from the fonts actually drawn, not from the fixed
+  // defaults: with the height-based sizes the old values were too small and
+  // the digits crossed into the row below.
+  const lv_coord_t label_h = lv_font_get_line_height(
+      mark_size ? ui_font_for_size(mark_size) : FONT_SMALL);
+  const lv_coord_t value_label_h = lv_font_get_line_height(
+      readout_size ? ui_font_for_size(readout_size) : FONT_VALUE);
   // The band carries the precipitation names, so it fits one small text line.
   const lv_coord_t band_h = label_h + tile_layout::scale_480(4);
   GraphBox box;
@@ -497,7 +524,7 @@ GraphBox graph_box(int tile_w, int tile_h) {
   box.graph_h = std::max<lv_coord_t>(
       30, content_h - box.graph_y - label_h - tile_layout::scale_480(4) - band_h);
   box.label_h = label_h;
-  box.value_label_h = lv_font_get_line_height(FONT_VALUE);
+  box.value_label_h = value_label_h;
   box.band_h = band_h;
   box.band_y = box.graph_y + box.graph_h + label_h + tile_layout::scale_480(4);
   return box;
@@ -506,7 +533,7 @@ GraphBox graph_box(int tile_w, int tile_h) {
 void layout_graph(WeatherGraphWidgets& widgets, lv_obj_t* card, int tile_w, int tile_h,
                   uint8_t count) {
   if (!widgets.chart || !widgets.band) return;
-  const GraphBox box = graph_box(tile_w, tile_h);
+  const GraphBox box = graph_box(tile_w, tile_h, widgets.mark_font_size, widgets.readout_font_size);
   const lv_coord_t graph_x = box.graph_x;
   const lv_coord_t graph_y = box.graph_y;
   const lv_coord_t graph_w = box.graph_w;
@@ -516,7 +543,11 @@ void layout_graph(WeatherGraphWidgets& widgets, lv_obj_t* card, int tile_w, int 
   lv_obj_set_pos(widgets.chart, graph_x, graph_y);
   lv_obj_set_size(widgets.chart, graph_w, graph_h);
   const lv_coord_t labels_y = graph_y + graph_h + tile_layout::scale_480(2);
-  const lv_coord_t label_w = tile_layout::scale_480(36);
+  // Wider boxes for the height-based marks (graph_font_size), so the bigger
+  // digits of a tall card keep their room around the number.
+  const lv_coord_t label_w = std::max<lv_coord_t>(
+      tile_layout::scale_480(36),
+      widgets.mark_font_size ? widgets.mark_font_size * 2 : 0);
   // The hour marks sit under their slot of the 00-23 axis, every three hours.
   for (uint8_t i = 0; i < kHourLabels; ++i) {
     lv_obj_t* label = widgets.hour_labels[i];
@@ -871,6 +902,27 @@ void update_weather_graph_tile_state(GridType grid_type, uint8_t grid_index,
   }
 
   const bool has_data = count > 0;
+  // The Web Admin preview scales the graph's texts with the card height
+  // (admin-graph.js: 7.5 % hour marks, 13 % readouts); the panel takes the
+  // nearest built-in size of the same fractions, so the two look alike.
+  const uint8_t mark_size = graph_font_size(tile_h, 0.075f);
+  const uint8_t readout_size = graph_font_size(tile_h, 0.13f);
+  if (mark_size != widgets.mark_font_size || readout_size != widgets.readout_font_size) {
+    widgets.mark_font_size = mark_size;
+    widgets.readout_font_size = readout_size;
+    const lv_font_t* mark_font = ui_font_for_size(mark_size);
+    const lv_font_t* readout_font = ui_font_for_size(readout_size);
+    for (uint8_t i = 0; i < kHourLabels; ++i) {
+      if (widgets.hour_labels[i]) {
+        lv_obj_set_style_text_font(widgets.hour_labels[i], mark_font, 0);
+      }
+    }
+    for (uint8_t i = 0; i < kTempLabels; ++i) {
+      if (widgets.temp_labels[i]) {
+        lv_obj_set_style_text_font(widgets.temp_labels[i], readout_font, 0);
+      }
+    }
+  }
   if (widgets.chart) {
     if (has_data) lv_obj_remove_flag(widgets.chart, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(widgets.chart, LV_OBJ_FLAG_HIDDEN);
@@ -973,11 +1025,15 @@ void update_weather_graph_tile_state(GridType grid_type, uint8_t grid_index,
 
   // Layout first: the readouts and episode labels use its geometry.
   layout_graph(widgets, lv_obj_get_parent(widgets.chart), tile_w, tile_h, count);
-  const GraphBox box = graph_box(tile_w, tile_h);
+  const GraphBox box = graph_box(tile_w, tile_h, widgets.mark_font_size, widgets.readout_font_size);
 
   // The temperature above the line, every three hours. A readout sits above
   // its point and moves below it when the curve crosses its box.
-  const lv_coord_t temp_w = tile_layout::scale_480(76);
+  // The readout box grows with the height-based font (admin-graph.js draws
+  // them at the same fraction of the card).
+  const lv_coord_t temp_w = std::max<lv_coord_t>(
+      tile_layout::scale_480(76),
+      widgets.readout_font_size ? widgets.readout_font_size * 3 : 0);
   const lv_coord_t label_gap = tile_layout::scale_480(6);
   const int32_t span = max_tenths - min_tenths;
   auto sample_x_at = [&](uint16_t i) {

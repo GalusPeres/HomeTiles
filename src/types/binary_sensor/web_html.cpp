@@ -28,16 +28,14 @@ void append_binary_sensor_fields_html(String& html, const String& tab_id) {
   html += "<option value=\"3\">32</option><option value=\"4\">40</option>";
   html += "<option value=\"5\" hidden disabled>28</option></select>";
 
-  if (tab_id != "screensaver") {
-    html += "<label>";
-    html += tr.popup_open;
-    html += "</label><select id=\"";
-    html += tab_id;
-    html += "_binary_sensor_popup_open_mode\"><option value=\"1\">";
-    html += tr.short_press;
-    html += "</option><option value=\"0\">";
-    html += tr.long_press;
-    html += "</option></select>";
-  }
+  html += "<label>";
+  html += tr.popup_open;
+  html += "</label><select id=\"";
+  html += tab_id;
+  html += "_binary_sensor_popup_open_mode\"><option value=\"1\">";
+  html += tr.short_press;
+  html += "</option><option value=\"0\">";
+  html += tr.long_press;
+  html += "</option></select>";
   html += "</div>\n";
 }

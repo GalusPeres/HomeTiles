@@ -70,6 +70,8 @@ ${read('src/tiles/config/tile_config.h').match(/static constexpr uint8_t SENSOR_
 ${fn(read('src/tiles/runtime/tile_renderer_shared.h'),'apply_fractional_tile_geometry')}
 #include "src/types/climate/layout.h"
 #include "src/tiles/runtime/tile_press.h"
+#include "src/tiles/runtime/tile_glass.h"
+#include "src/tiles/runtime/tile_screen.h"
 ${strip(read('src/tiles/runtime/tile_icon_disc.h'))}
 ${strip(read('src/tiles/runtime/compact_sensor_layout.h'))}
 uint32_t tileDefaultBgColor(){return 0x1A1A1A;}

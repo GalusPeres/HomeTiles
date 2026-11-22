@@ -835,7 +835,7 @@ lv_obj_t* render_device_tile(lv_obj_t* parent, int col, int row, const Tile& til
     view->bar_width = static_cast<int16_t>(box.width);
     if (view->bar) {
       lv_obj_add_event_cb(view->bar, bar_draw_cb, LV_EVENT_DRAW_MAIN, view);
-      if (view->entity.length() && grid_type != GridType::SCREENSAVER) {
+      if (view->entity.length()) {
         // Only these codes: the bar's own DELETE comes after the card freed
         // the view.
         for (const lv_event_code_t code :
@@ -853,7 +853,7 @@ lv_obj_t* render_device_tile(lv_obj_t* parent, int col, int row, const Tile& til
   g_views = view;
   show(view);
 
-  if (view->entity.length() && grid_type != GridType::SCREENSAVER) {
+  if (view->entity.length()) {
     const lv_event_code_t popup_event =
         getTilePopupOpenMode(tile) == TILE_POPUP_OPEN_SHORT_PRESS ? LV_EVENT_SHORT_CLICKED : LV_EVENT_LONG_PRESSED;
     lv_obj_add_event_cb(card, on_card_event, popup_event, view);

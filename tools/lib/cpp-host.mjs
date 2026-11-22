@@ -17,8 +17,9 @@ export function findCompiler() {
 
 // files: {relativePath: text} written next to the harness (shim headers).
 // sources: repository-relative .cpp files compiled with the harness.
+// includes: library folders outside the repository (their warnings do not count).
 // Returns stdout of the harness, or null after printing SKIP.
-export function compileAndRun({label, harness, files = {}, sources = [], input = ''}) {
+export function compileAndRun({label, harness, files = {}, sources = [], includes = [], input = ''}) {
   const compiler = findCompiler();
   if (!compiler) {
     console.log(`SKIP: ${label} requires a C++ compiler`);
@@ -40,6 +41,7 @@ export function compileAndRun({label, harness, files = {}, sources = [], input =
       // newlib does not, and the production code validates lengths first.
       ...(process.platform === 'win32' ? ['-D_CRT_SECURE_NO_WARNINGS'] : []),
       '-I', tempRoot, '-I', repoRoot,
+      ...includes.flatMap(folder => ['-isystem', folder]),
       path.join(tempRoot, 'harness.cpp'),
       ...sources.map(source => path.join(repoRoot, source)),
       '-o', output

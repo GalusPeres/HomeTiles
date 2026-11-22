@@ -43,8 +43,10 @@ assert.match(search, /g_answer\.received = 0;\s*g_answer\.full = false;\s*g_answ
 // declarations; nothing it serves can change the next declaration (the loop
 // of b232-b235: a reported entity came back released, was dropped from the
 // next report, removed by the Bridge and reported again).
-assert.equal((search.match(/haBridgeConfig\./g) || []).length, 7,
-  'only the six capability checks and the own sensor slots read the Bridge configuration');
+assert.equal((search.match(/haBridgeConfig\./g) || []).length, 8,
+  'only the seven capability checks and the own sensor slots read the Bridge configuration');
+assert.match(search, /if \(list == "places"\) return haBridgeConfig\.supportsCameraSources\(\);/,
+  'the radar\'s places only from a Bridge that serves them (level 7)');
 assert.match(search, /if \(list == "vacuums"\) return haBridgeConfig\.supportsVacuums\(\);/,
   'vacuums only from a Bridge that serves them (level 6)');
 assert.match(search, /if \(list == "calendars"\) return haBridgeConfig\.supportsCalendars\(\);/,

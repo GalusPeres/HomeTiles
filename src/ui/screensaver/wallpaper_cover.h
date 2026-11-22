@@ -160,41 +160,72 @@ inline void finish_native_in_place(uint16_t* pixels, uint16_t w, uint16_t h, uin
   }
 }
 
+// The source column of every target column (cover_pixels' column_map).
+inline void fill_column_map(const Crop& crop, uint16_t image_w, uint16_t* column_map) {
+  for (uint32_t x = 0; x < image_w; ++x) {
+    column_map[x] = static_cast<uint16_t>(crop.x0 + (x * crop.w) / image_w);
+  }
+}
+
+// Target row y of cover_pixels from its source row.
+inline void cover_row(const uint16_t* src_row, const Crop& crop, uint16_t* dst_row, uint32_t y,
+                      uint16_t image_w, uint16_t image_h, uint16_t radius,
+                      const uint16_t* column_map, bool to_native) {
+  if (crop.w == image_w) {
+    memcpy(dst_row, src_row + crop.x0, static_cast<size_t>(image_w) * sizeof(uint16_t));
+  } else if (column_map) {
+    for (uint32_t x = 0; x < image_w; ++x) dst_row[x] = src_row[column_map[x]];
+  } else {
+    for (uint32_t x = 0; x < image_w; ++x) {
+      dst_row[x] = src_row[crop.x0 + (x * crop.w) / image_w];
+    }
+  }
+  const bool rounded = radius != 0 && image_w >= radius * 2 && image_h >= radius * 2;
+  if (rounded && (y < radius || y >= static_cast<uint32_t>(image_h - radius))) {
+    for (uint32_t x = 0; x < radius; ++x) {
+      dst_row[x] = blend_swapped_rgb565_with_black(
+          dst_row[x], rounded_pixel_coverage(x, y, image_w, image_h, radius));
+    }
+    for (uint32_t x = image_w - radius; x < image_w; ++x) {
+      dst_row[x] = blend_swapped_rgb565_with_black(
+          dst_row[x], rounded_pixel_coverage(x, y, image_w, image_h, radius));
+    }
+  }
+  if (to_native) swap_row(dst_row, image_w);
+}
+
 inline void cover_pixels(const uint16_t* src, uint16_t src_w, const Crop& crop,
                          uint16_t* dst, uint32_t dst_stride,
                          uint16_t image_w, uint16_t image_h, uint16_t radius,
                          uint16_t* column_map, bool to_native = false) {
-  const bool copy_rows = crop.w == image_w;
-  if (column_map && !copy_rows) {
-    for (uint32_t x = 0; x < image_w; ++x) {
-      column_map[x] = static_cast<uint16_t>(crop.x0 + (x * crop.w) / image_w);
-    }
-  }
-  const bool rounded = radius != 0 && image_w >= radius * 2 && image_h >= radius * 2;
+  if (column_map && crop.w != image_w) fill_column_map(crop, image_w, column_map);
   for (uint32_t y = 0; y < image_h; ++y) {
     const uint32_t sy = crop.y0 + (y * crop.h) / image_h;
-    const uint16_t* src_row = src + static_cast<size_t>(sy) * src_w;
-    uint16_t* dst_row = dst + static_cast<size_t>(y) * dst_stride;
-    if (copy_rows) {
-      memcpy(dst_row, src_row + crop.x0, static_cast<size_t>(image_w) * sizeof(uint16_t));
-    } else if (column_map) {
-      for (uint32_t x = 0; x < image_w; ++x) dst_row[x] = src_row[column_map[x]];
-    } else {
-      for (uint32_t x = 0; x < image_w; ++x) {
-        dst_row[x] = src_row[crop.x0 + (x * crop.w) / image_w];
-      }
-    }
-    if (rounded && (y < radius || y >= static_cast<uint32_t>(image_h - radius))) {
-      for (uint32_t x = 0; x < radius; ++x) {
-        dst_row[x] = blend_swapped_rgb565_with_black(
-            dst_row[x], rounded_pixel_coverage(x, y, image_w, image_h, radius));
-      }
-      for (uint32_t x = image_w - radius; x < image_w; ++x) {
-        dst_row[x] = blend_swapped_rgb565_with_black(
-            dst_row[x], rounded_pixel_coverage(x, y, image_w, image_h, radius));
-      }
-    }
-    if (to_native) swap_row(dst_row, image_w);
+    cover_row(src + static_cast<size_t>(sy) * src_w, crop, dst + static_cast<size_t>(y) * dst_stride, y,
+              image_w, image_h, radius, column_map, to_native);
+  }
+}
+
+// cover_pixels with the source in the target's own buffer (the screensaver's
+// picture slot, image_screensaver.cpp): rows written from the bottom up, each
+// source row first taken into `row` (src_w pixels). Possible when no source
+// row is overwritten before its last use: the crop starts at the top and is
+// stretched or kept vertically (every target row y shows source row <= y),
+// and the source rows are no wider than the target's, as for a 16:9 picture
+// on a 16:10 screen.
+inline bool cover_in_place_ok(const Crop& crop, uint16_t src_w, uint16_t image_w, uint16_t image_h) {
+  return crop.y0 == 0 && crop.h <= image_h && src_w <= image_w;
+}
+
+inline void cover_in_place(uint16_t* pixels, uint16_t src_w, const Crop& crop,
+                           uint16_t image_w, uint16_t image_h, uint16_t radius,
+                           uint16_t* column_map, uint16_t* row, bool to_native = false) {
+  if (column_map && crop.w != image_w) fill_column_map(crop, image_w, column_map);
+  for (uint32_t y = image_h; y-- > 0;) {
+    const uint32_t sy = crop.y0 + (y * crop.h) / image_h;
+    memcpy(row, pixels + static_cast<size_t>(sy) * src_w, static_cast<size_t>(src_w) * sizeof(uint16_t));
+    cover_row(row, crop, pixels + static_cast<size_t>(y) * image_w, y, image_w, image_h, radius,
+              column_map, to_native);
   }
 }
 

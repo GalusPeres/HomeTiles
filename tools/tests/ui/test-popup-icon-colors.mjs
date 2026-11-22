@@ -77,7 +77,7 @@ for (const file of ['src/types/climate/renderer.cpp', 'src/types/cover/renderer.
     `${file} keeps the global tile color`);
 }
 assert.ok(read('src/types/climate/renderer.cpp').includes('init.bg_color = tileDefaultBgColor();'));
-assert.match(read('src/tiles/runtime/tile_icon_source.cpp'), /void forget_popup_source\(lv_obj_t\* obj\) \{[^}]*?popup_surface::g_open_surface = ui_theme::kThemeSurface;\s*remember_popup_source\(nullptr\);/);
+assert.match(read('src/tiles/runtime/tile_icon_source.cpp'), /void forget_popup_source\(lv_obj_t\* obj\) \{[^}]*?popup_surface::g_open_surface = ui_theme::kThemeSurface;\s*popup_surface::g_open_screen = tile_screen::of\(obj\);\s*popup_follow_screen\(\);\s*remember_popup_source\(nullptr\);/);
 // Weather and Media pass the tile icon's color to the popup header icon.
 const weatherOpener = read('src/types/weather/renderer.cpp');
 assert.ok(weatherOpener.includes('init.icon_color = lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFF;'),

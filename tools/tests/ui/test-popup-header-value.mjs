@@ -68,7 +68,14 @@ for (const file of ['src/ui/popups/sensor/sensor_popup.cpp', 'src/ui/popups/ener
   for (const call of calls)
     assert.ok(call.count === 7 && /nullptr, g_ctx->state_label$/.test(call.args), 'PIN popup passes its state holder');
 }
-for (const popup of ['light', 'climate', 'cover', 'camera', 'weather']) {
+// The Camera popup: "Live" or the shown picture's time.
+{
+  const calls = shellCalls('src/ui/popups/camera/camera_popup.cpp');
+  assert.ok(calls.length === 2, 'Camera popup opening and revealing the skipped popup');
+  for (const call of calls)
+    assert.ok(call.count === 7 && /nullptr, (g_camera_popup|ctx)->value_label$/.test(call.args), 'Camera popup passes its value holder');
+}
+for (const popup of ['light', 'climate', 'cover', 'weather']) {
   const file = `src/ui/popups/${popup}/${popup}_popup.cpp`;
   for (const call of shellCalls(file)) assert.ok(call.count <= 6, `${popup} keeps the classic header`);
 }

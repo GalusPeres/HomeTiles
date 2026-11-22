@@ -15,8 +15,14 @@ const config = read('src/ui/screensaver/screensaver_config.cpp');
 for (const marker of ['loaded.theme = static_cast<uint8_t>(constrain(doc["theme"] | 2, 0, 2));',
   'doc["theme"] = data_.theme;', 'if (data_.theme > 2) data_.theme = 2;']) assert.ok(config.includes(marker), marker);
 const renderer = read('src/tiles/runtime/tile_renderer.cpp');
-assert.match(renderer, /if \(grid_type == GridType::SCREENSAVER\) \{\s*const uint8_t theme = screensaverConfig\.get\(\)\.theme;\s*return theme == 0 \? tile_surface::kDark : theme == 1 \? tile_surface::kLight : tile_surface::kNone;/,
-  'the screensaver tiles draw on the chosen surface');
+// Its tiles draw on the chosen design as their screen (tile_screen.h): the
+// grid carries it, every tile renders on it (user 2026-11-02, as a Light or
+// Dark surface of their own they never filled).
+const saver = read('src/ui/screensaver/image_screensaver.cpp');
+assert.match(saver, /const uint8_t design = screensaverConfig\.get\(\)\.theme;\n  tile_screen::set\(st->slot_grid, design <= 1 \? static_cast<int8_t>\(design\) : -1\);/,
+  'the screensaver grid carries the chosen design');
+assert.match(renderer, /grid_type == GridType::SCREENSAVER \? tile_screen::of\(parent\) : -1\);/,
+  'the screensaver tiles draw on the chosen design');
 const handler = read('src/web/server/handlers/web_admin_screensaver.cpp');
 assert.ok(handler.includes('const uint8_t old_theme = before.theme;') &&
   handler.includes('if (after.theme != old_theme) image_screensaver_tiles_changed();'), 'an open screensaver draws its tiles again');
@@ -40,7 +46,7 @@ const context = vm.createContext({
   document: {getElementById: id => id === 'screensaverGrid' ? {dataset: {ssTheme: context.theme}} : null},
   theme: '0',
 });
-vm.runInContext(['tileSurfaceOf'].map(extractDeliveredFunction).join('\n'), context);
+vm.runInContext(['screensaverDesign', 'tileSurfaceOf'].map(extractDeliveredFunction).join('\n'), context);
 for (const [theme, surface] of [['0', 'dark'], ['1', 'light'], ['2', '']]) {
   context.theme = theme;
   assert.equal(context.tileSurfaceOf('screensaver', 'sensor', 0, '', '1'), surface, `design ${theme}`);

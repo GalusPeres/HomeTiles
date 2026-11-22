@@ -3056,7 +3056,7 @@ async function saveGestureEdge(select) {
   // Lists the Bridge searches (entity_search.py LIST_DOMAINS).
   const ENTITY_REMOTE_LISTS = new Set(['sensors', 'binary_sensors', 'numbers', 'selects', 'datetimes',
     'weathers', 'switches', 'media', 'climates', 'covers', 'cameras', 'images', 'locks', 'alarm_panels', 'fans',
-    'energy', 'scenes', 'calendars', 'vacuums']);
+    'energy', 'scenes', 'calendars', 'vacuums', 'places']);
   const ENTITY_REMOTE_DELAY_MS = 250;
   const ENTITY_REMOTE_POLL_MS = 120;
   const ENTITY_REMOTE_TIMEOUT_MS = 5000;
@@ -3133,16 +3133,27 @@ async function saveGestureEdge(select) {
     return name.slice(prefix.length).trim() || name;
   }
 
+  // Home Assistant puts the device name in front of an entity's own name.
+  // An entity named after its device reads it twice (Dreame vacuums are
+  // " L10s Ultra" with a leading space: "L10s Ultra  L10s Ultra"); the
+  // whole name then takes the device name once.
+  function entityPickerFullName(name, device) {
+    const whole = String(name || '').replace(/\s+/g, ' ').trim();
+    const own = entityPickerShortName(whole, device);
+    return own !== whole && own.toLowerCase() === String(device || '').trim().toLowerCase() ? own : whole;
+  }
+
   function entityPickerFromRemote(item) {
     const value = String(item?.v || '');
-    const name = String(item.t || '') || titleFromEntity(value) || value;
+    const name = entityPickerFullName(item.t, item.d) || titleFromEntity(value) || value;
     const entry = {
       value,
       name,
       label: entityPickerShortName(name, item.d),
       icon: normalizeMdiIconName(item.i || ''),
       entity: value,
-      context: entityPickerContext(item.a, item.d),
+      // A town of the radar's place search: its region and country.
+      context: value.startsWith('geo:') ? [item.a, item.d].filter(Boolean).join(', ') : entityPickerContext(item.a, item.d),
       remote: true
     };
     if (value) entityRemoteInfo.set(value, entry);
@@ -3569,6 +3580,8 @@ async function saveGestureEdge(select) {
     const tabs = entityPickerPopover?.querySelector('.entity-picker-tabs');
     const open = entityPickerOpen;
     if (!tabs || !open) return;
+    // The radar's places have no Recent or Favorites.
+    tabs.style.display = open.input.dataset.entityPicker === 'places' ? 'none' : '';
     tabs.innerHTML = ENTITY_PICKER_TABS.map(([tab, icon, label]) =>
       '<button type="button" class="icon-picker-choice entity-picker-tab' + (open.tab === tab ? ' selected' : '') +
       '" role="tab" aria-selected="' + (open.tab === tab ? 'true' : 'false') + '" data-tab="' + tab + '">' +
@@ -3586,7 +3599,7 @@ async function saveGestureEdge(select) {
     // All waits for the Bridge; Recent and Favorites show their rows at once.
     const all = open.tab === 'all';
     // Without a Web Admin password the Bridge finds only released entities.
-    if (foot) foot.hidden = !(open.remote === 'ready' && !open.full);
+    if (foot) foot.hidden = !(open.remote === 'ready' && !open.full) || open.input.dataset.entityPicker === 'places';
     // Nothing of the Bridge's list is there yet: the list waits at full size
     // instead of showing the panel's short list first and then growing.
     const waiting = all && entityPickerBelowWaits();
@@ -3616,7 +3629,7 @@ async function saveGestureEdge(select) {
     const current = open.input.value;
     const line = '<div class="entity-picker-divider" role="separator"></div>';
     list.innerHTML = rows.map((entry, index) => {
-      const kind = entityKindLabel(entry.entity);
+      const kind = (typeof cameraPickerKind === 'function' && cameraPickerKind(entry)) || entityKindLabel(entry.entity);
       return (index && index === rows.split ? line : '') +
         '<div class="entity-picker-item' + (index === open.active ? ' active' : '') +
         (entry.value === current ? ' selected' : '') + '" role="option" aria-selected="' +
@@ -3636,6 +3649,8 @@ async function saveGestureEdge(select) {
     if (!open) return;
     const apply = data => {
       open.local = entityPickerEntries(data, open.input.dataset.entityPicker);
+      // A radar place by hand (types/camera/admin.js).
+      if (open.input.dataset.entityPicker === 'places') open.local = [cameraOwnCoordinatesEntry()];
       open.state = 'ready';
       // Without own entities the list opens on All.
       if (!open.local.length && !open.tabChosen) open.tab = 'all';
@@ -3717,7 +3732,8 @@ async function saveGestureEdge(select) {
     entityPickerPopover.querySelector('.entity-picker-foot span').textContent = t('entityPickerReleased');
     entityPickerPopover.querySelector('.entity-picker-password').textContent = t('webAuthSet');
     entityPickerOpen = { input, local: [], entries: [], query: '', active: 0, state: 'loading',
-      remote: null, full: false, more: false, offset: 0, paging: false, tab: 'favorites', tabChosen: false };
+      remote: null, full: false, more: false, offset: 0, paging: false,
+      tab: input.dataset.entityPicker === 'places' ? 'all' : 'favorites', tabChosen: false };
     const field = entityPickerControl(input)?.querySelector('.entity-picker-field');
     field?.classList.add('open');
     field?.setAttribute('aria-expanded', 'true');
@@ -4022,7 +4038,7 @@ async function saveGestureEdge(select) {
   function iconPickerCurrent(open) {
     const shown = open.button?.dataset.iconValue;
     const raw = String(shown ?? document.getElementById(open.input)?.value ?? '').trim();
-    return !open.rule && isExplicitlyDisabledValue(raw) ? 'none' : normalizeMdiIconName(raw);
+    return (!open.rule || open.entry) && isExplicitlyDisabledValue(raw) ? 'none' : normalizeMdiIconName(raw);
   }
 
   function iconPickerCellsHtml(from, to) {
@@ -4050,11 +4066,12 @@ async function saveGestureEdge(select) {
       '<span class="entity-picker-context">' + escapeHtml(hint) + '</span></span></button>';
     // Home's head always shows its circle: no "No icon" there, nor for a
     // rule, whose Automatic keeps the tile's own icon.
-    const none = open.rule || document.getElementById(open.tab + '_tile_icon')?.dataset.autoIcon
+    // A Camera tile's entry has both, like a tile (types/camera/admin.js).
+    const none = (open.rule && !open.entry) || (!open.entry && document.getElementById(open.tab + '_tile_icon')?.dataset.autoIcon)
       ? '' : choice('none', 'cancel', t('iconPickerNone'), t('iconPickerNoneHint'));
     let html = open.query ? '' : '<div class="icon-picker-choices' + (none ? '' : ' single') + '">' +
-      choice('', tileAutomaticIcon(open.tab), t('iconPickerAuto'),
-        t(open.rule ? 'iconPickerRuleHint' : 'iconPickerAutoHint')) + none + '</div>';
+      choice('', open.entry ? open.button.dataset.iconAuto : tileAutomaticIcon(open.tab), t('iconPickerAuto'),
+        t(open.rule && !open.entry ? 'iconPickerRuleHint' : 'iconPickerAutoHint')) + none + '</div>';
     if (open.state === 'loading') {
       html += '<div class="entity-picker-loading"><div></div><div></div><div></div></div>';
     } else if (open.state === 'failed') {
@@ -4128,7 +4145,8 @@ async function saveGestureEdge(select) {
     const open = iconPickerOpen;
     // The tile head's row, or a rule's section across the panel at the
     // height of its button.
-    const row = !open ? null : open.rule ? open.button?.closest('.icon-color-section')
+    const row = !open ? null : open.entry ? open.button?.closest('.tile-head-row')
+      : open.rule ? open.button?.closest('.icon-color-section')
       : document.getElementById(open.tab + '_tile_title')?.closest('.tile-head-row');
     if (!row || !iconPickerPopover) return;
     const pop = iconPickerPopover;
@@ -4139,7 +4157,7 @@ async function saveGestureEdge(select) {
     }
     pop.classList.remove('sheet');
     const across = row.getBoundingClientRect();
-    const own = open.rule ? open.button.getBoundingClientRect() : across;
+    const own = open.rule && !open.entry ? open.button.getBoundingClientRect() : across;
     const rect = { left: across.left, width: across.width, top: own.top, bottom: own.bottom };
     const below = window.innerHeight - rect.bottom - 12;
     const above = rect.top - 12;
@@ -4170,7 +4188,7 @@ async function saveGestureEdge(select) {
     const rule = !!button;
     if (!button) button = document.getElementById(tab + '_tile_icon_picker');
     iconPickerOpen = { tab, input: rule ? button.dataset.iconInput : tab + '_tile_icon', button, rule,
-      query: '', matches: [], shown: 0, active: 0, state: 'loading' };
+      entry: !!button?.dataset.iconEntry, query: '', matches: [], shown: 0, active: 0, state: 'loading' };
     button?.classList.add('open');
     button?.setAttribute('aria-expanded', 'true');
     iconPickerPopover.classList.add('open');
@@ -4220,7 +4238,7 @@ async function saveGestureEdge(select) {
       }
       return;
     }
-    const button = target?.closest?.('.tile-icon-picker');
+    const button = target?.closest?.('.tile-icon-picker:not([data-icon-input])');
     if (button) {
       const tab = tileHeadTab(button);
       if (iconPickerOpen?.button === button) closeIconPicker(true);
@@ -4230,6 +4248,7 @@ async function saveGestureEdge(select) {
     const ruleButton = target?.closest?.('button[data-icon-input]');
     if (ruleButton) {
       const tab = ruleButton.closest('[data-tab]')?.dataset.tab || '';
+      if (typeof closeEntityPicker === 'function') closeEntityPicker(false);
       if (iconPickerOpen?.button === ruleButton) closeIconPicker(true);
       else if (tab) openIconPicker(tab, ruleButton);
       return;
@@ -4472,6 +4491,12 @@ async function saveGestureEdge(select) {
 
     for (const [key, value] of Object.entries(snapshot || {})) {
       if (key === '_dirty' || key === '_rev' || key === 'icon' || key === 'color' || key === 'bg_color_default' || key === 'col' || key === 'row' || key === 'span_w' || key === 'span_h' || key === 'type' || key === 'title') continue;
+      if (key === 'sensor_decimals' && String(value ?? '').trim() === '') {
+        // An empty decimals field shows the value as it comes (-1 as the server
+        // sends it, 0xFF on the panel), never 0: "4, 7, 9m" became "4" (#157).
+        tile[key] = -1;
+        continue;
+      }
       if (numericFields.includes(key)) {
         const num = Number(value);
         tile[key] = Number.isFinite(num) ? num : value;
@@ -4524,7 +4549,8 @@ async function saveGestureEdge(select) {
       tile.sensor_decimals = Math.max(0, CAMERA_FITS.indexOf(String(snapshot.camera_fit)));
       tile.image_slideshow_sec = cameraEvery(snapshot.camera_every);
       tile.key_code = cameraTransparency(snapshot.camera_transparency);
-      tile.key_modifier = cameraOptionFlags({head: snapshot.camera_head, tap: snapshot.camera_tap});
+      tile.key_modifier = cameraOptionFlags({head: snapshot.camera_head, tap: snapshot.camera_tap, shows: snapshot.camera_shows});
+      tile.camera_entries = snapshot.camera_entries || '';
     }
     for (const kind of ['lock', 'alarm', 'fan', 'vacuum']) {
       if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, kind + '_entity')) tile.sensor_entity = snapshot[kind + '_entity'] || '';
@@ -7039,7 +7065,7 @@ async function saveGestureEdge(select) {
   }
 
   // New tiles start as 1x1. The 1x0.5 slot is offered only where 1x1 does not
-  // fit; choosing a type that needs more grows it (grownNewTileLayout).
+  // fit; choosing a type that needs more grows it (grownTileLayout).
   const FREE_SLOT_SIZES = [[1, 1], [1, 0.5]];
 
   // Spot of the new (still empty) tile open in the editor: {tab, index, layout}.
@@ -7058,12 +7084,16 @@ async function saveGestureEdge(select) {
     return [1, supportsHalfSize(type) ? 0.5 : 1];
   }
 
-  // Layout a new half-height tile grows to for a type that needs more room:
-  // downwards first, then upwards, then left. Null when it does not fit.
-  function grownNewTileLayout(tab, type) {
-    if (!newTileSpot || newTileSpot.tab !== tab || newTileSpot.index !== currentTileIndex ||
-        !newTileSpot.layout) return null;
-    const base = newTileSpot.layout;
+  // Layout the shown tile takes for a type that needs more room
+  // (minimumTileSize): it grows from its place downwards first, then upwards,
+  // then left; a new tile from its free slot. Null when it does not fit: the
+  // type cannot be chosen there (a Media tile without a free 2x2 spot was
+  // stretched over its neighbours and could not be moved, user 2026-10-31).
+  function grownTileLayout(tab, type) {
+    const spot = newTileSpot && newTileSpot.tab === tab && newTileSpot.index === currentTileIndex
+      ? newTileSpot.layout : null;
+    const base = spot || getTileElementLayout(tab, currentTileIndex);
+    if (!base) return null;
     const [minW, minH] = minimumTileSize(type);
     if (base.span_w >= minW && base.span_h >= minH) return base;
     const spanW = Math.max(base.span_w, minW), spanH = Math.max(base.span_h, minH);
@@ -7752,7 +7782,6 @@ async function saveGestureEdge(select) {
     const climateSelect = document.getElementById(prefix + '_climate_entity');
     const coverSelect = document.getElementById(prefix + '_cover_entity');
     const coverPopupModeSelect = document.getElementById(prefix + '_cover_popup_open_mode');
-    const cameraSelect = document.getElementById(prefix + '_camera_entity');
     const climatePopupModeSelect = document.getElementById(prefix + '_climate_popup_open_mode');
     const climateSlotSelects = Array.from(
       { length: 6 },
@@ -7792,11 +7821,19 @@ async function saveGestureEdge(select) {
       const previousType = Number(tileEl?.dataset.type ?? 0);
       const nextType = Number(typeSelect.value);
       let currentLayout = getTileElementLayout(tab, currentTileIndex);
-      // A new tile grows from 1x0.5 to the smallest size the chosen type needs.
-      const grown = previousType === 0 && nextType !== 0 ? grownNewTileLayout(tab, nextType) : null;
-      if (grown && currentLayout && (grown.span_w !== currentLayout.span_w || grown.span_h !== currentLayout.span_h)) {
+      // The tile grows to the smallest size the chosen type needs. Without
+      // room for it the type is refused instead of stretching the tile over
+      // its neighbours (grownTileLayout).
+      const grown = nextType !== 0 && currentLayout ? grownTileLayout(tab, nextType) : null;
+      if (nextType !== 0 && currentLayout && !grown) {
+        typeSelect.value = String(previousType);
+        showNotification(t('pasteNoSpace'), false);
+        return;
+      }
+      if (grown && currentLayout && (grown.col !== currentLayout.col || grown.row !== currentLayout.row ||
+          grown.span_w !== currentLayout.span_w || grown.span_h !== currentLayout.span_h)) {
         applyLayoutInputsFromLayout(tab, grown, false);
-        newTileSpot.layout = grown;
+        if (newTileSpot && newTileSpot.tab === tab && newTileSpot.index === currentTileIndex) newTileSpot.layout = grown;
         if (tileEl) setTileGridPosition(tileEl, grown.col, grown.row, grown.span_w, grown.span_h);
         currentLayout = grown;
       }
@@ -8015,13 +8052,9 @@ async function saveGestureEdge(select) {
       updateDraft(tab);
       scheduleAutoSave(tab);
     });
-    bindLive(cameraSelect, 'change', 'cameraEntity', () => {
-      maybeFillTitleFromEntity(tab, '_camera_entity');
-      syncCameraFields(tab);
-      updateTilePreview(tab);
-      updateDraft(tab);
-      scheduleAutoSave(tab);
-    });
+    // The entries themselves bind once on the document (types/camera/admin.js).
+    bindLive(document.getElementById(prefix + '_camera_source'), 'change', 'cameraSource', () => cameraSourceChanged(tab));
+    bindLive(document.getElementById(prefix + '_camera_shows'), 'change', 'cameraShows', () => cameraShowsChanged(tab));
     // The picture options (types/camera/admin.js); the slider follows live.
     for (const [field, eventName] of [['camera_display', 'change'], ['camera_fit', 'change'],
                                       ['camera_every', 'change'], ['camera_transparency', 'input'],
@@ -8219,6 +8252,9 @@ async function saveGestureEdge(select) {
     // The edited tile draws with its surface's rules (tile_surface), set
     // below once its color is known; restored at the end.
     const surfaceSaved = globalThis.hometilesPreviewSurface;
+    const screenSaved = globalThis.hometilesPreviewScreen;
+    // A screensaver tile on the screensaver's own design (grid-preview.js).
+    globalThis.hometilesPreviewScreen = typeof previewScreenOf === 'function' ? previewScreenOf(tab) : undefined;
     let surfaceDrawn = null;
     try {
     if (currentTileIndex === -1) return;
@@ -8702,6 +8738,7 @@ async function saveGestureEdge(select) {
     }
     } finally {
       globalThis.hometilesPreviewSurface = surfaceSaved;
+      globalThis.hometilesPreviewScreen = screenSaved;
     }
     // Its tint changed the surface: drawn again on it from the start.
     const tileElem = currentTileIndex >= 0 ? document.getElementById(tab + '-tile-' + currentTileIndex) : null;
@@ -8896,6 +8933,9 @@ async function saveGestureEdge(select) {
         delete element.dataset.typeAuto;
       }
     };
+    // A Camera tile's titles and icons belong to its entries.
+    document.getElementById(tab + '_tile_title')?.closest?.('.tile-head-row')
+      ?.classList?.toggle('hidden', !!fields?.id?.endsWith('_camera_fields'));
     typeAuto(document.getElementById(tab + '_tile_title_auto'), 'autoTitle', fields?.dataset.autoTitle || '');
     typeAuto(document.getElementById(tab + '_tile_icon'), 'autoIcon', fields?.dataset.autoIcon || '');
     if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons(tab);
@@ -8924,13 +8964,12 @@ async function saveGestureEdge(select) {
       ? 1 : Number(document.getElementById(tab + '_tile_span_h')?.value || 1);
     // Half a row high only suits the half-size types.
     const halfHeight = h < 1;
-    // A new half-height tile may still take a larger type when it can grow.
-    const isNewTile = Number(getTilesData(tab)?.[currentTileIndex]?.type || 0) === 0;
     for (const option of typeEl.options) {
       if (option.dataset.sizeDisabled === '1') { option.disabled = false; delete option.dataset.sizeDisabled; }
       const type = Number(option.value);
-      const grows = isNewTile && type !== 0 && !!grownNewTileLayout(tab, type);
-      const blocked = type !== 0 && !grows && halfHeight && !supportsHalfSize(type);
+      // A type whose smallest size has no room here (Media 2x2, a whole cell
+      // on a half-height tile) cannot be chosen (grownTileLayout).
+      const blocked = type !== 0 && !grownTileLayout(tab, type);
       if (blocked && !option.disabled) {
         option.disabled = true; option.dataset.sizeDisabled = '1';
       }
@@ -10206,11 +10245,7 @@ async function saveGestureEdge(select) {
       if (tile.sensor_value_font !== undefined && tile.sensor_value_font !== null) {
         fd.append('sensor_value_font', tile.sensor_value_font);
       }
-      const isScreensaverTile =
-        Number(folderId) === Number(SCREENSAVER_FOLDER_ID);
-      const displayMode = isScreensaverTile
-        ? 0
-        : ((tile.sensor_display_mode !== undefined) ? tile.sensor_display_mode : (tile.sensor_gauge ? 1 : 0));
+      const displayMode = (tile.sensor_display_mode !== undefined) ? tile.sensor_display_mode : (tile.sensor_gauge ? 1 : 0);
       fd.append('sensor_display_mode', String(displayMode));
       if (tile.sensor_gauge_min !== undefined && tile.sensor_gauge_min !== null && String(tile.sensor_gauge_min).length > 0) {
         fd.append('sensor_gauge_min', tile.sensor_gauge_min);
@@ -10316,9 +10351,8 @@ async function saveGestureEdge(select) {
       if (tile.sensor_value_y_offset !== undefined && tile.sensor_value_y_offset !== null && String(tile.sensor_value_y_offset).length > 0) {
         fd.append('sensor_value_y_offset', tile.sensor_value_y_offset);
       }
-      // The bars below the header (2); the screensaver shows the value alone.
-      const screensaverEnergy = Number(folderId) === Number(SCREENSAVER_FOLDER_ID);
-      fd.append('sensor_display_mode', !screensaverEnergy && Number(tile.sensor_display_mode) === 2 ? '2' : '0');
+      // The bars below the header (2), also on the screensaver.
+      fd.append('sensor_display_mode', Number(tile.sensor_display_mode) === 2 ? '2' : '0');
     } else if (safeType === 28) {
       fd.append('flow_entities', tile.flow_entities || '');
       const bits = Number(tile.key_code) || 0;
@@ -10370,7 +10404,9 @@ async function saveGestureEdge(select) {
       }
     } else if (safeType === 18) {
       fd.append('camera_entity', tile.sensor_entity || tile.camera_entity || '');
+      fd.append('camera_entries', tile.camera_entries || '');
       const picture = cameraPictureOptionsOf(tile);
+      fd.append('camera_shows', picture.shows);
       fd.append('camera_display', picture.picture ? '1' : '0');
       fd.append('camera_fit', picture.fit);
       fd.append('camera_every', String(picture.every));
@@ -10553,7 +10589,7 @@ async function saveGestureEdge(select) {
     const tinted = icon[0] !== icon[1] || icon[1] !== icon[2];
     // The light theme shows every colored icon in its own color, on every
     // surface (tone_color::readable_icon).
-    if (panelThemeLight() && tinted) return icon;
+    if (designLight() && tinted) return icon;
     if (panelLight()) {
       // The icon's own color, like Home Assistant; only an icon without a
       // color (white, almost white, the text color) takes the icon grey.
@@ -10588,6 +10624,24 @@ async function saveGestureEdge(select) {
   // page's theme; each function reads it by itself).
   function panelThemeLight() {
     return typeof document !== 'undefined' && document.documentElement?.dataset?.panelTheme === 'light';
+  }
+  // ui_theme::g_screen (tile_screen.h): a screensaver tile follows the
+  // pages' rules of the screensaver's own design (data-ss-theme 0 dark,
+  // 1 light; Automatic the panel's theme). While a screensaver tile draws,
+  // globalThis.hometilesPreviewScreen holds that design; designLight()
+  // answers the theme's rules (filled tiles, real icon colors, frame lines)
+  // for it, panelThemeLight() stays the page's (its CSS tables).
+  function screensaverDesign() {
+    const theme = typeof document !== 'undefined' ? document.getElementById('screensaverGrid')?.dataset?.ssTheme : '';
+    return theme === '0' ? 0 : theme === '1' ? 1 : undefined;
+  }
+  function previewScreenOf(tab) {
+    return typeof isScreensaverTileTab === 'function' && isScreensaverTileTab(tab) ? screensaverDesign() : undefined;
+  }
+  function designLight() {
+    const screen = globalThis.hometilesPreviewScreen;
+    if (screen === 0 || screen === 1) return screen === 1;
+    return panelThemeLight();
   }
   function panelLight() {
     const surface = globalThis.hometilesPreviewSurface;
@@ -10693,10 +10747,11 @@ async function saveGestureEdge(select) {
   // its lightness; every other tile, and the screensaver, keeps the theme.
   function tileSurfaceOf(tab, previewKind, bgValue, iconColors, typeValue) {
     if (typeof isScreensaverTileTab === 'function' && isScreensaverTileTab(tab)) {
-      // The screensaver's own design (screensaver_config.h theme): Dark or
-      // Light for all its tiles, Automatic follows the panel.
-      const theme = document.getElementById('screensaverGrid')?.dataset.ssTheme;
-      return theme === '0' ? 'dark' : theme === '1' ? 'light' : '';
+      // The screensaver's own design (screensaver_config.h theme, its
+      // screen): Dark or Light for all its tiles, Automatic follows the
+      // panel. Drawn with that theme's CSS roles on the page.
+      const theme = screensaverDesign();
+      return theme === 0 ? 'dark' : theme === 1 ? 'light' : '';
     }
     if (!tileHasOwnColor(bgValue, iconColors, typeValue)) return '';
     const own = Number(bgValue) & 0xFFFFFF;
@@ -10706,10 +10761,12 @@ async function saveGestureEdge(select) {
   // tile_surface_rule_of() (tile_renderer.cpp): in the light theme a tile with
   // "Ausfuellen" is filled from the start; a rule row with its own "Fuellen"
   // changes a tile between the white and the filled look.
+  // The screensaver's tiles too, in its own design (user 2026-11-02).
   function tileFollowsTint(tab, previewKind, bgValue, iconColors, typeValue) {
-    if (typeof isScreensaverTileTab === 'function' && isScreensaverTileTab(tab)) return false;
+    const screen = previewScreenOf(tab);
+    const light = screen === 0 || screen === 1 ? screen === 1 : panelThemeLight();
     const rows = typeof iconColorRowsFill === 'function' && iconColorRowsFill(iconColors);
-    return panelThemeLight() && (tileFills(typeValue, iconColors) > 0 || rows) &&
+    return light && (tileFills(typeValue, iconColors) > 0 || rows) &&
       !tileHasOwnColor(bgValue, iconColors, typeValue);
   }
   // ui_surface_style frame_line(): a solid line, on the theme's plain card a
@@ -10724,7 +10781,7 @@ async function saveGestureEdge(select) {
     let line;
     if (card.every(v => v === 255)) line = [221, 221, 221];
     else if (card.every(v => v === 26)) line = [41, 41, 41];
-    else if (!panelThemeLight()) line = card.map(v => Math.floor((255 * 23 + v * 232) * 0x8081 / 0x800000));
+    else if (!designLight()) line = card.map(v => Math.floor((255 * 23 + v * 232) * 0x8081 / 0x800000));
     // frame_line_shown(): a filled card of the light theme (white words)
     // draws no line (user 2026-10-11, b391).
     else if (!toneLightSurface(card)) {
@@ -10758,7 +10815,7 @@ async function saveGestureEdge(select) {
   // ui_theme::unavailable_icon(): the light theme's one unavailable grey for
   // every domain, the dark theme each type's own `darkGrey`.
   function unavailableIconHex(darkGrey) {
-    return panelThemeLight() ? panelRoleHex('icon-unavailable', '#BDBDBD') : darkGrey;
+    return designLight() ? panelRoleHex('icon-unavailable', '#BDBDBD') : darkGrey;
   }
   // tone_color::no_color(): white, almost white or grey-white.
   function toneNoColor(rgb) {
@@ -10842,9 +10899,12 @@ async function saveGestureEdge(select) {
     if (!tileElem) return;
     // The tile's surface rules (tile_surface) while its colors are computed.
     const surfaceSaved = globalThis.hometilesPreviewSurface;
+    const screenSaved = globalThis.hometilesPreviewScreen;
     const surfaceMode = typeof surfaceTheme === 'function' ? surfaceTheme(tileElem.dataset?.surface || '') : -1;
     // 0 dark, 1 light, 2 a filled tile (ui_theme::kDarkTinted): its rules everywhere.
     if (surfaceMode >= 0) globalThis.hometilesPreviewSurface = surfaceMode;
+    // A screensaver tile on the screensaver's own design.
+    globalThis.hometilesPreviewScreen = tileElem.closest?.('.screensaver-tile-grid') ? screensaverDesign() : undefined;
     try {
     // Cut-outs in the card's color (the Media play glyph,
     // tile_icon_disc::refresh_cutouts) follow the card after every tint.
@@ -10873,7 +10933,7 @@ async function saveGestureEdge(select) {
       if (choice && toneNoColor(given)) choice = null;
       // White light fills in the neutral grey (tile_icon_source with_white):
       // the light theme's filled tiles, every tile of the dark theme (#130).
-      if (!choice && given && (tileElem.dataset.followTint === '1' || !panelThemeLight()) && toneNoColor(given) &&
+      if (!choice && given && (tileElem.dataset.followTint === '1' || !designLight()) && toneNoColor(given) &&
           toneOklch(given).L <= 0.95) {
         choice = { color: givenHex.toUpperCase(), percent: fill };
       }
@@ -10997,6 +11057,7 @@ async function saveGestureEdge(select) {
     }
     } finally {
       globalThis.hometilesPreviewSurface = surfaceSaved;
+      globalThis.hometilesPreviewScreen = screenSaved;
     }
   }
   // Mirrors tileBgColorFollowsDefault(): an unset color and the built-in
@@ -11256,9 +11317,12 @@ async function saveGestureEdge(select) {
       delete el.dataset.neutralIdle;
     }
     const surfaceSaved = globalThis.hometilesPreviewSurface;
+    const screenSaved = globalThis.hometilesPreviewScreen;
     const surfaceMode = typeof surfaceTheme === 'function' ? surfaceTheme(surface) : -1;
     // 0 dark, 1 light, 2 a filled tile (ui_theme::kDarkTinted): its rules everywhere.
     if (surfaceMode >= 0) globalThis.hometilesPreviewSurface = surfaceMode;
+    // A screensaver tile on the screensaver's own design.
+    globalThis.hometilesPreviewScreen = previewScreenOf(tab);
     try {
     const metaValues = sensorMeta?.values || {};
     const metaUnits = sensorMeta?.units || {};
@@ -11549,6 +11613,7 @@ async function saveGestureEdge(select) {
     }
     } finally {
       globalThis.hometilesPreviewSurface = surfaceSaved;
+      globalThis.hometilesPreviewScreen = screenSaved;
     }
     // Its tint changed the surface: drawn again on it from the start.
     if (!forcedSurface && el.dataset.surface === 'jewel' && surface !== 'jewel') {
@@ -19053,7 +19118,7 @@ function maybeFillTitleFromSwitch(tab) {
   // segmented choice.
   const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode', 'climate_view', 'media_layout',
     'cover_value_font', 'lock_value_font', 'alarm_value_font', 'fan_value_font', 'vacuum_value_font', 'vacuum_layout',
-    'camera_display', 'camera_fit',
+    'camera_source', 'camera_display', 'camera_fit',
     'camera_head', 'camera_tap', 'switch_orientation', 'fan_orientation', 'sensor_layout', 'sensor_form',
     'sensor_orientation', 'sensor_ring', 'sensor_place', 'sensor_value_font', 'sensor_popup_open_mode',
     'energy_value_font', 'energy_display_mode', 'energy_popup_open_mode', 'weather_graph_day'];
@@ -23531,6 +23596,8 @@ function maybeFillTitleFromMedia(tab) {
   const CAMERA_TAP_FULL = 1;
   const CAMERA_HEAD_LIGHT = 2;
   const CAMERA_HEAD_DARK = 4;
+  // With several entries the tile shows the one last chosen in the popup.
+  const CAMERA_LAST_CHOSEN = 8;
 
   function cameraEvery(value) {
     const seconds = Math.round(Number(value));
@@ -23553,7 +23620,8 @@ function maybeFillTitleFromMedia(tab) {
         every: cameraEvery(tile.camera_every),
         transparency: cameraTransparency(tile.camera_transparency),
         head: ['dark', 'light'].includes(tile.camera_head) ? tile.camera_head : 'auto',
-        tap: String(tile.camera_tap) === '1' ? '1' : '0'
+        tap: String(tile.camera_tap) === '1' ? '1' : '0',
+        shows: tile.camera_shows === 'last' ? 'last' : ''
       };
     }
     const flags = Number(tile?.key_modifier) || 0;
@@ -23563,13 +23631,14 @@ function maybeFillTitleFromMedia(tab) {
       every: cameraEvery(tile?.image_slideshow_sec),
       transparency: cameraTransparency(tile?.key_code),
       head: (flags & CAMERA_HEAD_LIGHT) ? 'light' : (flags & CAMERA_HEAD_DARK) ? 'dark' : 'auto',
-      tap: (flags & CAMERA_TAP_FULL) ? '1' : '0'
+      tap: (flags & CAMERA_TAP_FULL) ? '1' : '0',
+      shows: (flags & CAMERA_LAST_CHOSEN) ? 'last' : ''
     };
   }
 
   // key_modifier of the options (picture.h kTapFullScreen, kHeadLight, kHeadDark).
   function cameraOptionFlags(options) {
-    return (options?.tap === '1' ? CAMERA_TAP_FULL : 0) |
+    return (options?.tap === '1' ? CAMERA_TAP_FULL : 0) | (options?.shows === 'last' ? CAMERA_LAST_CHOSEN : 0) |
       (options?.head === 'light' ? CAMERA_HEAD_LIGHT : options?.head === 'dark' ? CAMERA_HEAD_DARK : 0);
   }
 
@@ -23583,19 +23652,20 @@ function maybeFillTitleFromMedia(tab) {
       every: cameraEvery(value('camera_every')),
       transparency: cameraTransparency(value('camera_transparency')),
       head: ['dark', 'light'].includes(value('camera_head')) ? value('camera_head') : 'auto',
-      tap: value('camera_tap') === '1' ? '1' : '0'
+      tap: value('camera_tap') === '1' ? '1' : '0',
+      shows: value('camera_shows') === 'last' ? 'last' : ''
     };
   }
 
-  // The rows of a picture show only with "Picture"; the interval and what a
-  // tap opens only for a camera (an image entity sends each new picture at
-  // once and has no popup).
+  // The rows of a picture show only with "Picture"; the interval only with a Home
+  // Assistant camera in the list (an image entity sends each new picture at once,
+  // the Bridge's own cameras too).
   function syncCameraFields(tab) {
     const options = cameraPictureOptions(tab);
-    const entity = document.getElementById(tab + '_camera_entity')?.value || '';
+    const editor = cameraEditor(tab);
+    const camera = editor.source === 'h' && editor.rows.h.some(row => String(row.value).startsWith('camera.'));
     document.getElementById(tab + '_camera_picture_fields')?.classList.toggle('hidden', !options.picture);
-    document.getElementById(tab + '_camera_every_row')?.classList.toggle('hidden', !entity.startsWith('camera.'));
-    document.getElementById(tab + '_camera_tap_row')?.classList.toggle('hidden', entity.startsWith('image.'));
+    document.getElementById(tab + '_camera_every_row')?.classList.toggle('hidden', !camera);
     const output = document.getElementById(tab + '_camera_transparency_value');
     if (output) output.textContent = options.transparency + ' %';
     if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
@@ -23603,12 +23673,26 @@ function maybeFillTitleFromMedia(tab) {
 
   function loadCameraFields(tab, data) {
     loadIconColorFields(tab, data);
-    const el = document.getElementById(tab + '_camera_entity');
     const configured = data.sensor_entity || data.camera_entity || '';
-    if (el) {
-      el.value = configured;
-    }
     const options = cameraPictureOptionsOf(data);
+    // The record, or the one entity of a tile from before the entries.
+    const editor = cameraEditor(tab);
+    let rows = cameraParseRecord(data.camera_entries);
+    if (!rows.length && cameraEntryEntity('h', configured)) {
+      const title = document.getElementById(tab + '_tile_title')?.value || '';
+      const name = sensorMetaCache.names?.[configured] || titleFromEntity(configured) || '';
+      rows = [{ kind: 'h', value: configured, title: title === normalizeTileTitle(name) ? '' : title,
+        icon: document.getElementById(tab + '_tile_icon')?.value || '', name, line: configured }];
+    }
+    const source = rows.length ? cameraSourceOfKind(rows[0].kind)
+      : ['r', 'w'].includes(data.camera_source) ? data.camera_source : 'h';
+    editor.source = source;
+    editor.rows = { h: [], r: [], w: [] };
+    editor.rows[source] = rows;
+    editor.open = -1;
+    const shownAt = cameraValidRows(rows).findIndex(row => cameraEntryEntity(row.kind, row.value) === configured);
+    editor.shows = { h: 0, r: 0, w: 0 };
+    editor.shows[source] = options.shows === 'last' ? 'last' : Math.max(0, shownAt);
     const set = (field, value) => {
       const input = document.getElementById(tab + '_' + field);
       if (input) input.value = String(value);
@@ -23619,14 +23703,18 @@ function maybeFillTitleFromMedia(tab) {
     set('camera_transparency', options.transparency);
     set('camera_head', options.head);
     set('camera_tap', options.tap);
-    syncCameraFields(tab);
-    maybeFillTitleFromEntity(tab, '_camera_entity');
+    set('camera_source', source);
+    renderCameraEntries(tab);
+    cameraSyncTile(tab);
   }
   function saveCameraFields(tab, formData) {
     const entity =
       document.getElementById(tab + '_camera_entity')?.value || '';
     formData.append('camera_entity', entity);
     formData.append('sensor_entity', entity);
+    formData.append('camera_entries', document.getElementById(tab + '_camera_entries')?.value || '');
+    formData.append('camera_source', cameraEditor(tab).source);
+    formData.append('camera_shows', cameraEditor(tab).shows[cameraEditor(tab).source] === 'last' ? 'last' : '');
     const options = cameraPictureOptions(tab);
     formData.append('camera_display', options.picture ? '1' : '0');
     formData.append('camera_fit', options.fit);
@@ -23640,6 +23728,9 @@ function maybeFillTitleFromMedia(tab) {
     resetIconColorFields(tab);
     const el = document.getElementById(tab + '_camera_entity');
     if (el) el.value = '';
+    const entriesField = document.getElementById(tab + '_camera_entries');
+    if (entriesField) entriesField.value = '';
+    cameraEditors.delete(tab);
     const set = (field, value) => {
       const input = document.getElementById(tab + '_' + field);
       if (input) input.value = value;
@@ -23650,6 +23741,8 @@ function maybeFillTitleFromMedia(tab) {
     set('camera_transparency', '0');
     set('camera_head', 'auto');
     set('camera_tap', '0');
+    set('camera_source', 'h');
+    renderCameraEntries(tab);
     syncCameraFields(tab);
   }
 
@@ -23737,6 +23830,546 @@ function maybeFillTitleFromMedia(tab) {
                                    cameraTitleMetric(layout, text, title, scale));
     tileElem.classList.toggle('camera-head-shared', head.shared);
   }
+
+  // ---- The entries of a Camera tile (types/camera/camera_entries.h) ----
+  // One source for the whole tile, under it its entries, all built alike: a row
+  // that folds out in its own frame, one open at a time. The source's own field,
+  // then title and icon as in a tile's head; removing only in there. Adding only
+  // adds a row. The first or chosen entry fills the tile's own fields (the hidden
+  // <tab>_camera_entity, <tab>_tile_title, <tab>_tile_icon), so previews, drafts
+  // and saving work as for every tile.
+
+  const CAMERA_MAX_ENTRIES = 8;
+  // A radar's and a webcam's default color (mockup webcam-radar/radar-tall.html),
+  // a plain icon color the user can change.
+  const CAMERA_SOURCE_COLOR = '#29B6F6';
+  const CAMERA_OWN_COORDINATES = 'geo:own';
+  // The picker's kinds per source; camera_entries.h kHomeAssistant and so on.
+  const CAMERA_PLACE_KINDS = ['r', 'c'];
+  const cameraEditors = new Map();
+
+  function cameraText(key) {
+    return typeof CAMERA_TEXT === 'object' ? String(CAMERA_TEXT[key] ?? '') : '';
+  }
+
+  function cameraEditor(tab) {
+    if (!cameraEditors.has(tab)) {
+      cameraEditors.set(tab, { source: 'h', rows: { h: [], r: [], w: [] }, shows: { h: 0, r: 0, w: 0 }, open: -1 });
+    }
+    return cameraEditors.get(tab);
+  }
+
+  function cameraSourceOfKind(kind) {
+    return CAMERA_PLACE_KINDS.includes(kind) ? 'r' : kind === 'w' ? 'w' : 'h';
+  }
+
+  function cameraFnv1a(text) {
+    let hash = 2166136261;
+    for (const byte of new TextEncoder().encode(String(text))) {
+      hash = Math.imul(hash ^ byte, 16777619) >>> 0;
+    }
+    return hash >>> 0;
+  }
+
+  function cameraHex(hash) {
+    return hash.toString(16).padStart(8, '0');
+  }
+
+  function cameraCoordinates(value) {
+    const found = /^geo:(-?[0-9.]+),(-?[0-9.]+)$/.exec(String(value || ''));
+    if (!found) return null;
+    const lat = Number(found[1]);
+    const lon = Number(found[2]);
+    return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null;
+  }
+
+  function cameraHundredths(value) {
+    const number = Math.round(Math.abs(value) * 100);
+    return value < 0 && number ? 'm' + number : String(number);
+  }
+
+  function cameraHttpsAddress(value) {
+    const text = String(value || '');
+    return text.length > 8 && text.length <= 400 && text.startsWith('https://') && !/[\s"\\]/.test(text);
+  }
+
+  // camera_entries::entity_of: the entity id of an entry, '' when it names nothing.
+  function cameraEntryEntity(kind, value) {
+    const text = String(value || '');
+    if (kind === 'h') return /^(camera|image)\.[a-z0-9_]+$/.test(text) ? text : '';
+    if (kind === 'w') return cameraHttpsAddress(text) ? 'camera.ht_cam_' + cameraHex(cameraFnv1a(text)) : '';
+    if (kind === 'r' && text === 'zone.home') return 'camera.ht_radar_home';
+    if (kind === 'r' && text.startsWith('zone.')) {
+      const zone = text.slice(5);
+      if (!/^[a-z0-9_]+$/.test(zone)) return '';
+      return 'camera.ht_radar_zone_' + (zone.length <= 43 ? zone : cameraHex(cameraFnv1a(zone)));
+    }
+    if (kind !== 'r' && kind !== 'c') return '';
+    const place = cameraCoordinates(text);
+    return place ? 'camera.ht_radar_' + cameraHundredths(place.lat) + '_' + cameraHundredths(place.lon) : '';
+  }
+
+  function cameraEntryField(text, limit) {
+    return Array.from(String(text || '').replace(/[\u0000-\u001f]/g, '')).reduce((out, char) =>
+      new TextEncoder().encode(out + char).length <= limit ? out + char : out, '');
+  }
+
+  function cameraParseRecord(record) {
+    const rows = [];
+    for (const line of String(record || '').split('\n')) {
+      const [kind, value, title, icon, name, context] = line.split('\t');
+      if (!cameraEntryEntity(kind, value)) continue;
+      const row = { kind, value, title: title || '', icon: icon || '', name: name || '', line: context || '' };
+      if (kind === 'c') {
+        const place = cameraCoordinates(value);
+        row.lat = String(place.lat);
+        row.lon = String(place.lon);
+      }
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  // The source's rows that name something, one per entity.
+  function cameraValidRows(rows) {
+    const seen = new Set();
+    return rows.filter(row => {
+      const entity = cameraEntryEntity(row.kind, row.value);
+      if (!entity || seen.has(entity)) return false;
+      seen.add(entity);
+      return true;
+    }).slice(0, CAMERA_MAX_ENTRIES);
+  }
+
+  function cameraRecordOf(rows) {
+    return cameraValidRows(rows).map(row => [row.kind, row.value, cameraEntryField(row.title, 64), cameraEntryField(row.icon, 48),
+      cameraEntryField(row.name, 64), cameraEntryField(row.line, 64)].join('\t')).join('\n');
+  }
+
+  function cameraRowTitle(row) {
+    return row.title || row.name || '';
+  }
+
+  // The icon a row stands for without an own one, in the list and in the icon
+  // picker's Automatic.
+  function cameraRowAutoIcon(row) {
+    if (CAMERA_PLACE_KINDS.includes(row.kind)) return 'map-marker';
+    if (row.kind === 'w') return 'webcam';
+    const known = entityRemoteInfo.get(row.value)?.icon || normalizeMdiIconName(sensorMetaCache.icons?.[row.value] || '');
+    return known || (String(row.value).startsWith('image.') ? 'image' : 'video');
+  }
+
+  function cameraRowIcon(row) {
+    if (isExplicitlyDisabledValue(row.icon)) return 'cancel';
+    return normalizeMdiIconName(row.icon) || cameraRowAutoIcon(row);
+  }
+
+  // What the tile stores as its icon for this entry: on the panel a radar shows
+  // its own icon, a webcam its own, a Home Assistant entity its entity's
+  // (types/camera/renderer.cpp camera_entry_icon).
+  function cameraTileIcon(row) {
+    if (row.icon) return row.icon;
+    return CAMERA_PLACE_KINDS.includes(row.kind) ? 'weather-pouring' : row.kind === 'w' ? 'webcam' : '';
+  }
+
+  function cameraOwnCoordinatesEntry() {
+    return { value: CAMERA_OWN_COORDINATES, name: cameraText('ownCoordinates'), icon: 'target', entity: '',
+      context: cameraText('ownCoordinatesHint') };
+  }
+
+  // The kind at the right of a picker row.
+  function cameraPickerKind(entry) {
+    const value = String(entry?.value || '');
+    if (value === 'zone.home') return cameraText('placeHome');
+    if (value.startsWith('zone.')) return cameraText('kindZone');
+    if (value === CAMERA_OWN_COORDINATES) return '';
+    if (value.startsWith('geo:')) return cameraText('place');
+    if (value.startsWith('image.')) return cameraText('kindImage');
+    return '';
+  }
+
+  function cameraEntryBodyHtml(tab, editor, row, index) {
+    const id = tab + '_camera_entry';
+    const removeTitle = escapeHtml(cameraText('remove'));
+    const fieldLabel = (text, target) => '<div class="camera-entry-label"><label for="' + target + '">' + escapeHtml(text) +
+      '</label><button type="button" class="camera-entry-remove" data-camera-remove="' + index + '" aria-label="' + removeTitle +
+      '" title="' + removeTitle + '"><i class="mdi mdi-delete-outline"></i></button></div>';
+    let field = '';
+    if (editor.source === 'w') {
+      field = '<div>' + fieldLabel(cameraText('address'), id + '_url') + '<input type="url" id="' + id +
+        '_url" data-camera-url placeholder="https://" spellcheck="false" autocomplete="off" value="' + escapeHtml(row.value) + '">' +
+        '<div class="camera-entry-fail" id="' + id + '_fail" hidden>' + escapeHtml(cameraText('noPictureFound')) + '</div></div>';
+    } else {
+      const label = editor.source === 'r' ? cameraText('place') : cameraText('entity');
+      const value = row.kind === 'c' ? CAMERA_OWN_COORDINATES : row.value;
+      field = '<div>' + fieldLabel(label, id + '_value_picker') + '<input type="hidden" id="' + id +
+        '_value" data-entity-picker="' + (editor.source === 'r' ? 'places' : 'images') + '" value="' + escapeHtml(value) + '"></div>';
+      if (row.kind === 'c') {
+        field += '<div class="camera-entry-coords"><div><label for="' + id + '_lat">' + escapeHtml(cameraText('latitudeLabel')) +
+          '</label><input type="text" inputmode="decimal" id="' + id + '_lat" data-camera-coordinate value="' + escapeHtml(row.lat || '') +
+          '"></div><div><label for="' + id + '_lon">' + escapeHtml(cameraText('longitudeLabel')) +
+          '</label><input type="text" inputmode="decimal" id="' + id + '_lon" data-camera-coordinate value="' + escapeHtml(row.lon || '') +
+          '"></div></div><div class="camera-entry-fail" id="' + id + '_coord_fail" hidden></div>';
+      }
+    }
+    const none = isExplicitlyDisabledValue(row.icon);
+    return '<div class="camera-entry-body">' + field +
+      '<div class="tile-head-row"><div><div class="tile-title-label"><label for="' + id + '_title">' + escapeHtml(cameraText('title')) +
+      '</label><button type="button" class="tile-title-auto' + (row.title ? '' : ' on') + '" data-camera-auto aria-pressed="' +
+      (row.title ? 'false' : 'true') + '">' + escapeHtml(cameraText('auto')) + '</button></div><input type="text" id="' + id +
+      '_title" data-camera-title maxlength="64" value="' + escapeHtml(cameraRowTitle(row)) + '"></div><div><label for="' + id +
+      '_icon_button">' + escapeHtml(cameraText('icon')) + '</label><input type="hidden" id="' + id + '_icon" value="' + escapeHtml(row.icon) +
+      '"><button type="button" class="tile-icon-picker' + (none ? ' none' : '') + '" id="' + id + '_icon_button" data-icon-input="' + id +
+      '_icon" data-icon-entry="1" data-icon-auto="' + escapeHtml(cameraRowAutoIcon(row)) + '" aria-haspopup="listbox"><i class="mdi mdi-' +
+      escapeHtml(cameraRowIcon(row)) + '"></i></button></div></div></div>';
+  }
+
+  function cameraEntryPlaceholder(editor) {
+    return editor.source === 'w' ? cameraText('newWebcam') : t('entityPickerChoose');
+  }
+
+  function cameraEntryHtml(tab, editor, row, index) {
+    const open = editor.open === index;
+    const name = cameraRowTitle(row);
+    return '<div class="camera-entry" data-camera-entry="' + index + '"><div class="camera-entry-head" data-camera-toggle="' + index +
+      '"><span class="entity-picker-icon"><i class="mdi mdi-' + escapeHtml(cameraRowIcon(row)) + '"></i></span>' +
+      '<span class="entity-picker-text"><span class="entity-picker-name' + (name ? '' : ' camera-entry-empty') + '">' +
+      escapeHtml(name || cameraEntryPlaceholder(editor)) + '</span><span class="entity-picker-context">' + escapeHtml(row.line || '') +
+      '</span></span><i class="mdi mdi-pencil camera-entry-pen"></i></div>' +
+      (open ? cameraEntryBodyHtml(tab, editor, row, index) : '') + '</div>';
+  }
+
+  // The picker shows a chosen place by what the row knows of it.
+  function cameraTeachPicker(row) {
+    const value = row.kind === 'c' ? CAMERA_OWN_COORDINATES : row.value;
+    if (!value || row.kind === 'h') return;
+    const name = row.kind === 'c' ? cameraText('ownCoordinates') : row.name || value;
+    entityRemoteInfo.set(value, { value, name, label: name, icon: cameraRowAutoIcon(row), entity: value,
+      context: row.line || '', remote: true });
+  }
+
+  function renderCameraEntries(tab) {
+    const list = document.getElementById(tab + '_camera_list');
+    if (!list) return;
+    const editor = cameraEditor(tab);
+    const rows = editor.rows[editor.source];
+    const label = document.getElementById(tab + '_camera_list_label');
+    if (label) label.textContent = cameraText(editor.source === 'r' ? 'listPlaces' : editor.source === 'w' ? 'listWebcams' : 'entity');
+    const add = document.getElementById(tab + '_camera_add');
+    if (add) {
+      add.textContent = cameraText(editor.source === 'r' ? 'addPlace' : editor.source === 'w' ? 'addWebcam' : 'addEntity');
+      add.classList.toggle('hidden', rows.length >= CAMERA_MAX_ENTRIES);
+    }
+    if (editor.open >= rows.length) editor.open = -1;
+    const open = rows[editor.open];
+    if (open) cameraTeachPicker(open);
+    list.innerHTML = rows.map((row, index) => cameraEntryHtml(tab, editor, row, index)).join('');
+    if (typeof setupEntityPickers === 'function') setupEntityPickers(list);
+    cameraRenderShows(tab);
+    cameraWatchSources(tab);
+  }
+
+  // "The tile shows": only with more than one entry, the first by default.
+  function cameraRenderShows(tab) {
+    const editor = cameraEditor(tab);
+    const select = document.getElementById(tab + '_camera_shows');
+    const row = document.getElementById(tab + '_camera_shows_row');
+    if (!select) return;
+    const rows = editor.rows[editor.source];
+    const valid = cameraValidRows(rows);
+    row?.classList.toggle('hidden', valid.length < 2);
+    let shown = editor.shows[editor.source];
+    if (shown !== 'last' && !(shown < valid.length)) shown = 0;
+    editor.shows[editor.source] = shown;
+    select.innerHTML = valid.map((entry, index) => '<option value="' + index + '">' +
+      escapeHtml(cameraRowTitle(entry) || entry.value) + '</option>').join('') +
+      '<option value="last">' + escapeHtml(cameraText('showsLast')) + '</option>';
+    select.value = String(shown);
+  }
+
+  // The chosen entry into the tile's own fields, and every other derived field.
+  function cameraSyncTile(tab) {
+    const editor = cameraEditor(tab);
+    const valid = cameraValidRows(editor.rows[editor.source]);
+    const shown = editor.shows[editor.source];
+    const row = valid[shown === 'last' ? 0 : shown] || valid[0] || null;
+    const entity = row ? cameraEntryEntity(row.kind, row.value) : '';
+    const set = (suffix, value) => {
+      const input = document.getElementById(tab + suffix);
+      if (input && input.value !== value) input.value = value;
+    };
+    set('_camera_entity', entity);
+    set('_camera_entries', cameraRecordOf(editor.rows[editor.source]));
+    set('_tile_title', row ? normalizeTileTitle(cameraRowTitle(row)) : '');
+    set('_tile_icon', row ? cameraTileIcon(row) : '');
+    syncCameraFields(tab);
+  }
+
+  function cameraEntriesChanged(tab) {
+    cameraSyncTile(tab);
+    updateTilePreview(tab);
+    updateDraft(tab);
+    scheduleAutoSave(tab);
+  }
+
+  // Quelle: each source keeps its own rows while the panel is open; the default
+  // color follows a radar or a webcam unless another color was chosen.
+  function cameraSourceChanged(tab) {
+    const editor = cameraEditor(tab);
+    const source = ['r', 'w'].includes(document.getElementById(tab + '_camera_source')?.value)
+      ? document.getElementById(tab + '_camera_source').value : 'h';
+    if (source === editor.source) return;
+    editor.source = source;
+    editor.open = -1;
+    // Just picking the radar is enough: Home Assistant's home.
+    if (source === 'r' && !editor.rows.r.length) {
+      editor.rows.r.push({ kind: 'r', value: 'zone.home', title: '', icon: '', name: cameraText('placeHome'), line: 'Home Assistant' });
+    }
+    const color = document.getElementById(tab + '_tile_icon_color');
+    if (color && typeof setIconColorInput === 'function') {
+      const unset = color.dataset.unset !== '0';
+      if (source !== 'h' && unset) setIconColorInput(tab, CAMERA_SOURCE_COLOR);
+      else if (source === 'h' && !unset && String(color.value).toUpperCase() === CAMERA_SOURCE_COLOR) setIconColorInput(tab, '');
+      if (typeof syncIconColorFields === 'function') syncIconColorFields(tab);
+    }
+    renderCameraEntries(tab);
+    cameraEntriesChanged(tab);
+  }
+
+  function cameraShowsChanged(tab) {
+    const editor = cameraEditor(tab);
+    const value = document.getElementById(tab + '_camera_shows')?.value;
+    editor.shows[editor.source] = value === 'last' ? 'last' : Number(value) || 0;
+    cameraEntriesChanged(tab);
+  }
+
+  // A page without a picture, told by the Bridge (entity_search.h): asked while a
+  // webcam's details are open.
+  let cameraSourcesTimer = 0;
+  function cameraWatchSources(tab) {
+    window.clearTimeout(cameraSourcesTimer);
+    const editor = cameraEditor(tab);
+    if (editor.source !== 'w' || !editor.rows.w[editor.open]) return;
+    const ask = () => {
+      const fail = document.getElementById(tab + '_camera_entry_fail');
+      const row = editor.rows.w[editor.open];
+      if (!fail || !row || !row.value) return;
+      fetch('/api/camera_sources')
+        .then(res => (res.ok ? res.json() : null))
+        .then(status => {
+          const id = cameraEntryEntity('w', row.value).slice(7);
+          const current = document.getElementById(tab + '_camera_entry_fail');
+          if (!current || !id) return;
+          const state = status?.src?.[id];
+          current.textContent = cameraText(state === 'blocked' ? 'siteBlocked' : 'noPictureFound');
+          current.hidden = state !== 'none' && state !== 'blocked';
+        })
+        .catch(() => {});
+      cameraSourcesTimer = window.setTimeout(ask, 5000);
+    };
+    cameraSourcesTimer = window.setTimeout(ask, 300);
+  }
+
+  function cameraTabOf(element) {
+    return element?.closest?.('.camera-entries-wrap')?.dataset.tab || '';
+  }
+
+  // The row's head without drawing the open field again (typing keeps its focus).
+  function cameraShowRowHead(tab, index) {
+    const editor = cameraEditor(tab);
+    const row = editor.rows[editor.source][index];
+    const head = document.querySelector('#' + tab + '_camera_list [data-camera-toggle="' + index + '"]');
+    if (!row || !head) return;
+    const name = cameraRowTitle(row);
+    const label = head.querySelector('.entity-picker-name');
+    label.textContent = name || cameraEntryPlaceholder(editor);
+    label.classList.toggle('camera-entry-empty', !name);
+    head.querySelector('.entity-picker-context').textContent = row.line || '';
+    head.querySelector('.entity-picker-icon i').className = 'mdi mdi-' + cameraRowIcon(row);
+    const auto = document.querySelector('#' + tab + '_camera_list [data-camera-auto]');
+    auto?.classList.toggle('on', !row.title);
+    auto?.setAttribute('aria-pressed', row.title ? 'false' : 'true');
+    cameraRenderShows(tab);
+  }
+
+  function cameraCoordinate(text, limit) {
+    const trimmed = String(text || '').trim();
+    if (!trimmed) return null;
+    const value = Number(trimmed.replace(',', '.'));
+    return Number.isFinite(value) && Math.abs(value) <= limit ? value : null;
+  }
+
+  function cameraReadCoordinates(tab, row) {
+    row.lat = document.getElementById(tab + '_camera_entry_lat')?.value || '';
+    row.lon = document.getElementById(tab + '_camera_entry_lon')?.value || '';
+    const lat = cameraCoordinate(row.lat, 90);
+    const lon = cameraCoordinate(row.lon, 180);
+    const fail = document.getElementById(tab + '_camera_entry_coord_fail');
+    const wrong = String(row.lat).trim() && lat === null ? cameraText('latitudeRange')
+      : String(row.lon).trim() && lon === null ? cameraText('longitudeRange') : '';
+    if (fail) {
+      fail.textContent = wrong;
+      fail.hidden = !wrong;
+    }
+    if (lat === null || lon === null) {
+      row.value = '';
+      row.line = cameraText('noCoordinates');
+    } else {
+      row.value = 'geo:' + lat + ',' + lon;
+      row.line = lat + ', ' + lon;
+    }
+    row.name = cameraText('ownCoordinates');
+    cameraTeachPicker(row);
+  }
+
+  function cameraChoosePlace(tab, row, value) {
+    const input = document.getElementById(tab + '_camera_entry_value');
+    const entry = value && typeof entityPickerEntryFor === 'function' ? entityPickerEntryFor(input, value) : null;
+    row.title = '';
+    row.icon = '';
+    if (value === CAMERA_OWN_COORDINATES) {
+      const coordinates = cameraCoordinates(row.value);
+      row.kind = 'c';
+      row.value = coordinates ? row.value : '';
+      row.lat = coordinates ? String(coordinates.lat) : '';
+      row.lon = coordinates ? String(coordinates.lon) : '';
+      row.name = cameraText('ownCoordinates');
+      row.line = coordinates ? coordinates.lat + ', ' + coordinates.lon : cameraText('noCoordinates');
+      return;
+    }
+    row.kind = 'r';
+    row.value = value;
+    row.name = entry?.name || '';
+    row.line = entry?.context || (value.startsWith('zone.') ? 'Home Assistant' : '');
+  }
+
+  document.addEventListener('click', event => {
+    const target = event.target;
+    const tab = cameraTabOf(target);
+    if (!tab) return;
+    const editor = cameraEditor(tab);
+    const rows = editor.rows[editor.source];
+    const row = rows[editor.open];
+    if (target.closest('[data-camera-add]')) {
+      if (rows.length >= CAMERA_MAX_ENTRIES) return;
+      const kind = editor.source === 'r' ? 'r' : editor.source;
+      rows.push({ kind, value: '', title: '', icon: '', name: '', line: '' });
+      renderCameraEntries(tab);
+      return;
+    }
+    const remove = target.closest('[data-camera-remove]');
+    if (remove) {
+      const gone = Number(remove.dataset.cameraRemove);
+      const valid = cameraValidRows(rows);
+      const removedShown = valid.indexOf(rows[gone]);
+      rows.splice(gone, 1);
+      editor.open = -1;
+      // What the tile shows follows the list; a removed entry falls back to the first.
+      const shown = editor.shows[editor.source];
+      if (typeof shown === 'number' && removedShown >= 0) {
+        editor.shows[editor.source] = shown === removedShown ? 0 : shown > removedShown ? shown - 1 : shown;
+      }
+      renderCameraEntries(tab);
+      cameraEntriesChanged(tab);
+      return;
+    }
+    if (target.closest('[data-camera-auto]') && row) {
+      row.title = row.title ? '' : cameraRowTitle(row);
+      const title = document.getElementById(tab + '_camera_entry_title');
+      if (title) title.value = cameraRowTitle(row);
+      cameraShowRowHead(tab, editor.open);
+      cameraEntriesChanged(tab);
+      return;
+    }
+    const toggle = target.closest('[data-camera-toggle]');
+    if (toggle) {
+      const index = Number(toggle.dataset.cameraToggle);
+      editor.open = editor.open === index ? -1 : index;
+      renderCameraEntries(tab);
+      if (editor.open >= 0) document.querySelector('#' + tab + '_camera_list [data-camera-entry="' + index + '"]')?.scrollIntoView({ block: 'nearest' });
+    }
+  });
+
+  document.addEventListener('input', event => {
+    const target = event.target;
+    const tab = cameraTabOf(target);
+    if (!tab) return;
+    const editor = cameraEditor(tab);
+    const row = editor.rows[editor.source][editor.open];
+    if (!row) return;
+    if (target.matches('[data-camera-title]')) {
+      row.title = target.value === row.name ? '' : target.value;
+    } else if (target.matches('[data-camera-coordinate]')) {
+      cameraReadCoordinates(tab, row);
+    } else if (target.matches('[data-camera-url]')) {
+      row.value = target.value.trim();
+      let host = '';
+      try {
+        host = new URL(row.value).hostname.replace(/^www\./, '');
+      } catch (error) {
+        host = '';
+      }
+      row.name = host;
+      row.line = host;
+      const fail = document.getElementById(tab + '_camera_entry_fail');
+      if (fail) fail.hidden = true;
+      if (!row.title) {
+        const title = document.getElementById(tab + '_camera_entry_title');
+        if (title) title.value = host;
+      }
+      cameraWatchSources(tab);
+    } else if (target.id === tab + '_camera_entry_icon') {
+      row.icon = target.value;
+      const button = document.getElementById(tab + '_camera_entry_icon_button');
+      if (button) {
+        button.innerHTML = '<i class="mdi mdi-' + escapeHtml(cameraRowIcon(row)) + '"></i>';
+        button.classList.toggle('none', isExplicitlyDisabledValue(row.icon));
+      }
+    } else {
+      return;
+    }
+    cameraShowRowHead(tab, editor.open);
+    cameraEntriesChanged(tab);
+  });
+
+  // The entity picker of the open entry.
+  document.addEventListener('change', event => {
+    const target = event.target;
+    const tab = cameraTabOf(target);
+    if (!tab || target.id !== tab + '_camera_entry_value') return;
+    const editor = cameraEditor(tab);
+    const row = editor.rows[editor.source][editor.open];
+    if (!row) return;
+    if (editor.source === 'r') {
+      cameraChoosePlace(tab, row, target.value);
+    } else {
+      const entry = target.value ? entityPickerEntryFor(target, target.value) : null;
+      row.value = target.value;
+      row.title = '';
+      row.icon = '';
+      row.name = entry?.name || '';
+      row.line = target.value;
+    }
+    renderCameraEntries(tab);
+    cameraEntriesChanged(tab);
+  });
+
+  // The rain radar's emergency address (System page): saved as it changes.
+  document.addEventListener('change', event => {
+    const input = event.target;
+    if (input?.id !== 'radar_source') return;
+    const value = String(input.value || '').trim();
+    if (value && !cameraHttpsAddress(value)) {
+      input.setAttribute('aria-invalid', 'true');
+      return;
+    }
+    input.removeAttribute('aria-invalid');
+    fetch('/api/radar_source', { method: 'POST', body: new URLSearchParams({ url: value }) })
+      .then(res => {
+        if (!res.ok) input.setAttribute('aria-invalid', 'true');
+      })
+      .catch(() => input.setAttribute('aria-invalid', 'true'));
+  });
 
 function loadAnimationFields(tab, data) {
     const el = document.getElementById(tab + '_animation_file');

@@ -36,6 +36,11 @@ void scheduleTilesReport();
 // A sealed "tiles" data message: the Bridge acknowledges a declaration.
 void handleDeclarationAck(const uint8_t* body, size_t length);
 
+// A sealed "sources" data message: how the Bridge's webcams fare,
+// {"src":{"ht_cam_x":"ok"|"none"}}; the Web Admin shows a page without a picture.
+void handleSourceStatus(const uint8_t* body, size_t length);
+const String& sourceStatus();
+
 // Loop: sends a due declaration once the encrypted session exists, again on
 // every new session, and again while the Bridge has not acknowledged it.
 void service();

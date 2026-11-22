@@ -26,22 +26,20 @@ void append_weather_fields_html(String& html, const String& tab_id) {
                             i18n::weather_sensor_label(language, 2));
     html += "\n";
   }
-  if (tab_id != "screensaver") {
-    html += R"html(              <label>)html";
-    html += tr.popup_open;
-    html += R"html(</label>
+  html += R"html(              <label>)html";
+  html += tr.popup_open;
+  html += R"html(</label>
               <select id=")html";
-    html += tab_id;
-    html += R"html(_weather_popup_open_mode">
+  html += tab_id;
+  html += R"html(_weather_popup_open_mode">
                 <option value="0">)html";
-    html += tr.long_press;
-    html += R"html(</option>
+  html += tr.long_press;
+  html += R"html(</option>
                 <option value="1" selected>)html";
-    html += tr.short_press;
-    html += R"html(</option>
+  html += tr.short_press;
+  html += R"html(</option>
               </select>
 )html";
-  }
   html += R"html(            </div>
 )html";
 }

@@ -652,7 +652,7 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
       widget.bar_base = static_cast<int16_t>(level_bar::box(tile).base);
       if (widget.bar) {
         lv_obj_add_event_cb(widget.bar, bar_draw_cb, LV_EVENT_DRAW_MAIN, &widget);
-        if (data && grid_type != GridType::SCREENSAVER) {
+        if (data) {
           // Only these codes: the bar's own DELETE comes after the card freed
           // the event data.
           for (const lv_event_code_t code : {LV_EVENT_PRESSED, LV_EVENT_PRESSING, LV_EVENT_RELEASED,
@@ -700,7 +700,7 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
 
   if (initial.length()) apply_state(grid_type, index, initial.c_str());
 
-  if (data && grid_type != GridType::SCREENSAVER) {
+  if (data) {
     const lv_event_code_t event_code =
         getTilePopupOpenMode(tile) == TILE_POPUP_OPEN_SHORT_PRESS
             ? LV_EVENT_SHORT_CLICKED
@@ -713,6 +713,9 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
           CoverEventData* data = static_cast<CoverEventData*>(
               lv_event_get_user_data(event));
           if (!data) return;
+          // Its values on the tile's screen (tile_screen.h).
+          const ui_theme::SurfaceScope screen =
+              tile_screen::scope(static_cast<lv_obj_t*>(lv_event_get_current_target(event)));
           const Tile* tile =
               tile_renderer_get_tile_config(data->grid_type, data->index);
           CoverPopupInit init = popup_init(data->grid_type, data->index);

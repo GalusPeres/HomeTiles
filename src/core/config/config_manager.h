@@ -21,8 +21,10 @@
 #define CONFIG_MQTT_CLIENT_ID_MAX 64
 #define CONFIG_MQTT_BASE_MAX     32
 #define CONFIG_HA_PREFIX_MAX     48
+#define CONFIG_RADAR_SOURCE_MAX  256
 #define CONFIG_LANG_MAX          8
 #define CONFIG_TIMEZONE_MAX      24
+#define CONFIG_TIMEZONE_RULE_MAX 48
 
 static constexpr uint16_t kSleepOptionsSec[] = {5, 15, 30, 60, 300, 900, 1800, 3600};
 static constexpr size_t kSleepOptionsSecCount = sizeof(kSleepOptionsSec) / sizeof(kSleepOptionsSec[0]);
@@ -80,6 +82,9 @@ struct DeviceConfig {
   char ha_prefix[CONFIG_HA_PREFIX_MAX];
   char language[CONFIG_LANG_MAX];
   char timezone[CONFIG_TIMEZONE_MAX];
+  // Home Assistant's time zone as the Bridge last sent it (a POSIX rule), for
+  // the time zone "auto". Only saveTimeZoneRule() changes it.
+  char timezone_rule[CONFIG_TIMEZONE_RULE_MAX];
   uint8_t global_time_format;
   uint8_t global_date_format;
   // The first day of the week (tm_wday: 0 Sunday, 1 Monday, 6 Saturday), or
@@ -111,6 +116,8 @@ struct DeviceConfig {
   // 2026-10-13); empty = "Home" in the panel's language and the house.
   char head_title[32];
   char head_icon[32];
+  // The rain radar's emergency list address, sent to the Bridge ("": its default).
+  char radar_source[CONFIG_RADAR_SOURCE_MAX];
   // The UI theme (ui_theme.h): 0 dark, 1 light, 2 automatic (light by day,
   // dark by night, theme_schedule.h). Read at boot; a change applies while
   // running (UIManager::processThemeChange).
@@ -192,8 +199,11 @@ public:
   bool saveHeadOverview(bool enabled);
   // Home's own head title and icon (empty = automatic), stored at once.
   bool saveHomeHead(const String& title, const String& icon);
+  bool saveRadarSource(const String& url);
   bool saveTheme(uint8_t theme);
   bool saveThemeAutoLast(uint8_t theme);
+  // True when the rule changed and is stored.
+  bool saveTimeZoneRule(const char* rule);
   bool saveEthernetEnabled(bool enabled);
   bool saveStaticAddressingEnabled(bool enabled);
 

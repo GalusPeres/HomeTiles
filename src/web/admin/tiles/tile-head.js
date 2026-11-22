@@ -157,7 +157,7 @@
   function iconPickerCurrent(open) {
     const shown = open.button?.dataset.iconValue;
     const raw = String(shown ?? document.getElementById(open.input)?.value ?? '').trim();
-    return !open.rule && isExplicitlyDisabledValue(raw) ? 'none' : normalizeMdiIconName(raw);
+    return (!open.rule || open.entry) && isExplicitlyDisabledValue(raw) ? 'none' : normalizeMdiIconName(raw);
   }
 
   function iconPickerCellsHtml(from, to) {
@@ -185,11 +185,12 @@
       '<span class="entity-picker-context">' + escapeHtml(hint) + '</span></span></button>';
     // Home's head always shows its circle: no "No icon" there, nor for a
     // rule, whose Automatic keeps the tile's own icon.
-    const none = open.rule || document.getElementById(open.tab + '_tile_icon')?.dataset.autoIcon
+    // A Camera tile's entry has both, like a tile (types/camera/admin.js).
+    const none = (open.rule && !open.entry) || (!open.entry && document.getElementById(open.tab + '_tile_icon')?.dataset.autoIcon)
       ? '' : choice('none', 'cancel', t('iconPickerNone'), t('iconPickerNoneHint'));
     let html = open.query ? '' : '<div class="icon-picker-choices' + (none ? '' : ' single') + '">' +
-      choice('', tileAutomaticIcon(open.tab), t('iconPickerAuto'),
-        t(open.rule ? 'iconPickerRuleHint' : 'iconPickerAutoHint')) + none + '</div>';
+      choice('', open.entry ? open.button.dataset.iconAuto : tileAutomaticIcon(open.tab), t('iconPickerAuto'),
+        t(open.rule && !open.entry ? 'iconPickerRuleHint' : 'iconPickerAutoHint')) + none + '</div>';
     if (open.state === 'loading') {
       html += '<div class="entity-picker-loading"><div></div><div></div><div></div></div>';
     } else if (open.state === 'failed') {
@@ -263,7 +264,8 @@
     const open = iconPickerOpen;
     // The tile head's row, or a rule's section across the panel at the
     // height of its button.
-    const row = !open ? null : open.rule ? open.button?.closest('.icon-color-section')
+    const row = !open ? null : open.entry ? open.button?.closest('.tile-head-row')
+      : open.rule ? open.button?.closest('.icon-color-section')
       : document.getElementById(open.tab + '_tile_title')?.closest('.tile-head-row');
     if (!row || !iconPickerPopover) return;
     const pop = iconPickerPopover;
@@ -274,7 +276,7 @@
     }
     pop.classList.remove('sheet');
     const across = row.getBoundingClientRect();
-    const own = open.rule ? open.button.getBoundingClientRect() : across;
+    const own = open.rule && !open.entry ? open.button.getBoundingClientRect() : across;
     const rect = { left: across.left, width: across.width, top: own.top, bottom: own.bottom };
     const below = window.innerHeight - rect.bottom - 12;
     const above = rect.top - 12;
@@ -305,7 +307,7 @@
     const rule = !!button;
     if (!button) button = document.getElementById(tab + '_tile_icon_picker');
     iconPickerOpen = { tab, input: rule ? button.dataset.iconInput : tab + '_tile_icon', button, rule,
-      query: '', matches: [], shown: 0, active: 0, state: 'loading' };
+      entry: !!button?.dataset.iconEntry, query: '', matches: [], shown: 0, active: 0, state: 'loading' };
     button?.classList.add('open');
     button?.setAttribute('aria-expanded', 'true');
     iconPickerPopover.classList.add('open');
@@ -355,7 +357,7 @@
       }
       return;
     }
-    const button = target?.closest?.('.tile-icon-picker');
+    const button = target?.closest?.('.tile-icon-picker:not([data-icon-input])');
     if (button) {
       const tab = tileHeadTab(button);
       if (iconPickerOpen?.button === button) closeIconPicker(true);
@@ -365,6 +367,7 @@
     const ruleButton = target?.closest?.('button[data-icon-input]');
     if (ruleButton) {
       const tab = ruleButton.closest('[data-tab]')?.dataset.tab || '';
+      if (typeof closeEntityPicker === 'function') closeEntityPicker(false);
       if (iconPickerOpen?.button === ruleButton) closeIconPicker(true);
       else if (tab) openIconPicker(tab, ruleButton);
       return;

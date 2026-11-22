@@ -11,7 +11,9 @@
 #include "src/network/mqtt/mqtt_topics.h"
 #include "src/network/network_manager.h"
 #include "src/network/secure/command_channel.h"
+#include "src/core/config/config_manager.h"
 #include "src/tiles/config/tile_config.h"
+#include "src/types/camera/camera_entries.h"
 #include "src/types/scene/scene_target.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/web/server/auth/web_admin_auth.h"
@@ -38,6 +40,9 @@ struct Answer {
 };
 
 Answer g_answer;
+// What the Bridge last told about its webcams (handleSourceStatus), as it came.
+String g_source_status;
+constexpr size_t kMaxSourceStatus = 1800;
 uint32_t g_next_id = 1;
 bool g_report_pending = true;
 uint32_t g_report_due_ms = 0;
@@ -89,6 +94,8 @@ bool knownList(const String& list) {
   if (list == "calendars") return haBridgeConfig.supportsCalendars();
   // Vacuums: a Bridge on level 6.
   if (list == "vacuums") return haBridgeConfig.supportsVacuums();
+  // The rain radar's places: a Bridge on level 7.
+  if (list == "places") return haBridgeConfig.supportsCameraSources();
   for (const ListTile& entry : kListTiles) {
     if (list == entry.list) return true;
   }
@@ -131,6 +138,18 @@ void addEntityLines(entity_declaration::Declaration& declaration, const char* li
   }
 }
 
+// A Camera tile's entries (types/camera/camera_entries.h): every entity in the
+// list of its kind, and what the Bridge itself provides (radar places, webcams)
+// so that it exists.
+void addCameraEntries(entity_declaration::Declaration& declaration, const char* record) {
+  for (const camera_entries::Entry& entry : camera_entries::parse(record)) {
+    declaration.add(listOfTile(TILE_CAMERA, entry.entity.c_str()), entry.entity.c_str());
+    if (camera_entries::is_bridge_source(entry)) {
+      declaration.addSource(entry.entity, camera_entries::source_json(entry));
+    }
+  }
+}
+
 // A tile's own entities: a Calendar tile names up to four calendars,
 // separated by commas (types/calendar/calendar_store.h); every other tile one.
 void addTileEntities(entity_declaration::Declaration& declaration, TileType type, const char* entity) {
@@ -166,7 +185,8 @@ entity_declaration::Declaration collectDeclaration() {
     for (size_t i = 0; i < TILES_PER_GRID; ++i) {
       addTileEntities(declaration, slots[i].type, slots[i].entity);
       declaration.add(listOfSource(slots[i].rule_entity), slots[i].rule_entity);
-      addEntityLines(declaration, slots[i].extra_entities);
+      if (slots[i].type == TILE_CAMERA) addCameraEntries(declaration, slots[i].extra_entities);
+      else addEntityLines(declaration, slots[i].extra_entities);
     }
   }
   const TileGridConfig& screensaver = screensaverConfig.tileGrid();
@@ -176,11 +196,19 @@ entity_declaration::Declaration collectDeclaration() {
     const String source = tileIconSourceEntity(tile.type, tile.icon_colors);
     declaration.add(listOfSource(source.c_str()), source.c_str());
     addEntityLines(declaration, weatherSensorsRecord(tile).c_str());
+    if (tile.type == TILE_CAMERA) addCameraEntries(declaration, tile.flow_entities.c_str());
   }
   // The screensaver picture the Bridge sends (docs-dev/images.md).
   const ScreensaverConfigData& screensaver_config = screensaverConfig.get();
   if (screensaver_config.use_wallpapers && screensaver_uses_ha_picture(screensaver_config)) {
     declaration.add("images", screensaver_config.picture_entity.c_str());
+  }
+  // The rain radar's emergency address (System page).
+  const char* radar_source = configManager.getConfig().radar_source;
+  if (camera_entries::https_address(radar_source)) {
+    std::string quoted;
+    camera_entries::append_json_string(quoted, radar_source);
+    declaration.setRadarSource(quoted);
   }
   return declaration;
 }
@@ -263,6 +291,14 @@ bool result(uint32_t id, String& json) {
   json += "]}";
   return true;
 }
+
+void handleSourceStatus(const uint8_t* body, size_t length) {
+  if (!body || length == 0 || length > kMaxSourceStatus) return;
+  g_source_status = "";
+  g_source_status.concat(reinterpret_cast<const char*>(body), length);
+}
+
+const String& sourceStatus() { return g_source_status; }
 
 void scheduleTilesReport() {
   g_report_pending = true;

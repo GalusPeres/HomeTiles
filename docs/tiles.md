@@ -521,12 +521,39 @@ Lock and Alarm Panel tiles show only states the device reports: a command waits 
 
 <a id="camera-experimental"></a>
 
-### Camera
+### Camera / Picture { #camera }
 
-Shows a `camera` or `image` entity. The camera can also be the [built-in camera](bridge.md#built-in-camera) of another HomeTiles display.
+Shows pictures and video. Choose the tile's **Source**; the tile holds up to eight entries of that source, and the popup's **…** button switches between them.
 
-- **Show:** the icon, or the **Picture**: the tile shows the camera's current image in its own size, with the title in a pill. **Circle and title** can be **Automatic**, **Dark** or **Light**, with an adjustable transparency.
-- **Tap opens:** the **Popup** with a 16:9 live video, or the **Full screen** video at once.
+- **Home Assistant:** `camera` and `image` entities. A camera can also be the [built-in camera](bridge.md#built-in-camera) of another HomeTiles display.
+- **Rain radar:** a place: **Home** (Home Assistant's location), a Home Assistant **Zone**, a town found by its name, or **Own coordinates** (latitude and longitude). The Bridge draws the radar from RainViewer (in Germany the DWD, elsewhere NASA, when it fails), with nothing to set up.
+- **Webcam:** the `https` address of a webcam picture, or of a webcam's own page that names its picture (Foto-Webcam, Panomax, snow-online and many others). See [Add a webcam](#add-a-webcam).
+
+The Bridge keeps the rain radar's and the webcams' pictures for 24 hours, at fixed times every 10 minutes. The popup shows **Synced 10:20** in its head, and a time bar with **Play** once there are two pictures: the radar brings its last two hours at once, Foto-Webcam and snow-online their last day, other webcams collect from when they are added. Webcam pictures belong to the webcam's operator: show only pictures the site allows you to use. Some portals ask for consent first, some do not allow it at all.
+
+#### Add a webcam
+
+1. Open the webcam in your browser: the page of that one webcam, not an overview of several. Copy the address from the browser's address bar.
+2. In the tile, choose **Source: Webcam**, then **Add webcam**, and paste the address.
+3. After a few seconds the tile shows the picture. What the Web Admin may say under the entry:
+    - **No picture was found on this page.** The page does not name its picture. Right-click the webcam picture in the browser, choose **Copy image address**, and paste that address instead.
+    - **This site blocks the request.** The site does not let the Bridge read the page. Paste the picture's own address the same way, but only where the site allows its pictures to be used.
+4. New pictures come every 10 minutes; **Play** appears in the popup once there are two.
+
+You can simply try a link: the Web Admin tells within seconds whether the Bridge finds a picture. These portals were checked with HomeTiles:
+
+| Portal | Paste | What the tile gets |
+| --- | --- | --- |
+| Foto-Webcam | the webcam's page, `https://www.foto-webcam.eu/webcam/<name>/` | a new picture every 10 minutes, the last day at once |
+| Panomax | the webcam's page, `https://<place>.panomax.com/` | the current preview of the panorama |
+| snow-online | the webcam's page | the current picture; the archive holds only a few a day |
+| Any other site | the page, or the picture's own address | collects from when it is added |
+
+- **Tile shows:** the entry on the tile, or **Last chosen**: the one last chosen in the popup, until the display restarts.
+- **Show:** the icon, or the **Picture**: the tile shows the current image in its own size, with the title in a pill. **Circle and title** can be **Automatic**, **Dark** or **Light**, with an adjustable transparency.
+- **Tap opens:** the **Popup**, or the **Full screen** at once.
+
+**Radar source** (Web Admin → System): an emergency address for a frame list like RainViewer's; empty uses the default. Rain radar and webcams need HomeTiles Bridge v0.9.8.
 
 <div class="ht-type-shots ht-type-pair" markdown>
 <div class="ht-type-stack" markdown>

@@ -29,6 +29,15 @@ void sync_popup_shell();
 // True from show_popup_shell() until the popup is hidden again. Every tile
 // popup and the PIN pad open through the shell.
 bool popup_shell_active();
+// The screensaver tells while its overlay is on the top layer
+// (image_screensaver.cpp): a popup opened meanwhile joins it there.
+void popup_shell_screensaver_open(bool open);
+// A popup opened over the screensaver (the shell on the top layer above
+// its overlay, show_popup_shell); a page popup left open under it is not.
+bool popup_shell_over_screensaver();
+// Such a popup covers the area completely (its frame or an opaque block):
+// nothing under it shows there.
+bool popup_shell_covers_over_screensaver(const lv_area_t& area);
 // The open popup's body (its card), nullptr without one.
 lv_obj_t* popup_shell_body();
 // Sets the active popup body's background; the frame copies it on the next
@@ -90,6 +99,13 @@ void popup_shell_delete_popups();
 // (popup_surface::g_open_surface): its fixed texts and icons, colored when it
 // was built, take that surface's roles (and back on the next opening).
 void popup_follow_surface(lv_obj_t* root);
+// An opener on a screen in another design than the last opener's (a
+// screensaver tile in its own Dark or Light, tile_screen.h, or back on the
+// panel's theme): every popup takes that design's roles now, before the
+// opened one applies its content (recolored after it, a white value on a
+// colored pill turned dark, b656). The opener calls it after setting the
+// open surface (tile_icon_source).
+void popup_follow_screen();
 // The surface `root`'s content was last shown with (kThemeSurface before its
 // first show): a hidden popup that refreshes draws with it, so the next show
 // recolors it like the rest of its content.

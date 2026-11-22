@@ -234,6 +234,10 @@ bool WebAdminServer::start() {
               guarded([this]() { this->handleStartEntitySearch(); }));
     server.on("/api/entity_search", HTTP_GET,
               guarded([this]() { this->handleGetEntitySearch(); }));
+    server.on("/api/camera_sources", HTTP_GET,
+              guarded([this]() { this->handleGetCameraSources(); }));
+    server.on("/api/radar_source", HTTP_POST,
+              guarded(withStorageHold([this]() { this->handleSaveRadarSource(); })));
     server.on("/api/screensaver", HTTP_GET,
               guarded([this]() { this->handleGetScreensaver(); }));
     server.on("/api/screensaver", HTTP_POST,

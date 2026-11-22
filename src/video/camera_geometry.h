@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "src/devices/device_select.h"
+#include "src/ui/popups/media/media_popup_layout.h"
 #include "src/ui/popups/popup_layout.h"
 
 namespace camera_geometry {
@@ -72,6 +73,16 @@ inline constexpr const char* kFullFit = "contain";
 // LVGL still receives the visible width/height and the aligned row stride.
 inline constexpr uint16_t kDecodedWidth = (kWidth + 15U) & ~15U;
 inline constexpr uint16_t kDecodedHeight = (kHeight + 15U) & ~15U;
+
+// The popup's picture area (mockup webcam-radar/radar-tall.html): one edge below
+// the head to one edge above the bottom row. A still camera's frames take their
+// own shape within this box, the Bridge fits them (camera_stream.py
+// _fit_into_box); a live camera's stay 16:9. Never lower than those, at most what
+// the Bridge accepts, even for yuv420.
+inline constexpr int kAreaTop = media_popup_layout::kHeadTop + media_popup_layout::kDisc + media_popup_layout::kEdge;
+inline constexpr int kAreaBottom = media_popup_layout::kVolumeTop - media_popup_layout::kEdge;
+inline constexpr uint16_t kBoxHeight = static_cast<uint16_t>(
+    (kAreaBottom - kAreaTop < kHeight ? kHeight : kAreaBottom - kAreaTop > 720 ? 720 : kAreaBottom - kAreaTop) & ~1);
 
 static_assert(kWidth >= 320 && kWidth <= 752,
               "Camera popup width is outside the supported P4 range");

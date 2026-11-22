@@ -19,4 +19,7 @@ void preload_energy_popup();
 void hide_energy_popup();
 void energy_popup_follow_tile_color(uint32_t color);
 void queue_energy_popup_refresh(const char* period);
+// The period an open popup shows when it is Week, Month or Year, else nullptr:
+// Today follows the tiles' requests, the others ask along with them.
+const char* energy_popup_open_period();
 void process_energy_popup_queue();

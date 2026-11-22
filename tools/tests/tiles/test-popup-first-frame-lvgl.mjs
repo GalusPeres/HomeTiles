@@ -41,6 +41,19 @@ int main(){lv_init();g_sensor_first_frame.begin();assert(!g_sensor_first_frame.p
  // A finger reading the graph defers history the same way.
  g_pending_history.valid=true;context.readout.touching=true;service();assert(g_pending_history.valid&&"History waits while a finger reads the graph");context.readout.touching=false;service();assert(!g_pending_history.valid);
  for(int i=0;i<100;++i){g_sensor_first_frame.begin();g_sensor_first_frame.begin();assert(g_sensor_first_frame.pending());g_sensor_first_frame.cancel();assert(!g_sensor_first_frame.pending());lv_display_send_event(display,LV_EVENT_REFR_READY,nullptr);}
+ // Nothing left to draw (LVGL paused its refresh timer after the frame): no
+ // REFR_READY follows, so the gate must not wait for one. Waiting held the
+ // gated tile updates, the only changes left to draw, until a touch (user
+ // 2026-10-31: tiles stood still overnight until a popup opened).
+ g_sensor_first_frame.cancel();lv_refr_now(display);assert(lv_timer_get_paused(lv_display_get_refr_timer(display)));
+ g_sensor_first_frame.begin();
+ for(int i=0;i<20;++i){lv_tick_inc(20);lv_timer_handler();}
+ assert(!g_sensor_first_frame.pending()&&!PopupFirstFrame::any_pending()&&"an idle screen never holds the gate");
+ // Something to draw: the gate waits for that frame and opens with it.
+ lv_obj_invalidate(lv_screen_active());g_sensor_first_frame.begin();assert(g_sensor_first_frame.pending());
+ for(int i=0;i<20&&g_sensor_first_frame.pending();++i){lv_tick_inc(20);lv_timer_handler();}
+ assert(!g_sensor_first_frame.pending()&&"the frame opens the gate");
+ lv_obj_invalidate(lv_screen_active());
  g_sensor_first_frame.begin();lv_display_delete(display);assert(!g_sensor_first_frame.pending());g_sensor_first_frame.cancel();lv_deinit();
 }
 `;

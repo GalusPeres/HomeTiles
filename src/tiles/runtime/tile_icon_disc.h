@@ -1,5 +1,7 @@
 #pragma once
 
+#include "src/tiles/runtime/tile_glass.h"
+#include "src/tiles/runtime/tile_screen.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/core/config/icon_glow.h"
@@ -70,11 +72,13 @@ inline int8_t theme_of(uint8_t surface) {
 
 // Opens the surface of `obj`'s card for the colors computed while it lives;
 // a card on the theme opens the theme explicitly, also inside a popup's
-// scope (a popup command updating its tile).
+// scope (a popup command updating its tile). The theme is the design of the
+// card's screen (tile_screen.h: the screensaver's own, else the panel's).
 inline ui_theme::SurfaceScope scope(lv_obj_t* obj) {
   lv_obj_t* card = card_of(obj);
   const int8_t theme = theme_of(card ? get(card) : find(obj));
-  return ui_theme::SurfaceScope(theme >= 0 ? theme : ui_theme::kThemeSurface, card);
+  return ui_theme::SurfaceScope(theme >= 0 ? theme : ui_theme::kThemeSurface, card,
+                                tile_screen::of(card ? card : obj));
 }
 
 // The rule of a card whose surface changes while it runs (render_tile): the
@@ -267,16 +271,18 @@ inline void set_fill_colors(lv_obj_t* obj, uint32_t rest, uint32_t pressed) {
 }
 
 // Whether a card lets the background through (screensaver tiles below full
-// Tile opacity): its circles and controls stay a veil (tone_color.h).
+// Tile opacity): its circles and controls stay a veil (tone_color.h). A
+// glass card does not: its contents are drawn as on an opaque card.
 inline bool see_through(lv_obj_t* card) {
-  return !card || lv_obj_get_style_bg_opa(card, LV_PART_MAIN) < LV_OPA_COVER;
+  return !card || (lv_obj_get_style_bg_opa(card, LV_PART_MAIN) < LV_OPA_COVER && !tile_glass::is_glass(card));
 }
 
-// The nearest opaque background behind `obj` (the tile card).
+// The nearest opaque background behind `obj` (the tile card); a glass card
+// counts as opaque (its tint is the circle's background).
 inline lv_obj_t* card_of(lv_obj_t* obj) {
   lv_obj_t* host = obj ? lv_obj_get_parent(obj) : nullptr;
   for (int depth = 0; host && depth < 3 &&
-       lv_obj_get_style_bg_opa(host, LV_PART_MAIN) < LV_OPA_50; ++depth) {
+       lv_obj_get_style_bg_opa(host, LV_PART_MAIN) < LV_OPA_50 && !tile_glass::is_glass(host); ++depth) {
     host = lv_obj_get_parent(host);
   }
   return host;

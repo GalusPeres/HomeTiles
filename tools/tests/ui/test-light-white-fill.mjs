@@ -24,7 +24,7 @@ assert.match(renderer, /uint32_t switch_state_icon_color\(const SwitchState& sta
 assert.ok(renderer.includes('return tile.type == TILE_SWITCH ? tile_surface::kFollowTint : tile_surface::kFollowTint | tile_surface::kNeutralIdle;'),
   'a Switch tile of the light theme is filled only while on (no idle grey)');
 const source = read('src/tiles/runtime/tile_icon_source.cpp');
-assert.match(source, /tile_tint::Choice with_white\([^)]*\) \{\n  if \(choice\.percent \|\| !fill \|\| !disc \|\| !tile_icon_disc::icon_of\(disc\)\) return choice;\n  uint8_t base = 0, flags = 0;\n  if \(ui_theme::theme_light\(\) && /,
+assert.match(source, /tile_tint::Choice with_white\([^)]*\) \{\n  if \(choice\.percent \|\| !fill \|\| !disc \|\| !tile_icon_disc::icon_of\(disc\)\) return choice;\n  const ui_theme::SurfaceScope screen = tile_screen::scope\(card\);\n  uint8_t base = 0, flags = 0;\n  if \(ui_theme::theme_light\(\) && /,
   'with_white: only the light theme needs a filled card rule; the dark theme fills white light too');
 const popup = read('src/ui/popups/light/light_popup.cpp');
 assert.ok(popup.includes('popup_nav_style::fill(popup_surface::card(ctx->card_bg), lv_color_hex(shown_icon_rgb(ctx, header_icon_rgb(ctx, icon_rgb))),'),
@@ -40,7 +40,7 @@ const js = vm.createContext({Math, Number, String, Array, parseInt, globalThis: 
 vm.runInContext(names.map((name) => extractDeliveredFunction(name)).join('\n'), js);
 const withTheme = (theme, run) => { js.document = {documentElement: {dataset: {panelTheme: theme}}}; return run(); };
 const grid = read('src/web/admin/tiles/grid-preview.js');
-assert.ok(grid.includes("(tileElem.dataset.followTint === '1' || !panelThemeLight()) && toneNoColor(given)"),
+assert.ok(grid.includes("(tileElem.dataset.followTint === '1' || !designLight()) && toneNoColor(given)"),
   'preview with_white: the dark theme fills white light too');
 assert.ok(grid.includes("tileFillOf(tile?.icon_colors) > 0 && surfaceType !== '5'"), 'preview: a Switch tile has no idle grey');
 

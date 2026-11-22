@@ -22,16 +22,14 @@ void append_datetime_fields_html(String& html, const String& tab_id) {
           "<option value=\"2\" selected>24</option><option value=\"0\">28</option>"
           "<option value=\"3\">32</option><option value=\"4\">40</option></select>";
 
-  if (tab_id != "screensaver") {
-    html += "<label>";
-    html += tr.popup_open;
-    html += "</label><select id=\"";
-    html += tab_id;
-    html += "_datetime_popup_open_mode\"><option value=\"1\">";
-    html += tr.short_press;
-    html += "</option><option value=\"0\">";
-    html += tr.long_press;
-    html += "</option></select>";
-  }
+  html += "<label>";
+  html += tr.popup_open;
+  html += "</label><select id=\"";
+  html += tab_id;
+  html += "_datetime_popup_open_mode\"><option value=\"1\">";
+  html += tr.short_press;
+  html += "</option><option value=\"0\">";
+  html += tr.long_press;
+  html += "</option></select>";
   html += "</div>\n";
 }

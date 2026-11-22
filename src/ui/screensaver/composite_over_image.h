@@ -96,6 +96,11 @@ inline bool render(lv_display_t* display, lv_obj_t* top, lv_obj_t* image,
   layer.color_format = LV_COLOR_FORMAT_RGB565;
   layer._clip_area = frame;
   layer.phy_clip_area = frame;
+  // An object drawn through a layer of its own (a Media cover, any layered
+  // opacity or transform) takes the display from its parent layer
+  // (lv_draw_layer_init); without it LVGL read a null display and the panel
+  // crashed whenever the screensaver showed such a tile (b634, V2).
+  layer.display = display;
   lv_draw_unit_send_event(nullptr, LV_EVENT_CHILD_CREATED, &layer);
   lv_display_t* display_old = lv_refr_get_disp_refreshing();
   lv_layer_t* layer_old = display->layer_head;

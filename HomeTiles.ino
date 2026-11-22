@@ -20,6 +20,7 @@
 #include "src/core/power/power_manager.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/diagnostics/crash_log.h"
+#include "src/core/diagnostics/dpi_underrun.h"
 #include "src/core/diagnostics/loop_stall.h"
 #include "src/core/diagnostics/text_fit_probe.h"
 #include "src/core/firmware/firmware_version.h"
@@ -806,6 +807,8 @@ void setup() {
     while(1) delay(1000);
   }
   Serial.println("[Setup] BoardHAL OK");
+  // Test builds on P4: log every blue flash (DPI underrun) from here on.
+  dpi_underrun::begin();
   log_memory_status("after-boardhal");
   Serial.flush();
 

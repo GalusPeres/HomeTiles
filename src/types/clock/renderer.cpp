@@ -11,6 +11,7 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/fonts/ui_fonts.h"
 #include "src/ui/screensaver/image_screensaver.h"
+#include "src/types/clock/clock_pixel_cache.h"
 #include "src/types/clock/clock_shadow_paint.h"
 #include <Arduino.h>
 #include <lvgl_private.h>
@@ -174,6 +175,8 @@ struct ClockShadowSet {
   lv_obj_t* mask_label = nullptr;
   lv_obj_t* painter = nullptr;
   clock_shadow_paint::Shadow paint;
+  // The line's finished pixels (clock_pixel_cache.h), with the painter.
+  clock_pixel_cache::Cache pixels;
   lv_draw_buf_t* mask_buf = nullptr;
   bool shadow_dirty = false;
 
@@ -193,6 +196,7 @@ struct ClockShadowSet {
     }
     if (mask_label) lv_label_set_text(mask_label, text);
     shadow_dirty = true;
+    clock_pixel_cache::invalidate(pixels);
     if (!line || !font) return true;
 
     lv_point_t text_size{};
@@ -217,6 +221,7 @@ struct ClockShadowSet {
 
   void set_box_width(lv_coord_t width) {
     if (!line || width < 1) return;
+    clock_pixel_cache::invalidate(pixels);
     lv_obj_set_width(line, width);
     const lv_text_align_t align = clock_text_align(alignment);
     if (main_label) lv_obj_set_style_text_align(main_label, align, 0);
@@ -245,6 +250,7 @@ struct ClockShadowSet {
     ClockShadowCopy copies[kClockShadowCopies];
     clock_shadow_copies(copies);
     clock_shadow_paint::place(painter, paint, mask, copies, ext);
+    clock_pixel_cache::invalidate(pixels);
     // The old mask: LVGL may hold it in its image cache from a fallback draw.
     if (mask_buf) {
       lv_image_cache_drop(mask_buf);
@@ -255,6 +261,7 @@ struct ClockShadowSet {
 
   void release_shadow() {
     clock_shadow_paint::release(paint);
+    clock_pixel_cache::release(pixels);
     if (!mask_buf) return;
     lv_image_cache_drop(mask_buf);
     lv_draw_buf_destroy(mask_buf);
@@ -552,6 +559,10 @@ static lv_obj_t* create_clock_line(lv_obj_t* stack,
   lv_obj_set_pos(label, 0, 0);
   lv_label_set_text(label, "");
   if (shadow_out) shadow_out->main_label = label;
+  // A painted shadow line keeps its finished pixels (clock_pixel_cache.h).
+  if (shadow_out && shadow_out->painter) {
+    clock_pixel_cache::attach(line, &shadow_out->pixels, shadow_out->painter, label);
+  }
   return label;
 }
 

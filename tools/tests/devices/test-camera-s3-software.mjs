@@ -29,7 +29,7 @@ assert.match(stream, /g_images\[i\]\.header\.cf = LV_COLOR_FORMAT_RGB565;/, 'nat
 assert.match(stream, /const bool full = CAMERA_STREAM_HW_JPEG && g_full_mode;/, 'software decoding decodes the full screen\'s frames in the task too');
 assert.match(stream, /lv_image_cache_drop\(&g_images\[ready\]\);\s*lv_image_header_cache_drop\(&g_images\[ready\]\);\s*lv_image_set_src\(image, &g_images\[ready\]\);\s*lv_obj_invalidate\(image\);/,
   'a reused buffer with new pixels or a new size is drawn again');
-assert.match(stream, /g_frame_w = full_screen \? camera_geometry::kSoftFullWidth : kWidth;/);
+assert.match(stream, /g_frame_w = full_screen \? camera_geometry::kSoftFullWidth : popup_w;/);
 // b327 left the S3's full screen black: the hardware full-screen flag skipped
 // LVGL's presentation; and the other view's last frame showed while switching.
 assert.match(stream, /g_full_shown = CAMERA_STREAM_HW_JPEG && full_screen;/);
@@ -56,7 +56,7 @@ assert.match(softEnter, /ctx->full_width = camera_geometry::kSoftFullWidth;\s*ct
 assert.match(softEnter, /mqttPublishCameraFullScreenOpen\(ctx->entity_id\.c_str\(\), camera_geometry::kFps,\s*camera_geometry::kSoftFullWidth,\s*camera_geometry::kSoftFullHeight, 0\);/);
 const softLeave = popup.slice(popup.indexOf('static void leave_soft_full_screen('), popup.indexOf('static void leave_full_screen('));
 assert.ok(softLeave.indexOf('lv_image_set_src(ctx->soft_full_image, nullptr);') < softLeave.indexOf('camera_stream_stop();'));
-assert.match(popup, /if \(g_camera_popup->full\) \{\s*camera_stream_process_ui\(g_camera_popup->soft_full_image, nullptr, nullptr\);/);
+assert.match(popup, /if \(g_camera_popup->full\) \{\s*camera_stream_process_ui\(g_camera_popup->soft_full_image, nullptr\);/);
 
 // A saved tile is declared to the Bridge even without MQTT routes: a new
 // camera tile was "unknown_camera" until a restart (S3 b325).

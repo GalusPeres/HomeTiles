@@ -147,6 +147,15 @@ The display captures images only while Home Assistant asks for them. Opening the
 
 Disabling the setting removes the entity. The paused switch keeps the entity but sends no images. A display cannot show its own camera in its own camera popup.
 
+## Rain Radar and Webcams { data-toc-label="Radar & webcams" }
+
+The Bridge provides the rain radar and the webcams of the [Camera / Picture tile](tiles.md#camera) itself; there is nothing to set up. This needs HomeTiles v0.9.8 and Bridge v0.9.8 or newer.
+
+- The Bridge creates its own device **HomeTiles Bridge** with one camera per radar place and webcam, however many displays use it: `camera.ht_radar_home` for Home Assistant's home always exists, every other place and webcam exists while a display uses it. They work like any camera in Home Assistant; its camera window plays the radar as a loop.
+- What a display uses is fetched every 10 minutes, also while nobody looks, and kept for 24 hours in the `hometiles_cameras` folder of Home Assistant's configuration. A radar place takes about 6 MB a day, a webcam up to about 14 MB.
+- The radar comes from RainViewer, inside Germany from the DWD when RainViewer fails, otherwise from NASA. Only the location rounded to about 10 km leaves Home Assistant.
+- **Radar source** on the display's System page takes an emergency address for a frame list like RainViewer's.
+
 ## Voice Assistant (early version) { #voice-assistant data-toc-label="Voice assistant" }
 
 ESP32-P4 displays with a speaker and microphone can play audio from Home Assistant and work as an Assist voice satellite. This needs HomeTiles v0.9.2 and Bridge v0.9.2. It is an early version: the display has no microphone button and no audio settings yet; everything is set in Home Assistant.

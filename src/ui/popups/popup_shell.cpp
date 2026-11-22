@@ -51,6 +51,8 @@ constexpr size_t kMaxPopupOverlays = 16;
 lv_obj_t* g_popup_overlays[kMaxPopupOverlays] = {};
 // popup_shell_hold_close_fill: a drag holds the close button's press color.
 bool g_hold_close_fill = false;
+// popup_shell_screensaver_open: the screensaver's overlay is on the top layer.
+bool g_screensaver_open = false;
 struct Shell {
   HeaderDisc disc;
   lv_obj_t* overlay = nullptr;
@@ -313,6 +315,34 @@ void close_clicked(lv_event_t* event) {
   sync_popup_shell();
 }
 
+// A tap beside the card closes the popup like its X (#142). The overlay gets
+// only presses that hit none of the card's objects; both the press and the
+// release must lie outside the card, so a press on the card that slides off
+// never closes it. A card that fills the screen has no outside.
+bool g_pressed_outside = false;
+
+bool outside_card(lv_event_t* event) {
+  lv_indev_t* indev = lv_event_get_indev(event);
+  if (!indev || !shell.frame) return false;
+  lv_point_t point;
+  lv_indev_get_point(indev, &point);
+  lv_area_t card;
+  lv_obj_get_coords(shell.frame, &card);
+  return !lv_area_is_point_on(&card, &point, 0);
+}
+
+void overlay_pressed(lv_event_t* event) {
+  const lv_event_code_t code = lv_event_get_code(event);
+  if (lv_event_get_target(event) != shell.overlay) return;
+  if (code == LV_EVENT_PRESSED) {
+    g_pressed_outside = outside_card(event);
+  } else if (code == LV_EVENT_CLICKED) {
+    const bool outside = g_pressed_outside && outside_card(event);
+    g_pressed_outside = false;
+    if (outside) close_clicked(event);
+  }
+}
+
 Binding* bind(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
                lv_obj_t* icon, lv_obj_t* close) {
   for (uint32_t i = 0; i < lv_obj_get_event_count(body); ++i) {
@@ -357,6 +387,8 @@ void ensure_shell() {
   lv_obj_set_size(shell.overlay, LV_PCT(100), LV_PCT(100));
   lv_obj_remove_flag(shell.overlay, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_flag(shell.overlay, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(shell.overlay, overlay_pressed, LV_EVENT_PRESSED, nullptr);
+  lv_obj_add_event_cb(shell.overlay, overlay_pressed, LV_EVENT_CLICKED, nullptr);
   shell.frame = lv_obj_create(shell.overlay);
   lv_obj_remove_style_all(shell.frame);
   lv_obj_set_style_bg_opa(shell.frame, LV_OPA_COVER, 0);
@@ -574,29 +606,67 @@ void surface_root_deleted(lv_event_t* event) {
     if (entry.root == root) entry = {};
   }
 }
+
+SurfaceMark* find_mark(lv_obj_t* root) {
+  for (SurfaceMark& entry : g_surface_marks) {
+    if (root && entry.root == root) return &entry;
+  }
+  return nullptr;
+}
+
+SurfaceMark* add_mark(lv_obj_t* root, int8_t surface) {
+  for (SurfaceMark& entry : g_surface_marks) {
+    if (entry.root) continue;
+    entry = {root, surface};
+    lv_obj_remove_event_cb(root, surface_root_deleted);  // once, after popup_shell_delete_popups
+    lv_obj_add_event_cb(root, surface_root_deleted, LV_EVENT_DELETE, nullptr);
+    return &entry;
+  }
+  return nullptr;
+}
+
+// The surface the opened popup draws with: the open surface; on the theme of
+// a screen in the other design than the panel's (a screensaver tile in its
+// own Dark or Light, tile_screen.h) that design's roles.
+int8_t wanted_surface() {
+  const int8_t want = popup_surface::g_open_surface == ui_theme::kThemeSurface ? -1 : popup_surface::g_open_surface;
+  const int8_t screen = popup_surface::g_open_screen;
+  return want < 0 && screen >= 0 && (screen == 1) != ui_theme::panel_light() ? screen : want;
+}
+
+// The surface the colors computed now belong to (a body built now): the open
+// surface, else the screen's design where it is not the panel's; -1 the
+// panel's theme.
+int8_t current_surface() {
+  if (ui_theme::g_surface >= 0) return ui_theme::g_surface;
+  const bool light = ui_theme::theme_light();
+  return light != ui_theme::panel_light() ? (light ? 1 : 0) : -1;
+}
+
+void follow_mark(SurfaceMark& mark, int8_t want) {
+  if (mark.surface == want) return;
+  // -1: the panel's theme (whatever screen is open now).
+  const int8_t panel = ui_theme::panel_light() ? 1 : 0;
+  tile_icon_source::recolor_surface(mark.root, mark.surface < 0 ? panel : mark.surface, want < 0 ? panel : want);
+  mark.surface = want;
+}
 }  // namespace
 
 void popup_follow_surface(lv_obj_t* root) {
   if (!root) return;
-  const int8_t want = popup_surface::g_open_surface == ui_theme::kThemeSurface ? -1 : popup_surface::g_open_surface;
-  SurfaceMark* mark = nullptr;
+  SurfaceMark* mark = find_mark(root);
+  if (!mark) mark = add_mark(root, -1);
+  if (mark) follow_mark(*mark, wanted_surface());
+}
+
+void popup_follow_screen() {
+  const int8_t want = wanted_surface();
+  bool screen = want == 0 || want == 1;
+  for (const SurfaceMark& entry : g_surface_marks) screen = screen || (entry.root && (entry.surface == 0 || entry.surface == 1));
+  if (!screen) return;
   for (SurfaceMark& entry : g_surface_marks) {
-    if (entry.root == root) mark = &entry;
+    if (entry.root) follow_mark(entry, want);
   }
-  if (!mark) {
-    for (SurfaceMark& entry : g_surface_marks) {
-      if (!entry.root) {
-        entry = {root, -1};
-        lv_obj_remove_event_cb(root, surface_root_deleted);  // once, after popup_shell_delete_popups
-        lv_obj_add_event_cb(root, surface_root_deleted, LV_EVENT_DELETE, nullptr);
-        mark = &entry;
-        break;
-      }
-    }
-  }
-  if (!mark || mark->surface == want) return;
-  tile_icon_source::recolor_surface(root, mark->surface, want);
-  mark->surface = want;
 }
 
 int8_t popup_drawn_surface(lv_obj_t* root) {
@@ -628,6 +698,9 @@ PopupShellParts create_popup_body(lv_event_cb_t close_handler, void* context,
   }
 
   parts.card = lv_obj_create(parts.overlay);
+  // The surface its colors are built with: a body built for an opener on a
+  // screen in its own design (tile_screen.h) is not mapped to it again.
+  add_mark(parts.card, current_surface());
   lv_obj_set_size(parts.card, popup_layout::kCardWidth, popup_layout::kCardHeight);
   lv_obj_center(parts.card);
   lv_obj_set_style_bg_color(parts.card, lv_color_hex(color), 0);
@@ -673,7 +746,9 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
     lv_obj_set_parent(owner, lv_layer_top());
     lv_obj_add_flag(owner, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(owner, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_parent(shell.overlay, lv_screen_active());
+    // Over an open screensaver (a tapped screensaver tile) the shell lies on
+    // the top layer above the screensaver's overlay; else on the screen.
+    lv_obj_set_parent(shell.overlay, g_screensaver_open ? lv_layer_top() : lv_screen_active());
     lv_obj_set_style_pad_all(shell.overlay, lv_obj_get_style_pad_top(owner, LV_PART_MAIN), 0);
     lv_obj_set_style_bg_color(shell.overlay, lv_obj_get_style_bg_color(owner, LV_PART_MAIN), 0);
     lv_obj_set_style_bg_opa(shell.overlay, lv_obj_get_style_bg_opa(owner, LV_PART_MAIN), 0);
@@ -716,6 +791,18 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
 }
 
 bool popup_shell_active() { return shell.active != nullptr; }
+
+void popup_shell_screensaver_open(bool open) { g_screensaver_open = open; }
+
+bool popup_shell_over_screensaver() {
+  return shell.active && shell.overlay && lv_obj_get_parent(shell.overlay) == lv_layer_top();
+}
+
+bool popup_shell_covers_over_screensaver(const lv_area_t& area) {
+  // LVGL's own rule for a screen (lv_refr.c refr_area_part): some object of
+  // the popup covers the whole area (cover check), not faded or transformed.
+  return popup_shell_over_screensaver() && lv_refr_get_top_obj(&area, shell.overlay) != nullptr;
+}
 
 lv_obj_t* popup_shell_body() { return shell.active ? shell.active->body : nullptr; }
 
@@ -820,10 +907,15 @@ void sync_popup_shell() {
   set_title_single_line(shell.title, with_value);
   // The header's title and value take the text of the open popup's surface
   // (white on a filled tile's color in the light theme).
+  // A title in either design's text takes it: a popup built with the panel's
+  // theme opens on a screen in the other (a light screensaver over the dark
+  // panel, tile_screen.h), and its copied white title stayed white on the
+  // light card (user 2026-11-02, b655).
   const lv_color_t header_text = lv_color_hex(ui_theme::text());
-  if (lv_color_eq(lv_obj_get_style_text_color(shell.title, LV_PART_MAIN),
-                  lv_color_hex(ui_theme::roles_of(ui_theme::kThemeSurface).text)) &&
-      !lv_color_eq(header_text, lv_obj_get_style_text_color(shell.title, LV_PART_MAIN))) {
+  const lv_color_t title_now = lv_obj_get_style_text_color(shell.title, LV_PART_MAIN);
+  const bool theme_text = lv_color_eq(title_now, lv_color_hex(ui_theme::kDark.text)) ||
+                          lv_color_eq(title_now, lv_color_hex(ui_theme::kLight.text));
+  if (theme_text && !lv_color_eq(header_text, title_now)) {
     lv_obj_set_style_text_color(shell.title, header_text, 0);
   }
   if (!lv_color_eq(lv_obj_get_style_text_color(shell.value, LV_PART_MAIN), header_text)) {
@@ -841,6 +933,18 @@ void sync_popup_shell() {
   else
     popup_layout::alignHeader(shell.header, shell.title, shell.icon, shell.icon_disc);
   copy_label(lv_obj_get_child(shell.close, 0), lv_obj_get_child(shell.active->close, 0), false);
+  // The X is the head's text too (popup_layout createCloseButton): a white X
+  // built with the dark theme became the light design's icon grey, not its
+  // text, on a light screen (two roles white in the dark theme, b656).
+  if (lv_obj_t* x = lv_obj_get_child(shell.close, 0)) {
+    const lv_color_t x_now = lv_obj_get_style_text_color(x, LV_PART_MAIN);
+    if ((lv_color_eq(x_now, lv_color_hex(ui_theme::kDark.text)) ||
+         lv_color_eq(x_now, lv_color_hex(ui_theme::kLight.text)) ||
+         lv_color_eq(x_now, lv_color_hex(ui_theme::kLight.icon))) &&
+        !lv_color_eq(x_now, header_text)) {
+      lv_obj_set_style_text_color(x, header_text, 0);
+    }
+  }
   if (lv_obj_has_state(shell.active->close, LV_STATE_DISABLED))
     lv_obj_add_state(shell.close, LV_STATE_DISABLED);
   else lv_obj_remove_state(shell.close, LV_STATE_DISABLED);

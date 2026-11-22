@@ -22,6 +22,8 @@
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/core/config/config_manager.h"
+#include "src/network/bridge/time_zone_rule.h"
+#include "src/ui/ui_manager.h"
 #include "src/core/config/week_start.h"
 #include "src/core/display/display_manager.h"
 #include "src/core/i18n/i18n.h"
@@ -1584,7 +1586,8 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
       if (slot.rule_entity[0]) add_route(String(slot.rule_entity), -1, "state");
       // Weather temperature/humidity sensors, one entity per line (a
       // Vacuum's chosen map comes as a picture, not as a state).
-      for (const char* extra = slot.type == TILE_VACUUM ? "" : slot.extra_entities; *extra;) {
+      // A Camera tile's record holds its entries, no states to follow.
+      for (const char* extra = slot.type == TILE_VACUUM || slot.type == TILE_CAMERA ? "" : slot.extra_entities; *extra;) {
         const char* end = strchr(extra, '\n');
         const size_t length = end ? static_cast<size_t>(end - extra) : strlen(extra);
         if (length) add_route(String(extra).substring(0, length), -1, "state");
@@ -2160,6 +2163,15 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
         Serial.println("[Bridge] Initial sync: idle timer started once");
       }
       tiles_request_bridge_cache_refresh();
+      // Home Assistant's time zone: kept also while the panel has its own, so
+      // the choice "auto" applies at once and the clock is right after a start.
+      char zone_rule[CONFIG_TIMEZONE_RULE_MAX];
+      if (time_zone_rule::extract(cfg_buf, zone_rule, sizeof(zone_rule)) &&
+          configManager.saveTimeZoneRule(zone_rule) &&
+          strcasecmp(configManager.getConfig().timezone, "auto") == 0) {
+        Serial.printf("[NTP] Time zone from Home Assistant: %s\n", zone_rule);
+        uiManager.scheduleNtpSync(0);
+      }
       if (reload) {
         yield();  // After JSON parsing.
         // Do not announce the device again: HA answers each announcement with
@@ -2507,6 +2519,10 @@ void mqttPublishSwitchCommand(const char* entity_id, const char* state) {
   Serial.printf("Switch command -> '%s' (%s)\n", topic, queued ? "queued" : "queue-full");
 }
 
+static uint32_t g_last_media_command_ms = 0;
+
+uint32_t mqttLastMediaCommandMs() { return g_last_media_command_ms; }
+
 void mqttPublishMediaCommand(const char* entity_id, const char* command) {
   if (!entity_id || !*entity_id) return;
 
@@ -2525,6 +2541,7 @@ void mqttPublishMediaCommand(const char* entity_id, const char* command) {
   char payload[256];
   snprintf(payload, sizeof(payload), "{\"entity_id\":\"%s\",\"command\":\"%s\"}", entity_id, action);
   bool queued = networkManager.mqttEnqueuePublishPriority(topic, payload, false);
+  if (queued) g_last_media_command_ms = millis() | 1U;
   Serial.printf("Media command -> '%s' (%s, priority)\n",
                 topic, queued ? "queued" : "queue-full");
 }
@@ -3381,8 +3398,10 @@ void mqttPublishCameraFullScreenOpen(const char* entity_id, uint8_t fps,
   const auto& text = i18n::strings(configManager.getConfig().language);
   const camera_transport::Request transport = camera_transport::request();
   const char* topic = mqttTopics.topic(TopicKey::CAMERA_CMND);
-  if (!networkManager.isMqttConnected() || !topic || !*topic) {
-    camera_popup_set_status(text.camera_mqtt_disconnected, true);
+  // Without a connection the popup waits for it and asks again (camera_popup.cpp).
+  if (!networkManager.isMqttConnected()) return;
+  if (!topic || !*topic) {
+    camera_popup_set_status(text.camera_mqtt_topic_missing, true);
     return;
   }
   char quality[24];
@@ -3408,14 +3427,25 @@ void mqttPublishCameraFullScreenOpen(const char* entity_id, uint8_t fps,
   if (!queued) camera_popup_set_status(text.camera_mqtt_queue_full, true);
 }
 
+void mqttPublishCameraFrame(const char* entity_id, uint32_t time) {
+  if (!entity_id || !*entity_id) return;
+  const char* topic = mqttTopics.topic(TopicKey::CAMERA_CMND);
+  if (!networkManager.isMqttConnected() || !topic || !*topic) return;
+  char payload[192];
+  snprintf(payload, sizeof(payload), "{\"entity_id\":\"%s\",\"command\":\"frame\",\"time\":%lu}", entity_id,
+           static_cast<unsigned long>(time));
+  // Lost under a full queue: the next step of the time bar sends the newest.
+  if (!networkManager.mqttEnqueuePublishPriority(topic, payload, false)) {
+    Serial.println("[Camera] Frame command dropped: queue full");
+  }
+}
+
 void mqttPublishCameraCommand(const char* entity_id, const char* command,
                               uint8_t fps) {
   if (!entity_id || !*entity_id) return;
   const auto& text = i18n::strings(configManager.getConfig().language);
-  if (!networkManager.isMqttConnected()) {
-    camera_popup_set_status(text.camera_mqtt_disconnected, true);
-    return;
-  }
+  // Without a connection the popup waits for it and asks again (camera_popup.cpp).
+  if (!networkManager.isMqttConnected()) return;
 
   const char* topic = mqttTopics.topic(TopicKey::CAMERA_CMND);
   if (!topic || !*topic) {
@@ -3424,19 +3454,22 @@ void mqttPublishCameraCommand(const char* entity_id, const char* command,
   }
 
   const char* action = (command && *command) ? command : "open";
-  char payload[384];
+  char payload[408];
   if (strcmp(action, "open") == 0) {
     const camera_transport::Request transport = camera_transport::request();
     char quality[24];
     camera_quality_field(quality, sizeof(quality));
+    // "box": a still camera's frames take their own shape within it.
     snprintf(payload, sizeof(payload),
              "{\"entity_id\":\"%s\",\"command\":\"%s\","
-             "\"width\":%u,\"height\":%u,\"fps\":%u,"
+             "\"width\":%u,\"height\":%u,\"box\":[%u,%u],\"fps\":%u,"
              "\"chunk\":%u,\"window\":%u%s%s,"
              "\"transport\":\"tcp-ack-v1\",\"protocol_version\":1}",
              entity_id, action,
              camera_geometry::kWidth,
              camera_geometry::kHeight,
+             camera_geometry::kWidth,
+             camera_geometry::kBoxHeight,
              fps ? fps : camera_geometry::kFps,
              static_cast<unsigned>(transport.chunk_bytes),
              static_cast<unsigned>(transport.window), quality, camera_audio_field());

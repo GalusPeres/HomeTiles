@@ -112,6 +112,8 @@ public:
   bool supportsCalendars() const { return entity_search_ >= 5; }
   // Vacuums, their detail state and commands (Bridge level 6).
   bool supportsVacuums() const { return entity_search_ >= 6; }
+  // Rain radar places, webcams and the place search (Bridge level 7).
+  bool supportsCameraSources() const { return entity_search_ >= 7; }
   // The live Bridge configuration announced "push": 1. Such a Bridge sends
   // name, unit and icon changes by itself, so the panel's periodic refresh is
   // only a slow safety net. Not stored: 0 until the configuration arrived.

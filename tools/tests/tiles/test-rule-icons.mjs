@@ -313,8 +313,8 @@ assert.ok(html.includes('append_rule_icon(html, tab_id + "_tile_icon_" + row.sta
   'On/Off and the stops have their icon too');
 const head = read('src/web/admin/tiles/tile-head.js');
 assert.ok(head.includes("const ruleButton = target?.closest?.('button[data-icon-input]');") &&
-  head.includes("t(open.rule ? 'iconPickerRuleHint' : 'iconPickerAutoHint')") &&
-  head.includes('const none = open.rule ||'), 'The tile head\'s picker sets a rule\'s icon, Automatic keeps the tile\'s own');
+  head.includes("t(open.rule && !open.entry ? 'iconPickerRuleHint' : 'iconPickerAutoHint')") &&
+  head.includes('const none = (open.rule && !open.entry) ||'), 'The tile head\'s picker sets a rule\'s icon, Automatic keeps the tile\'s own');
 const colors = read('src/web/admin/tiles/icon-colors.js');
 assert.ok(colors.includes("button.dataset.iconInput = tab + '_tile_icon_stop_icon';") &&
   colors.includes("stop.icon = iconColorValidIcon(target.value) ? target.value : '';") &&

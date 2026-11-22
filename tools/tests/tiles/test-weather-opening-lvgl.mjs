@@ -100,6 +100,8 @@ ${fn(read('src/tiles/runtime/tile_renderer_shared.h'),'apply_fractional_tile_geo
 ${fn(read('src/tiles/runtime/tile_renderer_shared.h'),'place_tile_card')}
 #include "src/types/climate/layout.h"
 #include "src/tiles/runtime/tile_press.h"
+#include "src/tiles/runtime/tile_glass.h"
+#include "src/tiles/runtime/tile_screen.h"
 ${strip(read('src/tiles/runtime/tile_icon_disc.h'))}
 ${ruleIconSource(root, {codepoint: true})}
 ${strip(read('src/tiles/runtime/compact_sensor_layout.h'))}
@@ -131,7 +133,7 @@ constexpr int GAUGE_ARC_STEPS=1000;
 bool tileTypeIsEditableValue(int){return false;}
 struct EditableValue{String state,unit,kind;};EditableValue parse_editable_value(const String&){return {};}
 bool sensor_popup_should_use_state_history(const String&,const String&){return false;}
-void show_sensor_popup(const SensorPopupInit&){++sensor_opens;}void sensor_popup_prefetch_history(const String&){}void request_tile_graph_history(const char*){}
+void show_sensor_popup(const SensorPopupInit&){++sensor_opens;}void sensor_popup_prefetch_history(const String&){}void request_tile_graph_history(const char*){}void tile_graph_request_soon(){}
 // The graph tile's header and area (types/sensor/renderer.cpp).
 ${strip(read('src/tiles/runtime/tile_header.h'))}
 ${strip(read('src/tiles/runtime/tile_graph_box.h'))}

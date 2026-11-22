@@ -78,9 +78,13 @@ assert.match(finish, /wallpaper_cover::is_whole_source\(crop, w, h, target_w, ta
 assert.match(finish, /if \(native\) \{\s*wallpaper_cover::finish_native_in_place\(pixels, w, h, corner_radius\);\s*\} else \{\s*wallpaper_cover::finish_in_place\(pixels, w, h, corner_radius, true\);\s*\}/);
 assert.match(finish, /dsc->data = reinterpret_cast<const uint8_t\*>\(pixels\);/);
 const decode = fn('decode_jpeg_to_size');
-assert.match(decode, /lv_image_dsc_t\* dsc = finish_cover_in_place\(pixels, w, h, target_w, target_h,\s*focus_x, focus_y, zoom, corner_radius, native\);[\s\S]*?if \(dsc\) \{\s*pixels = nullptr;[\s\S]*?\} else \{[\s\S]*?if \(native\) wallpaper_cover::swap_row\(pixels, static_cast<uint32_t>\(w\) \* h\);\s*dsc = make_cover_dsc\(/,
-  'in place first, the copy only otherwise (back in the swapped order); the buffer then belongs to the picture');
-assert.match(decode, /pixels = hw_decode_jpeg\(data, len, w, h, native, zoom <= 1000 \? target_w : 0,\s*zoom <= 1000 \? target_h : 0\);/,
+// Decoded into the picture slot (test-screensaver-picture-slots): in place
+// first, then stretched in place, the copy only otherwise (back in the
+// swapped order) and then into the slot.
+assert.match(decode, /if \(pixels == slot_pixels\) \{\s*dsc = finish_cover_in_place\(pixels, w, h, target_w, target_h,\s*focus_x, focus_y, zoom, corner_radius, native\);[\s\S]*?dsc = stretch_cover_in_place\([\s\S]*?\}\s*if \(!dsc && pixels\) \{[\s\S]*?if \(native\) wallpaper_cover::swap_row\(pixels, static_cast<uint32_t>\(w\) \* h\);\s*dsc = make_cover_dsc\([\s\S]*?slot_pixels\);/,
+  'in place first, the copy only otherwise (back in the swapped order), always into the slot');
+assert.match(decode, /if \(pixels != slot_pixels\) free\(pixels\);/, 'the slot stays, a buffer of its own goes');
+assert.match(decode, /pixels = hw_decode_jpeg\(data, len, w, h, native, zoom <= 1000 \? target_w : 0,\s*zoom <= 1000 \? target_h : 0, slot_pixels, slot\.capacity\);/,
   'only a picture of the screen\'s size without zoom is asked for in native order');
 assert.match(decode, /if \(!pixels\) \{\s*native = false;\s*pixels = sw_decode_jpeg\(/, 'the software decoder keeps its order');
 const hw = fn('hw_decode_jpeg');

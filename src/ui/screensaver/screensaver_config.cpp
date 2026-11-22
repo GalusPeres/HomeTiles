@@ -218,11 +218,6 @@ void ScreensaverConfigStore::normalizeTileGrid(TileGridConfig& grid) {
       tile.background_opacity = 0;
       continue;
     }
-    if (tile.type == TILE_SENSOR) {
-      // History is distributed only to normal folder grids. Screensaver
-      // sensors therefore use the compact value presentation exclusively.
-      tile.sensor_display_mode = 0;
-    }
     if (tile.col >= GRID_COLS) tile.col = GRID_COLS - 1;
     if (tile.row < first_row) tile.row = first_row;
     if (tile.row >= GRID_ROWS) tile.row = GRID_ROWS - 1;

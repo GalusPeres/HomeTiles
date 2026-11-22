@@ -407,7 +407,6 @@ struct Strings {
   // Camera tile, popup and video runtime status.
   const char* camera_tile_type;
   const char* camera_ready;
-  const char* camera_preparing;
   const char* camera_bridge_requesting;
   const char* camera_bridge_update_required;
   const char* camera_bridge_no_response;
@@ -434,8 +433,36 @@ struct Strings {
   const char* camera_ha_url_unavailable;
   const char* camera_setup_failed;
   const char* camera_input_buffer_full;
-  const char* camera_fps_fmt;  // %.1f = measured FPS
-  const char* camera_mqtt_disconnected;
+  const char* camera_live;              // the head of a running live camera
+  const char* camera_synced_fmt;  // %s = the newest picture's time
+  const char* camera_source_ha;
+  const char* camera_source_radar;
+  const char* camera_source_webcam;
+  const char* camera_list_places;
+  const char* camera_list_webcams;
+  const char* camera_place;
+  const char* camera_address;
+  const char* camera_add_entity;
+  const char* camera_add_place;
+  const char* camera_add_webcam;
+  const char* camera_new_webcam;
+  const char* camera_place_home;
+  const char* camera_kind_zone;
+  const char* camera_own_coordinates;
+  const char* camera_own_coordinates_hint;
+  const char* camera_no_coordinates;
+  const char* camera_latitude;
+  const char* camera_longitude;
+  const char* camera_latitude_range;
+  const char* camera_longitude_range;
+  const char* camera_no_picture_found;
+  const char* camera_site_blocked;
+  const char* camera_tile_shows;
+  const char* camera_tile_shows_last;
+  const char* camera_radar_source;
+  const char* camera_radar_source_default;
+  const char* camera_remove;
+  const char* camera_bridge_disconnected;
   const char* camera_mqtt_topic_missing;
   const char* camera_mqtt_queue_full;
   // View select (Home Assistant): a camera tile opened straight in full screen.
@@ -959,7 +986,7 @@ struct LocaleProfile {
   // Timezone selection in Web Admin and device Settings. Entries follow
   // i18n::timezone_option(); TimezoneOptionInfo::group selects the group.
   const char* timezone_group_labels[6];
-  const char* timezone_labels[27];
+  const char* timezone_labels[29];
 
   // Binary sensor UI labels. Order: type, entity, history, activity,
   // history unavailable, no activity, 24-hour range, 7-day range.
@@ -1165,7 +1192,7 @@ static_assert(static_cast<int>(DeviceLabel::Count) == 42, "LocaleProfile::device
 
 // Locale-independent timezone catalog with codes and group assignments.
 // LocaleProfile::timezone_labels supplies display names in the same order.
-constexpr size_t kTimezoneOptionCount = 27;
+constexpr size_t kTimezoneOptionCount = 29;
 constexpr size_t kTimezoneGroupCount = 6;
 struct TimezoneOptionInfo {
   uint8_t group;  // Index in LocaleProfile::timezone_group_labels

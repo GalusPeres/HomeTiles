@@ -145,8 +145,8 @@ assert.match(
 requireMarker(deviceSelect, '#define DEVICE_P4_IDF_DSI', 'shared DSI profile group');
 assert.match(
   deviceDispatch,
-  /void displayEndFullFramePreview\(\) \{\s*#if defined\(DEVICE_P4_IDF_DSI\)\s*DeviceImpl::displayEndFullFramePreview\(\);/,
-  'all native P4 DSI profiles must end the shared preview lifecycle',
+  /void displayEndFullFramePreview\(\) \{\s*#if defined\(DEVICE_P4_IDF_DSI\) \|\| defined\(DEVICE_WAVESHARE_4B\)\s*DeviceImpl::displayEndFullFramePreview\(\);/,
+  'all native P4 DSI profiles (and the 4B, which frees its turned-frame copy) must end the shared preview lifecycle',
 );
 
 const profiles = [

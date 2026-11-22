@@ -221,7 +221,6 @@
     const climateSelect = document.getElementById(prefix + '_climate_entity');
     const coverSelect = document.getElementById(prefix + '_cover_entity');
     const coverPopupModeSelect = document.getElementById(prefix + '_cover_popup_open_mode');
-    const cameraSelect = document.getElementById(prefix + '_camera_entity');
     const climatePopupModeSelect = document.getElementById(prefix + '_climate_popup_open_mode');
     const climateSlotSelects = Array.from(
       { length: 6 },
@@ -261,11 +260,19 @@
       const previousType = Number(tileEl?.dataset.type ?? 0);
       const nextType = Number(typeSelect.value);
       let currentLayout = getTileElementLayout(tab, currentTileIndex);
-      // A new tile grows from 1x0.5 to the smallest size the chosen type needs.
-      const grown = previousType === 0 && nextType !== 0 ? grownNewTileLayout(tab, nextType) : null;
-      if (grown && currentLayout && (grown.span_w !== currentLayout.span_w || grown.span_h !== currentLayout.span_h)) {
+      // The tile grows to the smallest size the chosen type needs. Without
+      // room for it the type is refused instead of stretching the tile over
+      // its neighbours (grownTileLayout).
+      const grown = nextType !== 0 && currentLayout ? grownTileLayout(tab, nextType) : null;
+      if (nextType !== 0 && currentLayout && !grown) {
+        typeSelect.value = String(previousType);
+        showNotification(t('pasteNoSpace'), false);
+        return;
+      }
+      if (grown && currentLayout && (grown.col !== currentLayout.col || grown.row !== currentLayout.row ||
+          grown.span_w !== currentLayout.span_w || grown.span_h !== currentLayout.span_h)) {
         applyLayoutInputsFromLayout(tab, grown, false);
-        newTileSpot.layout = grown;
+        if (newTileSpot && newTileSpot.tab === tab && newTileSpot.index === currentTileIndex) newTileSpot.layout = grown;
         if (tileEl) setTileGridPosition(tileEl, grown.col, grown.row, grown.span_w, grown.span_h);
         currentLayout = grown;
       }
@@ -484,13 +491,9 @@
       updateDraft(tab);
       scheduleAutoSave(tab);
     });
-    bindLive(cameraSelect, 'change', 'cameraEntity', () => {
-      maybeFillTitleFromEntity(tab, '_camera_entity');
-      syncCameraFields(tab);
-      updateTilePreview(tab);
-      updateDraft(tab);
-      scheduleAutoSave(tab);
-    });
+    // The entries themselves bind once on the document (types/camera/admin.js).
+    bindLive(document.getElementById(prefix + '_camera_source'), 'change', 'cameraSource', () => cameraSourceChanged(tab));
+    bindLive(document.getElementById(prefix + '_camera_shows'), 'change', 'cameraShows', () => cameraShowsChanged(tab));
     // The picture options (types/camera/admin.js); the slider follows live.
     for (const [field, eventName] of [['camera_display', 'change'], ['camera_fit', 'change'],
                                       ['camera_every', 'change'], ['camera_transparency', 'input'],

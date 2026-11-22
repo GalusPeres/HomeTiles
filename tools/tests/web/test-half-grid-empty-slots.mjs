@@ -3,12 +3,13 @@ import {extractDeliveredFunction, inlineScriptSafe, readRepoFile} from '../../li
 import {runDomHarness} from '../../lib/headless-dom.mjs';
 
 // One free slot (1x1, or 1x0.5 where no whole cell fits) is centred under the pointer in half-cell steps; a new
-// tile grows when a type needs more room. Other empty tiles stay hidden.
+// tile grows when a type needs more room, and a type without room cannot be chosen. Other empty tiles stay
+// hidden.
 const helpers=['clampInt','clampHalf','isCompactSensorType','isEditableValueType','supportsHalfSize','supportedTileLayout',
   'normalizeLayoutForTileType','normalizeTileLayout','constrainLayoutToTab','setGridItemPosition',
   'setTileGridPosition','layoutTiles','headBarLayout','placeCols','placeRows','tileTakesRoom','emptyOccupancy','markOccupied','slotFits','freeSlotNear','pointerGridPoint','firstFreeSlot',
   'occupiedFromGrid','freeSlotElement','enableFreeSlotHover','getTileElementLayout',
-  'minimumTileSize','grownNewTileLayout','canPlaceTileLayout','canPlaceGridLayout','rectsOverlap','getTileLayoutFromData'].map(extractDeliveredFunction).join('\n');
+  'minimumTileSize','grownTileLayout','canPlaceTileLayout','canPlaceGridLayout','rectsOverlap','getTileLayoutFromData'].map(extractDeliveredFunction).join('\n');
 const html=`<!doctype html><html><head><style>${readRepoFile('src/web/assets/admin.css')}
 :root{--grid-cols:3;--grid-rows:3;--preview-cell-w:100px;--preview-cell-h:100px;--preview-gap:12px;--preview-pad:4px;--tile-radius:16px;}</style></head><body>
 <div id="tab-tiles-test"><div class="tile-grid">${[14,14,5,0,0,0,0,0,0].map((type,i)=>`<div class="tile ${type?'filled':'empty'}" id="test-tile-${i}" data-index="${i}" data-type="${type}" onclick="selected=${i}"></div>`).join('')}</div></div><pre id="result"></pre><script>
@@ -55,13 +56,25 @@ try{
  newTileSpot={tab:'test',index:picked,layout:{col:0,row:1,span_w:1,span_h:.5}};
  // Weather needs a whole cell height; Switch may be half a row high since
  // its header layouts (tile_geometry::compact_switch), Text since 2026-10-12.
- const grown=grownNewTileLayout('test',12);
+ const grown=grownTileLayout('test',12);
  check(grown && grown.col===0 && grown.row===1 && grown.span_h===1,'A weather tile grows the new tile downwards to 1x1');
- check(grownNewTileLayout('test',10).span_h===.5,'A text tile keeps the half height');
- check(grownNewTileLayout('test',5).span_h===.5,'A switch keeps the half height');
- check(grownNewTileLayout('test',1).span_h===.5,'A sensor keeps the half height');
+ check(grownTileLayout('test',10).span_h===.5,'A text tile keeps the half height');
+ check(grownTileLayout('test',5).span_h===.5,'A switch keeps the half height');
+ check(grownTileLayout('test',1).span_h===.5,'A sensor keeps the half height');
  newTileSpot.layout={col:1.5,row:.5,span_w:1,span_h:.5};
- check(grownNewTileLayout('test',12)===null,'Without room a larger type cannot be chosen');
+ check(grownTileLayout('test',12)===null,'Without room a larger type cannot be chosen');
+ // Media needs 2x2: without a free 2x2 spot it cannot be chosen, never
+ // stretched over the neighbours (user 2026-10-31); an existing tile grows
+ // to it where the room is free.
+ newTileSpot.layout={col:0,row:2,span_w:1,span_h:1};
+ check(grownTileLayout('test',15)===null,'A new tile without a free 2x2 spot cannot become Media');
+ newTileSpot=null;currentTileIndex=1;
+ check(grownTileLayout('test',15)===null,'An existing tile without room cannot become Media');
+ currentTileIndex=2;
+ const media=grownTileLayout('test',15);
+ check(media && media.col===1 && media.row===1 && media.span_w===2 && media.span_h===2,'An existing tile grows to 2x2 where it is free '+JSON.stringify(media));
+ const own=grownTileLayout('test',5);
+ check(own && own.span_w===2 && own.span_h===1,'Its own type keeps its size');
  currentTileIndex=-1;newTileSpot=null;
  // A selected new tile still of type Empty does not block the free slot; the
  // slot may lie half a cell over it and takes the click.

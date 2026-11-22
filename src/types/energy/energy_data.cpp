@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <cstring>
 #include <math.h>
+#include <time.h>
 #include <utility>
 #include <vector>
 
@@ -51,14 +52,25 @@ EnergyRequestState g_day_request;
 EnergyRequestState g_week_request;
 EnergyRequestState g_month_request;
 EnergyRequestState g_year_request;
-uint32_t g_last_periodic_ms = 0;
+// The statistics step the tiles last asked for (loop-task only).
+int64_t g_asked_step = -1;
 
 constexpr uint32_t kEnergyRequestThrottleMs = 10000UL;
 constexpr uint32_t kEnergyRetryBackoffMs = 2000UL;
 constexpr uint32_t kEnergyResponseTimeoutMs = 15000UL;
-// Home Assistant's statistics have five-minute resolution at best, so a
-// shorter periodic refresh of the tiles only repeats the same totals.
-constexpr uint32_t kEnergyPeriodicMs = 5UL * 60UL * 1000UL;
+// Energy tiles show the running hour and the day's total so far, which grow with
+// Home Assistant's 5-minute statistics: the Bridge adds each step into its hour's
+// bar. So they ask once per step. Asked once an hour the newest bar stayed as small
+// as its first minutes (user 2026-11-04, who chose this over full hours only: the
+// running hour would always be missing). A lost request or answer costs one step.
+// One request costs little (V2: answer after 58 ms, parse 19 ms). The Energy popup
+// asks for itself when it opens.
+constexpr uint32_t kEnergyStepS = 300;
+// A minute into each step (:01, :06, ...): the Recorder writes a step at second 10
+// of every fifth minute, on the UTC clock like this count.
+constexpr uint32_t kEnergyStepDelayS = 60;
+// The clock is set from 2024-01-01 on (the same check as the head bar's time).
+constexpr time_t kClockSetEpoch = 1704067200;
 // A Bridge without Energy dashboard never answers. After this many timeouts
 // in a row the request waits for the next periodic slot or a popup instead of
 // retrying every 15 seconds (each try logged a Home Assistant warning).
@@ -217,6 +229,19 @@ void queue_energy_tile_update_for_entry(const EnergyEntryData& entry) {
   }
 }
 
+// The newest hour any source of an answer has a value for, -1 without any.
+int answer_newest_hour(JsonArray entries) {
+  int newest = -1;
+  for (JsonObject obj : entries) {
+    int hour = 0;
+    for (JsonVariant value : obj["values"].as<JsonArray>()) {
+      if (!value.isNull() && hour > newest) newest = hour;
+      ++hour;
+    }
+  }
+  return newest;
+}
+
 void parse_energy_response(const char* payload) {
   const uint32_t parse_started_ms = millis();
   DynamicJsonDocument doc(32768);
@@ -232,6 +257,14 @@ void parse_energy_response(const char* payload) {
   JsonArray entries = doc["entries"].as<JsonArray>();
   if (entries.isNull()) {
     Serial.println("[Energy] Response without entries");
+    return;
+  }
+  // Sources without a single hour: the Recorder failed, or the first minutes
+  // of a day hold no statistics yet. Such an answer must not blank the tiles'
+  // bars and totals; it does not count, so the refresh asks again.
+  const int newest_hour = answer_newest_hour(entries);
+  if (strcmp(period, "day") == 0 && entries.size() > 0 && newest_hour < 0) {
+    Serial.println("[Energy] Day response without hours; the tiles keep their values");
     return;
   }
 
@@ -312,9 +345,10 @@ void parse_energy_response(const char* payload) {
   // Timing of one response: since its request was sent, and the parse itself.
   const uint32_t now = millis();
   const uint32_t requested_ms = request_state_for_period(period).last_attempt_ms;
-  Serial.printf("[Energy] Response parsed: period=%s entries=%u after=%lu ms parse=%lu ms\n",
+  Serial.printf("[Energy] Response parsed: period=%s entries=%u newest=%d after=%lu ms parse=%lu ms\n",
                 period,
                 static_cast<unsigned>(parsed.size()),
+                newest_hour,
                 static_cast<unsigned long>(requested_ms ? now - requested_ms : 0),
                 static_cast<unsigned long>(now - parse_started_ms));
 }
@@ -411,15 +445,24 @@ void energy_service_periodic() {
   service_energy_retry("week", g_week_request, now);
   service_energy_retry("month", g_month_request, now);
   service_energy_retry("year", g_year_request, now);
-  // Without an energy section the Bridge has nothing to answer; Energy tiles
-  // and the popup still ask on their own when they are shown.
-  if (!haBridgeConfig.hasEnergyEntries()) return;
-  if (g_last_periodic_ms != 0 && (uint32_t)(now - g_last_periodic_ms) < kEnergyPeriodicMs) {
-    return;
-  }
-  if (energy_request_day_for_tiles(false)) {
-    g_last_periodic_ms = now;
-  }
+  // Energy tiles follow the day also without an energy section: their sources
+  // come from the Energy dashboard (picker list "energy"). Gated on the section
+  // alone, such a tile only got new values when it was built or a popup asked
+  // (user 2026-11-04: they only moved after a tap). With neither there is
+  // nothing to ask for.
+  if (!haBridgeConfig.hasEnergyEntries() && !energy_tiles_alive()) return;
+  const time_t wall = time(nullptr);
+  const bool clock_set = wall >= kClockSetEpoch;
+  const int64_t step = clock_set ? (static_cast<int64_t>(wall) - kEnergyStepDelayS) / kEnergyStepS : -1;
+  // Without a clock (no time server reached): the same rate since the last try.
+  const bool due = clock_set ? step != g_asked_step
+                             : g_day_request.last_attempt_ms == 0 ||
+                                   (uint32_t)(now - g_day_request.last_attempt_ms) >= kEnergyStepS * 1000UL;
+  if (!due || !energy_request_day_for_tiles(false)) return;
+  g_asked_step = step;
+  // An open popup follows too (user 2026-11-04): its Today gets this day answer,
+  // its Week, Month or Year asks along. The Bridge queues two requests per panel.
+  if (const char* period = energy_popup_open_period()) energy_request_period(period, false);
 }
 
 bool energy_find_entry(const String& id, const char* period, EnergyEntryData& out) {

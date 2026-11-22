@@ -92,7 +92,7 @@ Select the clock to change its time/date formats, font sizes, alignment, and sha
 
 The bottom two rows support Sensor, Binary Sensor, Energy, Switch, Button, and Media tiles. Select a slot, choose its type, and move or resize it as on the dashboard. Adjust **Color** and **Opacity** together.
 
-States stay live. Popups do not open in screensaver mode. Local I/O switches and temperatures remain available when Home Assistant is offline.
+The tiles work as on the pages: a tap opens their popup over the screensaver, and the slides pause while it is open or while you touch the screen. Sensor tiles show their graph, gauge or look, Energy tiles their bars. Tiles and popups follow the screensaver's own dark or light design. See-through tiles (**Opacity** below 100 %) show the slide behind them as frosted glass. The clock and tiles move a few pixels now and then against image retention. Local I/O switches and temperatures remain available when Home Assistant is offline.
 
 Media tiles need at least 2×2 cells. Cover art can slow entry and slide changes; use fewer Media tiles if the slideshow feels slow.
 

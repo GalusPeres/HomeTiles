@@ -4357,9 +4357,11 @@ void process_weather_popup_queue() {
   // popup was last shown with, not the one of a popup opened since (V2 b366:
   // black day names on a filled Weather tile's popup).
   const bool shown = g_weather_popup_ctx && (g_weather_open_pending || is_popup_visible(g_weather_popup_ctx));
-  const ui_theme::SurfaceScope popup_scope(shown || !g_weather_popup_ctx
-                                               ? popup_surface::g_open_surface
-                                               : popup_drawn_surface(g_weather_popup_ctx->card));
+  const bool open_surface = shown || !g_weather_popup_ctx;
+  const int8_t drawn = open_surface ? popup_surface::g_open_surface : popup_drawn_surface(g_weather_popup_ctx->card);
+  const ui_theme::SurfaceScope popup_scope(drawn, nullptr,
+                                           open_surface ? popup_surface::g_open_screen
+                                                        : popup_surface::drawn_screen(drawn));
   if (!g_weather_popup_ctx || !g_weather_popup_ctx->card) {
     g_weather_sensor_refresh_pending = false;
     reset_pending_weather_update();

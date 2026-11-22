@@ -2,6 +2,7 @@
 
 #include "src/core/config/config_manager.h"
 #include "src/core/config/icon_glow.h"
+#include "src/tiles/runtime/tile_screen.h"
 #include "src/ui/shared/tone_color.h"
 #include "src/ui/shared/ui_theme.h"
 
@@ -76,6 +77,8 @@ bool frame_line_shown(lv_obj_t* obj) {
 
 void apply_style(lv_obj_t* obj, bool enabled) {
   if (!obj) return;
+  // The line follows the design of the card's screen (tile_screen.h).
+  const ui_theme::SurfaceScope screen = tile_screen::scope(obj);
 
   enabled = enabled && !lv_obj_has_flag(obj, kHiddenTileBorderFlag) && frame_line_shown(obj);
 

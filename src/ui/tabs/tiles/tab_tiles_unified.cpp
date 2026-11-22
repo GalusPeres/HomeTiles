@@ -2090,6 +2090,8 @@ void tiles_request_icon_refresh() {
   if (g_tiles_icon_generation == 0) g_tiles_icon_generation = 1;
   if (!g_tiles_first_icon_generation) g_tiles_first_icon_generation = g_tiles_icon_generation;
   g_tiles_icon_refresh_requested = true;
+  // The screensaver's tiles are no grid of their own here.
+  image_screensaver_icons_changed();
 }
 
 void tiles_request_release(GridType grid_type) {
@@ -2933,6 +2935,8 @@ void tiles_update_sensor_by_entity(GridType grid_type, const char* entity_id, co
   // setting must reach the label), but only a new payload is logged; the
   // renderers skip identical texts and colors.
   const bool changed = cache_entity_payload(entity_id, value);
+  // The screensaver's tiles read the cache too (refresh_slot_values).
+  if (changed) image_screensaver_entity_changed(entity_id);
   // Power flow tiles read every node from the cache; they redraw in the
   // loop (types/power_flow), and a node's open Sensor popup follows.
   if (grid_type == GridType::TAB0 && power_flow_entity_changed(entity_id)) {

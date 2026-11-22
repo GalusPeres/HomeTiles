@@ -641,10 +641,10 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   // add_round made the disc).
   if (chart || look) tile_icon_source::refresh_controls(card);
 
-  // PPA presents the screensaver as a complete fullscreen frame. Popups would
-  // add a second overlay, so this mode disables them. Normal grids retain
-  // their existing behavior.
-  if (tile.sensor_entity.length() && grid_type != GridType::SCREENSAVER) {
+  // Screensaver tiles open their popup like the page's (user 2026-10-31); the
+  // screensaver pauses its slides while a popup is open, so no full-screen
+  // frame is composed under it (image_screensaver.cpp).
+  if (tile.sensor_entity.length()) {
     bool icon_override = false;
     if (tile.icon_name.length() &&
         (tileTypeIsEditableValue(tile.type) || !isMdiIconDisabled(tile.icon_name))) {
@@ -680,10 +680,9 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
         data);
   }
 
-  // Request history for graph tiles
-  if (graph_enabled && tile.sensor_entity.length()) {
-    request_tile_graph_history(tile.sensor_entity.c_str());
-  }
+  // A new graph asks for its day through tile_graph_service_periodic, one
+  // tile after another instead of every graph of a page at once.
+  if (graph_enabled && tile.sensor_entity.length()) tile_graph_request_soon();
 
   return card;
 }

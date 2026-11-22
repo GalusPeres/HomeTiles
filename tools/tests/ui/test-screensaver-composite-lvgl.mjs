@@ -87,6 +87,17 @@ int main() {
   lv_obj_set_style_text_color(text, lv_color_white(), 0);
   lv_label_set_text(text, "12:34");
   lv_obj_set_pos(text, 180, 20);
+  // A tile drawn through a layer of its own (a Media cover; here layered
+  // opacity): LVGL takes the display from the frame's layer, which lacked it
+  // and crashed the panel (b634, V2).
+  lv_obj_t* layered = lv_obj_create(overlay);
+  lv_obj_remove_style_all(layered);
+  lv_obj_set_pos(layered, 190, 120);
+  lv_obj_set_size(layered, 50, 50);
+  lv_obj_set_style_radius(layered, 12, 0);
+  lv_obj_set_style_bg_color(layered, lv_color_hex(0xFF9800), 0);
+  lv_obj_set_style_bg_opa(layered, LV_OPA_COVER, 0);
+  lv_obj_set_style_opa_layered(layered, 160, 0);
   lv_obj_t* later = lv_obj_create(top);  // above the overlay, like a popup
   lv_obj_remove_style_all(later);
   lv_obj_set_pos(later, 250, 140);

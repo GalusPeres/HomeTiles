@@ -20,6 +20,9 @@ const context = vm.createContext({
   light: true,
   panelThemeLight: () => context.light,
   isScreensaverTileTab: tab => tab === 'screensaver',
+  // The screensaver's own design (data-ss-theme: 0 dark, 1 light, 2 the panel's).
+  ssTheme: '2',
+  document: {getElementById: id => (id === 'screensaverGrid' ? {dataset: {ssTheme: context.ssTheme}} : null)},
   tileBgFollowsDefault: () => true,
 });
 vm.runInContext(['iconColorTrim', 'iconColorParseHex', 'iconColorValidIcon', 'iconColorParseHexIcon',
@@ -29,7 +32,8 @@ vm.runInContext(['iconColorTrim', 'iconColorParseHex', 'iconColorValidIcon', 'ic
   'iconColorTextMatches', 'iconColorParseRule', 'iconColorRowsFill', 'resolveIconColorRecord', 'iconColorFillOf',
   'iconColorValidEntity', 'iconColorParseSource', 'iconColorRecordSource', 'iconColorClipValue', 'iconColorLegacyNumericValid',
   'iconColorMigrateLegacyBar', 'iconColorCoverOf', 'normalizeIconColorRecord', 'parseIconColorRecord',
-  'tileFillOf', 'tileTypeKeepsOwnColor', 'tileFills', 'tileBgValueIsSet', 'tileHasOwnColor', 'tileFollowsTint',
+  'tileFillOf', 'tileTypeKeepsOwnColor', 'tileFills', 'tileBgValueIsSet', 'tileHasOwnColor', 'screensaverDesign',
+  'previewScreenOf', 'tileFollowsTint',
   'setPreviewRuleFill', 'applyTileRulesTint'].map(extractDeliveredFunction).join('\n'), context);
 
 const binary = 'v2\n\nis+ FFC107 on\nis- 9E9E9E off';
@@ -72,13 +76,24 @@ const filled = 'v2\n\nfill 20\nis+ FFC107 on\nis- 9E9E9E off';
 }
 
 // The light theme: a row with "Fuellen" lets the tile change its look, on
-// the page and never on the screensaver; the dark theme needs no surface.
+// the page and on the screensaver in its light design (user 2026-11-02);
+// the dark theme needs no surface.
 assert.equal(context.tileFollowsTint('folder1', 'navigate', 0, 'v2\n\nsrc rules light.desk\nis+ FFC107 on', '4'), true,
   'Folder Lighting on the desk lamp');
 assert.equal(context.tileFollowsTint('folder1', 'binary_sensor', 0, 'v2\n\nis- 9E9E9E off', '20'), false,
   'only rows without Fuellen: the white card');
-assert.equal(context.tileFollowsTint('screensaver', 'binary_sensor', 0, binary, '20'), false, 'not on the screensaver');
+assert.equal(context.tileFollowsTint('screensaver', 'binary_sensor', 0, binary, '20'), true,
+  'on the screensaver in the light theme of the panel (Automatic)');
+context.ssTheme = '0';
+assert.equal(context.tileFollowsTint('screensaver', 'binary_sensor', 0, binary, '20'), false,
+  'not on a dark screensaver over a light panel');
 context.light = false;
 assert.equal(context.tileFollowsTint('folder1', 'binary_sensor', 0, binary, '20'), false, 'dark theme');
+context.ssTheme = '1';
+assert.equal(context.tileFollowsTint('screensaver', 'binary_sensor', 0, binary, '20'), true,
+  'on a light screensaver over a dark panel');
+context.ssTheme = '2';
+assert.equal(context.tileFollowsTint('screensaver', 'binary_sensor', 0, binary, '20'), false,
+  'Automatic over a dark panel: dark');
 
 console.log('Rule row fill preview: the matching row fills or keeps the tile plain, like the panel');

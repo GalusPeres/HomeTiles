@@ -24,6 +24,8 @@ struct Sample {
   int32_t width = 0, height = 0;
   bool active = false, click_pending = false, in_frame = false;
   bool press_layout = false;
+  // A popup was open at the press: a click that leaves none closed it.
+  bool popup_open = false;
 };
 inline Sample sample;
 
@@ -32,14 +34,15 @@ inline Sample sample;
 // every block of the body. LVGL draws one object after the other here
 // (LV_OS_NONE, one software draw unit), so a block's time runs from its
 // DRAW_MAIN_BEGIN to the next marked object's or to its band's flush.
-constexpr int kMaxSegments = 32;
+constexpr int kMaxSegments = 64;
 struct Segment {
   lv_obj_t* obj;
-  char kind;  // 'u' under the popup, 'v' overlay, 'o' overlay child, 'B' body, 'b' body child
+  char kind;  // 'u' under the popup, 'v' overlay, 'o' overlay child, 'B' body, 'b' body child, 'd' drawn on closing
   uint32_t us;
 };
 inline Segment segments[kMaxSegments];
 inline int segment_count = 0;
+inline bool closing_marks = false;
 inline int open_segment = -1;
 inline uint32_t open_since = 0;
 inline int unmarked = 0;
@@ -68,6 +71,7 @@ inline void add_mark(lv_obj_t* obj, char kind) {
 inline void mark_popup() {
   segment_count = unmarked = 0;
   open_segment = -1;
+  closing_marks = false;
   lv_obj_t* body = popup_shell_body();
   lv_obj_t* overlay = body ? lv_obj_get_parent(body) : nullptr;
   if (!overlay) return;
@@ -81,12 +85,35 @@ inline void mark_popup() {
     add_mark(lv_obj_get_child(body, static_cast<int32_t>(i)), 'b');
   }
 }
+// Closing (user 2026-10-31: closing a popup over the screensaver redrew
+// 664000 px in ~128 ms, opening took ~90 ms): the first frame after a click
+// that closed the popup, split by the objects drawn there down to the tiles
+// three levels below the screen or the top layer (the screensaver's overlay,
+// wallpaper, clock, tile grid and every tile).
+inline void mark_drawn(lv_obj_t* parent, int depth) {
+  for (uint32_t i = 0; i < lv_obj_get_child_count(parent); ++i) {
+    lv_obj_t* child = lv_obj_get_child(parent, static_cast<int32_t>(i));
+    if (lv_obj_is_hidden(child)) continue;
+    add_mark(child, 'd');
+    if (depth > 1) mark_drawn(child, depth - 1);
+  }
+}
+inline void mark_closing(lv_display_t* display) {
+  segment_count = unmarked = 0;
+  open_segment = -1;
+  closing_marks = true;
+  segments[segment_count++] = {nullptr, 'u', 0};
+  for (lv_obj_t* root : {lv_display_get_screen_active(display), lv_display_get_layer_top(display)}) {
+    if (root && !lv_obj_is_hidden(root)) mark_drawn(root, 3);
+  }
+}
 inline void unmark_popup() {
   for (int i = 0; i < segment_count; ++i) {
     if (segments[i].obj) lv_obj_remove_event_cb(segments[i].obj, mark_event);
   }
   segment_count = 0;
   open_segment = -1;
+  closing_marks = false;
 }
 inline uint32_t descendants(lv_obj_t* obj) {
   uint32_t count = 0;
@@ -99,10 +126,10 @@ inline uint32_t descendants(lv_obj_t* obj) {
 // and how many objects it holds.
 inline void report_segments() {
   // In the heap (PSRAM on the S3), not in internal RAM (psram_static.h).
-  constexpr size_t kLineBytes = 1024;
+  constexpr size_t kLineBytes = 2048;
   static char* const line = static_cast<char*>(malloc(kLineBytes));
   if (!line) return;
-  size_t used = snprintf(line, kLineBytes, "[PopupDraw] under=%lu.%lu",
+  size_t used = snprintf(line, kLineBytes, closing_marks ? "[CloseDraw] before=%lu.%lu" : "[PopupDraw] under=%lu.%lu",
                          static_cast<unsigned long>(segments[0].us / 1000),
                          static_cast<unsigned long>(segments[0].us / 100 % 10));
   int overlay_child = 0, body_child = 0;
@@ -114,6 +141,17 @@ inline void report_segments() {
     else if (s.kind == 'o') snprintf(name, sizeof(name), "o%d", overlay_child++);
     else snprintf(name, sizeof(name), "b%d", body_child++);
     if (s.us < 500) continue;
+    if (s.kind == 'd') {
+      // Drawn on closing: where it lies tells which tile it is.
+      lv_area_t at;
+      lv_obj_get_coords(s.obj, &at);
+      used += snprintf(line + used, kLineBytes - used, " | %ldx%ld@%ld,%ld n=%lu %lu.%lu",
+                       static_cast<long>(lv_area_get_width(&at)), static_cast<long>(lv_area_get_height(&at)),
+                       static_cast<long>(at.x1), static_cast<long>(at.y1),
+                       static_cast<unsigned long>(descendants(s.obj)), static_cast<unsigned long>(s.us / 1000),
+                       static_cast<unsigned long>(s.us / 100 % 10));
+      continue;
+    }
     used += snprintf(line + used, kLineBytes - used, " | %s %ldx%ld n=%lu %lu.%lu", name,
                      static_cast<long>(lv_obj_get_width(s.obj)), static_cast<long>(lv_obj_get_height(s.obj)),
                      static_cast<unsigned long>(descendants(s.obj)), static_cast<unsigned long>(s.us / 1000),
@@ -131,6 +169,7 @@ inline void input_event(lv_event_t* event) {
     auto* source = static_cast<lv_obj_t*>(lv_event_get_param(event));
     if (!source) return;
     sample.active = true;
+    sample.popup_open = popup_shell_body() != nullptr;
     sample.pressed = now;
     sample.width = lv_obj_get_width(source);
     sample.height = lv_obj_get_height(source);
@@ -226,7 +265,12 @@ inline void display_event(lv_event_t* event) {
     sample.frame_started = now;
     sample.flush_us = sample.flushes = sample.pixels = 0;
     sample.in_frame = true;
-    if (sample.click_pending) mark_popup();
+    if (sample.click_pending) {
+      if (sample.popup_open && !popup_shell_body())
+        mark_closing(static_cast<lv_display_t*>(lv_event_get_target(event)));
+      else
+        mark_popup();
+    }
   } else if (sample.in_frame && code == LV_EVENT_RENDER_START) {
     if (segment_count) open_segment_at(0, now);
   } else if (sample.in_frame && code == LV_EVENT_FLUSH_START) {

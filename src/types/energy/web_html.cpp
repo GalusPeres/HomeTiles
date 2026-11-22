@@ -43,11 +43,8 @@ void append_energy_fields_html(String& html, const String& tab_id) {
   html += tab_id;
   html += R"html(_energy_decimals" min="0" max="6" step="1" placeholder="1">
 )html";
-  // The screensaver shows the value alone (renderer.cpp).
-  if (tab_id != "screensaver") {
-    const SwitchChoice displays[] = {{"0", tr.sensor_layout_value}, {"2", tr.sensor_display_graph}};
-    append_switch_choice(html, tab_id, "energy_display_mode", tr.switch_display, displays, 2);
-  }
+  const SwitchChoice displays[] = {{"0", tr.sensor_layout_value}, {"2", tr.sensor_display_graph}};
+  append_switch_choice(html, tab_id, "energy_display_mode", tr.switch_display, displays, 2);
   // The value's Y offset stays hidden: the Sensor editor shows it with the
   // old gauge only (user 2026-10-28), which the Energy tile does not have.
   // The field keeps a stored offset when the tile is saved.
@@ -60,10 +57,8 @@ void append_energy_fields_html(String& html, const String& tab_id) {
   html += tab_id;
   html += R"html(_energy_value_y_offset" min="-100" max="200" step="1" placeholder="0">
 )html";
-  if (tab_id != "screensaver") {
-    const SwitchChoice presses[] = {{"0", tr.long_press}, {"1", tr.short_press}};
-    append_switch_choice(html, tab_id, "energy_popup_open_mode", tr.popup_open, presses, 2);
-  }
+  const SwitchChoice presses[] = {{"0", tr.long_press}, {"1", tr.short_press}};
+  append_switch_choice(html, tab_id, "energy_popup_open_mode", tr.popup_open, presses, 2);
   html += R"html(            </div>
 )html";
 }

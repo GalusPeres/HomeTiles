@@ -1268,7 +1268,9 @@ static void applyWeatherSensorsFromSd(uint16_t folder_id, TileGridConfig& grid) 
 
 // Power flow node entities (Tile::flow_entities) follow the same sidecar
 // pattern: one text file per tile, written through a .tmp file.
-static constexpr size_t kFlowEntityRecordMax = kFlowEntityLinesMax * kWeatherSensorEntityMax;
+static constexpr size_t kFlowEntityRecordMax = camera_entries::kMaxRecord;
+static_assert(kFlowEntityRecordMax >= kFlowEntityLinesMax * kWeatherSensorEntityMax,
+              "A Power flow record must fit");
 
 static String flowEntityPathFile(uint16_t folder_id, size_t index) {
   char path[64];

@@ -6,6 +6,9 @@
     // The edited tile draws with its surface's rules (tile_surface), set
     // below once its color is known; restored at the end.
     const surfaceSaved = globalThis.hometilesPreviewSurface;
+    const screenSaved = globalThis.hometilesPreviewScreen;
+    // A screensaver tile on the screensaver's own design (grid-preview.js).
+    globalThis.hometilesPreviewScreen = typeof previewScreenOf === 'function' ? previewScreenOf(tab) : undefined;
     let surfaceDrawn = null;
     try {
     if (currentTileIndex === -1) return;
@@ -489,6 +492,7 @@
     }
     } finally {
       globalThis.hometilesPreviewSurface = surfaceSaved;
+      globalThis.hometilesPreviewScreen = screenSaved;
     }
     // Its tint changed the surface: drawn again on it from the start.
     const tileElem = currentTileIndex >= 0 ? document.getElementById(tab + '-tile-' + currentTileIndex) : null;

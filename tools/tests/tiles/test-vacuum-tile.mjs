@@ -41,7 +41,7 @@ assert.ok(tiles.includes('appendList("vacuums", parseSensorList(ha.vacuums_text)
 assert.ok(tiles.includes('&ha.fans_text, &ha.vacuums_text}'), 'the previews read the vacuum detail');
 const picker = read('src/web/admin/tiles/entity-picker.js');
 assert.ok(picker.includes("['calendar'], ['vacuum']"), 'the picker names the vacuum domain');
-assert.ok(picker.includes("'calendars', 'vacuums']"), 'the picker searches the vacuums list');
+assert.ok(picker.includes("'calendars', 'vacuums', 'places']"), 'the picker searches the vacuums list');
 
 // The detail state goes to its own cache; tiles and popup follow it.
 const control = read('src/types/device/device_control.cpp');
@@ -185,7 +185,7 @@ assert.ok(read('src/types/vacuum/vacuum_tile.cpp').includes('vacuum_map::unwant(
 assert.ok(read('src/ui/popups/vacuum/vacuum_popup.cpp').includes('if (show) vacuum_map::show_now(pop.map);'));
 assert.ok(map.includes('for (const Want& wish : g_wants) add(wish.entity, wish.edge, wish.every, wish.card);'));
 const config = read('src/tiles/config/tile_config.h');
-assert.match(config, /static constexpr bool tileKeepsFlowEntities\(int type\) \{\s*return type == TILE_POWER_FLOW \|\| type == TILE_VACUUM;/);
+assert.match(config, /static constexpr bool tileKeepsFlowEntities\(int type\) \{\s*return type == TILE_POWER_FLOW \|\| type == TILE_VACUUM \|\| type == TILE_CAMERA;/);
 assert.ok(config.includes('tile.flow_entities = map.startsWith("image.") || map.startsWith("camera.") ? map : String();'));
 const configCpp = read('src/tiles/config/tile_config.cpp');
 assert.ok(!configCpp.includes('tile.type != TILE_POWER_FLOW || !readFlowEntitiesSd'), 'the sidecar is read for every type that keeps it');

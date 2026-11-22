@@ -1,6 +1,6 @@
 // The Energy tile's bars (user 2026-10-29, mockup build/design-mockups/
 // energy-tile-bars): a choice per tile (Anzeige-Modus Wert / Graph, stored in
-// sensor_display_mode 2), on whole-height tiles outside the screensaver.
+// sensor_display_mode 2), on whole-height tiles, also on the screensaver.
 // Today's hours below the Switch header like the Sensor graph tile, in the
 // circle's tone with the value's edge in the icon color, the running hour
 // all icon color, a zero line where the range puts it. The bars keep the
@@ -25,8 +25,14 @@ const fn = (source, name) => {
 // ---- The tile ---------------------------------------------------------------
 const renderer = read('src/types/energy/renderer.cpp');
 const render = fn(renderer, 'render_energy_tile');
-assert.ok(render.includes('const bool bars_shown = tile.sensor_display_mode == kEnergyBarsMode && tile.span_h >= 1 && !compact &&') &&
-  render.includes('grid_type != GridType::SCREENSAVER;'), 'whole-height tiles outside the screensaver');
+// Every tile with a source counts while it lives, so the day answers keep
+// coming without an energy section in the Bridge's configuration (the sources
+// come from the Energy dashboard; bars stayed empty until a press, 2026-11-04).
+assert.match(render, /new EnergyEventData\(\);\n\s*\+\+g_energy_tiles;/, 'a tile with a source counts');
+assert.match(render, /delete data;\n\s*if \(g_energy_tiles\) --g_energy_tiles;/, 'until it is deleted');
+assert.match(fn(renderer, 'energy_tiles_alive'), /return g_energy_tiles > 0;/);
+assert.ok(render.includes('const bool bars_shown = tile.sensor_display_mode == kEnergyBarsMode && tile.span_h >= 1 && !compact;') &&
+  !render.includes('grid_type != GridType::SCREENSAVER'), 'whole-height tiles, also on the screensaver (user 2026-10-31)');
 assert.ok(render.includes('head.title = title_text;') &&
   render.includes('tile_header::create(card, head, false, tile_graph_box::box(tile).y1);'),
   'the Switch header beside the disc, with the source name when the tile has none');
@@ -47,15 +53,23 @@ assert.ok(read('src/types/sensor/renderer.cpp').includes('static lv_area_t senso
 // Live data: a day answer reaches every tile with bars of its source.
 const data = read('src/types/energy/energy_data.cpp');
 assert.match(data, /if \(strcmp\(period, "day"\) == 0\) \{\s*queue_energy_tile_update_for_entry\(entry\);\s*energy_tile_bars_update\(entry\);/);
-assert.ok(fn(renderer, 'energy_tile_bars_update').includes('if (copy_day_values(*live.bars, entry)) lv_obj_invalidate(live.frame);'),
+const barsUpdate = fn(renderer, 'energy_tile_bars_update');
+assert.ok(barsUpdate.includes('if (!copy_day_values(*live.bars, entry)) continue;') && barsUpdate.includes('lv_obj_invalidate(live.frame);'),
   'only changed hours redraw');
+// The log shows an answer's way to the display: changed, then drawn once.
+assert.ok(barsUpdate.includes('live.bars->report_next_draw = true;') && barsUpdate.includes('[EnergyTile] %s bars changed'),
+  'changed hours are logged and wait for their drawing');
+const barsDraw = fn(renderer, 'energy_bars_draw_cb');
+assert.ok(barsDraw.indexOf('bars->report_next_draw = false;') > 0 && barsDraw.includes('[EnergyTile] %s bars drawn')
+  && barsDraw.indexOf('bars->report_next_draw = false;') < barsDraw.indexOf('if (newest < 0) return;'),
+  'the drawing reports once, also when no hour is left to draw');
 assert.ok(fn(renderer, 'energy_bars_delete_cb').includes('if (live.frame == frame) live = LiveBars{};'), 'a deleted tile leaves the table');
 
 // ---- The editor -------------------------------------------------------------
 const handler = read('src/types/energy/web_handler.cpp');
 assert.ok(handler.includes('server.hasArg("sensor_display_mode") && server.arg("sensor_display_mode").toInt() == 2 ? 2 : 0;'));
 const html = read('src/types/energy/web_html.cpp');
-assert.ok(html.indexOf('"energy_display_mode"') > html.indexOf('if (tab_id != "screensaver") {'), 'no choice on the screensaver');
+assert.ok(html.includes('"energy_display_mode"') && !html.includes('tab_id != "screensaver"'), 'the choice on the screensaver too');
 // The editor like the Sensor's (user 2026-10-29): segmented choices in its order.
 assert.ok(html.includes('const SwitchChoice displays[] = {{"0", tr.sensor_layout_value}, {"2", tr.sensor_display_graph}};') &&
   html.includes('append_switch_choice(html, tab_id, "energy_display_mode", tr.switch_display, displays, 2);'), 'the Sensor tile\'s choice and words');
@@ -79,7 +93,7 @@ assert.ok(read('src/web/admin/tiles/editor.js').includes(
   "bindLive(energyDisplayModeSelect, 'change', 'energyDisplayMode', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });"),
   'a change updates the preview, the draft and saves');
 assert.ok(read('src/web/admin/tiles/import-export.js').includes(
-  "fd.append('sensor_display_mode', !screensaverEnergy && Number(tile.sensor_display_mode) === 2 ? '2' : '0');"), 'import and paste');
+  "fd.append('sensor_display_mode', Number(tile.sensor_display_mode) === 2 ? '2' : '0');"), 'import and paste');
 assert.ok(read('src/web/admin/tiles/layout.js').includes(
   'const sensorGraph = (Number(type) === 1 || Number(type) === 14) && Number(mode) === 2 && !halfHeight;'), 'the previews\' header');
 const css = read('src/web/assets/admin.css');

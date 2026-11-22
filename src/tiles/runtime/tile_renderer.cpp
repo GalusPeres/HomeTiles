@@ -39,6 +39,7 @@
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_color_rules.h"
 #include "src/tiles/runtime/tile_icon_source.h"
+#include "src/ui/screensaver/image_screensaver.h"
 #include "src/tiles/config/tile_icon_colors.h"
 #include "src/types/media/cover_color.h"
 #include "src/core/config/config_manager.h"
@@ -3176,10 +3177,12 @@ static String media_entity_for_grid_index(GridType grid_type, uint8_t grid_index
   return tile->sensor_entity;
 }
 
+// The screensaver's tiles too: a player that sits only on the screensaver
+// opened its popup without a cover (user 2026-11-01, S3 b644).
 const lv_image_dsc_t* tile_renderer_find_media_cover(const String& entity_id, uint32_t& hash) {
-  const GridType types[] = {GridType::TAB0, GridType::TAB1, GridType::TAB2};
-  MediaTileWidgets* const grids[] = {g_tab0_media, g_tab1_media, g_tab2_media};
-  for (size_t grid = 0; grid < 3; ++grid) {
+  const GridType types[] = {GridType::TAB0, GridType::TAB1, GridType::TAB2, GridType::SCREENSAVER};
+  MediaTileWidgets* const grids[] = {g_tab0_media, g_tab1_media, g_tab2_media, g_screensaver_media};
+  for (size_t grid = 0; grid < 4; ++grid) {
     if (!grids[grid]) continue;
     for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
       const auto& widgets = grids[grid][i];
@@ -3213,8 +3216,8 @@ static void update_media_popup_from_widgets(GridType grid_type,
                                             uint8_t grid_index,
                                             MediaTileWidgets& widgets,
                                             const String& state_override = String()) {
-  // Screensaver media tiles deliberately have no popup.
-  if (grid_type == GridType::SCREENSAVER) return;
+  // Screensaver media tiles open the popup like the pages' tiles; their
+  // song, state and cover reach it the same way.
   if (grid_index >= TILES_PER_GRID) return;
   const Tile* tile_ptr = tile_renderer_get_tile_config(grid_type, grid_index);
   if (!tile_ptr || tile_ptr->type != TILE_MEDIA ||
@@ -4864,174 +4867,184 @@ static void apply_tile_graph_history(const char* target_entity, const char* payl
   float hours = 24.0f;
   if (extract_json_number_field(json, "hours", hours) && lroundf(hours) != 24) return;
 
-  // Find matching tile with graph in active grid
-  const TileGridConfig& grid = tileConfig.getActiveGrid();
-  SensorTileWidgets* sensors = g_tab0_sensors;  // Active grid is always TAB0
+  // Matching graph tiles on the shown page (TAB0, the active grid) and on
+  // an open screensaver (user 2026-10-31).
+  struct GraphTarget {
+    const TileGridConfig* grid;
+    SensorTileWidgets* sensors;
+  };
+  const GraphTarget targets[] = {{&tileConfig.getActiveGrid(), g_tab0_sensors},
+                                 {image_screensaver_tile_grid(), g_screensaver_sensors}};
+  for (const GraphTarget& target : targets) {
+    if (!target.grid || !target.sensors) continue;
+    const TileGridConfig& grid = *target.grid;
+    SensorTileWidgets* sensors = target.sensors;
 
-  for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
-    const Tile& tile = grid.tiles[i];
-    if (tile.type != TILE_SENSOR) continue;
-    if (tile.sensor_display_mode != 2) continue;  // Only graph mode
-    if (!tile.sensor_entity.equalsIgnoreCase(entity_id)) continue;
+    for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
+      const Tile& tile = grid.tiles[i];
+      if (tile.type != TILE_SENSOR) continue;
+      if (tile.sensor_display_mode != 2) continue;  // Only graph mode
+      if (!tile.sensor_entity.equalsIgnoreCase(entity_id)) continue;
 
-    SensorTileWidgets& w = sensors[i];
-    if (!w.chart || !w.series) continue;
+      SensorTileWidgets& w = sensors[i];
+      if (!w.chart || !w.series) continue;
 
-    // Extract values array
-    String values_str;
-    int start = json.indexOf("\"values\"");
-    if (start < 0) continue;
-    int arr_start = json.indexOf('[', start);
-    int arr_end = json.indexOf(']', arr_start);
-    if (arr_start < 0 || arr_end < arr_start) continue;
-    values_str = json.substring(arr_start + 1, arr_end);
+      // Extract values array
+      String values_str;
+      int start = json.indexOf("\"values\"");
+      if (start < 0) continue;
+      int arr_start = json.indexOf('[', start);
+      int arr_end = json.indexOf(']', arr_start);
+      if (arr_start < 0 || arr_end < arr_start) continue;
+      values_str = json.substring(arr_start + 1, arr_end);
 
-    // Count and parse values
-    std::vector<float> values;
-    values.reserve(100);
-    const char* ptr = values_str.c_str();
-    while (*ptr) {
-      while (*ptr && (*ptr == ' ' || *ptr == ',')) ++ptr;
-      if (!*ptr) break;
+      // Count and parse values
+      std::vector<float> values;
+      values.reserve(100);
+      const char* ptr = values_str.c_str();
+      while (*ptr) {
+        while (*ptr && (*ptr == ' ' || *ptr == ',')) ++ptr;
+        if (!*ptr) break;
 
-      // Handle "null" or "unavailable"
-      if (strncmp(ptr, "null", 4) == 0) {
-        values.push_back(NAN);
-        ptr += 4;
-        continue;
-      }
-      if (*ptr == '"') {
-        // Skip string values like "unavailable"
-        ++ptr;
-        while (*ptr && *ptr != '"') ++ptr;
-        if (*ptr == '"') ++ptr;
-        values.push_back(NAN);
-        continue;
-      }
+        // Handle "null" or "unavailable"
+        if (strncmp(ptr, "null", 4) == 0) {
+          values.push_back(NAN);
+          ptr += 4;
+          continue;
+        }
+        if (*ptr == '"') {
+          // Skip string values like "unavailable"
+          ++ptr;
+          while (*ptr && *ptr != '"') ++ptr;
+          if (*ptr == '"') ++ptr;
+          values.push_back(NAN);
+          continue;
+        }
 
-      char* end = nullptr;
-      float val = strtof(ptr, &end);
-      if (end == ptr) {
-        ++ptr;
-        continue;
-      }
-      ptr = end;
-      if (isfinite(val)) {
-        values.push_back(val);
-      } else {
-        values.push_back(NAN);
-      }
-    }
-
-    if (values.empty()) {
-      lv_chart_set_point_count(w.chart, 1);
-      lv_chart_set_value_by_id(w.chart, w.series, 0, LV_CHART_POINT_NONE);
-      lv_chart_refresh(w.chart);
-      Serial.printf("[TileGraph] History cleared for %s (0 points)\n", entity_id.c_str());
-      continue;
-    }
-
-    // Fill missing buckets as HA does: carry the last valid value forward,
-    // and fill the leading gap with the first valid value.
-    size_t first_valid = values.size();
-    for (size_t j = 0; j < values.size(); ++j) {
-      if (isfinite(values[j])) {
-        first_valid = j;
-        break;
-      }
-    }
-    if (first_valid < values.size()) {
-      float last = values[first_valid];
-      for (size_t j = 0; j < first_valid; ++j) {
-        values[j] = last;
-      }
-      for (size_t j = first_valid + 1; j < values.size(); ++j) {
-        if (!isfinite(values[j])) {
-          values[j] = last;
+        char* end = nullptr;
+        float val = strtof(ptr, &end);
+        if (end == ptr) {
+          ++ptr;
+          continue;
+        }
+        ptr = end;
+        if (isfinite(val)) {
+          values.push_back(val);
         } else {
-          last = values[j];
+          values.push_back(NAN);
         }
       }
-    }
 
-    // One point per four pixels of the graph's width (the mean of each run,
-    // about the mockup's 96 points on a two-cell tile): the area below the
-    // line draws one rect and one triangle per segment (area_graph.h), and
-    // the line stays a calm line instead of LVGL's crowded mode of upright
-    // strokes. The popup keeps every point.
-    const int32_t graph_w = lv_obj_get_content_width(w.chart);
-    const size_t target = graph_w > 8 ? static_cast<size_t>(graph_w / 4) : 96;
-    if (values.size() > target && target >= 2) {
-      std::vector<float> reduced(target);
-      for (size_t j = 0; j < target; ++j) {
-        const size_t from = j * values.size() / target;
-        const size_t to = std::max(from + 1, (j + 1) * values.size() / target);
-        float sum = 0.0f;
-        size_t valid = 0;
-        for (size_t k = from; k < to; ++k) {
-          if (!isfinite(values[k])) continue;
-          sum += values[k];
-          ++valid;
+      if (values.empty()) {
+        lv_chart_set_point_count(w.chart, 1);
+        lv_chart_set_value_by_id(w.chart, w.series, 0, LV_CHART_POINT_NONE);
+        lv_chart_refresh(w.chart);
+        Serial.printf("[TileGraph] History cleared for %s (0 points)\n", entity_id.c_str());
+        continue;
+      }
+
+      // Fill missing buckets as HA does: carry the last valid value forward,
+      // and fill the leading gap with the first valid value.
+      size_t first_valid = values.size();
+      for (size_t j = 0; j < values.size(); ++j) {
+        if (isfinite(values[j])) {
+          first_valid = j;
+          break;
         }
-        reduced[j] = valid ? sum / valid : NAN;
       }
-      values.swap(reduced);
-    }
+      if (first_valid < values.size()) {
+        float last = values[first_valid];
+        for (size_t j = 0; j < first_valid; ++j) {
+          values[j] = last;
+        }
+        for (size_t j = first_valid + 1; j < values.size(); ++j) {
+          if (!isfinite(values[j])) {
+            values[j] = last;
+          } else {
+            last = values[j];
+          }
+        }
+      }
 
-    // Calculate min/max for range
-    float min_v = 0.0f, max_v = 0.0f;
-    bool has_range = false;
-    for (float v : values) {
-      if (!isfinite(v)) continue;
-      if (!has_range) {
-        min_v = max_v = v;
-        has_range = true;
-      } else {
-        if (v < min_v) min_v = v;
-        if (v > max_v) max_v = v;
+      // One point per four pixels of the graph's width (the mean of each run,
+      // about the mockup's 96 points on a two-cell tile): the area below the
+      // line draws one rect and one triangle per segment (area_graph.h), and
+      // the line stays a calm line instead of LVGL's crowded mode of upright
+      // strokes. The popup keeps every point.
+      const int32_t graph_w = lv_obj_get_content_width(w.chart);
+      const size_t target = graph_w > 8 ? static_cast<size_t>(graph_w / 4) : 96;
+      if (values.size() > target && target >= 2) {
+        std::vector<float> reduced(target);
+        for (size_t j = 0; j < target; ++j) {
+          const size_t from = j * values.size() / target;
+          const size_t to = std::max(from + 1, (j + 1) * values.size() / target);
+          float sum = 0.0f;
+          size_t valid = 0;
+          for (size_t k = from; k < to; ++k) {
+            if (!isfinite(values[k])) continue;
+            sum += values[k];
+            ++valid;
+          }
+          reduced[j] = valid ? sum / valid : NAN;
+        }
+        values.swap(reduced);
       }
-    }
 
-    // Determine scale factor
-    int scale = 1;
-    if (has_range) {
-      float span = max_v - min_v;
-      if (span <= 10.0f) {
-        scale = 100;
-      } else if (span <= 100.0f) {
-        scale = 10;
+      // Calculate min/max for range
+      float min_v = 0.0f, max_v = 0.0f;
+      bool has_range = false;
+      for (float v : values) {
+        if (!isfinite(v)) continue;
+        if (!has_range) {
+          min_v = max_v = v;
+          has_range = true;
+        } else {
+          if (v < min_v) min_v = v;
+          if (v > max_v) max_v = v;
+        }
       }
-      float max_abs = fmaxf(fabsf(min_v), fabsf(max_v));
-      while (scale > 1 && (max_abs * scale) > 30000.0f) {
-        scale /= 10;
-      }
-    }
 
-    // Update chart
-    lv_chart_set_point_count(w.chart, static_cast<uint16_t>(values.size()));
-    for (size_t j = 0; j < values.size(); ++j) {
-      float v = values[j];
-      if (!isfinite(v)) {
-        lv_chart_set_value_by_id(w.chart, w.series, static_cast<uint16_t>(j), LV_CHART_POINT_NONE);
-      } else {
-        lv_chart_set_value_by_id(w.chart, w.series, static_cast<uint16_t>(j),
-                                 static_cast<lv_coord_t>(lroundf(v * scale)));
+      // Determine scale factor
+      int scale = 1;
+      if (has_range) {
+        float span = max_v - min_v;
+        if (span <= 10.0f) {
+          scale = 100;
+        } else if (span <= 100.0f) {
+          scale = 10;
+        }
+        float max_abs = fmaxf(fabsf(min_v), fabsf(max_v));
+        while (scale > 1 && (max_abs * scale) > 30000.0f) {
+          scale /= 10;
+        }
       }
-    }
 
-    // Set range
-    if (has_range) {
-      if (min_v == max_v) {
-        min_v -= 1.0f;
-        max_v += 1.0f;
+      // Update chart
+      lv_chart_set_point_count(w.chart, static_cast<uint16_t>(values.size()));
+      for (size_t j = 0; j < values.size(); ++j) {
+        float v = values[j];
+        if (!isfinite(v)) {
+          lv_chart_set_value_by_id(w.chart, w.series, static_cast<uint16_t>(j), LV_CHART_POINT_NONE);
+        } else {
+          lv_chart_set_value_by_id(w.chart, w.series, static_cast<uint16_t>(j),
+                                   static_cast<lv_coord_t>(lroundf(v * scale)));
+        }
       }
-      lv_chart_set_range(w.chart, LV_CHART_AXIS_PRIMARY_Y,
-                         static_cast<lv_coord_t>(floorf(min_v * scale)),
-                         static_cast<lv_coord_t>(ceilf(max_v * scale)));
-    }
 
-    lv_chart_refresh(w.chart);
-    Serial.printf("[TileGraph] History applied for %s (%zu points)\n", entity_id.c_str(), values.size());
+      // Set range
+      if (has_range) {
+        if (min_v == max_v) {
+          min_v -= 1.0f;
+          max_v += 1.0f;
+        }
+        lv_chart_set_range(w.chart, LV_CHART_AXIS_PRIMARY_Y,
+                           static_cast<lv_coord_t>(floorf(min_v * scale)),
+                           static_cast<lv_coord_t>(ceilf(max_v * scale)));
+      }
+
+      lv_chart_refresh(w.chart);
+      Serial.printf("[TileGraph] History applied for %s (%zu points)\n", entity_id.c_str(), values.size());
+    }
   }
 }
 
@@ -5067,22 +5080,51 @@ static bool tile_graph_has_day(const SensorTileWidgets& widgets) {
   return false;
 }
 
-// Graph tiles ask for their day when they are built; offline that request
-// is dropped (mqttPublishHistoryRequest), so a tile built at boot stayed
-// empty until its popup asked (user log 2026-10-26). The shown grid's graph
-// tiles ask again once the connection is up and every five minutes after
-// (the Bridge's day comes in 5-minute steps), so the graph follows the day.
-// A tile still without its day asks again every 15 s, and at once when its
-// page is shown (tile_graph_request_soon): the first request after
-// connecting timed out while the Bridge was not ready yet, and its late
-// answer came while another page was shown, where apply_tile_graph_history
-// finds no tile for it (user log 2026-10-28: graphs empty until pressed).
-constexpr uint32_t kTileGraphRefreshMs = 5UL * 60UL * 1000UL;
+// The shown grid's graph tiles ask for their day once the connection is up
+// and every five minutes after (the Bridge's day comes in 5-minute steps),
+// so the graph follows the day also while the value stays the same (a PV
+// sensor at 0 at night has no new state). A round asks one tile at a time,
+// spread evenly over the five minutes, never all at once (user 2026-10-31:
+// sparing, nothing may stall). A round starts a few seconds after the last
+// one's answers stopped being replayed (mqtt_handlers.cpp keeps an answer
+// for one step), so every turn gets a new day.
+// A tile without its day asks at once, one every 0.3 s: when it is built
+// (tile_graph_request_soon), every 15 s while it has none, and when its page
+// is shown; so does every graph when a round comes far too late. Offline a request is dropped (mqttPublishHistoryRequest), so a
+// tile built at boot stayed empty until its popup asked (user log
+// 2026-10-26); the first request after connecting timed out while the Bridge
+// was not ready yet, and its late answer came while another page was shown,
+// where apply_tile_graph_history finds no tile for it (user log 2026-10-28:
+// graphs empty until pressed).
+constexpr uint32_t kTileGraphRefreshMs = 5UL * 60UL * 1000UL + 5UL * 1000UL;
 constexpr uint32_t kTileGraphRetryMs = 15UL * 1000UL;
+constexpr uint32_t kTileGraphCatchUpGapMs = 300UL;
+enum : uint8_t { kTileGraphNotDue = 0, kTileGraphDue = 1, kTileGraphMissing = 2 };
+// The graph slots: the shown page's tiles, then an open screensaver's (user
+// 2026-10-31: Sensor graphs on the screensaver too).
+constexpr uint16_t kTileGraphSlots = 2 * TILES_PER_GRID;
+static uint8_t g_tile_graph_due[kTileGraphSlots] = {};
 static bool g_tile_graph_online = false;
 static uint32_t g_tile_graph_asked_ms = 0;
 static uint32_t g_tile_graph_retried_ms = 0;
+// The last request (0 = the round's first turn may go at once) and the gap
+// between the turns of this round.
+static uint32_t g_tile_graph_sent_ms = 0;
+static uint32_t g_tile_graph_turn_ms = 0;
 static bool g_tile_graph_page_shown = false;
+
+// A slot's tile and widgets; false when it shows no graph (or no
+// screensaver is open for the screensaver's slots).
+static bool tile_graph_slot(uint16_t slot, const Tile*& tile, SensorTileWidgets*& widgets) {
+  const bool page = slot < TILES_PER_GRID;
+  const TileGridConfig* grid = page ? &tileConfig.getActiveGrid() : image_screensaver_tile_grid();
+  SensorTileWidgets* sensors = page ? g_tab0_sensors : g_screensaver_sensors;
+  if (!grid || !sensors) return false;
+  const uint8_t index = static_cast<uint8_t>(slot % TILES_PER_GRID);
+  tile = &grid->tiles[index];
+  widgets = &sensors[index];
+  return tile->type == TILE_SENSOR && tile->sensor_display_mode == 2 && widgets->chart && tile->sensor_entity.length();
+}
 
 void tile_graph_request_soon() { g_tile_graph_page_shown = true; }
 
@@ -5094,20 +5136,53 @@ void tile_graph_service_periodic() {
   const uint32_t now = millis();
   const bool refresh = !g_tile_graph_online || (uint32_t)(now - g_tile_graph_asked_ms) >= kTileGraphRefreshMs;
   const bool retry = g_tile_graph_page_shown || (uint32_t)(now - g_tile_graph_retried_ms) >= kTileGraphRetryMs;
-  if (!refresh && !retry) return;
-  g_tile_graph_page_shown = false;
-  g_tile_graph_retried_ms = now;
-  if (refresh) {
-    g_tile_graph_online = true;
-    g_tile_graph_asked_ms = now;
+  if (refresh || retry) {
+    // A round far too late (display sleep, a reconnect) catches every graph
+    // up like a missing day instead of spreading old graphs over minutes.
+    const bool late = refresh && (!g_tile_graph_online ||
+                                  (uint32_t)(now - g_tile_graph_asked_ms) >= 2 * kTileGraphRefreshMs);
+    uint16_t graphs = 0;
+    for (uint16_t i = 0; i < kTileGraphSlots; ++i) {
+      const Tile* tile = nullptr;
+      SensorTileWidgets* widgets = nullptr;
+      if (!tile_graph_slot(i, tile, widgets)) {
+        g_tile_graph_due[i] = kTileGraphNotDue;
+        continue;
+      }
+      ++graphs;
+      if (late || !tile_graph_has_day(*widgets)) g_tile_graph_due[i] = kTileGraphMissing;
+      else if (refresh && g_tile_graph_due[i] == kTileGraphNotDue) g_tile_graph_due[i] = kTileGraphDue;
+    }
+    if (refresh) {
+      g_tile_graph_online = true;
+      g_tile_graph_asked_ms = now;
+      g_tile_graph_turn_ms = graphs ? kTileGraphRefreshMs / graphs : 0;
+      g_tile_graph_sent_ms = 0;
+    }
+    g_tile_graph_page_shown = false;
+    g_tile_graph_retried_ms = now;
   }
-  const TileGridConfig& grid = tileConfig.getActiveGrid();
-  for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
-    const Tile& tile = grid.tiles[i];
-    if (tile.type != TILE_SENSOR || tile.sensor_display_mode != 2 || !g_tab0_sensors[i].chart) continue;
-    if (!refresh && tile_graph_has_day(g_tab0_sensors[i])) continue;
-    if (tile.sensor_entity.length()) request_tile_graph_history(tile.sensor_entity.c_str());
+  // A missing day first, then the round's next turn.
+  int pick = -1;
+  for (uint16_t i = 0; i < kTileGraphSlots; ++i) {
+    if (g_tile_graph_due[i] == kTileGraphMissing) {
+      pick = i;
+      break;
+    }
+    if (pick < 0 && g_tile_graph_due[i] == kTileGraphDue) pick = i;
   }
+  if (pick < 0) return;
+  const Tile* tile = nullptr;
+  SensorTileWidgets* widgets = nullptr;
+  if (!tile_graph_slot(static_cast<uint16_t>(pick), tile, widgets)) {
+    g_tile_graph_due[pick] = kTileGraphNotDue;
+    return;
+  }
+  const uint32_t gap = g_tile_graph_due[pick] == kTileGraphMissing ? kTileGraphCatchUpGapMs : g_tile_graph_turn_ms;
+  if (g_tile_graph_sent_ms != 0 && (uint32_t)(now - g_tile_graph_sent_ms) < gap) return;
+  g_tile_graph_due[pick] = kTileGraphNotDue;
+  g_tile_graph_sent_ms = now ? now : 1;
+  request_tile_graph_history(tile->sensor_entity.c_str());
 }
 
 void request_tile_graph_history(const char* entity_id) {
@@ -5257,16 +5332,13 @@ static bool tile_has_own_color(const Tile& tile) { return tileHasOwnColor(tile);
 // The surface a tile draws on (tile_surface in tile_icon_disc.h, user 2026-10-10):
 // a tile in its own color follows that color's lightness (a black tile is the
 // light theme's screen: the theme); every other tile, and the screensaver (a
-// photo frame), keeps the theme.
+// photo frame), keeps the theme. The screensaver's theme is its own design
+// (user 2026-10-11): it renders its tiles on that screen (tile_screen.h), so
+// they fill and color like the pages in that design (user 2026-11-02: as a
+// Light or Dark surface of their own they never filled).
 static uint8_t tile_surface_rule_of(const Tile& tile, GridType grid_type);
 
 static uint8_t tile_surface_of(const Tile& tile, GridType grid_type) {
-  // The screensaver's own design (user 2026-10-11): Dark or Light for all its
-  // tiles, Automatic follows the panel.
-  if (grid_type == GridType::SCREENSAVER) {
-    const uint8_t theme = screensaverConfig.get().theme;
-    return theme == 0 ? tile_surface::kDark : theme == 1 ? tile_surface::kLight : tile_surface::kNone;
-  }
   // A Camera tile's head over its picture: dark or light in either theme,
   // or the design's (types/camera/picture.h).
   if (grid_type != GridType::SCREENSAVER && camera_picture::head_over_picture(tile)) {
@@ -5294,10 +5366,12 @@ static uint8_t tile_surface_of(const Tile& tile, GridType grid_type) {
 // A rule row with its own "Fuellen" (user 2026-10-11)
 // changes a tile between the white and the filled look while it runs: filled
 // while a row with "Fuellen" matches, white while a row without it matches.
-// Every other tile keeps the theme's card.
+// Every other tile keeps the theme's card. The screensaver's tiles too, in
+// its own design (the open screen's theme).
 static uint8_t tile_surface_rule_of(const Tile& tile, GridType grid_type) {
-  if (grid_type == GridType::SCREENSAVER || tile.type == TILE_EMPTY || !ui_theme::theme_light() ||
-      tile_has_own_color(tile) || camera_picture::head_over_picture(tile)) {
+  (void)grid_type;
+  if (tile.type == TILE_EMPTY || !ui_theme::theme_light() || tile_has_own_color(tile) ||
+      camera_picture::head_over_picture(tile)) {
     return 0;
   }
   if (tileFills(tile)) {
@@ -5311,6 +5385,10 @@ lv_obj_t* render_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint
 
   const TileTypeDescriptor* desc = get_tile_type_descriptor(tile.type);
   if (desc && desc->render) {
+    // On its screen's design: a screensaver tile on the screensaver's own
+    // (its grid's mark, tile_screen.h), every other tile on the panel's.
+    const ui_theme::SurfaceScope on_screen(-1, nullptr,
+                                           grid_type == GridType::SCREENSAVER ? tile_screen::of(parent) : -1);
     // The whole tile draws with its surface's rules; its card keeps the
     // surface for every later color change (tile_surface::scope).
     const uint8_t surface = tile_surface_of(tile, grid_type);

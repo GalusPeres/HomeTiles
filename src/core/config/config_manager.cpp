@@ -62,6 +62,7 @@ static bool persisted_config_equal(const DeviceConfig& a,
          a.head_gear == b.head_gear &&
          a.head_clock == b.head_clock &&
          a.head_overview == b.head_overview &&
+         strcmp(a.radar_source, b.radar_source) == 0 &&
          strcmp(a.head_title, b.head_title) == 0 &&
          strcmp(a.head_icon, b.head_icon) == 0 &&
          a.theme == b.theme &&
@@ -175,6 +176,7 @@ static const char* normalize_timezone_code(const char* timezone_code) {
       {"berlin"},
       {"london"},
       {"utc"},
+      {"auto"},
       {"athens"},
       {"istanbul"},
       {"moscow"},
@@ -193,6 +195,7 @@ static const char* normalize_timezone_code(const char* timezone_code) {
       {"phoenix"},
       {"los_angeles"},
       {"honolulu"},
+      {"anchorage"},
       {"buenos_aires"},
       {"sao_paulo"},
       {"tokyo"},
@@ -368,6 +371,7 @@ bool ConfigManager::load() {
   char stored_timezone[CONFIG_TIMEZONE_MAX] = {0};
   prefs.getString("tz", stored_timezone, CONFIG_TIMEZONE_MAX);
   set_timezone_code(config.timezone, sizeof(config.timezone), stored_timezone);
+  prefs.getString("tz_rule", config.timezone_rule, CONFIG_TIMEZONE_RULE_MAX);
   config.global_time_format =
       normalize_global_time_format(prefs.getUChar("time_fmt", clock_tile::TIME_FORMAT_AUTO));
   config.global_date_format =
@@ -391,6 +395,8 @@ bool ConfigManager::load() {
   config.head_gear = prefs.getBool("head_gear", false);
   config.head_clock = prefs.getBool("head_clock", true);
   config.head_overview = prefs.getBool("head_overview", true);
+  config.radar_source[0] = '\0';
+  if (prefs.isKey("radar_source")) prefs.getString("radar_source", config.radar_source, sizeof(config.radar_source));
   config.head_title[0] = '\0';
   config.head_icon[0] = '\0';
   if (prefs.isKey("head_title")) prefs.getString("head_title", config.head_title, sizeof(config.head_title));
@@ -604,6 +610,8 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
                     normalized.language);
   set_timezone_code(normalized.timezone, sizeof(normalized.timezone),
                     normalized.timezone);
+  // Not a setting: it comes from the Bridge (saveTimeZoneRule).
+  memcpy(normalized.timezone_rule, config.timezone_rule, sizeof(normalized.timezone_rule));
   normalized.global_time_format =
       normalize_global_time_format(normalized.global_time_format);
   normalized.global_date_format =
@@ -721,6 +729,7 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
   prefs.putBool("head_gear", normalized.head_gear);
   prefs.putBool("head_clock", normalized.head_clock);
   prefs.putBool("head_overview", normalized.head_overview);
+  prefs.putString("radar_source", normalized.radar_source);
   prefs.putString("head_title", normalized.head_title);
   prefs.putString("head_icon", normalized.head_icon);
   prefs.putUChar("theme", normalized.theme);
@@ -982,6 +991,23 @@ bool ConfigManager::saveHomeHead(const String& title, const String& icon) {
   return true;
 }
 
+bool ConfigManager::saveRadarSource(const String& url) {
+  char value[sizeof(config.radar_source)];
+  copy_utf8(url, value, sizeof(value));
+  if (strcmp(value, config.radar_source) == 0) return true;
+  Device::ScopedStorageWrite storage_write(BatchedNvsWrite::kNeedsDisplayGuard);
+  BatchedNvsWrite::Preferences prefs;
+  if (!prefs.begin(PREF_NAMESPACE, false)) {
+    Serial.println("ConfigManager: Failed to open preferences for the radar source");
+    return false;
+  }
+  const bool written = prefs.putString("radar_source", value) == strlen(value);
+  const bool committed = BatchedNvsWrite::finish(prefs);
+  if (!written || !committed) return false;
+  memcpy(config.radar_source, value, sizeof(value));
+  return true;
+}
+
 bool ConfigManager::saveTileBorders(bool enabled) {
 #if defined(DEVICE_ESP32_S3_RGB_480)
   if (config.tile_borders == enabled) return true;
@@ -1049,6 +1075,23 @@ bool ConfigManager::saveThemeAutoLast(uint8_t theme) {
   const bool committed = BatchedNvsWrite::finish(prefs);
   if (!written || !committed) return false;
   config.theme_auto_last = theme;
+  return true;
+}
+
+bool ConfigManager::saveTimeZoneRule(const char* rule) {
+  if (!rule || strlen(rule) >= sizeof(config.timezone_rule)) return false;
+  if (strcmp(config.timezone_rule, rule) == 0) return false;
+  Device::ScopedStorageWrite storage_write(BatchedNvsWrite::kNeedsDisplayGuard);
+  BatchedNvsWrite::Preferences prefs;
+  if (!prefs.begin(PREF_NAMESPACE, false)) {
+    Serial.println("ConfigManager: Failed to open time zone rule preferences");
+    return false;
+  }
+  const bool written = prefs.putString("tz_rule", rule) == strlen(rule);
+  const bool committed = BatchedNvsWrite::finish(prefs);
+  if (!written || !committed) return false;
+  strncpy(config.timezone_rule, rule, sizeof(config.timezone_rule) - 1);
+  config.timezone_rule[sizeof(config.timezone_rule) - 1] = '\0';
   return true;
 }
 

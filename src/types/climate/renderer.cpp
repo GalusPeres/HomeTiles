@@ -1538,7 +1538,7 @@ lv_obj_t* render_climate_tile(lv_obj_t* parent,
     tile_icon_source::refresh_controls(card);
   }
 
-  if (grid_type != GridType::SCREENSAVER && tile.sensor_entity.length()) {
+  if (tile.sensor_entity.length()) {
     ClimateEventData* data = new ClimateEventData{grid_type, index};
     const lv_event_code_t popup_event =
         getTilePopupOpenMode(tile) == TILE_POPUP_OPEN_SHORT_PRESS
@@ -1551,6 +1551,9 @@ lv_obj_t* render_climate_tile(lv_obj_t* parent,
           if (code != LV_EVENT_SHORT_CLICKED && code != LV_EVENT_LONG_PRESSED) return;
           ClimateEventData* data =
               static_cast<ClimateEventData*>(lv_event_get_user_data(event));
+          // Its values on the tile's screen (tile_screen.h).
+          const ui_theme::SurfaceScope screen =
+              tile_screen::scope(static_cast<lv_obj_t*>(lv_event_get_current_target(event)));
           ClimatePopupInit init = popup_init_for(data);
           if (!init.entity_id.length()) return;
           // For now the popup keeps the global tile color and does not follow the

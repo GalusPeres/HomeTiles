@@ -37,6 +37,12 @@ void image_screensaver_config_changed(
 // a hidden one decodes it ahead.
 void image_screensaver_picture_arrived(const char* entity_id);
 
+// A new state of an entity (tiles_update_sensor_by_entity): a screensaver
+// tile showing it, or following it with a rule, takes it at once instead of
+// with the once-a-second refresh (a Media tile's next track came up to a
+// second after the popup's, user 2026-11-02).
+void image_screensaver_entity_changed(const char* entity_id);
+
 // A Bridge picture for a Camera tile (types/camera/picture.cpp), decoded with
 // the screensaver's decoders so tiles share its hardware JPEG engine (P4) and
 // its PSRAM budget: native RGB565 (LV_COLOR_FORMAT_RGB565) of the JPEG's own
@@ -49,6 +55,16 @@ uint16_t* image_screensaver_decode_picture(const uint8_t* data, size_t len, uint
 // color, icon glow) or a failed save. Rebuild only the small screensaver
 // grid, preserving the image and clock.
 void image_screensaver_tiles_changed();
+
+// The open screensaver's tiles as they are shown (their slots are the
+// GridType::SCREENSAVER widget indices), else nullptr: Sensor graph tiles
+// there take their day like the page's (tile_graph_service_periodic).
+const TileGridConfig* image_screensaver_tile_grid();
+
+// Home Assistant's entity icons came or changed (tiles_request_icon_refresh,
+// any task: it only sets a flag). The open screensaver builds its tiles with
+// the automatic icon again on its next tick.
+void image_screensaver_icons_changed();
 
 // A Web Admin tile edit or move (loopTask, like LVGL): an open screensaver
 // rebuilds only the changed slots and draws them at once, before the flash

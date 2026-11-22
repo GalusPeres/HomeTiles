@@ -19,7 +19,10 @@
 //   key_modifier         bit 0: a tap opens the camera straight in full
 //                        screen, and a tap there closes it back to the tiles
 //                        (icon look too); bits 1-2: circle and title
-//                        follow the design (0), light (1) or dark (2)
+//                        follow the design (0), light (1) or dark (2); bit 3:
+//                        with several entries the tile shows the one last
+//                        chosen in the popup (RAM only: the first after a
+//                        restart)
 // Over the direct link only; without it, at half height and until the first
 // picture arrives the tile shows its icon and title as before.
 namespace camera_picture {
@@ -30,6 +33,7 @@ constexpr uint8_t kTransparencyMax = 100;
 constexpr uint8_t kTapFullScreen = 0x01;
 constexpr uint8_t kHeadLight = 0x02;
 constexpr uint8_t kHeadDark = 0x04;
+constexpr uint8_t kLastChosen = 0x08;
 // The title's distance to the visible end of its pill (480 scale).
 constexpr int kTitlePad = 12;
 
@@ -56,10 +60,13 @@ inline uint8_t transparency(const Tile& tile) {
   return tile.key_code > kTransparencyMax ? kTransparencyMax : tile.key_code;
 }
 
-// A tap opens a camera straight in full screen (an image has no popup).
+// A tap opens the entity straight in full screen.
 inline bool tap_full_screen(const Tile& tile) {
-  return tile.type == TILE_CAMERA && (tile.key_modifier & kTapFullScreen) && is_camera(tile.sensor_entity);
+  return tile.type == TILE_CAMERA && (tile.key_modifier & kTapFullScreen) &&
+         (is_camera(tile.sensor_entity) || is_image(tile.sensor_entity));
 }
+
+inline bool last_chosen(const Tile& tile) { return (tile.key_modifier & kLastChosen) != 0; }
 
 // The head over the picture (user 2026-10-11: "Automatisch / Dunkel / Hell",
 // no switch at a transparency, Automatisch by default): Automatisch follows
@@ -80,7 +87,12 @@ int title_metric(const lv_font_t* font, const char* text);
 // once, a picture that waits is decoded right away; otherwise the icon look
 // stays until the first picture. The tile keeps its own decoded pixels;
 // everything is released with the card.
-void attach(lv_obj_t* card, lv_obj_t* icon, lv_obj_t* title, const Tile& tile);
+// `entity` is the entry the tile shows, the tile's own or one chosen in the popup.
+void attach(lv_obj_t* card, lv_obj_t* icon, lv_obj_t* title, const Tile& tile, const String& entity);
+
+// Another entry on a picture tile (Zuletzt gewaehlt): its title is set already.
+// The old picture stays until the new one is decoded.
+void show_entity(lv_obj_t* card, const String& entity);
 
 // A picture of `entity_id` arrived or was cleared (bridge_images.cpp).
 void arrived(const char* entity_id);

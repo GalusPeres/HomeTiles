@@ -13,6 +13,11 @@ struct CameraPopupInit {
   // A tile set to open in full screen (types/camera/picture.h): straight to
   // the full screen, and a tap there closes the popup back to the tiles.
   bool full_screen = false;
+  // A tile with several entries (types/camera/camera_entries.h): the "..." menu
+  // switches between them. remember_key: the tile follows the choice ("last
+  // chosen", camera_tile_entry_chosen).
+  String entries;
+  uint32_t remember_key = 0;
 };
 
 void show_camera_popup(const CameraPopupInit& init);

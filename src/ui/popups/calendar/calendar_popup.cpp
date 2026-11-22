@@ -8,6 +8,7 @@
 #include "src/network/bridge/ha_bridge_config.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_source.h"
+#include "src/tiles/runtime/tile_screen.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/types/calendar/calendar_model.h"
@@ -823,8 +824,10 @@ void refresh(bool show) {
   }
 }
 
-uint32_t theme_default_card() {
-  const ui_theme::SurfaceScope theme = popup_surface::theme_scope();
+uint32_t theme_default_card(lv_obj_t* source) {
+  // The theme of the opener's screen (a screensaver tile's own design,
+  // tile_screen.h), read before its popup_background sets it.
+  const ui_theme::SurfaceScope theme(ui_theme::kThemeSurface, nullptr, tile_screen::of(source));
   return popup_surface::card_or_default(tileDefaultBgColor());
 }
 
@@ -849,7 +852,7 @@ void show_calendar_popup(const CalendarPopupTarget& target) {
       calendar_store::split_entities(target.entities, pop.entities, calendar_model::kMaxCalendars));
   if (!pop.entity_count) return;
   if (!calendar_tile_alive(target.source)) pop.target.source = nullptr;
-  const uint32_t fallback = theme_default_card();
+  const uint32_t fallback = theme_default_card(pop.target.source);
   if (!pop.target.source) tile_icon_source::open_popup_without_tile();
   pop.card_rgb = pop.target.source ? tile_icon_source::popup_background(pop.target.source, fallback) : fallback;
   const ui_theme::SurfaceScope open_scope = popup_surface::scope();

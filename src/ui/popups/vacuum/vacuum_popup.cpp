@@ -14,6 +14,7 @@
 #include "src/fonts/ui_fonts.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_source.h"
+#include "src/tiles/runtime/tile_screen.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/types/vacuum/vacuum_control.h"
 #include "src/types/vacuum/vacuum_map.h"
@@ -858,8 +859,10 @@ void refresh(bool show) {
   }
 }
 
-uint32_t theme_default_card() {
-  const ui_theme::SurfaceScope theme = popup_surface::theme_scope();
+uint32_t theme_default_card(lv_obj_t* source) {
+  // The theme of the opener's screen (a screensaver tile's own design,
+  // tile_screen.h), read before its popup_background sets it.
+  const ui_theme::SurfaceScope theme(ui_theme::kThemeSurface, nullptr, tile_screen::of(source));
   return popup_surface::card_or_default(tileDefaultBgColor());
 }
 
@@ -884,7 +887,7 @@ void show_vacuum_popup(const VacuumPopupTarget& target) {
     pop.last_tab = Tab::None;
   }
   pop.target = target;
-  const uint32_t fallback = theme_default_card();
+  const uint32_t fallback = theme_default_card(pop.target.source);
   if (!pop.target.source) tile_icon_source::open_popup_without_tile();
   pop.card_rgb = pop.target.source ? tile_icon_source::popup_background(pop.target.source, fallback) : fallback;
   const ui_theme::SurfaceScope surface = popup_surface::scope();

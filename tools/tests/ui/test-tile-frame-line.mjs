@@ -36,7 +36,8 @@ const fn = preview.slice(preview.indexOf('function applyFrameLine(el) {'), previ
 // too) keeps that theme's fixed line.
 assert.ok(fn.includes("if (card.every(v => v === 255)) line = [221, 221, 221];"));
 assert.ok(fn.includes("else if (card.every(v => v === 26)) line = [41, 41, 41];"));
-assert.ok(fn.includes('else if (!panelThemeLight()) line = card.map('));
+// The theme's rule of the tile's screen (a screensaver tile: its own design).
+assert.ok(fn.includes('else if (!designLight()) line = card.map('));
 assert.ok(fn.includes('Math.floor((255 * 23 + v * 232) * 0x8081 / 0x800000)'));
 assert.ok(fn.includes('Math.floor((v * 219) * 0x8081 / 0x800000)'));
 const theme = read('src/ui/shared/ui_theme.h');

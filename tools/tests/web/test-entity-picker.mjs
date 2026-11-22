@@ -26,7 +26,6 @@ const fields = {
   'src/types/media/web_html.cpp': ['"media_entity"', '"media"'],
   'src/types/climate/web_html.cpp': ['"climate_entity"', '"climates"'],
   'src/types/cover/web_html.cpp': ['"cover_entity"', '"covers"'],
-  'src/types/camera/web_html.cpp': ['"camera_entity"', '"images"'],
   'src/types/scene/web_html.cpp': ['"scene_alias"', '"scenes"'],
   'src/types/device/web.cpp': ['"locks"', '"alarm_panels"', '"fans"']
 };
@@ -383,6 +382,13 @@ ${inlineScriptSafe(readAdminDeliverySource())}
    rows[1].querySelector('.entity-picker-context').textContent==='EG Büro ▸ Schreibtisch 2','Short name: '+rows[1].textContent);
  rows[1].click();
  check($('r_switch_entity').value==='light.desk_2'&&$('r_switch_entity_picker').textContent.includes('EG Büro'),'A Bridge entity is chosen with its area');
+ // Home Assistant puts the device name in front of the entity's own name; an
+ // entity named after its device (Dreame: " L10s Ultra") reads it twice. The
+ // automatic title takes the device name once, other names stay whole.
+ const doubled=entityPickerFromRemote({v:'vacuum.l10s_ultra',t:'L10s Ultra  L10s Ultra',a:'EG Büro',d:'L10s Ultra'});
+ check(doubled.name==='L10s Ultra'&&doubled.label==='L10s Ultra','Device name once: '+JSON.stringify(doubled));
+ check(entityPickerFromRemote({v:'light.desk_3',t:'Schreibtisch 3 Licht',d:'Schreibtisch 3'}).name==='Schreibtisch 3 Licht',
+   'Other names stay whole');
  // The hint opens the password section.
  $('r_switch_entity_picker').click();await wait(400);
  tab('all').click();

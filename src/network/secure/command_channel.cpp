@@ -434,6 +434,8 @@ void handleData(const Header& header, const uint8_t* body, size_t length) {
     entity_search::handleAnswer(body, length);
   } else if (strcmp(header.name, "tiles") == 0) {
     entity_search::handleDeclarationAck(body, length);
+  } else if (strcmp(header.name, "sources") == 0) {
+    entity_search::handleSourceStatus(body, length);
   } else if (strcmp(header.name, "audio") == 0) {
     speaker::handleCommandPayload(body, length);
   } else if (strcmp(header.name, "assist") == 0) {

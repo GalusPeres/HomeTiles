@@ -92,6 +92,12 @@
 
     for (const [key, value] of Object.entries(snapshot || {})) {
       if (key === '_dirty' || key === '_rev' || key === 'icon' || key === 'color' || key === 'bg_color_default' || key === 'col' || key === 'row' || key === 'span_w' || key === 'span_h' || key === 'type' || key === 'title') continue;
+      if (key === 'sensor_decimals' && String(value ?? '').trim() === '') {
+        // An empty decimals field shows the value as it comes (-1 as the server
+        // sends it, 0xFF on the panel), never 0: "4, 7, 9m" became "4" (#157).
+        tile[key] = -1;
+        continue;
+      }
       if (numericFields.includes(key)) {
         const num = Number(value);
         tile[key] = Number.isFinite(num) ? num : value;
@@ -144,7 +150,8 @@
       tile.sensor_decimals = Math.max(0, CAMERA_FITS.indexOf(String(snapshot.camera_fit)));
       tile.image_slideshow_sec = cameraEvery(snapshot.camera_every);
       tile.key_code = cameraTransparency(snapshot.camera_transparency);
-      tile.key_modifier = cameraOptionFlags({head: snapshot.camera_head, tap: snapshot.camera_tap});
+      tile.key_modifier = cameraOptionFlags({head: snapshot.camera_head, tap: snapshot.camera_tap, shows: snapshot.camera_shows});
+      tile.camera_entries = snapshot.camera_entries || '';
     }
     for (const kind of ['lock', 'alarm', 'fan', 'vacuum']) {
       if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, kind + '_entity')) tile.sensor_entity = snapshot[kind + '_entity'] || '';

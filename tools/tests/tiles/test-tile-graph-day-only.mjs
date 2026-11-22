@@ -84,6 +84,9 @@ struct { TileGridConfig grid; const TileGridConfig& getActiveGrid() const { retu
 struct SensorTileWidgets { lv_obj_t* chart = nullptr; lv_chart_series_t* series = nullptr; };
 SensorTileWidgets sensors[TILES_PER_GRID];
 SensorTileWidgets* g_tab0_sensors = sensors;
+// No screensaver open (image_screensaver_tile_grid).
+SensorTileWidgets* g_screensaver_sensors = nullptr;
+const TileGridConfig* image_screensaver_tile_grid() { return nullptr; }
 
 ${fn('extract_json_string_field')}
 ${fn('extract_json_number_field')}

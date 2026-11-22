@@ -117,7 +117,7 @@ assert.match(read('src/ui/popups/device/device_popup.cpp'),
 // light text). A popup without a tile resets it, and no default card is read
 // under the previous popup's surface.
 const devicePopup = read('src/ui/popups/device/device_popup.cpp');
-assert.match(devicePopup, /uint32_t theme_default_card\(\) \{\s*const ui_theme::SurfaceScope theme = popup_surface::theme_scope\(\);\s*return popup_surface::card_or_default\(tileDefaultBgColor\(\)\);/,
+assert.match(devicePopup, /uint32_t theme_default_card\(lv_obj_t\* source\) \{[^}]*?const ui_theme::SurfaceScope theme\(ui_theme::kThemeSurface, nullptr, tile_screen::of\(source\)\);\s*return popup_surface::card_or_default\(tileDefaultBgColor\(\)\);/,
   'device popup: the default card read with the theme');
 assert.match(devicePopup, /void show_device_popup\(const DevicePopupTarget& target\) \{\s*\/\/[^\n]*\n\s*const ui_theme::SurfaceScope popup_scope = popup_surface::theme_scope\(\);/,
   'device popup entry: the theme until its opener sets the surface');
@@ -137,10 +137,10 @@ assert.match(read('src/ui/popups/popup_shell.cpp'),
   /int8_t popup_drawn_surface\(lv_obj_t\* root\) \{\s*for \(const SurfaceMark& entry : g_surface_marks\) \{\s*if \(root && entry\.root == root\) return entry\.surface < 0 \? ui_theme::kThemeSurface : entry\.surface;/,
   'the surface a popup was last shown with');
 assert.match(read('src/ui/popups/weather/weather_popup.cpp'),
-  /void process_weather_popup_queue\(\) \{(?:\s*\/\/[^\n]*)*\s*const bool shown = g_weather_popup_ctx && \(g_weather_open_pending \|\| is_popup_visible\(g_weather_popup_ctx\)\);\s*const ui_theme::SurfaceScope popup_scope\(shown \|\| !g_weather_popup_ctx\s*\? popup_surface::g_open_surface\s*: popup_drawn_surface\(g_weather_popup_ctx->card\)\);/,
+  /void process_weather_popup_queue\(\) \{(?:\s*\/\/[^\n]*)*\s*const bool shown = g_weather_popup_ctx && \(g_weather_open_pending \|\| is_popup_visible\(g_weather_popup_ctx\)\);\s*const bool open_surface = shown \|\| !g_weather_popup_ctx;\s*const int8_t drawn = open_surface \? popup_surface::g_open_surface : popup_drawn_surface\(g_weather_popup_ctx->card\);\s*const ui_theme::SurfaceScope popup_scope\(drawn, nullptr,/,
   'a hidden Weather refresh: its own last surface');
 assert.ok(theme.includes('inline uint32_t unavailable_icon(uint32_t dark_grey) { return theme_light() ? icon_unavailable() : dark_grey; }') &&
-  grid.includes("return panelThemeLight() ? panelRoleHex('icon-unavailable', '#BDBDBD') : darkGrey;") &&
+  grid.includes("return designLight() ? panelRoleHex('icon-unavailable', '#BDBDBD') : darkGrey;") &&
   read('src/types/device/admin.js').includes('if (!d.available && typeof unavailableIconHex === \'function\') out.color = unavailableIconHex(out.color);') &&
   read('src/types/cover/admin.js').includes("return typeof unavailableIconHex === 'function' ? unavailableIconHex(rest) : rest;"),
   'preview: the same unavailable grey');
@@ -153,7 +153,7 @@ assert.ok(read('src/types/media/renderer.cpp').includes('if (primary) tile_icon_
 
 // The preview's functions, exactly as delivered.
 const names = ['toneToLinear', 'toneToSrgb', 'toneOklch', 'toneLinear', 'toneRgb', 'toneBlend', 'toneHex', 'panelVar',
-  'panelLight', 'panelThemeLight', 'panelRole', 'panelRoleHex', 'surfaceRoleTable', 'toneLightSurface', 'toneLightAccent',
+  'panelLight', 'panelThemeLight', 'designLight', 'panelRole', 'panelRoleHex', 'surfaceRoleTable', 'toneLightSurface', 'toneLightAccent',
   'toneHaLightColor', 'toneLightShown', 'toneMarkOn', 'toneNotchOn', 'toneNoColor', 'jewelVar', 'toneJewelIdleCard',
   'toneJewelCard', 'toneJewelFill', 'toneReadableIcon'];
 const js = new Function(names.map(extractDeliveredFunction).join('\n') +

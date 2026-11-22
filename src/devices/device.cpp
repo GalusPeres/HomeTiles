@@ -43,7 +43,7 @@ bool displayTryFullFramePreview(int32_t x, int32_t y, int32_t w, int32_t h,
 }
 
 void displayEndFullFramePreview() {
-#if defined(DEVICE_P4_IDF_DSI)
+#if defined(DEVICE_P4_IDF_DSI) || defined(DEVICE_WAVESHARE_4B)
   DeviceImpl::displayEndFullFramePreview();
 #endif
 }

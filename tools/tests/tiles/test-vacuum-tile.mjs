@@ -15,7 +15,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
 
 // Persisted ID and policies.
-assert.match(read('src/types/tile_type.h'), /TILE_POWER_FLOW = 28,\n  TILE_VACUUM = 29\n/);
+assert.match(read('src/types/tile_type.h'), /TILE_POWER_FLOW = 28,\n  TILE_VACUUM = 29[,\n]/);
 assert.match(read('src/types/tile_type_policy.h'), /\|\| type == TILE_VACUUM;/);
 assert.match(read('src/tiles/config/tile_geometry.h'), /type == TILE_FAN \|\| type == TILE_VACUUM;/);
 assert.match(read('src/ui/navigation/view_navigation.cpp'), /case TILE_VACUUM: return true;/);

@@ -184,14 +184,15 @@ assert.match(indicator, /if \(with_pill && !ui\.head\) \{/, 'No pill texts on th
 // The heads are built again when the circle comes or goes.
 assert.match(indicator, /const bool circle = ui\.head && visible && style == local_camera::IndicatorStyle::Pill;\s*if \(circle != ui\.head_circle\) \{\s*ui\.head_circle = circle;\s*tiles_rebuild_heads\(false\);/);
 const bar = read('src/ui/tabs/tiles/home_bar.cpp');
-const circle = bar.slice(bar.indexOf('static void add_camera_circle(lv_obj_t* bar, const Geometry& g, bool gear_hidden) {'));
-assert.match(bar, /if \(!g_time_timer\) g_time_timer = lv_timer_create\(time_tick, 5000, nullptr\);\s*add_camera_circle\(bar, g, gear_hidden\);/,
+const circle = bar.slice(bar.indexOf('static void add_camera_circle(lv_obj_t* bar, const Geometry& g, int right) {'));
+// Before the time, or before a voice timer's pill (timer_ui.h) when one shows.
+assert.match(bar, /if \(!g_time_timer\) g_time_timer = lv_timer_create\(time_tick, 5000, nullptr\);[\s\S]*?add_camera_circle\(bar, g, \(pill \? pill_left : time_left\) - g\.disc \/ 5\);/,
   'Every head builds it');
 assert.match(circle, /if \(local_camera::indicatorStyle\(\) != local_camera::IndicatorStyle::Pill \|\|\s*!local_camera::indicatorActive\(\)\)\s*return;/);
 assert.match(circle, /lv_obj_t\* circle = lv_button_create\(bar\);/, 'A child of the head');
 // In the middle of the screen; with pages the dots hold the middle and the
 // circle sits before the time (user 2026-10-12).
-assert.match(circle, /const int x = tile_layouts::pages\(pages\) \? \(gear_hidden \? g\.time_x_alone : g\.time_x\) - g\.disc \/ 5 - g\.disc\s*: \(grid_layout::screen_w\(\) - g\.disc\) \/ 2;/);
+assert.match(circle, /const int x = tile_layouts::pages\(pages\) \? right - g\.disc : \(grid_layout::screen_w\(\) - g\.disc\) \/ 2;/);
 assert.match(circle, /lv_obj_set_pos\(circle, x, g\.center_y - g\.disc \/ 2\);\s*lv_obj_set_size\(circle, g\.disc, g\.disc\);/,
   'The page circle\'s size on the head\'s centre line');
 assert.match(circle, /lv_label_set_text\(icon, getMdiChar\("webcam"\)\.c_str\(\)\);/);

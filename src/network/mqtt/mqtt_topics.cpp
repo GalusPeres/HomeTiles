@@ -40,6 +40,7 @@ const MqttTopicRegistry::TopicDescriptor MqttTopicRegistry::kDescriptors[] = {
   {TopicKey::ASSIST_STAT, TopicDomain::State, "assist"},
   {TopicKey::ASSIST_AUDIO_STAT, TopicDomain::State, "assist_audio"},
   {TopicKey::ASSIST_WAKE_STAT, TopicDomain::State, "assist_wake"},
+  {TopicKey::ASSIST_TIMER_STAT, TopicDomain::State, "assist_timer"},
   {TopicKey::DISPLAY_THEME_CMND, TopicDomain::Command, "display_theme"},
   {TopicKey::DISPLAY_THEME_STAT, TopicDomain::State, "display_theme"},
   {TopicKey::DISPLAY_ROTATION_CMND, TopicDomain::Command, "display_rotation"},

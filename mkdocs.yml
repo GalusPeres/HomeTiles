@@ -34,6 +34,7 @@ nav:
       - Installation: installer.md
       - Advanced setup: advanced-setup.md
       - Bridge Integration: bridge.md
+      - Voice Access per Display: voice-access.md
   - Dashboard:
       - Web Admin Panel: web-admin.md
       - On-Device UI: device-ui.md

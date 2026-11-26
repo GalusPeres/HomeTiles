@@ -13,10 +13,10 @@
   // Rules (every tile type, "src ..." in the record): the tile's own entity
   // or another one, entity color or own rules, coloring the icon and/or
   // tinting the tile (tile_icon_source.cpp). Scene, Folder, Back, Camera,
-  // Clock and Text have no entity of their own and use another entity only
+  // Clock, Text and Timer have no entity of their own and use another entity only
   // (tileTypeHasFixedIconColorOnly / tileTypeRulesUseOwnEntity in
   // tile_type_policy.h).
-  const ICON_COLOR_FIXED_TYPES = ['2', '4', '8', '9', '10', '18'];
+  const ICON_COLOR_FIXED_TYPES = ['2', '4', '8', '9', '10', '18', '30'];
   const ICON_COLOR_OWN_TYPES = ['1', '5', '12', '14', '15', '17', '19', '20', '21', '22', '23', '24', '25', '26', '29'];
   // The own entity field of each type (pairs, not an object with numeric keys).
   const ICON_COLOR_ENTITY_FIELDS = [['1', '_sensor_entity'], ['5', '_switch_entity'], ['12', '_weather_entity'],

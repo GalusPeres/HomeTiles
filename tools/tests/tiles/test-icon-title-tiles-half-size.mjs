@@ -51,7 +51,7 @@ assert.match(camera, /if \(!compact\) \{[\s\S]*?tile_icon_disc::add_round\(card,
 // Fixed icon color with glow: persisted like the Sensor family's record,
 // applied once when the tile is built, previewed with the same color.
 const policy = read('src/types/tile_type_policy.h');
-assert.match(policy, /static constexpr bool tileTypeHasFixedIconColorOnly\(int type\) \{\s*return type == TILE_SCENE \|\| type == TILE_FOLDER \|\| type == TILE_BACK \|\| type == TILE_CAMERA \|\|\s*type == TILE_CLOCK \|\| type == TILE_TEXT;/);
+assert.match(policy, /static constexpr bool tileTypeHasFixedIconColorOnly\(int type\) \{\s*return type == TILE_SCENE \|\| type == TILE_FOLDER \|\| type == TILE_BACK \|\| type == TILE_CAMERA \|\|\s*type == TILE_CLOCK \|\| type == TILE_TEXT \|\| type == TILE_TIMER;/);
 assert.match(policy, /return tileTypeRulesUseOwnEntity\(type\) \|\| tileTypeHasFixedIconColorOnly\(type\);/);
 assert.ok(!/tileTypeIconColorsByValue[^}]*TILE_(SCENE|FOLDER|BACK|CAMERA)/.test(policy) &&
   !/tileTypeIconColorsByState[^}]*TILE_(SCENE|FOLDER|BACK|CAMERA)/.test(policy), 'Fixed color only: no bar and no state list');

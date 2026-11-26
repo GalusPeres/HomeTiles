@@ -177,6 +177,8 @@ The Bridge adds these entities to the display's Home Assistant device while the 
 
 It works on the direct link and over MQTT.
 
+To limit which devices each display's voice may control or read, see [Voice Access per Display](voice-access.md).
+
 ## MQTT Topics Reference { data-toc-label="MQTT reference" }
 
 Entity states use `<HA prefix>/<entity>/...`. The Bridge publishes them itself; Home Assistant's MQTT Statestream integration is not required. On the direct link the same topics travel over the link instead of a broker.

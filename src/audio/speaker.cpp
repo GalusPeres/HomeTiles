@@ -6,8 +6,11 @@
 
 #include "src/audio/assist_contract.h"
 #include "src/audio/speaker_contract.h"
+#include "src/audio/timer_chime.h"
+#include "src/audio/voice_timer_contract.h"
 #include "src/network/mqtt/mqtt_topics.h"
 #include "src/network/network_manager.h"
+#include "src/ui/timers/voice_timers.h"
 
 #if defined(HOMETILES_SPEAKER)
 #include <HTTPClient.h>
@@ -146,6 +149,7 @@ constexpr uint32_t kNotifyVolume = 1u << 1;
 constexpr uint32_t kNotifyShutdown = 1u << 2;
 constexpr uint32_t kNotifyAssist = 1u << 3;
 constexpr uint32_t kNotifyWake = 1u << 4;
+constexpr uint32_t kNotifyChime = 1u << 5;
 constexpr uint32_t kShutdownWaitMs = 1500;
 
 constexpr uint32_t kHttpTimeoutMs = 5000;
@@ -192,6 +196,8 @@ struct PlayRequest {
   uint16_t lead_ms;
   // The Bridge plays the clip again to resume: a pause closes the stream.
   bool restart;
+  // A voice timer's own sound: this level (0..1), unmuted; < 0 = media volume.
+  float volume_override;
 };
 
 // Assist capture: 16 kHz 16-bit stereo (one mic per slot). 6 x 320 frames x
@@ -233,6 +239,15 @@ PlayRequest* g_request = nullptr;
 // Loop-task parse buffer for the play URL.
 char* g_parse_url = nullptr;
 std::atomic<bool> g_play_pending{false};
+// A timer chime to play: chime | repeats << 8; kNoChime when none.
+constexpr uint16_t kNoChime = 0xFFFF;
+std::atomic<uint16_t> g_chime_request{kNoChime};
+// The timer volume of the requested chime (0..1).
+std::atomic<float> g_chime_volume{0.6f};
+// Worker only: while a chime plays the output uses the timer volume, unmuted;
+// below zero it follows the media volume and mute.
+float g_volume_override = -1.0f;
+std::atomic<bool> g_chime_active{false};
 // Bumped by stop, a newer play and shutdown; a clip ends when it changed.
 std::atomic<uint32_t> g_stop_generation{0};
 std::atomic<bool> g_shutdown{false};
@@ -332,11 +347,13 @@ void setAmp(bool on) {
 
 void applyVolumeIfChanged() {
   if (!g_codec_ready.load()) return;
-  const uint8_t reg = limitedVolumeRegister(g_volume.load(), speaker_board::kVolumeLimit);
+  const bool override = g_volume_override >= 0.0f;
+  const uint8_t reg = limitedVolumeRegister(override ? g_volume_override : g_volume.load(),
+                                            speaker_board::kVolumeLimit);
   if (reg != g_applied_volume_reg && audio_board::setOutputVolumeRegister(reg) == ESP_OK) {
     g_applied_volume_reg = reg;
   }
-  const int mute = g_muted.load() ? 1 : 0;
+  const int mute = !override && g_muted.load() ? 1 : 0;
   if (mute != g_applied_mute && audio_board::setOutputMute(mute != 0) == ESP_OK) {
     g_applied_mute = mute;
   }
@@ -1226,6 +1243,8 @@ void playRequest(const PlayRequest& request, uint8_t* stream_memory) {
   g_clip_stats.internal_lowest = g_clip_stats.internal_before;
   if (!bridge_stream) setPublic(PublicState::Playing, ErrorCode::None);
   g_live_lead_ms.store(request.live ? request.lead_ms : 0);
+  // A timer's own sound plays at the timer volume, like the chimes.
+  g_volume_override = request.volume_override >= 0.0f ? clampVolume(request.volume_override) : -1.0f;
   Serial.printf("%s Playing %s\n", kLogPrefix, request.id);
   ErrorCode result = playUrl(request.id, request.url, request.live, generation, stream_memory);
   // A long pause can outlast the server's patience: the connection is gone
@@ -1242,6 +1261,10 @@ void playRequest(const PlayRequest& request, uint8_t* stream_memory) {
     result = playUrl(request.id, request.url, request.live, generation, stream_memory);
   }
   closeOutput();
+  if (g_volume_override >= 0.0f) {
+    g_volume_override = -1.0f;
+    applyVolumeIfChanged();
+  }
   g_pause_requested.store(false);
   if (g_clip_released && result == ErrorCode::None && !stopRequested(generation)) {
     Serial.printf("%s Clip %s paused at %.1f s, stream closed: internal RAM %u KB before, lowest %u KB\n",
@@ -1265,6 +1288,36 @@ void playRequest(const PlayRequest& request, uint8_t* stream_memory) {
     setStatusId(request.id);
     setPublic(PublicState::Idle, result);
   }
+}
+
+// Worker: a voice timer chime (timer_chime.h), rendered in blocks straight
+// into the output; a newer play or stop (the stop generation) ends it.
+// g_chime_active is already set (the worker's loop), so a stop arriving
+// while the output opens still ends it.
+void renderChime(uint16_t request, uint32_t generation) {
+  timer_chime::ChimeSynth synth;
+  if (!synth.begin(static_cast<uint8_t>(request & 0xFF), static_cast<uint8_t>(request >> 8)) ||
+      !g_codec_ready.load()) {
+    g_chime_active.store(false);
+    return;
+  }
+  // The timer volume, not the media volume or mute, for the chime only.
+  g_volume_override = g_chime_volume.load();
+  if (openOutput(timer_chime::kSampleRate) != ErrorCode::None) {
+    g_volume_override = -1.0f;
+    applyVolumeIfChanged();
+    g_chime_active.store(false);
+    return;
+  }
+  int16_t block[256];
+  while (!stopRequested(generation)) {
+    const size_t frames = synth.render(block, sizeof(block) / sizeof(block[0]));
+    if (frames == 0 || !writeFrames(block, frames)) break;
+  }
+  closeOutput();
+  g_volume_override = -1.0f;
+  applyVolumeIfChanged();
+  g_chime_active.store(false);
 }
 
 // ---------------------------------------------------------------------------
@@ -1775,6 +1828,18 @@ void workerMain(void*) {
         g_wake_resume_ms = millis();
       }
     }
+    if (bits & kNotifyChime) {
+      // Active before the request is taken: stopChime() then always ends it.
+      const uint32_t generation = g_stop_generation.load();
+      g_chime_active.store(true);
+      const uint16_t chime = g_chime_request.exchange(kNoChime);
+      if (chime != kNoChime) {
+        renderChime(chime, generation);
+        g_wake_resume_ms = millis();
+      } else {
+        g_chime_active.store(false);
+      }
+    }
     if (bits & kNotifyAssist) {
       AssistRequest assist_request = {};
       uint32_t generation = 0;
@@ -1870,6 +1935,55 @@ uint8_t capabilityBits() {
 }  // namespace
 
 bool supported() { return kSupported; }
+
+bool playChime(uint8_t chime, uint8_t repeats, float volume) {
+#if defined(HOMETILES_SPEAKER)
+  if (!g_worker || g_shutdown.load() || !g_codec_ready.load() || chime >= timer_chime::kChimeCount || repeats == 0) {
+    return false;
+  }
+  g_chime_volume.store(clampVolume(volume));
+  // A listening Assist session keeps the I2S lines.
+  if (static_cast<assist::PublicState>(g_assist_state.load()) == assist::PublicState::Listening ||
+      g_assist_pending.load()) {
+    return false;
+  }
+  // Ends the clip or chime playing now, before the request is visible, so
+  // the worker never takes the new chime under the old generation.
+  g_stop_generation.fetch_add(1);
+  g_chime_request.store(static_cast<uint16_t>(chime | (repeats << 8)));
+  notifyWorker(kNotifyChime);
+  return true;
+#else
+  (void)chime;
+  (void)repeats;
+  (void)volume;
+  return false;
+#endif
+}
+
+void stopChime() {
+#if defined(HOMETILES_SPEAKER)
+  g_chime_request.store(kNoChime);
+  if (g_chime_active.load()) g_stop_generation.fetch_add(1);
+#endif
+}
+
+bool chimePlaying() {
+#if defined(HOMETILES_SPEAKER)
+  return g_chime_active.load() || g_chime_request.load() != kNoChime;
+#else
+  return false;
+#endif
+}
+
+bool outputBusy() {
+#if defined(HOMETILES_SPEAKER)
+  return chimePlaying() || g_play_pending.load() ||
+         static_cast<PublicState>(g_public_state.load()) == PublicState::Playing;
+#else
+  return false;
+#endif
+}
 
 void begin() {
 #if defined(HOMETILES_SPEAKER)
@@ -2010,6 +2124,7 @@ void handleCommandPayload(const uint8_t* payload, size_t length) {
       g_request->live = command.live;
       g_request->lead_ms = command.lead_ms;
       g_request->restart = command.restart;
+      g_request->volume_override = command.timer ? voice_timers::volumePercent() / 100.0f : -1.0f;
       g_play_pending.store(true);
       g_pause_requested.store(false);
       // Playback ends a capture session or a start that has not begun.
@@ -2071,6 +2186,9 @@ void handleCommandPayload(const uint8_t* payload, size_t length) {
 void handleAssistCommandPayload(const uint8_t* payload, size_t length, bool sealed) {
 #if defined(HOMETILES_SPEAKER)
   if (!g_worker || g_shutdown.load() || !g_request_mutex) return;
+  // Voice timers share the Assist topic (voice_timer_contract.h); their
+  // lists are longer than the microphone commands.
+  if (voice_timers::handleCommandPayload(payload, length)) return;
   assist::Command command;
   assist::parseCommand(reinterpret_cast<const char*>(payload), length, &command);
   if (command.status != assist::CommandStatus::Ok) {

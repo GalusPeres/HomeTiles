@@ -1886,7 +1886,7 @@
       text-align:right;
     }
     .tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
-             .cover, .device, .energy, .weather, .media, .climate, .switch-bar, .calendar) > .tile-icon {
+             .cover, .device, .energy, .weather, .media, .climate, .switch-bar, .calendar, .timer_tile) > .tile-icon {
       position:absolute;
       top:calc(var(--tile-header-icon-top, 8px) - 3px);
       left:calc(var(--tile-header-icon-left, 6px) - 3px);
@@ -2997,6 +2997,64 @@
     .tile.text.text-compact { padding-top:var(--text-compact-pad-v, 3px); padding-bottom:var(--text-compact-pad-v, 3px); }
     .tile.text.text-compact > .tile-title,
     .tile.text.text-compact > .tile-icon { display:none; }
+
+/* Timer tile (types/timer/renderer.cpp): the Sensor header's corner circle,
+   the countdown over the name at the bottom left; from two columns without
+   a timer the name and "No timers running" beside the circle and the presets
+   along the bottom, as high as the circle. */
+.tile.timer_tile > .tile-timer-foot {
+      position:absolute;
+      left:calc(var(--timer-pad-side, 10px) - 3px);
+      right:calc(var(--timer-pad-side, 10px) - 3px);
+      bottom:calc(var(--timer-pad-bottom, 7px) - 3px);
+      display:flex;
+      flex-direction:column;
+      align-items:stretch;
+    }
+    .tile.timer_tile .tile-timer-value {
+      color:var(--pv-text-soft, #A6A6A6);
+      font-size:var(--fs28, 14px);
+      line-height:var(--lh28, 1.32);
+      white-space:nowrap;
+      overflow:hidden;
+    }
+    .tile.timer_tile .tile-timer-title,
+    .tile.timer_tile .tile-timer-hint {
+      color:var(--pv-text-soft, #A6A6A6);
+      font-size:var(--fs20, 10px);
+      line-height:var(--lh20, 1.35);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .tile.timer_tile > .tile-timer-head {
+      position:absolute;
+      left:calc(var(--timer-beside, 40px) - 3px);
+      right:calc(var(--timer-pad-side, 10px) - 3px);
+      top:calc(var(--timer-disc-mid, 24px) - var(--lh20, 14px) - 3px);
+    }
+    .tile.timer_tile > .tile-timer-presets {
+      position:absolute;
+      left:calc(var(--timer-pad-side, 10px) - 3px);
+      right:calc(var(--timer-pad-side, 10px) - 3px);
+      bottom:calc(var(--timer-pad-bottom, 7px) - 3px);
+      display:flex;
+      gap:var(--timer-gap, 4px);
+    }
+    .tile.timer_tile .tile-timer-preset {
+      flex:1 1 0;
+      min-width:0;
+      height:var(--timer-disc, 26px);
+      border-radius:999px;
+      background:rgba(var(--pv-text-rgb, 255,255,255), .08);
+      color:var(--pv-text, #fff);
+      font-size:var(--fs20, 10px);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      white-space:nowrap;
+      overflow:hidden;
+    }
     .tile.text.text-compact .tile-text { transform:translateY(-50%); }
     .tile.text.text-compact.text-v-top .tile-text { top:calc(var(--text-compact-pad-v, 3px) - 3px); transform:none; }
     .tile.text.text-compact.text-v-bottom .tile-text { top:auto; bottom:calc(var(--text-compact-pad-v, 3px) - 3px); transform:none; }

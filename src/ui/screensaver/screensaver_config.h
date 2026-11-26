@@ -39,6 +39,9 @@ struct ScreensaverConfigData {
   bool show_date = true;
   bool show_weekday = false;
   bool clock_shadow = true;
+  // Time beside the date in one row, so the overlay fits the very top of the
+  // screen (user 2026-11-05).
+  bool clock_single_line = false;
   uint8_t time_format = 0;
   uint8_t date_format = 0;
   uint8_t time_alignment = 1;  // 0=left, 1=center, 2=right

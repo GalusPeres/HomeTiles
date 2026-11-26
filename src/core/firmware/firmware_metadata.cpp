@@ -33,6 +33,9 @@
 #elif defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)
 #define FW_META_TARGET_DEVICE_KEY "golden_security_gs_t3e_v2"
 #define FW_META_TARGET_DISPLAY_NAME "Golden Security GS-T3E v2"
+#elif defined(DEVICE_BTT_PANDA_TOUCH)
+#define FW_META_TARGET_DEVICE_KEY "btt_panda_touch"
+#define FW_META_TARGET_DISPLAY_NAME "BTT Panda Touch"
 #elif defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4)
 #define FW_META_TARGET_DEVICE_KEY "waveshare_s3_touch_lcd_4"
 #define FW_META_TARGET_DISPLAY_NAME "Waveshare ESP32-S3 Touch LCD 4"

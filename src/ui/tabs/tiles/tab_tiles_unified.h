@@ -24,6 +24,8 @@ void tiles_process_reload_requests();
 void tiles_process_pending_folder_switch();
 void tiles_refresh_visible_from_cache();
 void tiles_request_visible_cache_refresh();
+// Replays cached states whose update was skipped while the panel slept.
+void tiles_replay_deferred_updates();
 void tiles_process_visible_cache_refresh(bool allow_now);
 void tiles_request_bridge_cache_refresh();
 void tiles_process_bridge_cache_refresh(bool allow_now);

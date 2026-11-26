@@ -1,6 +1,5 @@
-// The screensaver in the layouts (user 2026-10-08): it takes the active
-// layout's grid without the head, two rows of slots at the bottom (three
-// upright), with own
+// The screensaver in the layouts (user 2026-10-08, extended 2026-11-04): it
+// takes the active layout's grid and may use the whole screen, with own
 // places per layout in the layout file (screensaver_places.h, keyed by slot
 // + 1). The classic places stay in the screensaver grid; the export keeps
 // them; the Web Admin's screensaver tab edits the active layout's places.
@@ -16,8 +15,10 @@ const places = read('src/ui/screensaver/screensaver_places.cpp');
 const header = read('src/ui/screensaver/screensaver_places.h');
 assert.match(header, /constexpr uint16_t kFolder = TileConfig::kScreensaverGridStorageId;/);
 assert.match(header, /inline uint16_t key\(size_t index\) \{ return static_cast<uint16_t>\(index \+ 1\); \}/);
-// Two rows at the bottom of the layout's grid, three upright.
-assert.match(places, /const float count = layout == Layout::kPortrait \? 3 : 2;\s*return rows > count \? rows - count : 0;/);
+// The whole screen: no rows are reserved under the head, the clock floats
+// above the tiles (user 2026-11-04).
+assert.match(places, /Tiles may use the whole screensaver screen/);
+assert.match(places, /float first_row\(Layout layout\) \{\s*\(void\)layout;[\s\S]*?return 0;\s*\}/);
 // A layout without places yet: the classic rows moved onto its bottom rows.
 assert.match(places, /out\.row -= rows_of\(grid_layout::profile_grid\(\)\) - rows_of\(grid\);/);
 assert.match(places, /return out\.row >= first_row\(layout\) - 0\.001f &&\s*grid_layout::inside\(grid, out\.col, out\.row, out\.span_w, out\.span_h\);/);
@@ -44,28 +45,30 @@ assert.match(handler, /bool success = screensaver_layout \? tile_layouts::commit
 assert.match(read('src/web/admin/tiles/import-export.js'),
   /'\/api\/tiles\?folder=' \+ encodeURIComponent\(SCREENSAVER_FOLDER_ID\) \+ '&layout=classic'/);
 
-// The screensaver tab: the shown grid, its two rows at the bottom.
+// The screensaver tab: the shown grid, every row of it usable.
 const layout = read('src/web/admin/tiles/layout.js');
 assert.match(layout, /return !classic && headBarLayout\(\) && typeof GRID_SHOWN_COLS === 'number' \? GRID_SHOWN_COLS : GRID_COLS;/);
 const navigation = read('src/web/admin/folders/navigation.js');
-assert.ok(navigation.includes('return screensaverFirstRow(key, inWindow ? LAYOUTS[key].rows : placeRows(tab));') &&
-  navigation.includes("return Math.max(0, rows - (key === 'portrait' ? 3 : 2));"),
-  'two rows at the bottom, three upright, in the window of that layout');
-// An import writes the classic places: the stored grid's two bottom rows.
-assert.ok(navigation.includes('if (classic) return Math.max(0, GRID_ROWS - 2);'));
+assert.match(navigation, /function screensaverFirstRow\(key, rows\) \{\s*return 0;\s*\}/,
+  'no reserved rows at the bottom of a layout screen');
+assert.match(navigation,
+  /function firstAllowedGridRow\(tab, classic = false\) \{\s*if \(!isScreensaverTileTab\(tab\)\) return 0;\s*return 0;\s*\}/,
+  'no reserved rows in the window, and none for an import\'s classic places');
 assert.ok(!read('src/web/server/render/web_admin_styles.cpp').includes('.screensaver-tile-grid{--grid-cols:'),
   'no more profile grid for the screensaver tab');
 
 // The layout window: a screensaver tab after the pages, without picture,
-// with the clock of that layout; its tiles keep to the bottom rows when taken over; the server loads
-// and saves it like a folder with its slot keys as IDs.
+// with the clock of that layout; its tiles may be taken over into any row;
+// the server loads and saves it like a folder with its slot keys as IDs.
 const windowSource = read('src/web/admin/tiles/layout-window.js');
 assert.ok(windowSource.includes('return [...tabs.filter(tab => !isScreensaverTileTab(tab)), ...tabs.filter(isScreensaverTileTab)];'));
 assert.ok(windowSource.includes('const shift = isScreensaverTileTab(tab) ? L.rows - LAYOUTS[from].rows : 0;'));
 assert.ok(read('src/web/assets/admin.css').includes('.tile-grid.setup-grid.screensaver-tile-grid > :not(.tile):not(.screensaver-grid-clock)'));
 assert.ok(handler.includes('grid.tiles[i].view_id = grid.tiles[i].type == TILE_EMPTY ? 0 : screensaver_places::key(i);'));
 assert.match(handler, /if \(folder_id != screensaver_places::kFolder\) \{\s*if \(!tileConfig\.loadFolderGridClassic\(folder_id, \*grid\)\) return false;/);
-assert.ok(handler.includes('return place.inside && place.place.row < screensaver_places::first_row(layout) - 0.001f;'));
+assert.ok(handler.includes('return place.inside && place.place.row < screensaver_places::first_row(layout) - 0.001f;') ||
+  handler.includes('// The screensaver uses the whole screen (no reserved rows).'),
+  'a reorder accepts every row of the screensaver grid');
 assert.ok(handler.includes('ok = screensaverConfig.replaceTileGrid(*grid) && ok;'));
 
 // The clock per layout: the file keeps the classic place on top (older
@@ -85,4 +88,4 @@ assert.ok(handler.includes('const ScreensaverConfigStore::ClockPlace clock = scr
 assert.ok(handler.includes('ok = screensaverConfig.setClockPlace(layout, place) && ok;'));
 assert.ok(handler.includes('if (clock.size() == 4) image_screensaver_config_changed();'));
 
-console.log('Screensaver: the active layout\'s grid, two rows at the bottom (three upright), own places and clock per layout');
+console.log('Screensaver: the active layout\'s whole grid, own places and a clock per layout');

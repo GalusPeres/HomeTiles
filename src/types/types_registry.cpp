@@ -20,6 +20,7 @@
 #include "src/types/power_flow/renderer.h"
 #include "src/types/vacuum/vacuum_tile.h"
 #include "src/types/weather/renderer.h"
+#include "src/types/weather/graph_renderer.h"
 #include "src/types/media/renderer.h"
 #include "src/types/climate/renderer.h"
 #include "src/types/cover/renderer.h"
@@ -39,6 +40,7 @@
 #include "src/types/energy/web_handler.h"
 #include "src/types/power_flow/web_handler.h"
 #include "src/types/weather/web_handler.h"
+#include "src/types/weather/graph_web_handler.h"
 #include "src/types/media/web_handler.h"
 #include "src/types/climate/web_handler.h"
 #include "src/types/cover/web_handler.h"
@@ -60,6 +62,7 @@
 #include "src/types/energy/web_html.h"
 #include "src/types/power_flow/web_html.h"
 #include "src/types/weather/web_html.h"
+#include "src/types/weather/graph_web_html.h"
 #include "src/types/media/web_html.h"
 #include "src/types/climate/web_html.h"
 #include "src/types/cover/web_html.h"
@@ -239,6 +242,16 @@ lv_obj_t* render_weather_wrapper(lv_obj_t* parent,
   return render_weather_tile(parent, col, row, tile, index, grid_type);
 }
 
+lv_obj_t* render_weather_graph_wrapper(lv_obj_t* parent,
+                                       int col,
+                                       int row,
+                                       const Tile& tile,
+                                       uint8_t index,
+                                       GridType grid_type,
+                                       scene_publish_cb_t) {
+  return render_weather_graph_tile(parent, col, row, tile, index, grid_type);
+}
+
 lv_obj_t* render_energy_wrapper(lv_obj_t* parent,
                                 int col,
                                 int row,
@@ -402,6 +415,11 @@ bool apply_weather_wrapper(WebServer& server, Tile& tile, const TileTypeApplyCon
   return true;
 }
 
+bool apply_weather_graph_wrapper(WebServer& server, Tile& tile,
+                                 const TileTypeApplyContext& ctx) {
+  return apply_weather_graph_fields(server, tile, ctx);
+}
+
 bool apply_energy_wrapper(WebServer& server, Tile& tile, const TileTypeApplyContext&) {
   apply_energy_fields_from_request(server, tile);
   return true;
@@ -504,6 +522,10 @@ void append_text_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
 
 void append_weather_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
   append_weather_fields_html(html, safeString(ctx.tab_id));
+}
+
+void append_weather_graph_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
+  append_weather_graph_fields_html(html, safeString(ctx.tab_id));
 }
 
 void append_energy_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
@@ -663,6 +685,24 @@ const TileTypeDescriptor kTileTypes[] = {
     render_weather_wrapper,
     apply_weather_wrapper,
     append_weather_fields_wrapper,
+    append_weather_styles,
+    append_weather_scripts
+  },
+  {
+    TILE_WEATHER_GRAPH,
+    "Wetterdiagramm",
+    "weather-graph",
+    "weather_graph",
+    "weather_graph",
+    nullptr,
+    "loadWeatherGraphFields",
+    "saveWeatherGraphFields",
+    "resetWeatherGraphFields",
+    0x2A2A2A,
+    false,
+    render_weather_graph_wrapper,
+    apply_weather_graph_wrapper,
+    append_weather_graph_fields_wrapper,
     append_weather_styles,
     append_weather_scripts
   },
@@ -1063,6 +1103,7 @@ static const char* localized_tile_type_label(const TileTypeDescriptor& entry) {
     case TILE_ENERGY: return tr.tile_type_energy;
     case TILE_POWER_FLOW: return i18n::power_flow_label(language, i18n::PowerFlowLabel::Type);
     case TILE_WEATHER: return tr.tile_type_weather;
+    case TILE_WEATHER_GRAPH: return tr.tile_type_weather_graph;
     case TILE_SCENE: return tr.tile_type_scene;
     case TILE_FOLDER: return tr.tile_type_folder;
     case TILE_SWITCH: return tr.tile_type_switch;

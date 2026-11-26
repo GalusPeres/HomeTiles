@@ -8,6 +8,9 @@
 
 // tab_tiles_unified.cpp: recolors icon-and-title tiles from their source entity.
 void process_icon_source_updates();
+// tab_tiles_unified.cpp: replays cached states whose update was skipped while
+// the panel slept or before the grid existed (weather).
+void tiles_replay_deferred_updates();
 
 enum class TileUpdateBudget : uint8_t {
   Active,
@@ -21,6 +24,8 @@ enum class TileUpdateBudget : uint8_t {
 template <TileUpdateBudget budget>
 inline void process_tile_update_queues() {
   constexpr bool drain_all = budget == TileUpdateBudget::DrainAll;
+  // First the states that only reached the cache (sleep): they queue here.
+  tiles_replay_deferred_updates();
   process_sensor_update_queue(drain_all ? 0 : 6);
   process_switch_update_queue(drain_all ? 0 : 6);
   process_climate_update_queue(drain_all ? 0 : 4);

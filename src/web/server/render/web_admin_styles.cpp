@@ -208,6 +208,13 @@ void appendPreviewScaleVars(String& html, const char* selector = ":root", bool p
   emit_compact_line("compact-value-font-28", "compact-value-line-step-28", "compact-value-dy-28",
                     "compact-value-base-28", compact_sensor_layout::value_font(5),
                     compact_sensor_layout::value_size(5));
+  // The tall Sensor value sizes 96 and 120 (tile_renderer_fonts.h): the panel
+  // draws native fonts on the 480-class layouts, unlike the 2/3 UI font table
+  // behind --fs96. Keep the preview on the font the device really uses.
+  emit_scaled("sensor-value-fs-96",
+              ui_font_size_of(tile_layout::content_font_96()));
+  emit_scaled("sensor-value-fs-120",
+              ui_font_size_of(tile_layout::content_font_120()));
   // The line tops as compact_sensor_layout places them (whole device pixels).
   auto emit_compact_tops = [&emit_scaled](const char* title_name, const char* value_name, uint8_t choice) {
     const int top = compact_sensor_layout::text_top(true, choice);

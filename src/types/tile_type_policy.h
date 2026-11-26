@@ -23,7 +23,7 @@ static constexpr bool tileTypeIsCalendar(int type) { return type == TILE_CALENDA
 // and a Scene tile stores the scene, script or button it runs (sceneTarget).
 static constexpr bool entityTileStoresSensorEntity(TileType type) {
   return type == TILE_SENSOR || type == TILE_SWITCH || type == TILE_WEATHER ||
-         type == TILE_ENERGY || type == TILE_MEDIA || type == TILE_CLIMATE ||
+         type == TILE_WEATHER_GRAPH || type == TILE_ENERGY || type == TILE_MEDIA || type == TILE_CLIMATE ||
          type == TILE_CAMERA || type == TILE_COVER || type == TILE_SCENE ||
          tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR ||
          tileTypeIsDeviceControl(type) || tileTypeIsCalendar(type);
@@ -31,7 +31,7 @@ static constexpr bool entityTileStoresSensorEntity(TileType type) {
 
 static constexpr bool tileTypeUsesCachedEntityState(TileType type) {
   return type == TILE_SENSOR || type == TILE_SWITCH || type == TILE_WEATHER ||
-         type == TILE_ENERGY || type == TILE_MEDIA || type == TILE_CLIMATE ||
+         type == TILE_WEATHER_GRAPH || type == TILE_ENERGY || type == TILE_MEDIA || type == TILE_CLIMATE ||
          type == TILE_COVER || tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR;
 }
 
@@ -55,7 +55,7 @@ static constexpr bool tileTypeStoresPopupModeDirectly(TileType type) {
 static constexpr bool tileTypeHasDynamicMqttRoute(TileType type) {
   return type == TILE_SENSOR || tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR ||
          type == TILE_SWITCH || type == TILE_MEDIA || type == TILE_WEATHER ||
-         type == TILE_CLIMATE || type == TILE_COVER ||
+         type == TILE_WEATHER_GRAPH || type == TILE_CLIMATE || type == TILE_COVER ||
          tileTypeIsDeviceControl(type);
 }
 
@@ -78,7 +78,8 @@ static constexpr bool tileTypeSubscribesScreensaverState(TileType type) {
 static constexpr bool tileTypeAllowedInScreensaver(int type) {
   return type == TILE_EMPTY || type == TILE_SENSOR || type == TILE_ENERGY ||
          type == TILE_SCENE || type == TILE_SWITCH || type == TILE_MEDIA ||
-         type == TILE_COVER || tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR;
+         type == TILE_WEATHER_GRAPH || type == TILE_COVER ||
+         tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR;
 }
 
 // Tiles without an entity state of their own (Scene, Folder, Back, Camera,
@@ -112,6 +113,16 @@ static constexpr bool tileTypeIconColorsByValue(int type) {
 static constexpr bool tileTypeIconColorsByState(int type) {
   return type == TILE_SENSOR || type == TILE_BINARY_SENSOR || type == TILE_SELECT ||
          type == TILE_DATETIME;
+}
+
+// Tiles the screensaver builds without any tap action of their own: their
+// popup and their controls are disabled in this mode (sensor, cover and
+// weather graph renderers), so a tap would only be swallowed. A tap on them
+// exits the screensaver to the panel, like a tap on the wallpaper
+// (image_screensaver.cpp on_global_screensaver_clicked).
+static constexpr bool tileTypeScreensaverTapIsInert(int type) {
+  return type == TILE_SENSOR || type == TILE_ENERGY || type == TILE_BINARY_SENSOR ||
+         type == TILE_COVER || type == TILE_WEATHER_GRAPH || tileTypeIsEditableValue(type);
 }
 
 static constexpr bool tileTypeRefreshesEntityIcon(TileType type) {

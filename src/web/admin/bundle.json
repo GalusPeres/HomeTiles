@@ -50,6 +50,7 @@
     "src/types/power_flow/admin.js",
     "src/types/weather/admin-icons.js",
     "src/types/weather/admin.js",
+    "src/types/weather/admin-graph.js",
     "src/types/scene/admin.js",
     "src/types/navigate/admin.js",
     "src/types/switch/admin.js",

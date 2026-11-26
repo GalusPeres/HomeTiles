@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const read = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
+const read = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath), 'utf8').replace(/\r\n?/g, '\n');
 
 const popup = read('src/ui/popups/camera/camera_popup.cpp');
 const stringsHeader = read('src/core/i18n/i18n.h');

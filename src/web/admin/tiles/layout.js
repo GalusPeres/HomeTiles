@@ -69,7 +69,7 @@
   // size stays offered (types/sensor/renderer.cpp).
   function syncCompactValueFontOptions(select, compact, inside = 0) {
     if (!select?.options) return;
-    const allowed = inside ? ['0', '1', '2', '5', '3', '4'] : compact ? ['0', '2', '5'] : ['0', '1', '2', '3', '4'];
+    const allowed = inside ? ['0', '1', '2', '5', '3', '4', '6'] : compact ? ['0', '2', '5'] : ['0', '1', '2', '3', '4', '6', '7', '8', '9'];
     const sizes = String(select.dataset?.[compact && !inside ? 'compactSizes' : 'sizes'] || '').split(',').map(Number);
     if (inside && sizes.length > 5) sizes[0] = sizes[inside === 2 ? 2 : 1];
     const known = sizes.length > 5 && sizes.every(size => size > 0);
@@ -392,6 +392,11 @@
     if (Number(type) === MEDIA_TILE_TYPE) return [Math.min(MEDIA_TILE_MIN_SPAN, placeCols()), Math.min(MEDIA_TILE_MIN_SPAN, placeRows())];
     // The Power flow needs room for its four nodes (types/power_flow).
     if (Number(type) === 28) return [Math.min(2, placeCols()), Math.min(2, placeRows())];
+    // The weather graph is a wide strip: 4 x 1.5 on a 4 x 3 screen, 7 x 2 on
+    // a 7 x 5 one (types/weather/graph_renderer.cpp).
+    if (Number(type) === 30) {
+      return [placeCols(), Math.min(placeCols() >= 7 ? 2 : 1.5, placeRows())];
+    }
     return [1, supportsHalfSize(type) ? 0.5 : 1];
   }
 

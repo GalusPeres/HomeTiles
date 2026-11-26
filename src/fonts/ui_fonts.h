@@ -26,6 +26,7 @@ LV_FONT_DECLARE(ui_font_64);
 LV_FONT_DECLARE(ui_font_72);
 LV_FONT_DECLARE(ui_font_80);
 LV_FONT_DECLARE(ui_font_96);
+LV_FONT_DECLARE(ui_font_120);
 
 // Shared font lookup for clocks, weekdays and other UI labels.
 // Unsupported sizes use the prebuilt 20-pixel font.
@@ -47,13 +48,14 @@ static inline const lv_font_t* ui_font_for_size(uint8_t size) {
     case 72: return &ui_font_72;
     case 80: return &ui_font_80;
     case 96: return &ui_font_96;
+    case 120: return &ui_font_120;
     default: return &ui_font_20;
   }
 }
 
 // The size of a font from ui_font_for_size (0 for any other font).
 static inline uint8_t ui_font_size_of(const lv_font_t* font) {
-  for (const uint8_t size : {12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 72, 80, 96}) {
+  for (const uint8_t size : {12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 72, 80, 96, 120}) {
 #if !defined(DEVICE_LAYOUT_480X480)
     if (size < 16) continue;
 #endif

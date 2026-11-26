@@ -11,9 +11,14 @@ function maybeFillTitleFromSensor(tab) {
   function unitTextHtml(text) {
     const value = String(text ?? '');
     const match = /^([^\n]*\d) ?([^ \d\n]+)$/.exec(value);
-    const bytes = match ? [...match[2]].reduce((n, c) => n + (c.codePointAt(0) < 0x80 ? 1 : c.codePointAt(0) < 0x800 ? 2 : c.codePointAt(0) < 0x10000 ? 3 : 4), 0) : 0;
+    // The unit in the panel's language: Home Assistant sends "m/s" for the
+    // wind speed, Russian reads "м/с" (i18n::unit_label, WEATHER_I18N.units).
+    const unit = match && typeof WEATHER_I18N === 'object' && WEATHER_I18N &&
+      WEATHER_I18N.units && WEATHER_I18N.units[match[2]]
+      ? WEATHER_I18N.units[match[2]] : (match ? match[2] : '');
+    const bytes = unit ? [...unit].reduce((n, c) => n + (c.codePointAt(0) < 0x80 ? 1 : c.codePointAt(0) < 0x800 ? 2 : c.codePointAt(0) < 0x10000 ? 3 : 4), 0) : 0;
     if (!match || bytes > 12) return escapeHtml(value);
-    return escapeHtml(match[1]) + '<span class="tile-unit">' + escapeHtml(match[2]) + '</span>';
+    return escapeHtml(match[1]) + '<span class="tile-unit">' + escapeHtml(unit) + '</span>';
   }
 
   // A unit's inline size for a number of `valuePx` panel pixels, the step
@@ -35,6 +40,16 @@ function maybeFillTitleFromSensor(tab) {
     if (!text.length) return '--';
     const lower = text.toLowerCase();
     if (lower === 'unavailable' || lower === 'unknown' || lower === 'none') return '--';
+    // A condition sensor shows a condition: the table the panel uses
+    // (i18n::weather_condition_label); any other text stays as it is.
+    // The Yandex Pogoda integration sends underscored states (light_rain).
+    const conditionKey = lower.replace(/_/g, '-');
+    const conditionName = conditionKey === 'sleet' ? 'snowy-rainy'
+      : (conditionKey === 'snowfall' ? 'snowy' : conditionKey);
+    if (typeof WEATHER_I18N === 'object' && WEATHER_I18N && WEATHER_I18N.conditions &&
+        WEATHER_I18N.conditions[conditionName]) {
+      return WEATHER_I18N.conditions[conditionName];
+    }
     if (decimals === undefined || decimals === null || decimals === '' || Number(decimals) === -1) {
       return localizeNumericText(text);
     }

@@ -18,6 +18,10 @@ struct ClockWidgetConfig {
   bool fill_parent = false;
   // Put time and date side by side (half-height clock tiles).
   bool horizontal = false;
+  // The screensaver's one-line clock: both boxes take the width of the longer
+  // line, so the gap shows and each line's alignment acts (the Web preview
+  // does the same). Half-height clock tiles keep their natural widths.
+  bool one_line = false;
   // LVGL has no glyph shadow. Several slightly offset dark copies behind
   // each line approximate a blur. Used only by the screensaver.
   bool text_shadow = false;

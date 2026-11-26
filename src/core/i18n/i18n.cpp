@@ -86,6 +86,7 @@ static const Strings kStringsDe = {
     "Sensor",
     "Energie",
     "Wetter",
+    "Wetterdiagramm",
     "Button",
     "Ordner",
     "Schalter",
@@ -137,6 +138,8 @@ static const Strings kStringsDe = {
     "Automatisch",
     "Nur Titel",
     "Mit Wert",
+
+    "m/s",
     "Media Player",
     "Uhrzeit anzeigen",
     "Datum anzeigen",
@@ -222,6 +225,7 @@ static const Strings kStringsDe = {
     "Uhrzeit",
     "Wochentag",
     "Textschatten",
+    "Uhr in einer Zeile",
     "Ausrichtung Uhrzeit",
     "Ausrichtung Datum",
     "Links",
@@ -738,7 +742,7 @@ static const Strings kStringsDe = {
     "Dieser Player",
     "Alle abspielen",
     "Erster Wochentag:",
-    "System",
+    "System"
 };
 
 static const Strings kStringsEn = {
@@ -820,6 +824,7 @@ static const Strings kStringsEn = {
     "Sensor",
     "Energy",
     "Weather",
+    "Weather graph",
     "Button",
     "Folder",
     "Switch",
@@ -871,6 +876,8 @@ static const Strings kStringsEn = {
     "Automatic",
     "Title only",
     "With value",
+
+    "m/s",
     "Media Player",
     "Show time",
     "Show date",
@@ -956,6 +963,7 @@ static const Strings kStringsEn = {
     "Clock",
     "Weekday",
     "Text shadow",
+    "Clock on one line",
     "Time alignment",
     "Date alignment",
     "Left",
@@ -1472,7 +1480,7 @@ static const Strings kStringsEn = {
     "This player",
     "Play all",
     "First day of the week:",
-    "System",
+    "System"
 };
 
 static const Strings kStringsFr = {
@@ -1554,6 +1562,7 @@ static const Strings kStringsFr = {
     "Capteur",
     "Énergie",
     "Météo",
+    "Graphique météo",
     "Bouton",
     "Dossier",
     "Interrupteur",
@@ -1605,6 +1614,8 @@ static const Strings kStringsFr = {
     "Automatique",
     "Titre seul",
     "Avec valeur",
+
+    "m/s",
     "Lecteur multimédia",
     "Afficher l'heure",
     "Afficher la date",
@@ -1690,6 +1701,7 @@ static const Strings kStringsFr = {
     "Heure",
     "Jour de la semaine",
     "Ombre du texte",
+    "Horloge sur une ligne",
     "Alignement de l'heure",
     "Alignement de la date",
     "Gauche",
@@ -2206,7 +2218,7 @@ static const Strings kStringsFr = {
     "Ce lecteur",
     "Tout lire",
     "Premier jour de la semaine\u00A0:",
-    "Système",
+    "Système"
 };
 
 static const LocaleProfile kLocaleDe = {
@@ -2220,8 +2232,12 @@ static const LocaleProfile kLocaleDe = {
     {"Jan.", "Feb.", "Mär.", "Apr.", "Mai", "Jun.",
      "Jul.", "Aug.", "Sep.", "Okt.", "Nov.", "Dez."},
     {"Klare Nacht", "Bewölkt", "Ausnahme", "Nebel", "Hagel",
-     "Gewitter", "Gewitterregen", "Teilw. bewölkt", "Starkregen",
-     "Regen", "Schnee", "Schneeregen", "Sonnig", "Windig", "Böig"},
+     "Gewitter", "Gewitterregen", "Teilw. bewölkt", "Starkregen", "Regen",
+     "Schnee", "Schneeregen", "Sonnig", "Windig", "Böig",
+     "Klar", "Teilweise bewölkt", "Bedeckt", "Nieselregen", "Leichter Regen",
+     "Regen", "Mäßiger Regen", "Starker Regen", "Dauerregen", "Regenschauer",
+     "Schneeregen", "Leichter Schnee", "Schnee", "Schneeschauer", "Gewitter",
+     "Gewitter mit Regen", "Gewitter mit Hagel"},
     {"Temperatursensor", "Luftfeuchtigkeitssensor", "Wert der Wetter-Entity"},
     "Klima",
     "Klima-Entity",
@@ -2359,8 +2375,12 @@ static const LocaleProfile kLocaleEn = {
     {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"},
     {"Clear night", "Cloudy", "Exceptional", "Fog", "Hail",
-     "Lightning", "Lightning rain", "Partly cloudy", "Pouring",
-     "Rain", "Snow", "Sleet", "Sunny", "Windy", "Windy"},
+     "Lightning", "Lightning rain", "Partly cloudy", "Pouring", "Rain",
+     "Snow", "Sleet", "Sunny", "Windy", "Windy",
+     "Clear", "Partly cloudy", "Overcast", "Drizzle", "Light rain",
+     "Rain", "Moderate rain", "Heavy rain", "Continuous rain", "Showers",
+     "Wet snow", "Light snow", "Snow", "Snow showers", "Thunderstorm",
+     "Thunderstorm with rain", "Thunderstorm with hail"},
     {"Temperature sensor", "Humidity sensor", "Weather entity value"},
     "Climate",
     "Climate Entity",
@@ -2495,8 +2515,12 @@ static const LocaleProfile kLocaleFr = {
     {"janv.", "févr.", "mars", "avr.", "mai", "juin",
      "juil.", "août", "sept.", "oct.", "nov.", "déc."},
     {"Nuit claire", "Nuageux", "Exceptionnel", "Brouillard", "Grêle",
-     "Orage", "Orage pluvieux", "Partiellement nuageux", "Pluie forte",
-     "Pluie", "Neige", "Neige fondue", "Ensoleillé", "Venteux", "Rafales"},
+     "Orage", "Orage pluvieux", "Partiellement nuageux", "Pluie forte", "Pluie",
+     "Neige", "Neige fondue", "Ensoleillé", "Venteux", "Rafales",
+     "Dégagé", "Partiellement nuageux", "Couvert", "Bruine", "Pluie faible",
+     "Pluie", "Pluie modérée", "Fortes pluies", "Pluie continue", "Averses",
+     "Pluie et neige", "Neige faible", "Neige", "Averses de neige", "Orage",
+     "Orage avec pluie", "Orage avec grêle"},
     {"Capteur de température", "Capteur d'humidité", "Valeur de l'entité météo"},
     "Climat",
     "Entité climat",
@@ -2729,6 +2753,7 @@ static const Strings kStringsPl = {
     "Czujnik",
     "Energia",
     "Pogoda",
+    "Wykres pogody",
     "Przycisk",
     "Folder",
     "Przełącznik",
@@ -2779,6 +2804,8 @@ static const Strings kStringsPl = {
     "Automatyczny",
     "Tylko tytuł",
     "Z wartością",
+
+    "m/s",
     "Odtwarzacz mediów",
     "Pokaż czas",
     "Pokaż datę",
@@ -2855,6 +2882,7 @@ static const Strings kStringsPl = {
     "Zegar",
     "Dzień tygodnia",
     "Cień tekstu",
+    "Zegar w jednej linii",
     "Wyrównanie czasu",
     "Wyrównanie daty",
     "Lewo",
@@ -3358,7 +3386,7 @@ static const Strings kStringsPl = {
     "Ten odtwarzacz",
     "Odtwórz wszystko",
     "Pierwszy dzień tygodnia:",
-    "System",
+    "System"
 };
 
 static const Strings kStringsCs = {
@@ -3433,6 +3461,7 @@ static const Strings kStringsCs = {
     "Senzor",
     "Energie",
     "Počasí",
+    "Graf počasí",
     "Tlačítko",
     "Složka",
     "Vypínač",
@@ -3483,6 +3512,8 @@ static const Strings kStringsCs = {
     "Automaticky",
     "Pouze název",
     "S hodnotou",
+
+    "m/s",
     "Přehrávač médií",
     "Zobrazit čas",
     "Zobrazit datum",
@@ -3559,6 +3590,7 @@ static const Strings kStringsCs = {
     "Hodiny",
     "Den v týdnu",
     "Stín textu",
+    "Hodiny v jednom řádku",
     "Zarovnání času",
     "Zarovnání data",
     "Vlevo",
@@ -4062,7 +4094,7 @@ static const Strings kStringsCs = {
     "Tento přehrávač",
     "Přehrát vše",
     "První den týdne:",
-    "Systém",
+    "Systém"
 };
 
 static const Strings kStringsEs = {
@@ -4137,6 +4169,7 @@ static const Strings kStringsEs = {
     "Sensor",
     "Energía",
     "Tiempo",
+    "Gráfico del tiempo",
     "Botón",
     "Carpeta",
     "Interruptor",
@@ -4187,6 +4220,8 @@ static const Strings kStringsEs = {
     "Automático",
     "Solo título",
     "Con valor",
+
+    "m/s",
     "Reproductor multimedia",
     "Mostrar hora",
     "Mostrar fecha",
@@ -4263,6 +4298,7 @@ static const Strings kStringsEs = {
     "Reloj",
     "Día de la semana",
     "Sombra del texto",
+    "Reloj en una línea",
     "Alineación de la hora",
     "Alineación de la fecha",
     "Izquierda",
@@ -4766,7 +4802,7 @@ static const Strings kStringsEs = {
     "Este reproductor",
     "Reproducir todo",
     "Primer día de la semana:",
-    "Sistema",
+    "Sistema"
 };
 
 static const Strings kStringsSk = {
@@ -4841,6 +4877,7 @@ static const Strings kStringsSk = {
     "Senzor",
     "Energia",
     "Počasie",
+    "Graf počasia",
     "Tlačidlo",
     "Priečinok",
     "Prepínač",
@@ -4891,6 +4928,8 @@ static const Strings kStringsSk = {
     "Automaticky",
     "Iba názov",
     "S hodnotou",
+
+    "m/s",
     "Prehrávač médií",
     "Zobraziť čas",
     "Zobraziť dátum",
@@ -4967,6 +5006,7 @@ static const Strings kStringsSk = {
     "Hodiny",
     "Deň v týždni",
     "Tieň textu",
+    "Hodinky v jednom riadku",
     "Zarovnanie času",
     "Zarovnanie dátumu",
     "Vľavo",
@@ -5470,7 +5510,7 @@ static const Strings kStringsSk = {
     "Tento prehrávač",
     "Prehrať všetko",
     "Prvý deň týždňa:",
-    "Systém",
+    "Systém"
 };
 
 static const Strings kStringsRu = {
@@ -5552,6 +5592,7 @@ static const Strings kStringsRu = {
     "Датчик",
     "Энергия",
     "Погода",
+    "График погоды",
     "Кнопка",
     "Папка",
     "Выключатель",
@@ -5603,6 +5644,8 @@ static const Strings kStringsRu = {
     "Авто",
     "Только имя",
     "Со значением",
+
+    "м/с",
     "Медиаплеер",
     "Время",
     "Дата",
@@ -5687,6 +5730,7 @@ static const Strings kStringsRu = {
     "Часы",
     "День недели",
     "Тень текста",
+    "Часы в одну строку",
     "Выравнивание времени",
     "Выравнивание даты",
     "Слева",
@@ -6203,7 +6247,7 @@ static const Strings kStringsRu = {
     "Этот плеер",
     "Воспроизвести все",
     "Первый день недели:",
-    "Система",
+    "Система"
 };
 
 static const LocaleProfile kLocalePl = {
@@ -6215,7 +6259,13 @@ static const LocaleProfile kLocalePl = {
     "Dziś",
     {"Nd", "Pn", "Wt", "Śr", "Cz", "Pt", "Sb"},
     {"sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"},
-    {"Czysta noc", "Pochmurno", "Wyjątkowe", "Mgła", "Grad", "Burza", "Burza z deszczem", "Częściowo pochmurno", "Ulewny deszcz", "Deszcz", "Śnieg", "Deszcz ze śniegiem", "Słonecznie", "Wietrznie", "Porywisty wiatr"},
+    {"Czysta noc", "Pochmurno", "Wyjątkowe", "Mgła", "Grad",
+     "Burza", "Burza z deszczem", "Częściowo pochmurno", "Ulewny deszcz", "Deszcz",
+     "Śnieg", "Deszcz ze śniegiem", "Słonecznie", "Wietrznie", "Porywisty wiatr",
+     "Bezchmurnie", "Częściowo pochmurno", "Pochmurno", "Mżawka", "Słaby deszcz",
+     "Deszcz", "Umiarkowany deszcz", "Silny deszcz", "Stały deszcz", "Przelotne opady",
+     "Deszcz ze śniegiem", "Słaby śnieg", "Śnieg", "Opady śniegu", "Burza",
+     "Burza z deszczem", "Burza z gradem"},
     {"Czujnik temperatury", "Czujnik wilgotności", "Wartość encji pogody"},
     "Klimatyzacja",
     "Encja klimatyzacji",
@@ -6282,7 +6332,13 @@ static const LocaleProfile kLocaleCs = {
     "Dnes",
     {"Ne", "Po", "Út", "St", "Čt", "Pá", "So"},
     {"led", "úno", "bře", "dub", "kvě", "čvn", "čvc", "srp", "zář", "říj", "lis", "pro"},
-    {"Jasná noc", "Zataženo", "Výjimečné", "Mlha", "Krupobití", "Bouřka", "Bouřka s deštěm", "Polojasno", "Liják", "Déšť", "Sníh", "Déšť se sněhem", "Slunečno", "Větrno", "Nárazový vítr"},
+    {"Jasná noc", "Zataženo", "Výjimečné", "Mlha", "Krupobití",
+     "Bouřka", "Bouřka s deštěm", "Polojasno", "Liják", "Déšť",
+     "Sníh", "Déšť se sněhem", "Slunečno", "Větrno", "Nárazový vítr",
+     "Jasno", "Polojasno", "Zataženo", "Mrholení", "Slabý déšť",
+     "Déšť", "Mírný déšť", "Silný déšť", "Trvalý déšť", "Přeháňky",
+     "Déšť se sněhem", "Slabý sníh", "Sníh", "Sněhové přeháňky", "Bouřka",
+     "Bouřka s deštěm", "Bouřka s krupobitím"},
     {"Teplotní senzor", "Senzor vlhkosti", "Hodnota entity počasí"},
     "Klima",
     "Entita klimatizace",
@@ -6351,8 +6407,12 @@ static const LocaleProfile kLocaleEs = {
     {"ene", "feb", "mar", "abr", "may", "jun",
      "jul", "ago", "sep", "oct", "nov", "dic"},
     {"Noche despejada", "Nublado", "Excepcional", "Niebla", "Granizo",
-     "Tormenta", "Tormenta con lluvia", "Parcialmente nublado", "Lluvia intensa",
-     "Lluvia", "Nieve", "Aguanieve", "Soleado", "Ventoso", "Ventoso"},
+     "Tormenta", "Tormenta con lluvia", "Parcialmente nublado", "Lluvia intensa", "Lluvia",
+     "Nieve", "Aguanieve", "Soleado", "Ventoso", "Ventoso",
+     "Despejado", "Parcialmente nublado", "Encapotado", "Llovizna", "Lluvia débil",
+     "Lluvia", "Lluvia moderada", "Lluvia fuerte", "Lluvia continua", "Chubascos",
+     "Aguanieve", "Nieve débil", "Nieve", "Chubascos de nieve", "Tormenta",
+     "Tormenta con lluvia", "Tormenta con granizo"},
     {"Sensor de temperatura", "Sensor de humedad", "Valor de la entidad del tiempo"},
     "Clima",
     "Entidad de clima",
@@ -6496,8 +6556,12 @@ static const LocaleProfile kLocaleSk = {
     {"jan", "feb", "mar", "apr", "máj", "jún",
      "júl", "aug", "sep", "okt", "nov", "dec"},
     {"Jasná noc", "Oblačno", "Výnimočné", "Hmla", "Krupobitie",
-     "Búrka", "Búrka s dažďom", "Polooblačno", "Lejak",
-     "Dážď", "Sneh", "Sneh s dažďom", "Slnečno", "Veterno", "Veterno"},
+     "Búrka", "Búrka s dažďom", "Polooblačno", "Lejak", "Dážď",
+     "Sneh", "Sneh s dažďom", "Slnečno", "Veterno", "Veterno",
+     "Jasno", "Polooblačno", "Zamračené", "Mrholenie", "Slabý dážď",
+     "Dážď", "Mierny dážď", "Silný dážď", "Trvalý dážď", "Prehánky",
+     "Dážď so snehom", "Slabý sneh", "Sneh", "Snehové prehánky", "Búrka",
+     "Búrka s dažďom", "Búrka s krúpami"},
     {"Teplotný senzor", "Senzor vlhkosti", "Hodnota entity počasia"},
     "Klíma",
     "Entita klímy",
@@ -6631,8 +6695,12 @@ static const LocaleProfile kLocaleRu = {
     {"янв.", "фев.", "мар.", "апр.", "май", "июн.",
      "июл.", "авг.", "сен.", "окт.", "ноя.", "дек."},
     {"Ясная ночь", "Облачно", "Исключительное", "Туман", "Град",
-     "Гроза", "Гроза с дождём", "Переменная облачность", "Ливень",
-     "Дождь", "Снег", "Дождь со снегом", "Солнечно", "Ветрено", "Порывистый ветер"},
+     "Гроза", "Гроза с дождём", "Переменная облачность", "Ливень", "Дождь",
+     "Снег", "Дождь со снегом", "Солнечно", "Ветрено", "Порывистый ветер",
+     "Ясно", "Малооблачно", "Пасмурно", "Морось", "Небольшой дождь",
+     "Дождь", "Умеренный дождь", "Сильный дождь", "Затяжной дождь", "Ливень",
+     "Дождь со снегом", "Небольшой снег", "Снег", "Снегопад", "Гроза",
+     "Гроза с дождём", "Гроза с градом"},
     {"Датчик температуры", "Датчик влажности", "Значение сущности погоды"},
     "Климат",
     "Сущность климата",
@@ -6891,20 +6959,35 @@ static bool parse_iso_date_internal(const String& iso, int& y, int& m, int& d) {
   return (y > 0 && m >= 1 && m <= 12 && d >= 1 && d <= 31);
 }
 
+// The keys of weather_condition_label's table, Home Assistant's fifteen first
+// and Yandex Pogoda's own codes after them (the Yandex integration sends its
+// richer set, e.g. "overcast"). One list: the label and is_weather_condition
+// must agree on what a condition is.
+static const char* kWeatherConditionKeys[] = {
+    "clear-night", "cloudy", "exceptional", "fog", "hail",
+    "lightning", "lightning-rainy", "partlycloudy", "pouring",
+    "rainy", "snowy", "snowy-rainy", "sunny", "windy",
+    "windy-variant",
+    "clear", "partly-cloudy", "overcast", "drizzle", "light-rain",
+    "rain", "moderate-rain", "heavy-rain", "continuous-heavy-rain",
+    "showers", "wet-snow", "light-snow", "snow", "snow-showers",
+    "thunderstorm", "thunderstorm-with-rain", "thunderstorm-with-hail"};
+
 String weather_condition_label(const char* language_code, const String& condition) {
   String key = condition;
   key.trim();
   key.toLowerCase();
+  // The Yandex Pogoda integration sends underscored states (light_rain); the
+  // table and every other caller spell conditions with hyphens.
+  key.replace("_", "-");
+  // Its own names for conditions the table already has under another key.
+  if (key == "sleet") key = "snowy-rainy";
+  else if (key == "snowfall") key = "snowy";
   if (!key.length()) return "--";
 
-  static const char* kKeys[] = {
-      "clear-night", "cloudy", "exceptional", "fog", "hail",
-      "lightning", "lightning-rainy", "partlycloudy", "pouring",
-      "rainy", "snowy", "snowy-rainy", "sunny", "windy",
-      "windy-variant"};
   const LocaleProfile& profile = locale(language_code);
-  for (size_t i = 0; i < sizeof(kKeys) / sizeof(kKeys[0]); ++i) {
-    if (key == kKeys[i]) return profile.weather_conditions[i];
+  for (size_t i = 0; i < sizeof(kWeatherConditionKeys) / sizeof(kWeatherConditionKeys[0]); ++i) {
+    if (key == kWeatherConditionKeys[i]) return profile.weather_conditions[i];
   }
 
   String text = condition;
@@ -6912,6 +6995,30 @@ String weather_condition_label(const char* language_code, const String& conditio
   text.replace("_", " ");
   text.trim();
   return text.length() ? text : "--";
+}
+
+// True for a key both tables know, so a sensor tile showing a condition can
+// translate it like the Weather tile does while other sensor text stays raw.
+bool is_weather_condition(const String& condition) {
+  String key = condition;
+  key.trim();
+  key.toLowerCase();
+  // Same spelling as weather_condition_label: underscored Yandex states.
+  key.replace("_", "-");
+  if (key == "sleet") key = "snowy-rainy";
+  else if (key == "snowfall") key = "snowy";
+  if (!key.length()) return false;
+  for (size_t i = 0; i < sizeof(kWeatherConditionKeys) / sizeof(kWeatherConditionKeys[0]); ++i) {
+    if (key == kWeatherConditionKeys[i]) return true;
+  }
+  return false;
+}
+
+String unit_label(const char* language_code, const String& unit) {
+  String key = unit;
+  key.trim();
+  if (key.equalsIgnoreCase("m/s")) return strings(language_code).unit_meters_per_second;
+  return unit;
 }
 
 String weather_weekday_short(const char* language_code, const String& iso) {

@@ -535,6 +535,28 @@
       }
     },
     {
+      "buildProfile": "btt_panda_touch",
+      "key": "btt_panda_touch",
+      "metadataDeviceKey": "btt_panda_touch",
+      "define": "DEVICE_BTT_PANDA_TOUCH",
+      "chipFamily": "ESP32-S3",
+      "flashSize": 16777216,
+      "siliconVariant": "default",
+      "minimumRevision": 0,
+      "maximumRevision": 65535,
+      "rxVariant": "native-s3",
+      "elfFlags": "",
+      "publish": true,
+      "ciOrder": 23,
+      "ciLabel": "BTT Panda Touch",
+      "legacySlug": "btt-panda-touch",
+      "installer": {
+        "label": "BIGTREETECH Panda Touch (4.3 inch)",
+        "status": "validation-pending",
+        "hardwareCheck": "The board is a BIGTREETECH Panda Touch with a 4.3 inch 800x480 RGB display and a GT900 touch controller."
+      }
+    },
+    {
       "buildProfile": "layout_test_1024x600",
       "key": "layout_test_1024x600",
       "metadataDeviceKey": "layout_test_1024x600",

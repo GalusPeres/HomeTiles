@@ -1082,6 +1082,10 @@ static String weather_icon_from_condition(const String& condition) {
   String key = condition;
   key.trim();
   key.toLowerCase();
+  // The Yandex Pogoda integration sends underscored states (light_rain).
+  key.replace("_", "-");
+  if (key == "sleet") key = "snowy-rainy";
+  else if (key == "snowfall") key = "snowy";
   if (!key.length()) return "";
   if (key == "clear-night") return "mdi:weather-night";
   if (key == "cloudy") return "mdi:weather-cloudy";
@@ -1098,6 +1102,24 @@ static String weather_icon_from_condition(const String& condition) {
   if (key == "sunny") return "mdi:weather-sunny";
   if (key == "windy") return "mdi:weather-windy";
   if (key == "windy-variant") return "mdi:weather-windy-variant";
+  // Yandex Pogoda's own codes (yandex/pogoda-home-assistant).
+  if (key == "clear") return "mdi:weather-sunny";
+  if (key == "partly-cloudy") return "mdi:weather-partly-cloudy";
+  if (key == "overcast") return "mdi:weather-cloudy";
+  if (key == "drizzle") return "mdi:weather-rainy";
+  if (key == "light-rain") return "mdi:weather-rainy";
+  if (key == "rain") return "mdi:weather-rainy";
+  if (key == "moderate-rain") return "mdi:weather-rainy";
+  if (key == "heavy-rain") return "mdi:weather-pouring";
+  if (key == "continuous-heavy-rain") return "mdi:weather-pouring";
+  if (key == "showers") return "mdi:weather-pouring";
+  if (key == "wet-snow") return "mdi:weather-snowy-rainy";
+  if (key == "light-snow") return "mdi:weather-snowy";
+  if (key == "snow") return "mdi:weather-snowy";
+  if (key == "snow-showers") return "mdi:weather-snowy";
+  if (key == "thunderstorm") return "mdi:weather-lightning";
+  if (key == "thunderstorm-with-rain") return "mdi:weather-lightning-rainy";
+  if (key == "thunderstorm-with-hail") return "mdi:weather-lightning";
   return "";
 }
 

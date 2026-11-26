@@ -1,6 +1,6 @@
 # HomeTiles shared project context
 
-Last reviewed: 2026-10-29
+Last reviewed: 2026-11-22
 
 ## Sources of truth
 
@@ -14,16 +14,17 @@ Last reviewed: 2026-10-29
 
 - FW + Bridge v0.9.8 released 2026-11-19.
 - Pairing by IP, no mDNS (#114, Bridge #16): `GET /api/link`.
-- Test builds stay `v0.6.12bNNN` (System Update offers releases); beta define in `firmware_version.h`.
-- Run `node tools/fast-build-check.mjs --build-path <cache>` before every build (warm: only repo headers changed, same LVGL config hash).
-- Docs CI: Chrome for Testing 154.0.8037.57; dispatch docs after a release.
-- Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need icons on HomeTiles-staging (tag = FW_VERSION).
+- Test builds stay `v0.6.12bNNN`; beta define in `firmware_version.h`.
+- Run `node tools/fast-build-check.mjs --build-path <cache>` before every build (warm: same LVGL config hash).
+- Docs CI: Chrome for Testing 154.0.8037.57; dispatch docs (`main`) after a release.
+- Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need icons on HomeTiles-staging.
 
 ## Active work
 
 - Vacuum tile 29 (#50, `src/types/vacuum/`), Bridge level 6; V2 HW ok, others pending.
 - Camera tile "Kamera / Bild" (v0.9.8, `camera_entries.h`): one source per tile, entries in `/_tile_flow_entities`; Bridge makes one `camera.ht_*` per thing. "Zuletzt gewählt" RAM only (decided). Bergfex: no (operators hold the rights).
 - Power flow tile 28 ("Leistungsfluss", `src/types/power_flow/`, picture 65): nodes in `/_tile_flow_entities`, options in key_code, node tap = Sensor popup; V2 HW ok.
+- Weather graph tile 30: linked Today/Tomorrow, condition band, screensaver ok; HW pending.
 - Media popup: layouts `sensor_display_mode` 0 cover left, 1 centre; controls only with their HA feature bit; menu box: speakers, source, library; tile/head icon state form (`state_icon.h`).
 - #116 (JC4880 camera popup ends after 18-60 min): Bridge waits 45 s per chunk ACK; reporter pending.
 - Issue #119 (Guition V1): own Helix (b501, `src/audio/helix_mp3`), TLS in PSRAM. Speaker audio from the Bridge (`docs-dev/audio-stream.md`): FFmpeg -> mono PCM over the camera tcp-ack listener (`HTAUD/1`); panels announce `"stream":"tcp-ack-v1"`. HW ok. Camera sound: lip-synced live track (b507 HW ok, b508 even gaps HW pending).
@@ -53,6 +54,7 @@ Last reviewed: 2026-10-29
 - P4 v3 images (post_v3 301-399): WS 10.1 (PR #48, v3.2 ok), WS 7B `_rev3` (#41; 30 s Wi-Fi join, PR #120), JC8012 V3 = V2 code (#44), WS 4.3/8 `_rev3` (#135/#140); HW pending.
 - New in v0.9.3, HW pending by the reporters: GS-T3E v2 (#93, S3, relays GPIO45/46/44 at once), Waveshare 5-inch (#76, HX8394, own `dsi_driver`, pre-v3 + `_rev3`).
 - Voice (b477) HW ok on V2, Tab5, 8-inch, 4B; per-board `kVolumeLimit` (Guition 0.6, Tab5 0.9); none on S3 and JC1060 V1.
+- Panda Touch S3 port: HW ok, update-check PCLK guard pending HW, see board README.
 
 ## P4 network, issues #37/#38
 
@@ -67,17 +69,17 @@ Last reviewed: 2026-10-29
 
 - LVGL PSRAM S3 2 / P4 12 MiB; SRAM band <= 72 KiB = DMA free - 150 KB (big tables in LVGL heap, S3 b606); page caches S3 4 / P4 6; bindings, popup history, Select options, slots, queues, grids in PSRAM.
 - S3 mallocs > 32 B prefer PSRAM (b324): internal free 42 -> ~89 KB, text-heavy steps slower. Open: S3 Web Admin pages block the loop 1-6 s.
-- Icon file: all 7447 MDI icons in LittleFS `/_mdi_icons_<px>.bin`, 399 built in, one PSRAM raw cache; icon + text fonts unpack each glyph once (`glyph_cache.c`, P4 512 KB, S3 256, b599); a missing file downloads once from its release; System page Icons card.
+- Icon file: all 7447 MDI icons in LittleFS `/_mdi_icons_<px>.bin`, 399 built in, one PSRAM raw cache; icon + text fonts unpack each glyph once (`glyph_cache.c`); a missing file downloads once from its release; System page Icons card.
 - `-fno-exceptions` (-300 KiB per image), unused LVGL widgets off, Admin CSS minified. LVGL 9.6.0 (lvgl#10306, caches `hometiles-lvgl96-*`).
 - Perf: nav preload (S3 max 3 grids), S3 PCLK 12 MHz.
-- Cards/discs draw rounded fills and frame lines from kept corner masks (`rounded_corners.h`, b594).
+- Cards/discs draw rounded fills and frame lines from kept corner masks (`rounded_corners.h`).
 - Pending: artwork, sleep/wake, camera soak, memory minima, fixed screensaver picture slots (b648).
 
 ## Camera
 
 - Stream: one Bridge FFmpeg per camera/size/fps/quality for all panels (lingers 30 s), thinned to the panel's rate before scaling; tcp-ack-v1 with 32 KB chunks x2, 8 KB x1 after a transport error. P4 decodes JPEG in hardware, S3 with tjpgd (~4.5 FPS popup).
 - Full screen (#65): frames in the panel's framebuffer size and turn, HW JPEG straight into the framebuffer, black until the first frame; V2/Tab5 30 FPS HW ok; "(Vollbild)" View targets (`full_targets`).
-- Camera tile with picture (#50, b377) HW pending.
+- Camera tile with picture (#50, b377) HW pending. Screensaver SD/HA picture (#69) HW ok.
 - Local camera: core `src/video/local_camera/`, drivers `sensors/*/`, boards `src/devices/*/local_camera_board.*`, opt-in `local_cam_en`. Window rule (b296): Bridge quarter turn = upright centred strip, no turn = whole image. `lcam_rot` (b387): one value for every layout, the mirror never turns. HW pending on most boards (#56). Open: TEST window `kChunkWindow = 4` (`local_camera_stream_contract.h`).
 
 ## UI decisions (do not reopen)
@@ -87,7 +89,7 @@ Last reviewed: 2026-10-29
 - Half-grid: Sensor/Binary/Energy/Switch height 0.5, width >= 1 by 0.5; V7 size unchanged. Open: cross-grid import clamps whole tiles (HTTP 400), value fonts 32/40 clip in half tiles.
 - Titles: two centred/ellipsized lines, 255 bytes in `/_tile_titles`.
 - HW pending (evidence in `build/`): radius reboot, screensaver child-click, Energy compact slots, Clock/Text border.
-- Layouts (`grid_layout.h`): classic, head bar landscape, upright (prepared); NVS `layout`; places `/_tile_grids/layouts.json`; folder storage entries (`grid_slots.h`, max 64), full storage blocks Save (`layoutStorageFull`); backups hold all three, import checks classic places on the stored grid, a start keeps the choice (b509/b510); b479/b480 HW pending.
+- Layouts (`grid_layout.h`): classic, head bar landscape, upright (prepared); NVS `layout`; places `/_tile_grids/layouts.json`; folder storage entries (`grid_slots.h`, max 64), full storage blocks Save (`layoutStorageFull`); backups hold all three, a start keeps the choice (b509/b510); b479/b480 HW pending.
 - One look (b300): popup card margin 0, tiles one grid gap from the edge; popup header follows the head bar rule (`popup_layout.h`); card shadow width follows the radius (LVGL shadow cache, `shadow_width_for`, max 28 px).
 - Upright (b294): P4 panels upright under a landscape profile draw it directly (`drawUpright`); JC1060/7B upright, JC4880 landscape (b368) compile only.
 - Light theme: `ui_theme` roles + `SurfaceScope`; popups take the opener's surface. Screensaver Dark/Light: own screen (`tile_screen.h`), fills/popups like pages; b655 HW pending. Remembered LVGL objects clear on delete (9.6 `lv_obj_is_valid` reads freed ones).
@@ -100,13 +102,13 @@ Last reviewed: 2026-10-29
 - Editable tiles 21 Number, 22 Select, 23 Date/Time reuse Sensor persistence/popups (`PackedTileV7` unchanged); drafts coalesce 600 ms, sliders publish on release. Open: S3 froze adding Number to an active screensaver.
 - Lock/Alarm/Fan (24-26, `src/types/device/`): sealed commands need pairing + Web Admin password; HW ok.
 - Calendar 27 (PR #127, `docs-dev/calendar.md`): Bridge `events` (`entity_search` 5); V2 HW pending.
-- Sensor graph (#131, mockup sensor-graph-3): pictures (`area_graph.h`), circle-color area fading low, 1 px 8 % lines, labels right; tile 24 h; numeric popup 30D/7D/24H/6H/1H; corners in masks. HW ok b613.
-- Energy: popup Year/Month/Week/Today; tile mode 2 = today's bars, every 5 min (V2 ok b662); week start: Localization.
+- Sensor graph (#131): pictures (`area_graph.h`), circle-color area fading low, 1 px 8 % lines, labels right; tile 24 h; numeric popup 30D/7D/24H/6H/1H. HW ok b613.
+- Energy: popup Year/Month/Week/Today (Bridge v0.9.6b3); tile mode 2 = today's bars, every 5 min (V2 ok b662); week start: Localization.
 - Sensor looks (`build/analysis/2026-10-28-analyse.md`): modes 3-14 (`sensor_look.h`, `look_view.cpp`, `admin-look.js`), A8 masks rebuilt on value change; Switch-like menu; b570 HW pending.
 - Rule icons (b574): stop/state colors may carry an MDI icon (`RRGGBB,<icon>`); `tile_rule_icon.h` swaps/restores the glyph (renderers: `set_glyph`), popup head too; Switch & co. own rules b575. HW pending.
 - Switch layouts `sensor_decimals` 0-3, 4-6 upright bar (`bar_orientation.h`; Fan upright = 1; sim ok, HW pending); `command_pacer.h` pacing: reporter test pending (#11).
 - Scene tile is "Button": picker searches scenes/scripts/buttons (`entity_search` 4), entity in `sensor_entity`.
 - Direct link: TCP 8140, Bridge = broker, frames sealed with pairing keys (`docs-dev/bridge-link.md`). The panel declares every entity it uses; without a password only released entities and the Energy Dashboard categories reach it. Picker lists Recent/Favorites/All (b369): V2 HW pending.
-- Security: optional Web Admin password (PBKDF2 300k), sessions, CSRF; command channel pairing v2 (X25519, 6-digit code), `docs-dev/command-encryption.md`.
+- Security: optional Web Admin password (PBKDF2 300k), sessions, CSRF; command channel pairing v2 (X25519, 6-digit code).
 - Commands validate targets/availability/features and ignore retained commands; stable tile IDs in reserved PackedTileV7 bytes.
 - Languages en/de/fr/pl/cs/es/sk/ru are data only (Strings + LocaleProfile); `test-i18n-panel-glyphs` checks all text sizes. Russian (PR #124): Cyrillic fallbacks (`generate-cyrillic-fonts.mjs`), JCUKEN keys. Fit cs/es/sk/ru pending.

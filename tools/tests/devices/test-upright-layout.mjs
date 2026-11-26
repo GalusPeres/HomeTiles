@@ -233,7 +233,8 @@ assert.match(read('src/web/server/render/web_admin_scripts.cpp'),
 assert.match(read('src/web/assets/admin.css'), /grid-template-rows:repeat\(var\(--grid-rows\), var\(--preview-cell-h\)\) var\(--grid-half-track,\);/);
 const handler = read('src/web/server/handlers/web_admin_tiles.cpp');
 assert.match(handler, /setPlaceGrid\(classic_places \|\| \(screensaver_grid && !screensaver_layout\)\);/);
-assert.match(handler, /const float first_row = screensaver_layout \? screensaver_places::first_row\(grid_layout::active\(\)\)/);
+// The screensaver uses the whole screen: no row is reserved for it.
+assert.match(handler, /\/\/ The screensaver uses the whole screen \(no reserved rows\)\.\s*const float first_row = 0;/);
 
 // --- The own camera turns with the panel: upright, its image turns a
 // quarter back, clockwise on the V2 (hardware 2026-10-08: three quarters
@@ -312,6 +313,9 @@ assert.match(read('src/ui/tabs/settings/settings_screen.cpp'),
   /const int tile_h = static_cast<int>\(lroundf\(0\.9f \* \(settings_style::kGrid\.cell_h \+ GRID_GAP\) - GRID_GAP\)\);/);
 const saver = read('src/ui/screensaver/image_screensaver.cpp');
 assert.ok(!saver.includes('Device::kScreenWidth'), 'the wallpaper is fitted to the upright screen');
-assert.match(read('src/ui/screensaver/screensaver_places.cpp'), /const float count = layout == Layout::kPortrait \? 3 : 2;/);
+// The screensaver takes the whole screen in every orientation (user
+// 2026-11-04: no rows are reserved under the head).
+assert.match(read('src/ui/screensaver/screensaver_places.cpp'),
+  /float first_row\(Layout layout\) \{\s*\(void\)layout;[\s\S]*?return 0;\s*\}/);
 
 console.log('Hochkant: upright copy, touch, grid rows, half row, Settings and screensaver');

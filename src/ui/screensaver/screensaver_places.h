@@ -18,8 +18,8 @@ namespace screensaver_places {
 constexpr uint16_t kFolder = TileConfig::kScreensaverGridStorageId;
 inline uint16_t key(size_t index) { return static_cast<uint16_t>(index + 1); }
 
-// The first row of the screensaver's rows in a layout's grid: two at the
-// bottom, three on the upright screen.
+// The first row of the screensaver's rows in a layout's grid: tiles may use
+// the whole screen (the clock floats above them), so always the top row.
 float first_row(grid_layout::Layout layout);
 
 // A tile's place in `layout`: its own, or while the layout has none yet the

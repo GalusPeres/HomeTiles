@@ -72,13 +72,14 @@ for (const size of [32, 40, 48]) {
   }
 }
 
-// Every Home Assistant condition resolves to a colored icon, and the day icons
-// Home Assistant also reports at night have night variants.
+// Every condition Home Assistant and Yandex Pogoda report resolves to a
+// colored icon, and the day icons Home Assistant also reports at night have
+// night variants.
 const popup = read('src/ui/popups/weather/weather_popup.cpp');
 const tileRenderer = read('src/tiles/runtime/tile_renderer.cpp');
 for (const source of [popup, tileRenderer]) {
   const names = [...fn(source, 'weather_icon_from_condition').matchAll(/return "mdi:([\w-]+)"/g)].map((m) => m[1]);
-  assert.equal(names.length, 15);
+  assert.equal(names.length, 32);
   for (const name of names) assert(ICONS[name], `condition icon ${name} has colored layers`);
 }
 assert(ICONS['weather-night-partly-cloudy'] && ICONS['weather-night']);

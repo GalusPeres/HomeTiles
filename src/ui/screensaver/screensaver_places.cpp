@@ -48,11 +48,10 @@ bool free_classic_place(const TileGridConfig& classic, size_t index, const Tile&
 }  // namespace
 
 float first_row(Layout layout) {
-  const float rows = rows_of(grid_layout::layout_grid(layout));
-  // Three rows on the upright screen (user 2026-10-08; square panels have
-  // no upright layout).
-  const float count = layout == Layout::kPortrait ? 3 : 2;
-  return rows > count ? rows - count : 0;
+  (void)layout;
+  // Tiles may use the whole screensaver screen (user 2026-11-04); the clock
+  // floats above them wherever it is put, so no rows are reserved.
+  return 0;
 }
 
 bool find(Layout layout, size_t index, const Tile& tile, tile_layouts::Place& out) {

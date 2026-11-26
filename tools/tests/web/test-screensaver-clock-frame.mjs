@@ -21,11 +21,19 @@ ${inputs}<div id="screensaverWallpaperControls"></div><div id="screensaverWallpa
 const nativeListen=document.addEventListener.bind(document);
 document.addEventListener=(name,...args)=>{if(name!=='DOMContentLoaded')nativeListen(name,...args);};
 const APP_I18N={},CLIMATE_I18N={},BINARY_SENSOR_I18N={},GRID_COLS=7,GRID_ROWS=5,TILES_PER_GRID=35,ADMIN_WEB_SESSION_TOKEN='test';
+const CLOCK_I18N=Object.freeze({months:['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'],
+  weekdays:['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'],
+  weekdaysShort:['Вс','Пн','Вт','Ср','Чт','Пт','Сб'],pattern:'{d} {M}',patternYear:'{d} {M} {Y}'});
 const TILE_TYPE_REGISTRY={},TILE_TABS=[],TAB_BY_FOLDER={},FOLDER_BY_TAB={},SCREENSAVER_FOLDER_ID=65535,SCREENSAVER_TILE_DEFAULT_OPACITY=0,SCREENSAVER_TILE_DEFAULT_COLOR='#000000',MEDIA_TILE_TYPE=15,MEDIA_TILE_MIN_SPAN=2,MEDIA_TILE_MAX_SPAN=3;
 window.fetch=async()=>({json:async()=>({success:true})});
 ${inlineScriptSafe(readAdminDeliverySource())}
 (async()=>{try{
  const check=(v,m)=>{if(!v)throw Error(m);};
+ // The weekday preview follows the central CLOCK_I18N table, not a
+ // German/English fallback (user 2026-11-03: Russian panel, English days).
+ const weekdayPreview=getScreensaverClockPreviewDate({show_date:false,show_weekday:true});
+ check(weekdayPreview===CLOCK_I18N.weekdays[new Date().getDay()],
+   'Screensaver weekday follows CLOCK_I18N: '+weekdayPreview);
  const grid=document.getElementById('screensaverGrid');
  grid.style.width='679px';grid.style.height='429px';
  const frame=grid.querySelector('.screensaver-grid-image-frame').getBoundingClientRect();

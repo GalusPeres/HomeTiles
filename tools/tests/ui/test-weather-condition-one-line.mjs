@@ -29,6 +29,8 @@ assert.match(fn('apply_weather_header'),
   /fit_condition_label\(ctx, condition_text\.c_str\(\), temp_text\.c_str\(\)\);\s*lv_label_set_text\(ctx->condition_label, condition_text\.c_str\(\)\);/);
 
 // Every translated condition, per language: the list holding "partlycloudy".
+// Home Assistant's fifteen first, Yandex Pogoda's seventeen after them
+// (i18n::weather_condition_label).
 const i18n = read('src/core/i18n/i18n.cpp');
 const partly = {De: 'Teilw. bewölkt', En: 'Partly cloudy', Fr: 'Partiellement nuageux', Pl: 'Częściowo pochmurno'};
 const conditions = [];
@@ -39,8 +41,11 @@ for (const [code, key] of Object.entries(partly)) {
   const block = i18n.slice(start, i18n.indexOf('\nstatic const ', start + head.length));
   const list = [...block.matchAll(/\{([^{}]*)\}/g)]
     .map(m => [...m[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(s => s[1]))
-    .find(items => items.length === 15 && items[7] === key);
+    .find(items => items.length === 32 && items[7] === key);
   assert.ok(list, `${code} weather conditions`);
+  // The Yandex seventeen are translated, not left as raw codes.
+  const rawCodes = list.slice(15).filter(value => /^[a-z]+(-[a-z]+)*$/.test(value));
+  assert.deepEqual(rawCodes, [], `${code}: Yandex conditions are translated`);
   conditions.push(...list);
 }
 

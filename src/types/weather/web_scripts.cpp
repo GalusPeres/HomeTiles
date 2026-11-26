@@ -89,11 +89,17 @@ void append_weather_js_string(String& html, const String& value) {
 void append_weather_scripts(String& html) {
   const char* language = configManager.getConfig().language;
   html += "  <script>\n  const WEATHER_I18N = Object.freeze({\n    conditions: Object.freeze({\n";
+  // Home Assistant's conditions first, Yandex Pogoda's own codes after them,
+  // in the order of i18n::weather_condition_label's table (i18n.cpp).
   static const char* kConditions[] = {
       "clear-night", "cloudy", "exceptional", "fog", "hail",
       "lightning", "lightning-rainy", "partlycloudy", "pouring",
       "rainy", "snowy", "snowy-rainy", "sunny", "windy",
-      "windy-variant"};
+      "windy-variant",
+      "clear", "partly-cloudy", "overcast", "drizzle", "light-rain",
+      "rain", "moderate-rain", "heavy-rain", "continuous-heavy-rain",
+      "showers", "wet-snow", "light-snow", "snow", "snow-showers",
+      "thunderstorm", "thunderstorm-with-rain", "thunderstorm-with-hail"};
   for (const char* condition : kConditions) {
     html += "      '";
     html += condition;
@@ -110,6 +116,13 @@ void append_weather_scripts(String& html) {
   html += "]),\n    today: ";
   // The short "today" the tile shows (renderer.cpp, like the popup's).
   append_weather_js_string(html, i18n::weather_today_button_label(language));
+  html += ",\n    tomorrow: ";
+  append_weather_js_string(html, i18n::weather_tomorrow_label(language));
+  // Units the language spells differently ("m/s" for the wind speed), used by
+  // the sensor value formatting (sensor/admin-format.js).
+  html += ",\n    units: Object.freeze({\n      'm/s': ";
+  append_weather_js_string(html, i18n::unit_label(language, "m/s"));
+  html += "\n    })";
   html += "\n  });\n";
 
   // The tile geometry in display pixels (renderer.cpp, tile_layout.h); the

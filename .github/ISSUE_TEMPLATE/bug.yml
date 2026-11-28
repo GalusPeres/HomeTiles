@@ -33,6 +33,7 @@ body:
         - Guition JC4880P443C_I_W
         - Guition ESP32-4848S040C_I
         - Golden Security GS-T3E v2 (PCB v2.3)
+        - Panlee ZX3D95CE01S (V12)
     validations:
       required: true
   - type: input

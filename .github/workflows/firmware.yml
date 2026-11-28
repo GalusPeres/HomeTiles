@@ -277,6 +277,12 @@ jobs:
             silicon_variant: post_v3
             rx_variant: repo-a8204
             publish: true
+          - label: Panlee ZX3D95CE01S
+            profile: panlee_zx3d95ce01s
+            key: panlee_zx3d95ce01s
+            define: DEVICE_PANLEE_ZX3D95CE01S
+            rx_variant: native-s3
+            publish: true
         # END GENERATED DEVICE MATRIX
 
     steps:

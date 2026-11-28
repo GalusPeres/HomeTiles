@@ -291,4 +291,13 @@ export const DEVICE_PROFILES = Object.freeze([
     "status": "validation-pending",
     "hardwareCheck": "The board is a GS-T3E (Tuya T3E) 4-inch 480x480 wall panel with an ESP32-S3-WROOM-1 module and PCB revision v2.3. The discontinued v1.23 board and the Zigbee-only T3E Pro use different hardware."
   }),
+  Object.freeze({
+    "key": "panlee_zx3d95ce01s",
+    "buildProfile": "panlee_zx3d95ce01s",
+    "label": "Panlee ZX3D95CE01S (V12)",
+    "chipFamily": "ESP32-S3",
+    "flashSize": 16777216,
+    "status": "validation-pending",
+    "hardwareCheck": "The board is a Smart Panlee ZX3D95CE01S 86-box wall panel, revision V12 (3.95-inch 480x480, WT32-S3-WROVER-N16R8, GC9503V panel, FT6336 touch). The UR and AR variants of the family use other pins and are not supported by this image."
+  }),
 ]);

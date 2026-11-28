@@ -33,6 +33,9 @@
 #elif defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)
 #define FW_META_TARGET_DEVICE_KEY "golden_security_gs_t3e_v2"
 #define FW_META_TARGET_DISPLAY_NAME "Golden Security GS-T3E v2"
+#elif defined(DEVICE_PANLEE_ZX3D95CE01S)
+#define FW_META_TARGET_DEVICE_KEY "panlee_zx3d95ce01s"
+#define FW_META_TARGET_DISPLAY_NAME "Panlee ZX3D95CE01S"
 #elif defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4)
 #define FW_META_TARGET_DEVICE_KEY "waveshare_s3_touch_lcd_4"
 #define FW_META_TARGET_DISPLAY_NAME "Waveshare ESP32-S3 Touch LCD 4"

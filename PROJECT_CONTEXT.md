@@ -53,6 +53,7 @@ Last reviewed: 2026-10-29
 - P4 v3 images (post_v3 301-399): WS 10.1 (PR #48, v3.2 ok), WS 7B `_rev3` (#41; 30 s Wi-Fi join, PR #120), JC8012 V3 = V2 code (#44), WS 4.3/8 `_rev3` (#135/#140); HW pending.
 - New in v0.9.3, HW pending by the reporters: GS-T3E v2 (#93, S3, relays GPIO45/46/44 at once), Waveshare 5-inch (#76, HX8394, own `dsi_driver`, pre-v3 + `_rev3`).
 - Voice (b477) HW ok on V2, Tab5, 8-inch, 4B; per-board `kVolumeLimit` (Guition 0.6, Tab5 0.9); none on S3 and JC1060 V1.
+- Panlee V12 (S3): HW ok 2026-10-23.
 
 ## P4 network, issues #37/#38
 
@@ -66,7 +67,7 @@ Last reviewed: 2026-10-29
 ## Memory, flash, performance
 
 - LVGL PSRAM S3 2 / P4 12 MiB; SRAM band <= 72 KiB = DMA free - 150 KB (big tables in LVGL heap, S3 b606); page caches S3 4 / P4 6; bindings, popup history, Select options, slots, queues, grids in PSRAM.
-- S3 mallocs > 32 B prefer PSRAM (b324): internal free 42 -> ~89 KB, text-heavy steps slower. Open: S3 Web Admin pages block the loop 1-6 s.
+- S3 mallocs > 32 B prefer PSRAM (b324): internal free 42 -> ~89 KB. Open: S3 Web Admin blocks the loop 1-6 s.
 - Icon file: all 7447 MDI icons in LittleFS `/_mdi_icons_<px>.bin`, 399 built in, one PSRAM raw cache; icon + text fonts unpack each glyph once (`glyph_cache.c`, P4 512 KB, S3 256, b599); a missing file downloads once from its release; System page Icons card.
 - `-fno-exceptions` (-300 KiB per image), unused LVGL widgets off, Admin CSS minified. LVGL 9.6.0 (lvgl#10306, caches `hometiles-lvgl96-*`).
 - Perf: nav preload (S3 max 3 grids), S3 PCLK 12 MHz.

@@ -517,6 +517,38 @@ Arduino IDE (the `sketch.yaml` profile):
 - Upload Speed: `921600`
 - USB Mode: `Hardware CDC and JTAG`
 
+## Panlee ZX3D95CE01S (V12)
+
+Used for:
+- `src/devices/panlee_zx3d95ce01s` (own driver, derived from the GS-T3E v2 one)
+- build profile `panlee_zx3d95ce01s`
+
+Important:
+- Confirmed on one revision V12 unit (display, touch, Wi-Fi, Home Assistant link). The UR and AR variants use different wiring.
+- WT32-S3-WROVER-N16R8 with `16MB` flash and `8MB` octal PSRAM.
+- The panel is a `480x480` GC9503V RGB display: 3-wire SPI init on CS 38,
+  SCK 45, MOSI 48 (SCK/MOSI are also RGB B0/B1), RGB bus DE 40, VSYNC 41,
+  HSYNC 42, PCLK 39, R(18,8,3,46,10), G(14,13,12,11,16,17), B(45,48,47,0,21),
+  Arduino_GFX GC9503V type1 init table, 12MHz.
+- Capacitive touch is FT6336 (0x38) on SDA 15 / SCL 6.
+- Backlight PWM is active-high on GPIO 5 (150Hz, rate unconfirmed).
+- No microSD interface is documented. Runtime files use LittleFS.
+- The serial log is on the native USB port (USB CDC On Boot enabled).
+- Use the repository's `partitions.csv`; HomeTiles needs two 6.5MB OTA slots.
+- Sources and open points: [device README](src/devices/panlee_zx3d95ce01s/README.md).
+
+Arduino IDE (the `sketch.yaml` profile):
+- Board: `ESP32S3 Dev Module`
+- USB CDC On Boot: `Enabled`
+- CPU Frequency: `240MHz (WiFi)`
+- Core Debug Level: `None`
+- Flash Mode: `QIO 80MHz`
+- Flash Size: `16MB (128Mb)`
+- Partition Scheme: `Custom`
+- PSRAM: `OPI PSRAM`
+- Upload Speed: `921600`
+- USB Mode: `Hardware CDC and JTAG`
+
 ## Waveshare ESP32-S3-Touch-LCD-4 Rev 4.0
 
 Used for:

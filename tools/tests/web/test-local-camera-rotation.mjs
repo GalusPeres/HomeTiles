@@ -350,6 +350,7 @@ let membersAfter = 0;
   membersAfter = members.length - (blockStart + newKeys.length);
 }
 const expected = {
+  kStringsIt: ['Avanzate', 'Rotazione', 'Scambia rosso e blu'],
   kStringsEn: ['Advanced', 'Rotation', 'Swap red and blue'],
   kStringsDe: ['Erweitert', 'Drehung', 'Rot und Blau tauschen'],
   kStringsFr: ['Avancé', 'Rotation', 'Inverser le rouge et le bleu'],

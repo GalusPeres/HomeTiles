@@ -66,6 +66,7 @@ assert.ok(stringsHeader.includes('const char* camera_bridge_disconnected;'));
 // The camera's connection texts name the Bridge, never MQTT, which a linked panel
 // does not use; one per language.
 for (const text of [
+  'Nessuna risposta dalla telecamera tramite Bridge', 'Nessuna connessione al Bridge',
   'Keine Kamera-Antwort von der Bridge', 'Keine Verbindung zur Bridge',
   'No camera response from the Bridge', 'No connection to the Bridge',
   'Aucune réponse caméra du bridge', 'Pas de connexion au bridge',

@@ -67,6 +67,10 @@ const releaseTargets = new Map([
     key: 'golden_security_gs_t3e_v2',
     siliconVariant: 'default',
   }],
+  ['DEVICE_PANLEE_ZX3D95CE01S', {
+    key: 'panlee_zx3d95ce01s',
+    siliconVariant: 'default',
+  }],
 ]);
 
 function selectorSource(...defines) {

@@ -535,6 +535,28 @@
       }
     },
     {
+      "buildProfile": "panlee_zx3d95ce01s",
+      "key": "panlee_zx3d95ce01s",
+      "metadataDeviceKey": "panlee_zx3d95ce01s",
+      "define": "DEVICE_PANLEE_ZX3D95CE01S",
+      "chipFamily": "ESP32-S3",
+      "flashSize": 16777216,
+      "siliconVariant": "default",
+      "minimumRevision": 0,
+      "maximumRevision": 65535,
+      "rxVariant": "native-s3",
+      "elfFlags": "",
+      "publish": true,
+      "ciOrder": 23,
+      "ciLabel": "Panlee ZX3D95CE01S",
+      "legacySlug": "panlee-zx3d95ce01s",
+      "installer": {
+        "label": "Panlee ZX3D95CE01S (V12)",
+        "status": "validation-pending",
+        "hardwareCheck": "The board is a Smart Panlee ZX3D95CE01S 86-box wall panel, revision V12 (3.95-inch 480x480, WT32-S3-WROVER-N16R8, GC9503V panel, FT6336 touch). The UR and AR variants of the family use other pins and are not supported by this image."
+      }
+    },
+    {
       "buildProfile": "layout_test_1024x600",
       "key": "layout_test_1024x600",
       "metadataDeviceKey": "layout_test_1024x600",

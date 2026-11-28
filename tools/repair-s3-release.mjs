@@ -16,7 +16,7 @@ export function replacementNames(version) {
 }
 export function inspectReplacements(directory, version) {
   const names = replacementNames(version);
-  assert.equal(names.length, 8, 'This repair supports exactly four S3 profiles');
+  assert.equal(names.length, 10, 'This repair supports exactly five S3 profiles');
   assert.deepEqual(fs.readdirSync(directory).sort(), names, 'Unexpected or missing repair assets');
   return names.map(name => {
     const data = fs.readFileSync(path.join(directory, name));
@@ -65,7 +65,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (!['--preflight', '--validate'].includes(process.argv[2])) {
     const directory = path.resolve(process.argv[2]);
     const replacements = inspectReplacements(directory, tag);
-    // All eight files are verified before any existing asset is replaced.
+    // All ten files are verified before any existing asset is replaced.
     gh('release', 'upload', tag, ...replacements.map(a => path.join(directory, a.name)), '--repo', repo, '--clobber');
     const after = JSON.parse(gh('api', `repos/${repo}/releases/${before.id}`));
     assert.equal(after.draft, true, 'Release became public during repair');

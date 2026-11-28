@@ -22,6 +22,7 @@ const kinds = {
   // asks these for direct output).
   golden_security_gs_t3e_v2: 'lvgl',
   guition_esp32_4848s040: 'lvgl',
+  panlee_zx3d95ce01s: 'lvgl',
   waveshare_s3_touch_lcd_4: 'lvgl',
   waveshare_s3_touch_lcd_4b: 'lvgl',
   // ESP32-P4 panels: the shared PPA presenter, given the panel's rotation.

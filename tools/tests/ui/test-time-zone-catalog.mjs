@@ -43,7 +43,7 @@ assert.ok(specBody.includes('"anchorage") == 0) return "AKST9AKDT,M3.2.0/02,M11.
 
 // Every language lists the zones in catalog order.
 const lists = [...i18n.matchAll(/\{"UTC\+0 - UTC"[^}]*\}/g)].map(match => [...match[0].matchAll(/"([^"]*)"/g)].map(item => item[1]));
-assert.equal(lists.length, 8, 'eight languages');
+assert.equal(lists.length, 9, 'nine languages');
 const alaska = codes.indexOf('anchorage');
 for (const labels of lists) {
   assert.equal(labels.length, count, `${labels[0]}: one name per zone`);

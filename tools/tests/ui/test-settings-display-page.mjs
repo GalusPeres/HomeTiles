@@ -23,6 +23,7 @@ const keys = ['settings_screen', 'settings_brightness', 'settings_sleep', 'setti
   'settings_sleep_summary_fmt',
   'settings_not_connected', 'settings_access_point_on', 'settings_update_available'];
 const expected = {
+  kStringsIt: ['Schermo', 'Luminosità', 'Standby', 'Rotazione', 'Salvaschermo', 'Si avvia dopo', 'Audio', 'Volume', 'Microfono', 'Schermo e audio', 'Standby %s', 'Non connesso', 'Hotspot attivo', 'Aggiornamento disponibile'],
   kStringsEn: ['Screen', 'Brightness', 'Sleep', 'Rotation', 'Screensaver', 'Starts after', 'Sound', 'Volume', 'Microphone', 'Display & Sound', 'Sleep %s',
     'Not connected', 'Access point on', 'Update available'],
   kStringsDe: ['Bildschirm', 'Helligkeit', 'Standby', 'Drehung', 'Screensaver', 'Startet nach', 'Ton', 'Lautstärke', 'Mikrofon', 'Anzeige & Ton', 'Standby %s',
@@ -95,7 +96,7 @@ assert.match(rawModel, /void microphone_selected\(bool on\) \{ speaker::setMicEn
 // beside the monitor; boards without a speaker keep "Display" and the monitor.
 assert.match(screen, /case Category::Display:\s*return settings_model::sound_values\(\)\.speaker \? s\.settings_display_sound : s\.display_label;/);
 assert.match(rawScreen, /case Category::Display:\s*return settings_model::sound_values\(\)\.speaker \? "monitor-speaker" : "monitor";/);
-const soundNames = {kStringsEn: 'Display & Sound', kStringsDe: 'Anzeige & Ton', kStringsFr: '\u00c9cran et son',
+const soundNames = {kStringsIt: 'Schermo e audio', kStringsEn: 'Display & Sound', kStringsDe: 'Anzeige & Ton', kStringsFr: '\u00c9cran et son',
   kStringsPl: 'Ekran i d\u017awi\u0119k', kStringsCs: 'Displej a zvuk', kStringsEs: 'Pantalla y sonido', kStringsSk: 'Displej a zvuk',
   kStringsRu: '\u042d\u043a\u0440\u0430\u043d \u0438 \u0437\u0432\u0443\u043a'};
 const soundIndex = fields.indexOf('settings_display_sound');

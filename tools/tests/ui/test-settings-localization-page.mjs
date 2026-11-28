@@ -28,6 +28,7 @@ const between = (source, from, to) => {
 const keys = ['settings_language', 'settings_time_zone', 'settings_time_format', 'settings_date_format',
   'settings_keyboard'];
 const expected = {
+  kStringsIt: ['Lingua', 'Fuso orario', 'Formato ora', 'Formato data', 'Tastiera'],
   kStringsEn: ['Language', 'Time zone', 'Time format', 'Date format', 'Keyboard'],
   kStringsDe: ['Sprache', 'Zeitzone', 'Zeitformat', 'Datumsformat', 'Tastatur'],
   kStringsFr: ['Langue', 'Fuseau horaire', "Format de l'heure", 'Format de date', 'Clavier'],

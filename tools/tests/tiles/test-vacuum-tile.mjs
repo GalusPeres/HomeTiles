@@ -264,7 +264,7 @@ assert.match(header, /const char\* vacuum_states\[8\];/);
 assert.match(header, /const char\* entity_kind_labels\[24\];/);
 const i18n = read('src/core/i18n/i18n.cpp');
 const profiles = [...i18n.matchAll(/static const LocaleProfile kLocale(\w+) = \{([\s\S]*?\})\};\n/g)];
-assert.equal(profiles.length, 8, 'eight languages');
+assert.equal(profiles.length, 9, 'nine languages');
 for (const [, code, body] of profiles) {
   const groups = [...body.matchAll(/\{("[^{}]*")\}/g)]
     .map(m => [...m[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(g => g[1]));
